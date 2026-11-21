@@ -1,4 +1,5 @@
 import { surfaceDistance, type TerrainField } from './field';
+import { rot, rotate2 } from './math';
 import type { BugSpecies } from './species';
 
 /**
@@ -18,6 +19,8 @@ export const MAX_FALL_SPEED = 40;
 /** A contact whose normal has at least this Y component is ground; below it is wall (~50°). */
 export const WALKABLE_NY = 0.64;
 export const WALK_BACK_FACTOR = 0.6;
+/** Speed multiplier while running (shift held). */
+export const RUN_FACTOR = 1.8;
 /** Below this height the bug has left the world and dies. */
 export const KILL_Y = -4;
 
@@ -36,9 +39,11 @@ export interface BugInput {
   /** +1 turn right (clockwise seen from above), -1 turn left. */
   turn: -1 | 0 | 1;
   jump: boolean;
+  /** Run instead of walk (forward and back). */
+  run?: boolean;
 }
 
-export const IDLE: Readonly<BugInput> = Object.freeze({ move: 0, turn: 0, jump: false });
+export const IDLE: Readonly<BugInput> = Object.freeze({ move: 0, turn: 0, jump: false, run: false });
 
 // Scratch buffers: no allocations per tick.
 const n = new Float64Array(3);
@@ -66,8 +71,11 @@ export class Bug {
   alive = true;
   /** Ticks since the bug last stood on the ground (0 while grounded). */
   airTicks = 0;
-  /** Downward speed at the last landing (for fall damage later). */
+  /** Downward speed at the last landing. */
   lastImpact = 0;
+  /** True only during the tick in which the bug landed (read it for fall damage). */
+  justLanded = false;
+  health = 100;
 
   constructor(readonly species: BugSpecies) {}
 
@@ -87,6 +95,7 @@ export class Bug {
     this.alive = true;
     this.airTicks = 0;
     this.lastImpact = 0;
+    this.justLanded = false;
     const cx = field.W * 0.5 - x;
     const cz = field.D * 0.5 - z;
     const l = Math.sqrt(cx * cx + cz * cz);
@@ -102,6 +111,7 @@ export class Bug {
 
   /** Advance one tick (DT seconds). */
   step(field: TerrainField, input: Readonly<BugInput>): void {
+    this.justLanded = false;
     if (!this.alive) return;
     const sp = this.species;
     this.px = this.x;
@@ -119,7 +129,8 @@ export class Bug {
       this.grounded = false;
     } else if (this.grounded) {
       // Walk along the ground plane: project the facing onto it, keep the full speed on slopes.
-      const speed = input.move > 0 ? sp.walkSpeed : input.move < 0 ? -sp.walkSpeed * WALK_BACK_FACTOR : 0;
+      const walk = input.run ? sp.walkSpeed * RUN_FACTOR : sp.walkSpeed;
+      const speed = input.move > 0 ? walk : input.move < 0 ? -walk * WALK_BACK_FACTOR : 0;
       if (speed !== 0) {
         const dot = this.fx * this.nx + this.fz * this.nz;
         const tx = this.fx - this.nx * dot;
@@ -179,6 +190,7 @@ export class Bug {
     if (groundNy >= WALKABLE_NY && (stick || this.vy <= 0)) {
       if (!this.grounded) {
         this.lastImpact = fallSpeed;
+        this.justLanded = true;
         this.vx = this.vy = this.vz = 0;
       }
       this.grounded = true;
@@ -189,6 +201,20 @@ export class Bug {
     }
 
     if (this.y < KILL_Y) this.alive = false;
+  }
+
+  /** Throw the bug (explosion knockback): adds to its velocity and makes it airborne. */
+  push(vx: number, vy: number, vz: number): void {
+    if (!this.alive) return;
+    this.vx += vx;
+    this.vy += vy;
+    this.vz += vz;
+    this.grounded = false;
+  }
+
+  /** True when standing still on the ground (or dead): nothing left to simulate for this bug. */
+  get settled(): boolean {
+    return !this.alive || (this.grounded && this.vx === 0 && this.vy === 0 && this.vz === 0);
   }
 
   /**
@@ -227,15 +253,11 @@ export class Bug {
     return best;
   }
 
-  /** Rotate the facing about +Y. Small-angle series instead of Math.sin/cos, then renormalise. */
+  /** Rotate the facing about +Y by `a` radians (counter-clockwise seen from above). */
   private rotate(a: number): void {
-    const a2 = a * a;
-    const c = 1 - a2 * 0.5 + a2 * a2 * (1 / 24);
-    const s = a * (1 - a2 * (1 / 6) + a2 * a2 * (1 / 120));
-    const fx = this.fx * c + this.fz * s;
-    const fz = -this.fx * s + this.fz * c;
-    const l = Math.sqrt(fx * fx + fz * fz);
-    this.fx = fx / l;
-    this.fz = fz / l;
+    // In (x, z) with y up, a rotation about +Y by a is a 2D rotation of (x, z) by -a.
+    rotate2(this.fx, this.fz, -a);
+    this.fx = rot[0];
+    this.fz = rot[1];
   }
 }

@@ -14,13 +14,13 @@ Each phase must end with something playable or measurable. Do not move on to the
 - [x] React to craters (falls if the ground disappears); dies when leaving the map
 - [x] Camera that follows the active bug
 - [x] Tests: bug settles on the ground, does not pass through walls, falls after `carve`
-- Left for Phase 2: explosion knockback and fall damage (`lastImpact` is already recorded)
 
-## Phase 2 · Turns and weapons
-- [ ] Turn manager, teams, health and damage
-- [ ] Ballistic projectiles with wind; explosion = `carve` + distance-based damage
-- [ ] 3–4 original weapons (see IDEAS.md)
-- [ ] Usable 3D aiming (mouse and touch): camera that follows the projectile, trajectory indicator
+## Phase 2 · Turns and weapons (done)
+- [x] Turn manager, teams, health and damage (local hot-seat: two players on one device)
+- [x] Ballistic projectiles with wind; explosion = `carve` + distance-based damage and knockback; fall damage
+- [x] 4 original weapons: Solder Blob, Capacitor, Short Circuit, Soldering Iron (see IDEAS.md)
+- [x] Usable 3D aiming (keyboard, plus an on-screen pad for mouse and touch): camera that follows the projectile and does not get hidden behind islands, aim direction pointer
+- Not done yet: aiming by dragging on the screen, a computer opponent, a match setup screen (teams and sizes are fixed in `main.ts`)
 
 ## Phase 3 · Performance
 - [ ] Meshing in a Web Worker (removes the ~16 ms spikes)

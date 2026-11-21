@@ -29,6 +29,8 @@ Use the project's musical DNA: parts of the scenario that pulse to the beat of a
 
 ## Weapons (original; do not copy Worms ones)
 
+In the game since Phase 2: Solder Blob (impact shell), Capacitor (bouncing, 3 s fuse), Short Circuit (arc that jumps between bugs), Soldering Iron (tunnel). Still ideas: the slow-charging capacitor below, thermal paste, fan.
+
 - **Short circuit:** an electric arc that jumps between nearby bugs.
 - **Charged capacitor:** a bomb that builds up charge over several turns before it goes off.
 - **Soldering iron:** digs a thin, directional tunnel.

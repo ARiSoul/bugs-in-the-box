@@ -2,40 +2,103 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
     <title>Bugs in the Box</title>
     <link rel="icon" href="data:," />
     <style>
-      html, body { margin: 0; height: 100%; overflow: hidden; background: radial-gradient(ellipse at 50% 30%, #2a3a5c 0%, #141a2b 70%); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: #dfe6f5; }
+      html, body { margin: 0; height: 100%; overflow: hidden; background: radial-gradient(ellipse at 50% 30%, #2a3a5c 0%, #141a2b 70%); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: #dfe6f5; -webkit-user-select: none; user-select: none; }
       canvas { display: block; width: 100vw; height: 100vh; touch-action: none; }
-      .panel { position: fixed; left: 12px; top: 12px; max-width: min(560px, calc(100vw - 24px)); background: rgba(12, 16, 28, 0.72); border: 1px solid rgba(160, 185, 255, 0.18); border-radius: 10px; padding: 10px 12px; font-size: 12px; line-height: 1.5; backdrop-filter: blur(6px); }
-      #stats { white-space: pre-wrap; margin-bottom: 8px; color: #a9c1ff; }
-      .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 6px; }
-      button, input, select { font: inherit; color: inherit; background: rgba(60, 80, 130, 0.35); border: 1px solid rgba(160, 185, 255, 0.3); border-radius: 6px; padding: 4px 9px; }
-      button { cursor: pointer; } button:hover { background: rgba(90, 120, 190, 0.5); }
-      input[type=number] { width: 84px; } input[type=range] { padding: 0; width: 110px; accent-color: #ffb04a; }
-      .hint { opacity: 0.7; margin-top: 8px; }
+      .box { position: fixed; background: rgba(12, 16, 28, 0.72); border: 1px solid rgba(160, 185, 255, 0.18); border-radius: 10px; padding: 8px 10px; font-size: 12px; line-height: 1.5; backdrop-filter: blur(6px); }
+      button, input { font: inherit; color: inherit; background: rgba(60, 80, 130, 0.35); border: 1px solid rgba(160, 185, 255, 0.3); border-radius: 6px; padding: 4px 9px; }
+      button { cursor: pointer; touch-action: none; } button:hover { background: rgba(90, 120, 190, 0.5); }
+      button.down, button.on { background: rgba(255, 176, 74, 0.45); border-color: #ffb04a; }
+      input[type=number] { width: 84px; }
+      .row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-top: 6px; }
+
+      #panel { left: 12px; top: 12px; max-width: min(460px, calc(100vw - 24px)); }
+      #panel summary { cursor: pointer; opacity: 0.8; }
+      #panel:not([open]) { padding: 4px 10px; }
+      #stats { white-space: pre-wrap; color: #a9c1ff; font-size: 11px; }
+      .hint { opacity: 0.7; margin-top: 6px; font-size: 11px; }
       #fps { position: fixed; right: 12px; top: 12px; font-size: 12px; opacity: 0.7; }
+
+      #turn { left: 50%; top: 12px; transform: translateX(-50%); text-align: center; min-width: 220px; }
+      #who { font-size: 15px; font-weight: 700; }
+      #timer { font-size: 22px; font-weight: 800; }
+      #wind { display: flex; gap: 8px; align-items: center; justify-content: center; }
+      #windArrow { display: inline-block; font-size: 18px; transition: transform 0.1s linear; }
+      .meter { width: 110px; height: 7px; background: rgba(255, 255, 255, 0.12); border-radius: 4px; overflow: hidden; }
+      .meter > div { height: 100%; width: 0%; background: #8fe3ff; }
+
+      #weapons { left: 50%; bottom: 12px; transform: translateX(-50%); text-align: center; }
+      #power { width: 100%; height: 8px; margin-bottom: 6px; }
+      #power > div { background: linear-gradient(90deg, #ffe066, #ff6a3d); }
+
+      #teams { left: 12px; bottom: 12px; min-width: 170px; }
+      .team { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; align-items: center; }
+      .team .meter { grid-column: 1 / 3; width: 100%; }
+
+      #pad { right: 12px; bottom: 12px; display: grid; grid-template-columns: repeat(3, 48px); grid-auto-rows: 44px; gap: 6px; padding: 8px; }
+      #pad button { padding: 0; font-size: 16px; }
+      #pad .fire { grid-column: 1 / 4; font-weight: 800; letter-spacing: 1px; }
+
+      @media (max-width: 1000px) {
+        #weapons { bottom: auto; top: 118px; }
+        #weaponList { display: grid; grid-template-columns: 1fr 1fr; }
+        #panel { max-width: 46vw; }
+        #turn { left: auto; right: 12px; transform: none; min-width: 0; }
+        #fps { display: none; }
+      }
+      #banner { left: 50%; top: 40%; transform: translate(-50%, -50%); font-size: 22px; font-weight: 800; padding: 16px 24px; text-align: center; display: none; }
+      #banner small { display: block; font-size: 12px; font-weight: 400; opacity: 0.8; margin-top: 6px; }
     </style>
   </head>
   <body>
     <canvas id="c"></canvas>
     <div id="fps"></div>
-    <div class="panel">
+
+    <details id="panel" class="box">
+      <summary>menu</summary>
       <div id="stats"></div>
       <div class="row">
         <label>seed <input id="seed" type="number" /></label>
-        <button id="regen">generate</button>
+        <button id="regen">new match</button>
         <button id="rand">random</button>
-        <label>radius <input id="radius" type="range" min="2" max="12" step="1" value="6" /> <span id="rv">6</span></label>
         <button id="bench">benchmark</button>
       </div>
-      <div class="row">
-        <label>bug <select id="species"></select></label>
-        <button id="respawn">respawn (R)</button>
+      <div class="hint">
+        W/S walk · shift run · A/D or ←/→ turn · space jump · ↑/↓ aim · hold F to charge, release to fire · 1–4 weapon · N new match · drag to orbit · scroll to zoom
       </div>
-      <div class="hint">WASD / arrows: walk and turn · space: jump · click the terrain to explode · drag to orbit · scroll to zoom</div>
+    </details>
+
+    <div id="turn" class="box">
+      <div id="who"></div>
+      <div id="timer"></div>
+      <div id="wind">wind <span id="windArrow">➜</span><div class="meter"><div id="windBar"></div></div></div>
     </div>
+
+    <div id="weapons" class="box">
+      <div id="power" class="meter"><div></div></div>
+      <div id="weaponList" class="row" style="margin-top: 0"></div>
+    </div>
+
+    <div id="teams" class="box"></div>
+
+    <div id="pad" class="box">
+      <button data-code="ArrowUp" title="aim higher">⤴</button>
+      <button data-code="KeyW" title="walk forward">▲</button>
+      <button data-code="Space" title="jump">⇪</button>
+      <button data-code="KeyA" title="turn left">◀</button>
+      <button data-code="KeyS" title="walk back">▼</button>
+      <button data-code="KeyD" title="turn right">▶</button>
+      <button data-code="ArrowDown" title="aim lower">⤵</button>
+      <button data-code="ShiftLeft" title="run (hold with walk)">⇧</button>
+      <span></span>
+      <button class="fire" data-code="KeyF" title="hold to charge, release to fire">FIRE</button>
+    </div>
+
+    <div id="banner" class="box"></div>
+
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

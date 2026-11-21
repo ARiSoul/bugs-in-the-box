@@ -8,6 +8,8 @@ export interface TerrainField {
   readonly D: number;
   sample(x: number, y: number, z: number): number;
   raycast(ox: number, oy: number, oz: number, dx: number, dy: number, dz: number, maxT?: number): number;
+  /** Remove a sphere of terrain (explosions, digging). */
+  carve(x: number, y: number, z: number, r: number): void;
 }
 
 /** Central-difference step for the gradient. Half a cell: smooths the per-cell trilinear kinks. */

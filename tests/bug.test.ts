@@ -1,29 +1,12 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { Bug, IDLE, TICK_RATE, type BugInput } from '../src/game/bug';
+import { Bug, IDLE, RUN_FACTOR, TICK_RATE, type BugInput } from '../src/game/bug';
 import { ANT } from '../src/game/species';
-import { DENSITY_CLAMP } from '../src/terrain/constants';
 import { floatingIslands } from '../src/terrain/generators/floatingIslands';
 import { createRng } from '../src/terrain/noise';
 import { Terrain } from '../src/terrain/Terrain';
-
-/** Terrain from an analytic density function, with the usual air shell around the box. */
-function world(cx: number, cy: number, cz: number, f: (i: number, j: number, k: number) => number): Terrain {
-  const t = new Terrain(cx, cy, cz);
-  for (let k = 0; k < t.sz; k++)
-    for (let j = 0; j < t.sy; j++)
-      for (let i = 0; i < t.sx; i++) {
-        let d = f(i, j, k);
-        const edge = Math.min(i, j, k, t.W - i, t.H - j, t.D - k);
-        if (edge < 2) d = Math.max(d, 2 - edge);
-        t.dens[t.idx(i, j, k)] = Math.max(-DENSITY_CLAMP, Math.min(DENSITY_CLAMP, d));
-      }
-  t.commitGeneration();
-  return t;
-}
-
-const flat = (y: number): Terrain => world(2, 1, 2, (_i, j) => j - y);
+import { flat, world } from './helpers/worlds';
 
 function run(bug: Bug, t: Terrain, ticks: number, input: Readonly<BugInput> = IDLE): void {
   for (let n = 0; n < ticks; n++) bug.step(t, input);
@@ -64,6 +47,19 @@ describe('bug on the ground', () => {
       expect(bug.y).toBeCloseTo(y, 6);
       expect(bug.z).toBeCloseTo(z, 6);
     }
+  });
+
+  it('runs faster than it walks (shift)', () => {
+    const t = flat(10);
+    const walker = settled(t, 16, 32);
+    const runner = settled(t, 16, 32);
+    face(walker, 1, 0);
+    face(runner, 1, 0);
+    run(walker, t, TICK_RATE, FORWARD);
+    run(runner, t, TICK_RATE, { ...FORWARD, run: true });
+    expect(walker.x - 16).toBeCloseTo(ANT.walkSpeed, 1);
+    expect(runner.x - 16).toBeCloseTo(ANT.walkSpeed * RUN_FACTOR, 1);
+    expect(runner.grounded).toBe(true);
   });
 
   it('walks up a gentle slope at full speed and stays on the ground', () => {

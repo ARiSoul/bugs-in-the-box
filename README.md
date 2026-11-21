@@ -2,7 +2,7 @@
 
 Turn-based 3D artillery game in the browser. Bugs (ants, spiders, cockroaches and made-up creatures) wage war inside electronic devices: the insides of PCs, speakers, fridges, guitars, microwaves. Destructible, procedurally generated terrain.
 
-> Status: technical prototype (Phase 1). Destructible terrain and one controllable bug. No turns or weapons yet.
+> Status: prototype (Phase 2). Local hot-seat matches: two teams take turns on one device, with wind and four weapons. No online play yet.
 
 ## Getting started
 
@@ -15,9 +15,13 @@ npm run dev
 
 Open the address that Vite prints.
 
-- **WASD / arrows**: walk and turn the bug · **space**: jump · **R**: respawn
-- **Click the terrain** to blow it up · **drag** to orbit the camera · **scroll** to zoom
-- The panel lets you pick the seed, the blast radius and the bug species, and run a benchmark.
+- **W / S**: walk (hold **shift** to run) · **A / D** or **← / →**: turn · **↑ / ↓**: aim higher / lower
+- **Space**: jump · **hold F** to charge, release to fire · **1–4**: weapon · **N**: new match
+- **Drag** to orbit the camera · **scroll** to zoom
+- On a touch screen (or with the mouse), use the pad in the bottom-right corner and tap a weapon.
+- The menu lets you pick the seed (the same seed gives the same map and match) and run a benchmark.
+
+Each turn lasts 30 s. After a shot, the bug has 3 s to walk away. The last team with bugs left wins.
 
 ## Scripts
 

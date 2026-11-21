@@ -37,8 +37,12 @@ src/
     field.ts            TerrainField (what gameplay may see) + surfaceDistance
     species.ts          species as data (physics numbers + body proportions)
     spawn.ts            dropNear: deterministic spawn search
-  render/             three.js: stage (renderer/camera/lights), ChunkRenderer (1 mesh per chunk), BugView, FollowCamera, effects
-  input/              mouse picking against the density field, keyboard -> BugInput
+    match.ts            Match: teams, turn flow (aim -> flight -> settle), wind, explosions, damage, events
+    projectile.ts       shells and grenades (gravity, wind, bounces)
+    weapons.ts          weapons as data (Solder Blob, Capacitor, Short Circuit, Soldering Iron)
+    math.ts             rotate2: deterministic rotation without sin/cos
+  render/             three.js: stage, ChunkRenderer (1 mesh per chunk), BugView, FollowCamera, labels, projectiles, aim, effects
+  input/              Controls (keyboard + on-screen pad -> MatchInput), picking against the density field
   ui/                 DOM HUD
   bench/              benchmark shared between the in-browser button and scripts/bench.ts
   main.ts             glue: wires terrain, render, input and UI
@@ -64,7 +68,8 @@ Details and rationale in `docs/ARCHITECTURE.md`. Plan in `docs/ROADMAP.md`.
 - Strict TypeScript. Everything in English (see "Language" above).
 - In hot loops (`mesher.ts`, `Terrain.carve/sample`, generators): no allocations, no per-iteration closures, no temporary arrays. Reuse buffers (see `SurfaceNetsMesher`).
 - `src/terrain/` does not import three.js, the DOM, or anything from `src/render`, `src/ui`, `src/input`, `src/game`.
-- `src/game/` does not import three.js, the DOM, or anything from `src/render`, `src/ui`, `src/input`. It sees the terrain only through `TerrainField`.
+- `src/game/` does not import three.js, the DOM, or anything from `src/render`, `src/ui`, `src/input`. It sees the terrain only through `TerrainField` (it may use `createRng` from `terrain/noise.ts`).
+- The render reads `match.events` and the game state; it never changes the game state. Randomness in effects is fine (render only).
 - Gameplay runs in fixed ticks (`DT` in `game/bug.ts`), never with the frame time. Rendering interpolates between ticks.
 - Allowed `Math` in `src/terrain/` and `src/game/`: `floor`, `ceil`, `round`, `min`, `max`, `abs`, `sqrt`, `imul`. Not `hypot`, `sin`, `cos`, `pow`, `exp`, `log`, `random` (a test enforces this).
 - A new generator = one file in `terrain/generators/` that implements `TerrainGenerator` and ends with `terrain.commitGeneration()`. It must be deterministic.
@@ -91,4 +96,4 @@ Target budget: one explosion must not exceed 1 frame (16 ms) on the main thread;
 
 ## Current status
 
-Phase 0 done: destructible SDF terrain prototype (click to explode, seed, benchmark). Phase 1 done: a controllable bug (ant, spider, cockroach) that walks, jumps, falls into craters and dies off the map, with a follow camera. Next: Phase 2, turns and weapons. See `docs/ROADMAP.md`.
+Phase 0 done: destructible SDF terrain prototype (click to explode, seed, benchmark). Phase 1 done: a controllable bug (ant, spider, cockroach) that walks, jumps, falls into craters and dies off the map, with a follow camera. Phase 2 done: local hot-seat matches (Red Ants vs Blue Spiders, 3 bugs each), turns, wind, 4 weapons, damage, knockback, fall damage, on-screen pad for mouse and touch. Next: Phase 3, performance (meshing in a Worker, phone measurements). See `docs/ROADMAP.md`.

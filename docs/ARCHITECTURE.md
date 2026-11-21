@@ -70,6 +70,21 @@ No mesh colliders. `raycast` does sphere tracing over `sample()` (step `max(0.25
 
 Render side: `BugView` builds the body from spheres and cylinders, leans it into the ground normal (smoothed), and animates a tripod gait from the actual ground speed. `FollowCamera` moves the orbit camera and its target together, so the player keeps the angle and zoom; panning is off while following. `KeyboardInput` uses physical key codes (WASD works on any layout).
 
+## Match: turns and weapons (`src/game/match.ts`)
+
+`Match` owns the teams, the projectiles, the wind and the turn state. Like `Bug`, it advances in fixed ticks with one discrete input per tick (`MatchInput`: walk, run, turn, jump, aim, fire held, weapon). The whole match is a function of the map seed, the match seed and that input stream, which is what multiplayer will send.
+
+- **Turn flow.** `aim` (30 s: walk, jump, aim, choose a weapon, fire) → `flight` (projectiles fly; the shooter has 3 s to retreat, without firing again) → `settle` (wait until every bug and projectile is at rest, at most 10 s; bugs at 0 health die here) → the next team that still has bugs. Teams alternate; inside a team the bugs take turns; dead bugs are skipped. Getting hurt on your own turn ends the aiming. At most one team left → `over`.
+- **Aiming.** The aim pitch is a 2D unit vector `(aimH, aimV)` in the vertical plane of the bug's facing, rotated with the same small-angle series as the facing (no `sin/cos`). Holding fire charges the power for 1.2 s; releasing fires, and a full bar fires by itself.
+- **Wind.** A new horizontal acceleration per turn, from the match's seeded PRNG. Each weapon says how much it feels it.
+- **Projectiles** (`projectile.ts`): a point of radius 0.3 under gravity and wind, in substeps of at most 0.3 units. Shells explode on the first contact with terrain (`sample` below the radius) or with a bug (the shooter is immune for 8 ticks). Grenades bounce off the terrain (normal from `surfaceDistance`, restitution and friction per weapon), come to rest, and explode when the fuse runs out.
+- **Explosions.** `carve` + damage that falls off linearly up to 1.6 blast radii from the centre (distance measured to the bug's surface) + knockback away from the centre with an upward bias. A thrown bug can take fall damage when it lands (above 15 units/s).
+- **Weapons** (`weapons.ts`) are data. Short Circuit adds an arc that jumps to the nearest bugs one after another (ties go to the lower unit id, so it stays deterministic). Soldering Iron has no projectile: it carves a row of spheres along the aim.
+- **Events.** Every step fills `match.events` (turn, fire, explosion, arc, dig, damage, death, over). The render reads them for effects and floating damage numbers; the game never reads them back.
+- **PRNG.** `game/` uses `createRng` from `terrain/noise.ts`: a pure utility, not part of the terrain representation.
+
+Render side: `UnitLabel` (name and health above each bug, redrawn only on change), `FloatingTexts`, `ProjectileViews`, `LineFlashes` (arcs, tunnels), `AimView` (a short pointer of fixed length along the aim: it shows the direction only, never the range, so it cannot be read as where the shot lands; plus the active-bug marker). The camera follows the first projectile in flight, otherwise the active bug. When terrain (a floating island) is between the target and the camera, `FollowCamera.avoid` moves the camera in front of it at once, with a `raycast` against the density field, and eases back to the player's zoom distance once the view is clear. `Controls` turns keys and the on-screen pad (`[data-code]` buttons, pointer events: mouse and touch) into `MatchInput`. In dev builds, shift+click blows up the terrain under the pointer.
+
 ## Explosions
 
 `carve(p, r)` does `d = max(d, r - dist)` in a box around the sphere, updates `scorch` and marks as dirty the touched chunks **plus their neighbours** (they share boundary vertices). On average ~3 chunks per explosion with r=6.
