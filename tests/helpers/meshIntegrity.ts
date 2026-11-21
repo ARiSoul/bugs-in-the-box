@@ -1,9 +1,9 @@
-import { SurfaceNetsMesher, type ChunkMesh } from '../../src/terrain/mesher';
+import { ChunkMesher, type ChunkMesh } from '../../src/terrain/mesher';
 import type { Terrain } from '../../src/terrain/Terrain';
 
 /** Mesh every chunk (ignoring the dirty set). */
 export function meshAll(terrain: Terrain): ChunkMesh[] {
-  const mesher = new SurfaceNetsMesher();
+  const mesher = new ChunkMesher();
   const out: ChunkMesh[] = [];
   for (let id = 0; id < terrain.chunkCount; id++) {
     const [cx, cy, cz] = terrain.chunkCoords(id);

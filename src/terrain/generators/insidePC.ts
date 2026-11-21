@@ -83,7 +83,7 @@ export const insidePC: TerrainGenerator = (terrain, seed) => {
       x = x2;
       z = z2;
     }
-    add(terrain, cylinder(x, P + 0.2, z, 1.7, 0.6), GOLD);
+    add(terrain, cylinder(x, P + 0.2, z, 1.8, 0.9, 1, 0.8), GOLD);
   }
 
   // ---- CPU: socket, tower cooler with fins, fan on top
@@ -181,8 +181,8 @@ export const insidePC: TerrainGenerator = (terrain, seed) => {
     if (!free(x - r - 0.6, z - r - 0.6, x + r + 0.6, z + r + 0.6)) continue;
     claim(x - r - 0.6, z - r - 0.6, x + r + 0.6, z + r + 0.6);
     const h = rand(7, 12);
-    add(terrain, cylinder(x, P + h / 2, z, r, h / 2), rng() < 0.7 ? CAP_SLEEVE : BLACK_PLASTIC);
-    add(terrain, cylinder(x, P + h, z, r - 0.4, 0.7), STEEL);
+    add(terrain, cylinder(x, P + h / 2, z, r, h / 2, 1, 1), rng() < 0.7 ? CAP_SLEEVE : BLACK_PLASTIC);
+    add(terrain, cylinder(x, P + h - 0.2, z, r - 0.5, 0.9, 1, 0.8), STEEL);
     placed++;
   }
 
@@ -235,7 +235,7 @@ function fan(t: Terrain, x: number, y: number, z: number, axis: Axis, half: numb
 /** Hub and six blades of a fan rotor centred at (x, y, z), spinning about `axis` (1 or 2). */
 function fanRotor(t: Terrain, x: number, y: number, z: number, axis: Axis, hubRadius: number, reach: number): void {
   const hub = hubRadius > 0 ? hubRadius : reach * 0.32;
-  add(t, cylinder(x, y, z, hub, 1.2, axis), FAN);
+  add(t, cylinder(x, y, z, hub, 1.3, axis, 1), FAN);
   const len = (reach - hub) / 2;
   const mid = hub + len - 0.3;
   for (const [c, s] of BLADES) {

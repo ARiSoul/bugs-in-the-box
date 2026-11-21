@@ -31,7 +31,7 @@ Before any commit: `npm run typecheck && npm run test`. For changes in `src/terr
 src/
   terrain/            game core, NO dependency on three.js or the DOM (so it can move to a Worker/WASM)
     Terrain.ts          density grid + sample/normal/raycast/carve + set of dirty chunks
-    mesher.ts           Surface Nets per chunk (no allocations in hot loops)
+    mesher.ts           ChunkMesher: Dual Contouring (sharp) or Surface Nets (smooth) per chunk, + AO and pbr (no allocations in hot loops)
     region.ts           copy the samples one chunk needs in/out of the grid (what the mesh workers receive)
     noise.ts            deterministic noise, seeded PRNG
     shading.ts          per-vertex color from the material id (+ grass/rock for GROUND)
@@ -64,7 +64,7 @@ Details and rationale in `docs/ARCHITECTURE.md`. Plan in `docs/ROADMAP.md`.
 ## Architecture decisions (do not revert without discussion)
 
 1. **Density, not blocks.** The terrain is a grid of float values (negative = solid). It was designed for procedural generation and smooth visuals; blocks/voxels were ruled out.
-2. **Surface Nets** for meshing (simpler and fewer triangles than Marching Cubes). In 32³ chunks; neighbouring chunks share boundary vertices identically (tested: watertight mesh).
+2. **Dual Contouring / Surface Nets** for meshing, in 32³ chunks, same topology (one vertex per surface cell), so both are watertight and neighbouring chunks share boundary vertices identically (tested). Built scenarios use Dual Contouring (sharp edges, decided in Phase 4); natural terrain uses Surface Nets (smooth). Not Marching Cubes.
 3. **Gameplay only talks to the terrain interface**: `sample`, `normal`, `raycast`, `carve`. Nothing outside `terrain/` knows about the mesher. This lets us swap the representation or move meshing to a Worker without touching the game.
 4. **Collisions against the density field, never against the mesh.** Bugs and projectiles test `sample()`/gradient. Mesh colliders are expensive to rebuild after every explosion.
 5. **Determinism by seed.** A shared map is just a number. In generation and game logic: **`Math.random()` is forbidden**, as are `Math.sin/cos` and anything else that varies between devices. Use `noise.ts` (integer hash) and `createRng`. (`Math.random` is only acceptable in the UI, e.g. the "random" button.)
@@ -74,7 +74,7 @@ Details and rationale in `docs/ARCHITECTURE.md`. Plan in `docs/ROADMAP.md`.
 ## Conventions
 
 - Strict TypeScript. Everything in English (see "Language" above).
-- In hot loops (`mesher.ts`, `Terrain.carve/sample`, generators): no allocations, no per-iteration closures, no temporary arrays. Reuse buffers (see `SurfaceNetsMesher`).
+- In hot loops (`mesher.ts`, `Terrain.carve/sample`, generators): no allocations, no per-iteration closures, no temporary arrays. Reuse buffers (see `ChunkMesher`).
 - `src/terrain/` does not import three.js, the DOM, or anything from `src/render`, `src/ui`, `src/input`, `src/game`.
 - `src/game/` does not import three.js, the DOM, or anything from `src/render`, `src/ui`, `src/input`. It sees the terrain only through `TerrainField` (it may use `createRng` from `terrain/noise.ts`).
 - The render reads `match.events` and the game state; it never changes the game state. Randomness in effects is fine (render only).
@@ -96,7 +96,7 @@ Measured on Node 22 in a cloud VM (one core). They serve as a regression baselin
 | Explosion r=6 (carve + remesh of ~3 chunks) | mean ~5–7 ms · p95 ~9–18 ms |
 | Remesh per chunk | ~2–3 ms |
 | Bug step | ~0.5 µs per bug per tick |
-| Inside a PC, 160×96×160 | generate ~35–55 ms · initial mesh ~100 ms (with ambient occlusion) · explosion r=6 mean ~5–6 ms |
+| Inside a PC, 160×96×160 (Dual Contouring) | generate ~35 ms · initial mesh ~100 ms (CPU, one thread) · explosion r=6 mean ~7.5 ms (on the workers) |
 | Large map 160×96×160 (75 chunks, `?map=5x3x5`) | generate ~700–850 ms · initial mesh ~80–100 ms · explosion r=6 mean ~5 ms |
 
 Target budget: one explosion must not exceed 1 frame (16 ms) on the main thread. Since Phase 3 meshing runs on workers: an explosion costs the main thread ~1–2 ms (region copy + geometry upload) on desktop, 1.8 ms on a Samsung S23 Ultra. Render target: 60 fps on desktop and phones (the S23 Ultra, high-end, holds it: p95 16.7 ms; a mid-range phone is still to be measured).

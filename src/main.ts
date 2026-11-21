@@ -15,7 +15,6 @@ import { MeshWorkers, type MeshBatch } from './render/MeshWorkers';
 import { FloatingTexts, UnitLabel } from './render/labels';
 import { ProjectileViews } from './render/projectiles';
 import { createStage } from './render/stage';
-import { SurfaceNetsMesher } from './terrain/mesher';
 import { SCENARIOS, scenarioById, type Scenario } from './terrain/scenarios';
 import { Terrain } from './terrain/Terrain';
 import { Hud, type HudState } from './ui/hud';
@@ -31,7 +30,7 @@ const params = new URLSearchParams(location.search);
 const size = (params.get('map') ?? '').match(/^(\d)x(\d)x(\d)$/);
 const terrain = size ? new Terrain(Number(size[1]), Number(size[2]), Number(size[3])) : new Terrain(5, 3, 5);
 const stage = createStage(canvas, terrain);
-const chunks = new ChunkRenderer(stage.scene, new SurfaceNetsMesher());
+const chunks = new ChunkRenderer(stage.scene);
 const flashes = new ExplosionFlashes(stage.scene);
 const lines = new LineFlashes(stage.scene);
 const texts = new FloatingTexts(stage.scene);
@@ -87,10 +86,11 @@ function newMatch(s: number): void {
   const t0 = performance.now();
   scenario.generate(terrain, s);
   applySky(scenario);
+  chunks.setSharp(scenario.sharpEdges);
   state.generateMs = performance.now() - t0;
   if (workers) {
     workers.reset();
-    initialBatch = workers.request(terrain);
+    initialBatch = workers.request(terrain, chunks.sharp);
   } else {
     state.initialMeshMs = chunks.sync(terrain).ms;
   }
@@ -147,7 +147,7 @@ function handleEvents(events: readonly MatchEvent[]): void {
 function syncTerrain(): void {
   if (terrain.dirty.size === 0) return;
   if (workers) {
-    workers.request(terrain);
+    workers.request(terrain, chunks.sharp);
     return;
   }
   const res = chunks.sync(terrain);

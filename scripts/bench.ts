@@ -11,13 +11,15 @@ import { dropNear } from '../src/game/spawn';
 import { ANT } from '../src/game/species';
 import { floatingIslands } from '../src/terrain/generators/floatingIslands';
 import { insidePC } from '../src/terrain/generators/insidePC';
-import { SurfaceNetsMesher } from '../src/terrain/mesher';
+import { ChunkMesher } from '../src/terrain/mesher';
 import { Terrain } from '../src/terrain/Terrain';
 
-const mesher = new SurfaceNetsMesher();
+// The islands use smooth meshing (Surface Nets) in the game; built scenarios use Dual Contouring.
+const smooth = new ChunkMesher(false);
+const sharp = new ChunkMesher(true);
 const coords: [number, number, number] = [0, 0, 0];
 
-function remesh(t: Terrain): number {
+function remesh(t: Terrain, mesher = smooth): number {
   let n = 0;
   for (const id of t.dirty) {
     const [cx, cy, cz] = t.chunkCoords(id, coords);
@@ -77,17 +79,19 @@ for (const [cx, cy, cz] of [
 
 // Phase 4 scenario: Inside a PC on the default large map (built from SDF stamps).
 {
-  insidePC(new Terrain(5, 3, 5), 1); // warm-up
+  const warm = new Terrain(5, 3, 5);
+  insidePC(warm, 1); // warm-up
+  remesh(warm, sharp);
   const pc = new Terrain(5, 3, 5);
   let s0 = performance.now();
   insidePC(pc, 1234);
   const g = performance.now() - s0;
   s0 = performance.now();
-  remesh(pc);
+  remesh(pc, sharp);
   const m = performance.now() - s0;
-  const r = runExplosionBenchmark(pc, () => remesh(pc), 6, 60);
+  const r = runExplosionBenchmark(pc, () => remesh(pc, sharp), 6, 60);
   console.log(
-    `inside a PC ${pc.W}x${pc.H}x${pc.D}: generate ${g.toFixed(0)} ms  initial mesh ${m.toFixed(0)} ms  ` +
+    `inside a PC (Dual Contouring) ${pc.W}x${pc.H}x${pc.D}: generate ${g.toFixed(0)} ms  initial mesh ${m.toFixed(0)} ms  ` +
       `explosion r=6 mean ${r.meanMs.toFixed(1)} ms  p95 ${r.p95Ms.toFixed(1)}`,
   );
 }

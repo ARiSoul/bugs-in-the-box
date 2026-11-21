@@ -13,6 +13,8 @@ export interface MeshRequest {
   /** Map generation: results from an older map are dropped. */
   gen: number;
   batch: number;
+  /** Dual Contouring (true) or Surface Nets (false). */
+  sharp: boolean;
   /** Terrain size in chunks, so the worker can size its mirror grid. */
   cx: number;
   cy: number;

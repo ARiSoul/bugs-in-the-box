@@ -28,10 +28,24 @@ const REGION = N * N * N;
 const EDGE_A = [0, 2, 4, 6, 0, 1, 4, 5, 0, 1, 2, 3];
 const EDGE_B = [1, 3, 5, 7, 2, 3, 6, 7, 4, 5, 6, 7];
 
+/** Pull of the QEF solution towards the cell's mass point (cell units squared): keeps flat areas stable. */
+const QEF_BIAS = 0.05;
+/** Keep Dual Contouring vertices this far inside their cell. */
+const CELL_MARGIN = 0.02;
+
 /**
- * Naive Surface Nets over a chunk of the global density grid.
+ * Mesher over a chunk of the global density grid: Dual Contouring (default) or naive Surface Nets.
+ * Both share the topology (one vertex per surface cell, one quad per sign-changing edge), so both are
+ * watertight across chunks; they differ only in where the cell's vertex goes.
  *
- * - One vertex per cell that straddles the surface (average of its edge crossings).
+ * - Surface Nets: the average of the cell's edge crossings. Smooth, but rounds every edge and corner.
+ * - Dual Contouring: the point that best fits the tangent planes at the crossings (a small least-squares
+ *   problem, the QEF), so box edges and corners stay sharp. The plane normals must be right for that,
+ *   and the trilinear field blurs them near an edge. So each crossing takes its normal from whichever of
+ *   the 4 cells around its grid edge is closest to linear (smallest trilinear cross terms): such a cell
+ *   sees one face only, and its gradient is that face's normal.
+ *
+ * - One vertex per cell that straddles the surface.
  * - One quad per grid edge with a sign change, connecting the 4 cells sharing that edge.
  * - Seams: vertices are computed in cells [start-1, end) and depend only on the global grid, so
  *   neighbouring chunks produce identical vertices on their shared boundary. A chunk only emits the
@@ -40,7 +54,12 @@ const EDGE_B = [1, 3, 5, 7, 2, 3, 6, 7, 4, 5, 6, 7];
  * - No allocation inside the hot loops: scratch buffers are reused between calls, so call
  *   `mesh()` from one thread/worker at a time per mesher instance.
  */
-export class SurfaceNetsMesher {
+export class ChunkMesher {
+  /** `sharp`: Dual Contouring vertex placement (default); false gives plain Surface Nets. */
+  constructor(readonly sharp = true) {}
+
+  private readonly gn = new Float64Array(3);
+
   private readonly vmap = new Int32Array(REGION); // -1 none, -2 exists but not emitted, >=0 output index
   private readonly vpos = new Float32Array(REGION * 3);
   private readonly vnrm = new Float32Array(REGION * 3);
@@ -91,6 +110,9 @@ export class SurfaceNetsMesher {
           let py = 0;
           let pz = 0;
           let cnt = 0;
+          // QEF terms (Dual Contouring): AtA (symmetric) and Atb, in cell-local coordinates
+          let a00 = 0, a01 = 0, a02 = 0, a11 = 0, a12 = 0, a22 = 0;
+          let b0 = 0, b1 = 0, b2 = 0;
           for (let e = 0; e < 12; e++) {
             const a = EDGE_A[e];
             const bb = EDGE_B[e];
@@ -98,14 +120,55 @@ export class SurfaceNetsMesher {
             const vb = cv[bb];
             if (va < 0 === vb < 0) continue;
             const tt = va / (va - vb);
-            px += (a & 1) + ((bb & 1) - (a & 1)) * tt;
-            py += ((a >> 1) & 1) + (((bb >> 1) & 1) - ((a >> 1) & 1)) * tt;
-            pz += ((a >> 2) & 1) + (((bb >> 2) & 1) - ((a >> 2) & 1)) * tt;
+            const ax = a & 1;
+            const ay = (a >> 1) & 1;
+            const az = (a >> 2) & 1;
+            const qx = ax + ((bb & 1) - ax) * tt;
+            const qy = ay + (((bb >> 1) & 1) - ay) * tt;
+            const qz = az + (((bb >> 2) & 1) - az) * tt;
+            px += qx;
+            py += qy;
+            pz += qz;
             cnt++;
+            if (this.sharp) {
+              const gn = this.edgeNormal(t, i + ax, j + ay, k + az, a ^ bb, i + qx, j + qy, k + qz);
+              const nx = gn[0];
+              const ny = gn[1];
+              const nz = gn[2];
+              const d = nx * qx + ny * qy + nz * qz;
+              a00 += nx * nx; a01 += nx * ny; a02 += nx * nz;
+              a11 += ny * ny; a12 += ny * nz; a22 += nz * nz;
+              b0 += nx * d; b1 += ny * d; b2 += nz * d;
+            }
           }
           px /= cnt;
           py /= cnt;
           pz /= cnt;
+          if (this.sharp) {
+            // Solve (AtA + bias I) y = Atb - AtA c around the mass point c, then x = c + y.
+            const r0 = b0 - (a00 * px + a01 * py + a02 * pz);
+            const r1 = b1 - (a01 * px + a11 * py + a12 * pz);
+            const r2 = b2 - (a02 * px + a12 * py + a22 * pz);
+            const m00 = a00 + QEF_BIAS;
+            const m11 = a11 + QEF_BIAS;
+            const m22 = a22 + QEF_BIAS;
+            const c00 = m11 * m22 - a12 * a12;
+            const c01 = a02 * a12 - a01 * m22;
+            const c02 = a01 * a12 - a02 * m11;
+            const det = m00 * c00 + a01 * c01 + a02 * c02;
+            if (det > 1e-9) {
+              const c11 = m00 * m22 - a02 * a02;
+              const c12 = a01 * a02 - m00 * a12;
+              const c22 = m00 * m11 - a01 * a01;
+              const hi = 1 - CELL_MARGIN;
+              const sx0 = px + (c00 * r0 + c01 * r1 + c02 * r2) / det;
+              const sy0 = py + (c01 * r0 + c11 * r1 + c12 * r2) / det;
+              const sz0 = pz + (c02 * r0 + c12 * r1 + c22 * r2) / det;
+              px = sx0 < CELL_MARGIN ? CELL_MARGIN : sx0 > hi ? hi : sx0;
+              py = sy0 < CELL_MARGIN ? CELL_MARGIN : sy0 > hi ? hi : sy0;
+              pz = sz0 < CELL_MARGIN ? CELL_MARGIN : sz0 > hi ? hi : sz0;
+            }
+          }
 
           const local = i - ex0 + N * (j - ey0) + NN * (k - ez0);
           vmap[local] = -2;
@@ -212,5 +275,51 @@ export class SurfaceNetsMesher {
       pbr: opbr.slice(0, nv * 2),
       indices: oidx.slice(0, ni),
     };
+  }
+
+  /**
+   * Unit normal for the crossing at (px, py, pz) on the grid edge that starts at sample (ex, ey, ez)
+   * and runs along `axisBit` (1 = x, 2 = y, 4 = z): the gradient of the most linear of the 4 cells
+   * around that edge (see the class comment). Written into `this.gn`.
+   */
+  private edgeNormal(t: Terrain, ex: number, ey: number, ez: number, axisBit: number, px: number, py: number, pz: number): Float64Array {
+    const { sx, sy, dens } = t;
+    const sk = sx * sy;
+    const gn = this.gn;
+    let best = Infinity;
+    for (let q = 0; q < 4; q++) {
+      // the two axes across the edge each step back 0 or 1 cell
+      const u = q & 1;
+      const v = (q >> 1) & 1;
+      const ci = axisBit === 1 ? ex : ex - u;
+      const cj = axisBit === 2 ? ey : axisBit === 1 ? ey - u : ey - v;
+      const ck = axisBit === 4 ? ez : ez - v;
+      if (ci < 0 || cj < 0 || ck < 0 || ci >= t.W || cj >= t.H || ck >= t.D) continue;
+      const b = ci + sx * (cj + sy * ck);
+      const c0 = dens[b];
+      const c1 = dens[b + 1];
+      const c2 = dens[b + sx];
+      const c3 = dens[b + sx + 1];
+      const c4 = dens[b + sk];
+      const c5 = dens[b + sk + 1];
+      const c6 = dens[b + sk + sx];
+      const c7 = dens[b + sk + sx + 1];
+      const nonLinear =
+        Math.abs(c0 - c1 - c2 + c3) + Math.abs(c0 - c1 - c4 + c5) + Math.abs(c0 - c2 - c4 + c6) +
+        Math.abs(-c0 + c1 + c2 - c3 + c4 - c5 - c6 + c7);
+      if (nonLinear >= best) continue;
+      best = nonLinear;
+      const fx = px - ci;
+      const fy = py - cj;
+      const fz = pz - ck;
+      gn[0] = ((c1 - c0) * (1 - fy) + (c3 - c2) * fy) * (1 - fz) + ((c5 - c4) * (1 - fy) + (c7 - c6) * fy) * fz;
+      gn[1] = ((c2 - c0) * (1 - fx) + (c3 - c1) * fx) * (1 - fz) + ((c6 - c4) * (1 - fx) + (c7 - c5) * fx) * fz;
+      gn[2] = ((c4 - c0) * (1 - fx) + (c5 - c1) * fx) * (1 - fy) + ((c6 - c2) * (1 - fx) + (c7 - c3) * fx) * fy;
+    }
+    const l = Math.sqrt(gn[0] * gn[0] + gn[1] * gn[1] + gn[2] * gn[2]) || 1;
+    gn[0] /= l;
+    gn[1] /= l;
+    gn[2] /= l;
+    return gn;
   }
 }

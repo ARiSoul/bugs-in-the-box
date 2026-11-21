@@ -6,7 +6,7 @@
             ┌────────────── src/terrain (pure, no DOM/three) ───────────────────┐
  generator ▶│ Terrain: density grid + dirty chunks                               │
  (seed)     │   sample · normal · raycast · carve                                │
-            │ SurfaceNetsMesher: chunk ──▶ positions, normals, colors, indices   │
+            │ ChunkMesher: chunk ──▶ positions, normals, colors, pbr, indices    │
             └───────────────▲──────────────────────────────┬─────────────────────┘
                             │ stable interface             │ ChunkMesh
               gameplay (bugs, projectiles, picking)        ▼
@@ -43,23 +43,27 @@ Shapes are composed with SDF operations: union `min(a,b)`, subtraction `max(a,-b
 
 Determinism: integer-hash noise (`noise.ts`), seeded PRNG (`createRng`). No `Math.random`/`Math.sin` in generation, so the same number gives the same map on any device. The tests check this.
 
-## Meshing (Surface Nets)
+## Meshing (Dual Contouring / Surface Nets)
 
 Vertex colours come from `shadeVertex` (`shading.ts`): the material of the nearest sample gives the base colour (GROUND is grass on top and rock on the sides), with a little noise, darkened by scorch and by ambient occlusion. The occlusion comes from the density field itself: the mesher probes outward along the normal at 1, 2 and 3.5 cells, and where the field says something is closer than the probe, the vertex sits in a crease and gets darker (3 samples per vertex, in the worker). The mesher also writes a `pbr` attribute per vertex (roughness, metalness) from the material table.
 
 Per chunk, in three steps (`mesher.ts`):
 
-1. **Vertices.** For each cell whose 8 corners have different signs, one vertex at the average of the edge crossings. The normal is the analytic gradient of that cell's trilinear interpolation.
+1. **Vertices.** For each cell whose 8 corners have different signs, one vertex. Where it goes depends on the mode, chosen per scenario (`Scenario.sharpEdges`):
+   - **Dual Contouring** (built scenarios, e.g. the PC): the point that best fits the tangent planes at the cell's edge crossings (a 3×3 least-squares problem, the QEF, solved around the crossings' mass point with a small bias towards it, and kept inside the cell). Box edges and corners stay sharp. The plane normals must be right: the trilinear field blurs them near an edge, so each crossing takes its normal from the most linear of the 4 cells around its grid edge (smallest trilinear cross terms): such a cell sees one face only, so its gradient is that face's normal. A test checks that a box corner off the grid comes out within 0.1 of the true corner (Surface Nets: more than 0.3 away).
+   - **Surface Nets** (natural terrain, the islands): the average of the edge crossings. Smooth; it rounds every edge.
+
+   The vertex normal is the analytic gradient of the cell's trilinear interpolation. In sharp mode the terrain shader also uses the triangle's own normal where it disagrees strongly with the interpolated one, so hard edges are shaded hard.
 2. **Lazy emission.** Output vertices are only created when some quad uses them.
 3. **Quads.** For each grid edge with a sign change, one quad connecting the 4 cells that share it; the winding depends on which side is solid.
 
 **Seams.** Vertices are computed over the chunk's cells `[start-1, end)` and depend only on the global grid, so two neighbouring chunks produce exactly the same vertices on their shared boundary. Each chunk emits only the quads whose source edge lies inside it, so no quad is duplicated. The tests check this (zero open edges after welding positions).
 
-**Performance.** No allocations in hot loops; scratch buffers are reused between calls (so one mesher instance serves one thread at a time). ~2–3 ms per chunk.
+**Performance.** No allocations in hot loops; scratch buffers are reused between calls (so one mesher instance serves one thread at a time). Surface Nets ~2–3 ms per chunk; Dual Contouring about twice that (in the workers, so it does not reach the main thread).
 
 **Known limitations.**
-- No sharp edges (Surface Nets smooths them); Dual Contouring would fix this, but costs a lot more.
-- Walls thinner than ~1 cell can vanish or get holes.
+- Sharp round rims (a cylinder's flat top) show the grid as small steps in Dual Contouring: give round parts a rounded rim of at least ~1 cell.
+- Walls thinner than ~2 cells can vanish or break up: the scenario design rule is ≥ 2 cells for parts and gaps.
 - There are some non-manifold edges (≈100–200 per map); this is normal for this algorithm, and the test only checks they do not blow up.
 - About 0.1% of faces end up wound against their normals in very thin geometry.
 - Per-cell normals can show slight faceting; if it bothers us, smooth them with the neighbouring cells' normals.
@@ -111,7 +115,7 @@ One `MeshStandardMaterial` for all terrain, patched (`onBeforeCompile`) to take 
 
 - After each simulation step, the dirty chunks are sent to a pool of module workers (cores − 1, at most 4), spread evenly so the chunks of one explosion mesh in parallel.
 - A job carries only the samples its chunk reads: the chunk's cells plus a pad of 6 samples on each side (one cell for the mesher, the rest for the ambient-occlusion probe): a box of 44³ samples, densities, scorch and material packed in one ~510 kB buffer (`terrain/region.ts`). The buffer is transferred, and it comes back with the result for reuse. The grid itself never crosses threads.
-- Each worker keeps a mirror grid in which only the regions it was sent are current. That is all the mesher reads, so it runs the same `SurfaceNetsMesher` unchanged. A test checks that a mirror mesh is bit-identical to the original for every chunk.
+- Each worker keeps a mirror grid in which only the regions it was sent are current. That is all the mesher reads, so it runs the same `ChunkMesher` unchanged (both modes; the request says which). A test checks that a mirror mesh is bit-identical to the original for every chunk.
 - The meshes are transferred back (no copy). The whole batch is applied in one frame, so neighbouring chunks of an explosion change together and the seams never open.
 - Results are dropped when a newer request for the same chunk was sent (workers can finish out of order) or when the map was regenerated (`reset`).
 - Gameplay never waits for meshes: it reads the density grid on the main thread, so determinism is untouched. The new crater appears one or two frames after the carve.

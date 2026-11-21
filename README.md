@@ -37,7 +37,7 @@ Each turn lasts 30 s. After a shot, the bug has 3 s to walk away. The last team 
 
 ## How it works (summary)
 
-The terrain is a 3D density grid (negative = solid). Each 32³ chunk is turned into a mesh with Surface Nets; an explosion subtracts a sphere from the grid and only the affected chunks are re-meshed (~3 per explosion, ~5–7 ms). Maps are generated deterministically from a seed.
+The terrain is a 3D density grid (negative = solid). Each 32³ chunk is turned into a mesh on Web Workers, with Dual Contouring (sharp edges, for built scenarios like the PC) or Surface Nets (smooth, for natural terrain); an explosion subtracts a sphere from the grid and only the affected chunks are re-meshed (~3 per explosion, ~5–7 ms). Maps are generated deterministically from a seed.
 
 More detail in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md), the plan in [`docs/ROADMAP.md`](docs/ROADMAP.md), and ideas for scenarios and bugs in [`docs/IDEAS.md`](docs/IDEAS.md). To work on the code with Claude Code, see [`CLAUDE.md`](CLAUDE.md).
 

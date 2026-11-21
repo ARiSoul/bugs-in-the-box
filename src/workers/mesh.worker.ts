@@ -1,10 +1,10 @@
 /**
  * Meshing worker. Keeps a mirror of the terrain grid in which only the regions it is asked to mesh
- * are up to date (that is all the mesher reads), and runs the same SurfaceNetsMesher as the main thread.
+ * are up to date (that is all the mesher reads), and runs the same ChunkMesher as the main thread.
  * The output arrays are transferred, not copied.
  */
 import { regionArrays, writeRegion } from '../terrain/region';
-import { SurfaceNetsMesher } from '../terrain/mesher';
+import { ChunkMesher } from '../terrain/mesher';
 import { Terrain } from '../terrain/Terrain';
 import type { MeshReply, MeshRequest, MeshResult } from './meshProtocol';
 
@@ -14,7 +14,8 @@ interface WorkerScope {
 }
 
 const scope = self as unknown as WorkerScope;
-const mesher = new SurfaceNetsMesher();
+const sharpMesher = new ChunkMesher(true);
+const smoothMesher = new ChunkMesher(false);
 let mirror: Terrain | null = null;
 const coords: [number, number, number] = [0, 0, 0];
 
@@ -26,6 +27,7 @@ scope.onmessage = (e) => {
   }
   const results: MeshResult[] = [];
   const transfer: Transferable[] = [];
+  const mesher = req.sharp ? sharpMesher : smoothMesher;
   for (const job of req.jobs) {
     writeRegion(mirror, job.box, regionArrays(job.buffer));
     const [cx, cy, cz] = mirror.chunkCoords(job.id, coords);

@@ -21,9 +21,9 @@ export function shadeVertex(
   const keep = 1 - burn * 0.87;
   if (material === GROUND || material >= MATERIAL_RGB.length) {
     const grass = Math.min(1, Math.max(0, (ny - 0.55) * 3.2));
-    out[o] = ((0.34 + 0.09 * n) * (1 - grass) + (0.2 + 0.05 * n) * grass) * keep;
-    out[o + 1] = ((0.27 + 0.07 * n) * (1 - grass) + (0.48 + 0.09 * n) * grass) * keep;
-    out[o + 2] = ((0.23 + 0.06 * n) * (1 - grass) + (0.17 + 0.04 * n) * grass) * keep;
+    out[o] = ((0.2 + 0.06 * n) * (1 - grass) + (0.07 + 0.03 * n) * grass) * keep;
+    out[o + 1] = ((0.15 + 0.05 * n) * (1 - grass) + (0.24 + 0.06 * n) * grass) * keep;
+    out[o + 2] = ((0.12 + 0.04 * n) * (1 - grass) + (0.05 + 0.02 * n) * grass) * keep;
     return;
   }
   const c = MATERIAL_RGB[material];

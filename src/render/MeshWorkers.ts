@@ -80,7 +80,7 @@ export class MeshWorkers {
   }
 
   /** Send every dirty chunk to the workers and clear the dirty set. Returns the batch id, or -1. */
-  request(terrain: Terrain): number {
+  request(terrain: Terrain, sharp: boolean): number {
     if (terrain.dirty.size === 0) return -1;
     const startedAt = performance.now();
     const batch = this.nextBatch++;
@@ -99,7 +99,7 @@ export class MeshWorkers {
     let sent = 0;
     parts.forEach((jobs, i) => {
       if (jobs.length === 0) return;
-      const req: MeshRequest = { gen: this.gen, batch, cx: terrain.cx, cy: terrain.cy, cz: terrain.cz, jobs };
+      const req: MeshRequest = { gen: this.gen, batch, sharp, cx: terrain.cx, cy: terrain.cy, cz: terrain.cz, jobs };
       this.workers[i].postMessage(req, jobs.map((j) => j.buffer));
       sent++;
     });

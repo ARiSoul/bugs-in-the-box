@@ -70,9 +70,12 @@ export const rotatedBox = (x: number, y: number, z: number, hx: number, hy: numb
   return s;
 };
 
-/** Capped cylinder along `axis`. */
-export const cylinder = (x: number, y: number, z: number, radius: number, halfHeight: number, axis: Axis = 1): Shape =>
-  shape(Kind.Cylinder, x, y, z, radius, halfHeight, 0, 0, axis);
+/**
+ * Capped cylinder along `axis`, optionally with rounded rims. Round rims of at least ~1 cell mesh
+ * cleanly; a sharp round rim shows the grid as small steps.
+ */
+export const cylinder = (x: number, y: number, z: number, radius: number, halfHeight: number, axis: Axis = 1, round = 0): Shape =>
+  shape(Kind.Cylinder, x, y, z, radius, halfHeight, 0, round, axis);
 
 /** Segment from (x0,y0,z0) to (x1,y1,z1) with round ends. */
 export const capsule = (x0: number, y0: number, z0: number, x1: number, y1: number, z1: number, radius: number): Shape =>
@@ -118,11 +121,11 @@ export function distance(s: Shape, px: number, py: number, pz: number): number {
     case Kind.Cylinder: {
       const axial = s.axis === 1 ? dy : s.axis === 0 ? dx : dz;
       const r2 = dx * dx + dy * dy + dz * dz - axial * axial;
-      const qr = Math.sqrt(r2 > 0 ? r2 : 0) - s.a;
-      const qa = Math.abs(axial) - s.b;
+      const qr = Math.sqrt(r2 > 0 ? r2 : 0) - s.a + s.r;
+      const qa = Math.abs(axial) - s.b + s.r;
       const or = qr > 0 ? qr : 0;
       const oa = qa > 0 ? qa : 0;
-      return Math.sqrt(or * or + oa * oa) + Math.min(Math.max(qr, qa), 0);
+      return Math.sqrt(or * or + oa * oa) + Math.min(Math.max(qr, qa), 0) - s.r;
     }
     case Kind.Capsule: {
       const bx = s.a - s.x;

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { ChunkMesh, SurfaceNetsMesher } from '../terrain/mesher';
+import { ChunkMesher, type ChunkMesh } from '../terrain/mesher';
 import type { Terrain } from '../terrain/Terrain';
 
 export interface SyncResult {
@@ -13,13 +13,20 @@ export interface SyncResult {
 export class ChunkRenderer {
   private readonly meshes = new Map<number, THREE.Mesh>();
   private readonly tris = new Map<number, number>();
-  private readonly material = terrainMaterial();
+  private readonly sharpUniform = { value: 1 };
+  private readonly material = terrainMaterial(this.sharpUniform);
+  private readonly sharpMesher = new ChunkMesher(true);
+  private readonly smoothMesher = new ChunkMesher(false);
   private readonly coords: [number, number, number] = [0, 0, 0];
+  /** Sharp edges (Dual Contouring + hard-edge shading) or smooth (Surface Nets): set per scenario. */
+  sharp = true;
 
-  constructor(
-    private readonly scene: THREE.Scene,
-    private readonly mesher: SurfaceNetsMesher,
-  ) {}
+  constructor(private readonly scene: THREE.Scene) {}
+
+  setSharp(sharp: boolean): void {
+    this.sharp = sharp;
+    this.sharpUniform.value = sharp ? 1 : 0;
+  }
 
   get triangles(): number {
     let n = 0;
@@ -30,10 +37,11 @@ export class ChunkRenderer {
   /** Re-mesh every dirty chunk on this thread and clear the dirty set (fallback, and the CPU benchmark). */
   sync(terrain: Terrain): SyncResult {
     const t0 = performance.now();
+    const mesher = this.sharp ? this.sharpMesher : this.smoothMesher;
     let chunks = 0;
     for (const id of terrain.dirty) {
       const [cx, cy, cz] = terrain.chunkCoords(id, this.coords);
-      this.apply(id, this.mesher.mesh(terrain, cx, cy, cz));
+      this.apply(id, mesher.mesh(terrain, cx, cy, cz));
       chunks++;
     }
     terrain.dirty.clear();
@@ -76,15 +84,27 @@ export class ChunkRenderer {
 /**
  * One standard (PBR) material for all terrain, where roughness and metalness come per vertex from the
  * `pbr` attribute (set from the material id by the mesher), so metal parts reflect and plastic does not.
+ * With `sharp` at 1, hard edges are shaded hard (see below).
  */
-function terrainMaterial(): THREE.MeshStandardMaterial {
+function terrainMaterial(sharp: { value: number }): THREE.MeshStandardMaterial {
   const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0 });
   m.onBeforeCompile = (shader) => {
+    shader.uniforms.uSharp = sharp;
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nattribute vec2 pbr;\nvarying vec2 vPbr;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvPbr = pbr;');
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', '#include <common>\nvarying vec2 vPbr;')
+      .replace('#include <common>', '#include <common>\nvarying vec2 vPbr;\nuniform float uSharp;')
+      // Hard edges: vertex normals are averaged across an edge, which shades it round. Where the
+      // triangle's own normal disagrees strongly with the interpolated one, use the triangle's.
+      .replace(
+        '#include <normal_fragment_begin>',
+        [
+          '#include <normal_fragment_begin>',
+          'vec3 faceNormal = normalize(cross(dFdx(vViewPosition), dFdy(vViewPosition)));',
+          'normal = normalize(mix(normal, faceNormal, uSharp * smoothstep(0.84, 0.7, dot(faceNormal, normal))));',
+        ].join('\n'),
+      )
       .replace('#include <roughnessmap_fragment>', 'float roughnessFactor = vPbr.x;')
       .replace('#include <metalnessmap_fragment>', 'float metalnessFactor = vPbr.y;');
   };

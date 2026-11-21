@@ -4,7 +4,8 @@ import { ANT, SPIDER } from '../src/game/species';
 import { insidePC } from '../src/terrain/generators/insidePC';
 import { COPPER, FAN, PCB } from '../src/terrain/materials';
 import { SCENARIOS, scenarioById } from '../src/terrain/scenarios';
-import { add, box, capsule, cut, cylinder, distance, rotatedBox, sphere, torus } from '../src/terrain/sdf';
+import { ChunkMesher } from '../src/terrain/mesher';
+import { add, box, boxMinMax, capsule, cut, cylinder, distance, rotatedBox, sphere, torus } from '../src/terrain/sdf';
 import { Terrain } from '../src/terrain/Terrain';
 import { analyze, meshAll } from './helpers/meshIntegrity';
 
@@ -50,6 +51,39 @@ describe('SDF primitives', () => {
     expect(t.dens[t.idx(0, 16, 32)]).toBeGreaterThan(0);
     expect(t.dens[t.idx(1, 16, 32)]).toBeGreaterThan(0);
     expect(t.dens[t.idx(t.W, 16, 32)]).toBeGreaterThan(0);
+  });
+});
+
+describe('mesher modes', () => {
+  /** Distance from `p` to the nearest mesh vertex. */
+  const nearest = (positions: Float32Array, p: number[]): number => {
+    let best = Infinity;
+    for (let i = 0; i < positions.length; i += 3) {
+      const dx = positions[i] - p[0];
+      const dy = positions[i + 1] - p[1];
+      const dz = positions[i + 2] - p[2];
+      best = Math.min(best, Math.sqrt(dx * dx + dy * dy + dz * dz));
+    }
+    return best;
+  };
+
+  it('Dual Contouring keeps box corners and edges sharp; Surface Nets rounds them', () => {
+    const t = new Terrain(1, 1, 1);
+    t.beginGeneration();
+    add(t, boxMinMax(8.3, 6.3, 8.3, 20.7, 18.7, 20.7), PCB); // corners off the grid on purpose
+    const corner = [8.3, 18.7, 8.3];
+    const edge = [14.5, 18.7, 8.3];
+    const sharp = new ChunkMesher(true).mesh(t, 0, 0, 0);
+    const smooth = new ChunkMesher(false).mesh(t, 0, 0, 0);
+    expect(nearest(sharp.positions, corner)).toBeLessThan(0.1);
+    expect(nearest(sharp.positions, edge)).toBeLessThan(0.1);
+    expect(nearest(smooth.positions, corner)).toBeGreaterThan(0.3);
+    for (const m of [sharp, smooth]) {
+      const r = analyze([m]);
+      expect(r.openEdges).toBe(0);
+      expect(r.degenerate).toBe(0);
+      expect(r.orientedOutward).toBeGreaterThan(0.99);
+    }
   });
 });
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { floatingIslands } from '../src/terrain/generators/floatingIslands';
-import { SurfaceNetsMesher } from '../src/terrain/mesher';
+import { ChunkMesher } from '../src/terrain/mesher';
 import { REGION_BYTES, REGION_SAMPLES, readRegion, regionArrays, regionBox, writeRegion } from '../src/terrain/region';
 import { Terrain } from '../src/terrain/Terrain';
 
@@ -16,8 +16,8 @@ describe('chunk regions (what the mesh workers receive)', () => {
     floatingIslands(t, 77);
     t.carve(40, 30, 40, 6); // scorch too
     const mirror = new Terrain(3, 2, 3);
-    const a = new SurfaceNetsMesher();
-    const b = new SurfaceNetsMesher();
+    const a = new ChunkMesher();
+    const b = new ChunkMesher();
     const box = new Int32Array(6);
     const arrays = regionArrays(new ArrayBuffer(REGION_BYTES));
     const c: [number, number, number] = [0, 0, 0];
