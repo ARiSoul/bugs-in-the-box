@@ -19,7 +19,7 @@ Open the address that Vite prints.
 - **Space**: jump · **hold F** to charge, release to fire · **1–4**: weapon · **N**: new match
 - **Drag** to orbit the camera · **scroll** to zoom
 - On a touch screen (or with the mouse), use the pad in the bottom-right corner and tap a weapon.
-- The menu lets you pick the seed (the same seed gives the same map and match) and run a benchmark.
+- The menu lets you pick the seed (the same seed gives the same map and match) and run a benchmark. It also shows the meshing cost; the frame time is at the top. Add `?mesh=main` to the URL to mesh on the main thread instead of the workers, to compare.
 
 Each turn lasts 30 s. After a shot, the bug has 3 s to walk away. The last team with bugs left wins.
 
@@ -28,6 +28,7 @@ Each turn lasts 30 s. After a shot, the bug has 3 s to walk away. The last team 
 | Command | What it does |
 |---|---|
 | `npm run dev` | development server with hot reload |
+| `npm run dev:lan` | the same, reachable from other devices on the network (open the "Network" URL on a phone) |
 | `npm run build` | typecheck + production build into `dist/` |
 | `npm run preview` | serves the production build |
 | `npm run test` | tests (Vitest) |

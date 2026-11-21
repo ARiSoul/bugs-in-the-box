@@ -13,9 +13,16 @@ const el = <T extends HTMLElement>(id: string): T => {
 const hex = (c: number): string => `#${c.toString(16).padStart(6, '0')}`;
 
 export interface HudState {
+  /** Where meshing runs ("3 workers", "main thread"). */
+  meshing: string;
   generateMs: number;
+  /** Until the whole map is on screen. */
   initialMeshMs: number;
+  /** Main-thread cost of the last remesh (with workers: copy, post and upload only). */
   lastExplosionMs: number;
+  lastExplosionWorkerMs: number;
+  /** From the request until the new meshes are on screen (workers only). */
+  lastExplosionLatencyMs: number;
   lastExplosionChunks: number;
   triangles: number;
   bench: string;
@@ -42,15 +49,29 @@ export class Hud {
   private teamRows: { hp: HTMLElement; bar: HTMLElement; max: number }[] = [];
   private readonly last = new Map<string, string>();
 
-  setFps(fps: number): void {
-    this.fps.textContent = `${Math.round(fps)} fps`;
+  private readonly sorted = new Float32Array(120);
+
+  /** Frame rate and frame-time spread over the last `count` frame times (ms). */
+  setFrames(frameMs: Float32Array, count: number): void {
+    if (count === 0) return;
+    let sum = 0;
+    for (let i = 0; i < count; i++) {
+      this.sorted[i] = frameMs[i];
+      sum += frameMs[i];
+    }
+    const s = this.sorted.subarray(0, count).sort();
+    const p95 = s[Math.min(count - 1, Math.floor(count * 0.95))];
+    this.fps.textContent = `${Math.round((1000 * count) / sum)} fps · p95 ${p95.toFixed(1)} ms · worst ${s[count - 1].toFixed(1)} ms`;
   }
 
   render(terrain: Terrain, s: HudState): void {
     this.stats.textContent =
       `map ${terrain.W}×${terrain.H}×${terrain.D} · ${terrain.chunkCount} chunks of ${CHUNK}³ · ${(s.triangles / 1000).toFixed(1)}k triangles\n` +
-      `generate: ${s.generateMs.toFixed(0)} ms · initial mesh: ${s.initialMeshMs.toFixed(0)} ms\n` +
-      `last explosion: ${s.lastExplosionMs.toFixed(1)} ms (${s.lastExplosionChunks} chunks)` +
+      `meshing on ${s.meshing} · generate: ${s.generateMs.toFixed(0)} ms · initial mesh: ${s.initialMeshMs.toFixed(0)} ms\n` +
+      `last remesh (${s.lastExplosionChunks} chunks): main thread ${s.lastExplosionMs.toFixed(1)} ms` +
+      (s.lastExplosionLatencyMs > 0
+        ? ` · worker ${s.lastExplosionWorkerMs.toFixed(1)} ms · on screen after ${s.lastExplosionLatencyMs.toFixed(0)} ms`
+        : '') +
       (s.bench ? `\n${s.bench}` : '');
   }
 

@@ -91,11 +91,24 @@ Render side: `UnitLabel` (name and health above each bug, redrawn only on change
 
 ## Rendering
 
-`ChunkRenderer.sync(terrain)` re-meshes the dirty chunks and replaces the `BufferGeometry` of each `THREE.Mesh`. One material with vertex colors, hemisphere + directional light, no shadows. `stage.ts` creates the renderer, camera and controls.
+One material with vertex colors, hemisphere + directional light, no shadows. `stage.ts` creates the renderer, camera and controls. `ChunkRenderer.apply(id, mesh)` replaces the `BufferGeometry` of a chunk's `THREE.Mesh`. The meshes come from the worker pool (below); `ChunkRenderer.sync(terrain)` meshes on the main thread instead (fallback, `?mesh=main`, and the benchmark button).
+
+### Meshing workers (`src/render/MeshWorkers.ts`, `src/workers/mesh.worker.ts`)
+
+- After each simulation step, the dirty chunks are sent to a pool of module workers (cores − 1, at most 4), spread evenly so the chunks of one explosion mesh in parallel.
+- A job carries only the samples its chunk reads: the box `[start − 1, start + 32]` per axis, densities and scorch packed in one ~200 kB buffer (`terrain/region.ts`). The buffer is transferred, and it comes back with the result for reuse. The grid itself never crosses threads.
+- Each worker keeps a mirror grid in which only the regions it was sent are current. That is all the mesher reads, so it runs the same `SurfaceNetsMesher` unchanged. A test checks that a mirror mesh is bit-identical to the original for every chunk.
+- The meshes are transferred back (no copy). The whole batch is applied in one frame, so neighbouring chunks of an explosion change together and the seams never open.
+- Results are dropped when a newer request for the same chunk was sent (workers can finish out of order) or when the map was regenerated (`reset`).
+- Gameplay never waits for meshes: it reads the density grid on the main thread, so determinism is untouched. The new crater appears one or two frames after the carve.
+
+Measured on a desktop browser (Ricardo's PC, 4 workers), explosions of 2–8 chunks: main thread 0.3–1.6 ms (copy, post, upload), worker 2–5 ms, on screen after 2–7 ms. On the main thread the same explosions cost 2.5–11.7 ms. Initial mesh of the 18 chunks: ~15 ms until on screen. The stats line in the menu and the frame-time readout (fps · p95 · worst) show these numbers live, also on a phone.
+
+On a Samsung Galaxy S23 Ultra (a high-end phone, 120 Hz screen; Chrome over `npm run dev:lan`): ~65 fps, p95 16.7 ms, worst frame usually ~17 ms with rare spikes up to ~58 ms (cause not found yet); a remesh costs the main thread 1.8 ms; generating the map 145–151 ms (main thread, once per match); initial mesh 36 ms warm (308 ms on the very first load, while the workers start).
 
 ## Performance path (in this order, always measuring)
 
-1. **Web Worker for meshing.** The mesher already depends only on typed arrays, so the change is: send the grid (or just the chunk + 1 cell of margin) to the worker and get the arrays back as *transferables*. This removes the ~16 ms spikes on the main thread.
+1. **Web Worker for meshing.** Done (Phase 3): see "Meshing workers" above. Explosions cost the main thread ~1–2 ms instead of up to ~16 ms.
 2. **WASM (Rust)** for the mesher/noise **only if** the benchmark shows JS is the limit after the Worker.
 3. **Compute shaders (WebGPU)** only if CPU/WASM meshing is still the bottleneck; this needs a CPU copy of the grid for gameplay, and GPU→CPU readback has latency (tolerable in a turn-based game).
 4. On the render side: per-chunk frustum culling (three.js already does it), LOD for distant chunks, and measuring on phones.

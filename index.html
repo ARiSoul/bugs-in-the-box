@@ -46,8 +46,10 @@
         #weapons { bottom: auto; top: 118px; }
         #weaponList { display: grid; grid-template-columns: 1fr 1fr; }
         #panel { max-width: 46vw; }
+        /* open, the menu covers the other boxes, so its numbers can be read in full on a phone */
+        #panel[open] { max-width: calc(100vw - 24px); z-index: 10; background: rgba(12, 16, 28, 0.94); }
         #turn { left: auto; right: 12px; transform: none; min-width: 0; }
-        #fps { display: none; }
+        #fps { right: auto; left: 12px; top: 46px; font-size: 10px; max-width: calc(100vw - 250px); }
       }
       #banner { left: 50%; top: 40%; transform: translate(-50%, -50%); font-size: 22px; font-weight: 800; padding: 16px 24px; text-align: center; display: none; }
       #banner small { display: block; font-size: 12px; font-weight: 400; opacity: 0.8; margin-top: 6px; }

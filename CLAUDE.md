@@ -14,6 +14,7 @@ Author: Ricardo (Marinha Grande, PT). Project priority #1: **the best possible p
 ```bash
 npm install
 npm run dev         # Vite with hot reload (http://localhost:5173)
+npm run dev:lan     # same, reachable from a phone on the local network
 npm run test        # Vitest: mesh integrity, determinism, carve, raycast
 npm run typecheck   # tsc --noEmit
 npm run build       # typecheck + production build into dist/
@@ -29,6 +30,7 @@ src/
   terrain/            game core, NO dependency on three.js or the DOM (so it can move to a Worker/WASM)
     Terrain.ts          density grid + sample/normal/raycast/carve + set of dirty chunks
     mesher.ts           Surface Nets per chunk (no allocations in hot loops)
+    region.ts           copy the samples one chunk needs in/out of the grid (what the mesh workers receive)
     noise.ts            deterministic noise, seeded PRNG
     shading.ts          per-vertex color (provisional, depends on the scenario)
     generators/         one generator per scenario; today only floatingIslands (generic test scenario)
@@ -41,12 +43,13 @@ src/
     projectile.ts       shells and grenades (gravity, wind, bounces)
     weapons.ts          weapons as data (Solder Blob, Capacitor, Short Circuit, Soldering Iron)
     math.ts             rotate2: deterministic rotation without sin/cos
-  render/             three.js: stage, ChunkRenderer (1 mesh per chunk), BugView, FollowCamera, labels, projectiles, aim, effects
+  render/             three.js: stage, ChunkRenderer (1 mesh per chunk), MeshWorkers (worker pool), BugView, FollowCamera, labels, projectiles, aim, effects
+  workers/            mesh.worker.ts (runs the mesher on a mirror grid) + message types; no three.js, no DOM
   input/              Controls (keyboard + on-screen pad -> MatchInput), picking against the density field
   ui/                 DOM HUD
   bench/              benchmark shared between the in-browser button and scripts/bench.ts
   main.ts             glue: wires terrain, render, input and UI
-tests/                Vitest + helpers (meshIntegrity)
+tests/                Vitest + helpers (meshIntegrity, worlds)
 scripts/bench.ts      Node benchmark
 docs/                 ARCHITECTURE.md, ROADMAP.md, IDEAS.md
 ```
@@ -88,7 +91,7 @@ Measured on Node 22 in a cloud VM (one core). They serve as a regression baselin
 | Remesh per chunk | ~2–3 ms |
 | Bug step | ~0.5 µs per bug per tick |
 
-Target budget: one explosion must not exceed 1 frame (16 ms) on the main thread; once meshing moves to a Worker, it stops blocking. Render target: 60 fps on desktop, to be validated on mid-range phones.
+Target budget: one explosion must not exceed 1 frame (16 ms) on the main thread. Since Phase 3 meshing runs on workers: an explosion costs the main thread ~1–2 ms (region copy + geometry upload) on desktop, 1.8 ms on a Samsung S23 Ultra. Render target: 60 fps on desktop and phones (the S23 Ultra, high-end, holds it: p95 16.7 ms; a mid-range phone is still to be measured).
 
 ## Trademark
 
@@ -96,4 +99,4 @@ Target budget: one explosion must not exceed 1 frame (16 ms) on the main thread;
 
 ## Current status
 
-Phase 0 done: destructible SDF terrain prototype (click to explode, seed, benchmark). Phase 1 done: a controllable bug (ant, spider, cockroach) that walks, jumps, falls into craters and dies off the map, with a follow camera. Phase 2 done: local hot-seat matches (Red Ants vs Blue Spiders, 3 bugs each), turns, wind, 4 weapons, damage, knockback, fall damage, on-screen pad for mouse and touch. Next: Phase 3, performance (meshing in a Worker, phone measurements). See `docs/ROADMAP.md`.
+Phase 0 done: destructible SDF terrain prototype (click to explode, seed, benchmark). Phase 1 done: a controllable bug (ant, spider, cockroach) that walks, jumps, falls into craters and dies off the map, with a follow camera. Phase 2 done: local hot-seat matches (Red Ants vs Blue Spiders, 3 bugs each), turns, wind, 4 weapons, damage, knockback, fall damage, on-screen pad for mouse and touch. Phase 3 in progress: meshing runs on a Web Worker pool, with live performance readouts. Measured on a Samsung S23 Ultra (60 fps); WASM not needed for now. Still open: a mid-range phone, rare frame spikes, larger maps and LOD. See `docs/ROADMAP.md`.

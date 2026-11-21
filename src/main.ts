@@ -11,6 +11,7 @@ import { BugView } from './render/BugView';
 import { ChunkRenderer } from './render/ChunkRenderer';
 import { ExplosionFlashes, LineFlashes } from './render/effects';
 import { FollowCamera } from './render/followCamera';
+import { MeshWorkers, type MeshBatch } from './render/MeshWorkers';
 import { FloatingTexts, UnitLabel } from './render/labels';
 import { ProjectileViews } from './render/projectiles';
 import { createStage } from './render/stage';
@@ -36,11 +37,42 @@ const aim = new AimView(stage.scene);
 const follow = new FollowCamera(stage.camera, stage.controls);
 const hud = new Hud();
 
-const state: HudState = { generateMs: 0, initialMeshMs: 0, lastExplosionMs: 0, lastExplosionChunks: 0, triangles: 0, bench: '' };
+const state: HudState = {
+  meshing: '',
+  generateMs: 0,
+  initialMeshMs: 0,
+  lastExplosionMs: 0,
+  lastExplosionWorkerMs: 0,
+  lastExplosionLatencyMs: 0,
+  lastExplosionChunks: 0,
+  triangles: 0,
+  bench: '',
+};
 const refresh = (): void => {
   state.triangles = chunks.triangles;
   hud.render(terrain, state);
 };
+
+// Meshing runs on a worker pool; `?mesh=main` keeps it on the main thread (to compare, or as a fallback).
+let initialBatch = -1;
+const workers = new URLSearchParams(location.search).get('mesh') === 'main' ? null : MeshWorkers.create(onMeshBatch);
+state.meshing = workers ? `${workers.size} worker${workers.size > 1 ? 's' : ''}` : 'main thread';
+
+/** A batch of chunk meshes is ready: show all of them in this frame (neighbours must change together). */
+function onMeshBatch(b: MeshBatch): void {
+  const t0 = performance.now();
+  for (const m of b.meshes) chunks.apply(m.id, m.mesh);
+  const now = performance.now();
+  if (b.id === initialBatch) {
+    state.initialMeshMs = now - b.startedAt;
+  } else {
+    state.lastExplosionMs = b.postMs + (now - t0);
+    state.lastExplosionWorkerMs = b.workerMs;
+    state.lastExplosionLatencyMs = now - b.startedAt;
+    state.lastExplosionChunks = b.meshes.length;
+  }
+  refresh();
+}
 
 let seed = 1234;
 let match: Match;
@@ -51,8 +83,15 @@ function newMatch(s: number): void {
   const t0 = performance.now();
   floatingIslands(terrain, s);
   state.generateMs = performance.now() - t0;
-  state.initialMeshMs = chunks.sync(terrain).ms;
+  if (workers) {
+    workers.reset();
+    initialBatch = workers.request(terrain);
+  } else {
+    state.initialMeshMs = chunks.sync(terrain).ms;
+  }
   state.lastExplosionMs = 0;
+  state.lastExplosionWorkerMs = 0;
+  state.lastExplosionLatencyMs = 0;
   state.lastExplosionChunks = 0;
   state.bench = '';
 
@@ -99,9 +138,13 @@ function handleEvents(events: readonly MatchEvent[]): void {
   }
 }
 
-/** Re-mesh whatever the last ticks carved, and time it. */
+/** Re-mesh whatever the last ticks carved (on the workers if there are any), and time it. */
 function syncTerrain(): void {
   if (terrain.dirty.size === 0) return;
+  if (workers) {
+    workers.request(terrain);
+    return;
+  }
   const res = chunks.sync(terrain);
   state.lastExplosionMs = res.ms;
   state.lastExplosionChunks = res.chunks;
@@ -156,13 +199,15 @@ if (import.meta.env.DEV) {
 window.addEventListener('resize', stage.resize);
 const target = new THREE.Vector3();
 const camDir = new THREE.Vector3();
-let frames = 0;
+const frameMs = new Float32Array(120);
+let frameCount = 0;
 let lastFps = performance.now();
 let lastFrame = performance.now();
 let accumulator = 0;
 function loop(now: number): void {
   requestAnimationFrame(loop);
   const dt = Math.min(0.25, (now - lastFrame) / 1000); // after a stall, drop time instead of spiralling
+  frameMs[frameCount++ % frameMs.length] = now - lastFrame;
   lastFrame = now;
 
   accumulator += dt;
@@ -204,10 +249,8 @@ function loop(now: number): void {
   lines.update(now);
   texts.update(now);
   stage.renderer.render(stage.scene, stage.camera);
-  frames++;
   if (now - lastFps > 500) {
-    hud.setFps((frames * 1000) / (now - lastFps));
-    frames = 0;
+    hud.setFrames(frameMs, Math.min(frameCount, frameMs.length));
     lastFps = now;
   }
 }
@@ -216,5 +259,5 @@ newMatch(seed);
 requestAnimationFrame(loop);
 
 if (import.meta.env.DEV) {
-  (window as unknown as { __game: unknown }).__game = { terrain, stage, controls, match: () => match, newMatch };
+  (window as unknown as { __game: unknown }).__game = { terrain, stage, chunks, controls, match: () => match, newMatch };
 }

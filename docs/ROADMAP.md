@@ -23,9 +23,13 @@ Each phase must end with something playable or measurable. Do not move on to the
 - Not done yet: aiming by dragging on the screen, a computer opponent, a match setup screen (teams and sizes are fixed in `main.ts`)
 
 ## Phase 3 · Performance
-- [ ] Meshing in a Web Worker (removes the ~16 ms spikes)
-- [ ] Measure on a mid-range phone; set the frame budget
-- [ ] Decide on WASM based on the numbers, not on instinct
+- [x] Meshing in a Web Worker pool (removes the ~16 ms spikes): main thread ~1–2 ms per explosion
+- [x] Live measurements on screen: frame time (fps, p95, worst), remesh cost on the main thread and on the workers, time until on screen; `?mesh=main` to compare; `npm run dev:lan` to open the game on a phone
+- [x] Measure on a high-end phone: a Samsung S23 Ultra (Chrome) holds 60 fps (p95 16.7 ms), remesh 1.8 ms on the main thread, map generation ~150 ms once per match (numbers in ARCHITECTURE.md). Frame budget: 16.7 ms per frame, of which an explosion may use at most ~2 ms on the main thread
+- [x] WASM: not now. Meshing is off the main thread and costs it < 2 ms; nothing measured points at JS as the limit. Revisit if a larger map or the mid-range phone says otherwise
+- [ ] Measure on a mid-range phone too (the S23 Ultra is high-end): the real target
+- [ ] Find the rare frame spikes (~58 ms) seen on the phone
+- [ ] Move map generation (~150 ms on the phone) off the main thread, if the pause at match start becomes a problem
 - [ ] Larger maps (e.g. 5×3×5 chunks) and LOD for distant chunks
 
 ## Phase 4 · Procedural scenarios
