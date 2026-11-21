@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Bugs in the Box</title>
+    <link rel="icon" href="data:," />
+    <style>
+      html, body { margin: 0; height: 100%; overflow: hidden; background: radial-gradient(ellipse at 50% 30%, #2a3a5c 0%, #141a2b 70%); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: #dfe6f5; }
+      canvas { display: block; width: 100vw; height: 100vh; touch-action: none; }
+      .panel { position: fixed; left: 12px; top: 12px; max-width: min(560px, calc(100vw - 24px)); background: rgba(12, 16, 28, 0.72); border: 1px solid rgba(160, 185, 255, 0.18); border-radius: 10px; padding: 10px 12px; font-size: 12px; line-height: 1.5; backdrop-filter: blur(6px); }
+      #stats { white-space: pre-wrap; margin-bottom: 8px; color: #a9c1ff; }
+      .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 6px; }
+      button, input { font: inherit; color: inherit; background: rgba(60, 80, 130, 0.35); border: 1px solid rgba(160, 185, 255, 0.3); border-radius: 6px; padding: 4px 9px; }
+      button { cursor: pointer; } button:hover { background: rgba(90, 120, 190, 0.5); }
+      input[type=number] { width: 84px; } input[type=range] { padding: 0; width: 110px; accent-color: #ffb04a; }
+      .hint { opacity: 0.7; margin-top: 8px; }
+      #fps { position: fixed; right: 12px; top: 12px; font-size: 12px; opacity: 0.7; }
+    </style>
+  </head>
+  <body>
+    <canvas id="c"></canvas>
+    <div id="fps"></div>
+    <div class="panel">
+      <div id="stats"></div>
+      <div class="row">
+        <label>seed <input id="seed" type="number" /></label>
+        <button id="regen">generate</button>
+        <button id="rand">random</button>
+        <label>radius <input id="radius" type="range" min="2" max="12" step="1" value="6" /> <span id="rv">6</span></label>
+        <button id="bench">benchmark</button>
+      </div>
+      <div class="hint">click the terrain to explode · drag to orbit · scroll to zoom · right-drag to pan</div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
