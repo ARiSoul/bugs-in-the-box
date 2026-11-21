@@ -15,8 +15,8 @@ import { MeshWorkers, type MeshBatch } from './render/MeshWorkers';
 import { FloatingTexts, UnitLabel } from './render/labels';
 import { ProjectileViews } from './render/projectiles';
 import { createStage } from './render/stage';
-import { floatingIslands } from './terrain/generators/floatingIslands';
 import { SurfaceNetsMesher } from './terrain/mesher';
+import { SCENARIOS, scenarioById, type Scenario } from './terrain/scenarios';
 import { Terrain } from './terrain/Terrain';
 import { Hud, type HudState } from './ui/hud';
 
@@ -78,13 +78,15 @@ function onMeshBatch(b: MeshBatch): void {
 }
 
 let seed = 1234;
+let scenario: Scenario = scenarioById(params.get('scenario'));
 let match: Match;
 let views: { view: BugView; label: UnitLabel; height: number }[] = [];
 
 /** New map and new match from one number: the seed is all two players need to share. */
 function newMatch(s: number): void {
   const t0 = performance.now();
-  floatingIslands(terrain, s);
+  scenario.generate(terrain, s);
+  applySky(scenario);
   state.generateMs = performance.now() - t0;
   if (workers) {
     workers.reset();
@@ -163,6 +165,26 @@ controls.bindButtons(hud.pad);
 // The menu (seed, benchmark, key help) starts open where there is room for it.
 (document.getElementById('panel') as HTMLDetailsElement).open = window.innerWidth > 1000;
 hud.seed.value = String(seed);
+hud.scenario.replaceChildren(
+  ...SCENARIOS.map((sc) => {
+    const o = document.createElement('option');
+    o.value = sc.id;
+    o.textContent = sc.name;
+    return o;
+  }),
+);
+hud.scenario.value = scenario.id;
+hud.scenario.addEventListener('change', () => {
+  scenario = scenarioById(hud.scenario.value);
+  newMatch(seed);
+  hud.scenario.blur();
+});
+
+/** The look around the map: page background behind the canvas and the fog colour. */
+function applySky(sc: Scenario): void {
+  document.body.style.background = sc.sky.css;
+  (stage.scene.fog as THREE.Fog).color.setHex(sc.sky.fog);
+}
 hud.regen.addEventListener('click', () => {
   seed = Number(hud.seed.value) | 0;
   newMatch(seed);
@@ -175,7 +197,7 @@ hud.random.addEventListener('click', () => {
   hud.random.blur();
 });
 hud.bench.addEventListener('click', () => {
-  floatingIslands(terrain, seed);
+  scenario.generate(terrain, seed);
   chunks.sync(terrain);
   const r = runExplosionBenchmark(terrain, () => chunks.sync(terrain).chunks, 6, 60);
   newMatch(seed);

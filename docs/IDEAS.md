@@ -10,7 +10,7 @@ How to compose each one from SDF primitives + noise (suggestions):
 
 | Scenario | Terrain | Elements |
 |---|---|---|
-| Inside a PC | PCB as the base platform, with raised traces | heatsinks (combs of fins), capacitors (cylindrical towers), fans, cables as bridges |
+| Inside a PC (built in Phase 4) | PCB as the base platform, with raised traces | heatsinks (combs of fins), capacitors (cylindrical towers), fans, cables as bridges |
 | Speaker | the driver cone as a basin | resonance box, grille, terminals |
 | Guitar / bass | the neck as a long bridge | frets as steps, strings as thin obstacles, pickups |
 | Fridge | shelves as floors | drawers, fan, food (!) |

@@ -1,13 +1,24 @@
 import { CHUNK } from './constants';
+import { MATERIAL_PBR } from './materials';
 import { shadeVertex } from './shading';
 import type { Terrain } from './Terrain';
 
 export interface ChunkMesh {
   positions: Float32Array;
   normals: Float32Array;
+  /** Linear RGB with ambient occlusion already applied. */
   colors: Float32Array;
+  /** Roughness, metalness per vertex (from the material). */
+  pbr: Float32Array;
   indices: Uint32Array;
 }
+
+/** Farthest the ambient-occlusion probe samples the field from a vertex (cells). Regions are padded for it. */
+export const AO_REACH = 3.5;
+const AO_STEPS = [1, 2, AO_REACH];
+const AO_WEIGHTS = [0.45, 0.33, 0.22];
+const AO_STRENGTH = 0.85;
+const PBR = new Float32Array(MATERIAL_PBR.flat());
 
 const N = CHUNK + 1; // cells per axis in the working region (chunk + 1 cell of overlap on the negative side)
 const NN = N * N;
@@ -36,11 +47,12 @@ export class SurfaceNetsMesher {
   private readonly opos = new Float32Array(REGION * 3);
   private readonly onrm = new Float32Array(REGION * 3);
   private readonly ocol = new Float32Array(REGION * 3);
+  private readonly opbr = new Float32Array(REGION * 2);
   private readonly oidx = new Uint32Array(REGION * 18);
   private readonly cv = new Float32Array(8);
 
   mesh(t: Terrain, cxI: number, cyI: number, czI: number): ChunkMesh {
-    const { sx, sy, dens, scorch } = t;
+    const { sx, sy, dens, scorch, material } = t;
     const sk = sx * sy;
     const x0 = cxI * CHUNK;
     const y0 = cyI * CHUNK;
@@ -51,7 +63,7 @@ export class SurfaceNetsMesher {
     const ex0 = x0 - 1;
     const ey0 = y0 - 1;
     const ez0 = z0 - 1;
-    const { vmap, vpos, vnrm, opos, onrm, ocol, oidx, cv } = this;
+    const { vmap, vpos, vnrm, opos, onrm, ocol, opbr, oidx, cv } = this;
     vmap.fill(-1);
     let nv = 0;
     let ni = 0;
@@ -131,7 +143,24 @@ export class SurfaceNetsMesher {
       onrm[o3 + 1] = vnrm[l3 + 1];
       onrm[o3 + 2] = vnrm[l3 + 2];
       const si = Math.round(x) + sx * (Math.round(y) + sy * Math.round(z));
-      shadeVertex(ocol, o3, x, y, z, vnrm[l3 + 1], scorch[si] / 255);
+      const mat = material[si];
+      shadeVertex(ocol, o3, x, y, z, vnrm[l3 + 1], scorch[si] / 255, mat);
+      // Ambient occlusion from the field itself: probe outward along the normal; where something is
+      // closer than the probe distance, the vertex sits in a crease and gets darker.
+      let occ = 0;
+      for (let s = 0; s < 3; s++) {
+        const k = AO_STEPS[s];
+        const d = t.sample(x + vnrm[l3] * k, y + vnrm[l3 + 1] * k, z + vnrm[l3 + 2] * k);
+        const o = (k - d) / k;
+        occ += AO_WEIGHTS[s] * (o < 0 ? 0 : o > 1 ? 1 : o);
+      }
+      const ao = 1 - AO_STRENGTH * occ;
+      ocol[o3] *= ao;
+      ocol[o3 + 1] *= ao;
+      ocol[o3 + 2] *= ao;
+      const pm = mat < MATERIAL_PBR.length ? mat : 0;
+      opbr[vi * 2] = PBR[pm * 2];
+      opbr[vi * 2 + 1] = PBR[pm * 2 + 1];
       vmap[local] = vi;
       return vi;
     };
@@ -180,6 +209,7 @@ export class SurfaceNetsMesher {
       positions: opos.slice(0, nv * 3),
       normals: onrm.slice(0, nv * 3),
       colors: ocol.slice(0, nv * 3),
+      pbr: opbr.slice(0, nv * 2),
       indices: oidx.slice(0, ni),
     };
   }

@@ -31,6 +31,7 @@ export interface HudState {
 /** DOM HUD. Writes to the DOM only when a shown value changes. */
 export class Hud {
   readonly seed = el<HTMLInputElement>('seed');
+  readonly scenario = el<HTMLSelectElement>('scenario');
   readonly regen = el<HTMLButtonElement>('regen');
   readonly random = el<HTMLButtonElement>('rand');
   readonly bench = el<HTMLButtonElement>('bench');

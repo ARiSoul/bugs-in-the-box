@@ -13,7 +13,7 @@ export interface SyncResult {
 export class ChunkRenderer {
   private readonly meshes = new Map<number, THREE.Mesh>();
   private readonly tris = new Map<number, number>();
-  private readonly material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, metalness: 0 });
+  private readonly material = terrainMaterial();
   private readonly coords: [number, number, number] = [0, 0, 0];
 
   constructor(
@@ -56,6 +56,7 @@ export class ChunkRenderer {
     g.setAttribute('position', new THREE.BufferAttribute(m.positions, 3));
     g.setAttribute('normal', new THREE.BufferAttribute(m.normals, 3));
     g.setAttribute('color', new THREE.BufferAttribute(m.colors, 3));
+    g.setAttribute('pbr', new THREE.BufferAttribute(m.pbr, 2));
     g.setIndex(new THREE.BufferAttribute(m.indices, 1));
     g.computeBoundingSphere();
     if (mesh) {
@@ -63,9 +64,29 @@ export class ChunkRenderer {
       mesh.geometry = g;
     } else {
       mesh = new THREE.Mesh(g, this.material);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
       this.scene.add(mesh);
       this.meshes.set(id, mesh);
     }
     this.tris.set(id, m.indices.length / 3);
   }
+}
+
+/**
+ * One standard (PBR) material for all terrain, where roughness and metalness come per vertex from the
+ * `pbr` attribute (set from the material id by the mesher), so metal parts reflect and plastic does not.
+ */
+function terrainMaterial(): THREE.MeshStandardMaterial {
+  const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0 });
+  m.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nattribute vec2 pbr;\nvarying vec2 vPbr;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvPbr = pbr;');
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying vec2 vPbr;')
+      .replace('#include <roughnessmap_fragment>', 'float roughnessFactor = vPbr.x;')
+      .replace('#include <metalnessmap_fragment>', 'float metalnessFactor = vPbr.y;');
+  };
+  return m;
 }

@@ -17,21 +17,35 @@ The boundary that matters is the one on the left: gameplay only uses `sample`, `
 
 ## Data model
 
-- A world of `W×H×D` cells (today 96×64×96 = 3×2×3 chunks of 32). One world unit = one cell.
+- A world of `W×H×D` cells (default 160×96×160 = 5×3×5 chunks of 32; `?map=3x2x3` gives 96×64×96). One world unit = one cell.
 - Density samples at the grid points: `(W+1)(H+1)(D+1)` floats. `< 0` is solid, `> 0` is air. The value is an *approximate* signed distance (not exact after several operations), in cell units, clamped to ±6.
 - The outer layer of the world is always air, so the surface is closed (no "holes" at the edges). `carve` never opens it.
-- `scorch` (0–255 per sample) stores the burn mark; it is visual only and feeds into the vertex colors.
+- `scorch` (0–255 per sample) stores the burn mark; `material` (one id per sample, `materials.ts`) says what the surface near the sample is made of. Both are visual only and feed into the vertex colors; gameplay never reads them.
 - `dirty`: the set of chunk ids to re-mesh.
 
 ## Procedural generation
 
-A generator is `(terrain, seed) => void` and ends with `terrain.commitGeneration()`. The current `floatingIslands` combines a rolling ground (2D fBm per column), interior cave pockets (only ≥ 3 cells below the surface, hidden until someone blows them open) and floating islands (a union of rough ellipsoids).
+A generator is `(terrain, seed) => void`; it starts with `terrain.beginGeneration()` (all air, no material, no scorch) and ends with `terrain.commitGeneration()`. Scenarios (`scenarios.ts`) pair a generator with its look (page background and fog colour); the menu and `?scenario=` pick one.
 
-Shapes are composed with SDF operations: union `min(a,b)`, subtraction `max(a,-b)`, intersection `max(a,b)`. This is what later lets us build recognizable scenarios (a PC, a speaker) from primitives (boxes, cylinders, cones) plus noise to make them look organic.
+### Inside a PC (`generators/insidePC.ts`, the default)
+
+A motherboard floating in the dark (fall off its edge and you are gone), built from SDF stamps: plated mounting holes, copper traces, a CPU socket with a tower cooler (fins) and a fan on top, four RAM sticks, a 24-pin and an 8-pin connector, a graphics card on its edge with a two-fan cooler, a power supply with a guarded fan and front vents, capacitors around the socket, a chipset with a heatsink, loose chips, and power cables that arc from the PSU to the connectors (two strands side by side: bridges). The layout scales with the map; the seed moves and varies the parts. Generating it takes ~35 ms on the large map (the islands take ~800 ms: they evaluate noise everywhere).
+
+### SDF stamps (`sdf.ts`)
+
+Primitives: sphere, box (rounded, optionally rotated about one axis), cylinder, capsule, torus; `distance(shape, p)` is exact. A stamp (`add` = union, optionally smooth; `cut` = subtraction) writes one shape into the grid, visiting only its bounding box plus 4 cells, so hundreds of parts stay cheap. Beyond that padding the grid keeps at most the clamp value (6), and `raycast` steps 0.6 × the sample (3.6 < 4), so it cannot jump over a part. `add` also sets the material of the samples where the shape owns the surface. Stamps never write the outer two layers (the world stays closed), and never write an exact 0 (a surface exactly on a sample would make degenerate triangles). Rotations use exact (cos, sin) pairs (e.g. √3/2 for 60°): no `Math.sin/cos`.
+
+### Floating islands (`generators/floatingIslands.ts`)
+
+The first test scenario combines a rolling ground (2D fBm per column), interior cave pockets (only ≥ 3 cells below the surface, hidden until someone blows them open) and floating islands (a union of rough ellipsoids).
+
+Shapes are composed with SDF operations: union `min(a,b)`, subtraction `max(a,-b)`, intersection `max(a,b)`. The PC scenario is built this way (see SDF stamps above).
 
 Determinism: integer-hash noise (`noise.ts`), seeded PRNG (`createRng`). No `Math.random`/`Math.sin` in generation, so the same number gives the same map on any device. The tests check this.
 
 ## Meshing (Surface Nets)
+
+Vertex colours come from `shadeVertex` (`shading.ts`): the material of the nearest sample gives the base colour (GROUND is grass on top and rock on the sides), with a little noise, darkened by scorch and by ambient occlusion. The occlusion comes from the density field itself: the mesher probes outward along the normal at 1, 2 and 3.5 cells, and where the field says something is closer than the probe, the vertex sits in a crease and gets darker (3 samples per vertex, in the worker). The mesher also writes a `pbr` attribute per vertex (roughness, metalness) from the material table.
 
 Per chunk, in three steps (`mesher.ts`):
 
@@ -91,12 +105,12 @@ Render side: `UnitLabel` (name and health above each bug, redrawn only on change
 
 ## Rendering
 
-One material with vertex colors, hemisphere + directional light, no shadows. `stage.ts` creates the renderer, camera and controls. `ChunkRenderer.apply(id, mesh)` replaces the `BufferGeometry` of a chunk's `THREE.Mesh`. The meshes come from the worker pool (below); `ChunkRenderer.sync(terrain)` meshes on the main thread instead (fallback, `?mesh=main`, and the benchmark button).
+One `MeshStandardMaterial` for all terrain, patched (`onBeforeCompile`) to take roughness and metalness per vertex from the `pbr` attribute, so metal reflects and plastic does not. Light: an image-based environment (three's `RoomEnvironment` through PMREM) for soft fill and reflections, a weak hemisphere light, and one directional key light with soft shadows (4096² map over the whole map; terrain and bugs cast and receive). ACES tone mapping. `stage.ts` creates the renderer, camera and controls. `ChunkRenderer.apply(id, mesh)` replaces the `BufferGeometry` of a chunk's `THREE.Mesh`. The meshes come from the worker pool (below); `ChunkRenderer.sync(terrain)` meshes on the main thread instead (fallback, `?mesh=main`, and the benchmark button).
 
 ### Meshing workers (`src/render/MeshWorkers.ts`, `src/workers/mesh.worker.ts`)
 
 - After each simulation step, the dirty chunks are sent to a pool of module workers (cores − 1, at most 4), spread evenly so the chunks of one explosion mesh in parallel.
-- A job carries only the samples its chunk reads: the box `[start − 1, start + 32]` per axis, densities and scorch packed in one ~200 kB buffer (`terrain/region.ts`). The buffer is transferred, and it comes back with the result for reuse. The grid itself never crosses threads.
+- A job carries only the samples its chunk reads: the chunk's cells plus a pad of 6 samples on each side (one cell for the mesher, the rest for the ambient-occlusion probe): a box of 44³ samples, densities, scorch and material packed in one ~510 kB buffer (`terrain/region.ts`). The buffer is transferred, and it comes back with the result for reuse. The grid itself never crosses threads.
 - Each worker keeps a mirror grid in which only the regions it was sent are current. That is all the mesher reads, so it runs the same `SurfaceNetsMesher` unchanged. A test checks that a mirror mesh is bit-identical to the original for every chunk.
 - The meshes are transferred back (no copy). The whole batch is applied in one frame, so neighbouring chunks of an explosion change together and the seams never open.
 - Results are dropped when a newer request for the same chunk was sent (workers can finish out of order) or when the map was regenerated (`reset`).

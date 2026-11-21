@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { floatingIslands } from '../src/terrain/generators/floatingIslands';
 import { SurfaceNetsMesher } from '../src/terrain/mesher';
-import { REGION_SAMPLES, readRegion, regionBox, writeRegion } from '../src/terrain/region';
+import { REGION_BYTES, REGION_SAMPLES, readRegion, regionArrays, regionBox, writeRegion } from '../src/terrain/region';
 import { Terrain } from '../src/terrain/Terrain';
 
 const same = (a: ArrayLike<number>, b: ArrayLike<number>): boolean => {
@@ -19,14 +19,13 @@ describe('chunk regions (what the mesh workers receive)', () => {
     const a = new SurfaceNetsMesher();
     const b = new SurfaceNetsMesher();
     const box = new Int32Array(6);
-    const dens = new Float32Array(REGION_SAMPLES);
-    const scorch = new Uint8Array(REGION_SAMPLES);
+    const arrays = regionArrays(new ArrayBuffer(REGION_BYTES));
     const c: [number, number, number] = [0, 0, 0];
     let triangles = 0;
     for (let id = 0; id < t.chunkCount; id++) {
       regionBox(t, id, box);
-      readRegion(t, box, dens, scorch);
-      writeRegion(mirror, box, dens, scorch);
+      readRegion(t, box, arrays);
+      writeRegion(mirror, box, arrays);
       t.chunkCoords(id, c);
       const ma = a.mesh(t, c[0], c[1], c[2]);
       const mb = b.mesh(mirror, c[0], c[1], c[2]);
@@ -34,6 +33,7 @@ describe('chunk regions (what the mesh workers receive)', () => {
       expect(same(ma.positions, mb.positions)).toBe(true);
       expect(same(ma.normals, mb.normals)).toBe(true);
       expect(same(ma.colors, mb.colors)).toBe(true);
+      expect(same(ma.pbr, mb.pbr)).toBe(true);
       expect(same(ma.indices, mb.indices)).toBe(true);
     }
     expect(triangles).toBeGreaterThan(50_000);

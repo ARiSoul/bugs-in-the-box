@@ -10,6 +10,7 @@ import { Bug } from '../src/game/bug';
 import { dropNear } from '../src/game/spawn';
 import { ANT } from '../src/game/species';
 import { floatingIslands } from '../src/terrain/generators/floatingIslands';
+import { insidePC } from '../src/terrain/generators/insidePC';
 import { SurfaceNetsMesher } from '../src/terrain/mesher';
 import { Terrain } from '../src/terrain/Terrain';
 
@@ -70,6 +71,23 @@ for (const [cx, cy, cz] of [
   const r = runExplosionBenchmark(big, () => remesh(big), 6, 60);
   console.log(
     `world ${big.W}x${big.H}x${big.D} (${big.chunkCount} chunks): generate ${g.toFixed(0)} ms  initial mesh ${m.toFixed(0)} ms  ` +
+      `explosion r=6 mean ${r.meanMs.toFixed(1)} ms  p95 ${r.p95Ms.toFixed(1)}`,
+  );
+}
+
+// Phase 4 scenario: Inside a PC on the default large map (built from SDF stamps).
+{
+  insidePC(new Terrain(5, 3, 5), 1); // warm-up
+  const pc = new Terrain(5, 3, 5);
+  let s0 = performance.now();
+  insidePC(pc, 1234);
+  const g = performance.now() - s0;
+  s0 = performance.now();
+  remesh(pc);
+  const m = performance.now() - s0;
+  const r = runExplosionBenchmark(pc, () => remesh(pc), 6, 60);
+  console.log(
+    `inside a PC ${pc.W}x${pc.H}x${pc.D}: generate ${g.toFixed(0)} ms  initial mesh ${m.toFixed(0)} ms  ` +
       `explosion r=6 mean ${r.meanMs.toFixed(1)} ms  p95 ${r.p95Ms.toFixed(1)}`,
   );
 }

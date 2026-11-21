@@ -15,6 +15,7 @@ interface Island {
 
 /** Generic test scenario: rolling slab with interior cave pockets plus floating islands. */
 export const floatingIslands: TerrainGenerator = (terrain, seed) => {
+  terrain.beginGeneration();
   const { W, H, D, sx, sy, sz, dens } = terrain;
   const rand = createRng(seed * 7919 + 13);
 

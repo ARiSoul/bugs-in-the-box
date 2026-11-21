@@ -34,8 +34,11 @@ src/
     mesher.ts           Surface Nets per chunk (no allocations in hot loops)
     region.ts           copy the samples one chunk needs in/out of the grid (what the mesh workers receive)
     noise.ts            deterministic noise, seeded PRNG
-    shading.ts          per-vertex color (provisional, depends on the scenario)
-    generators/         one generator per scenario; today only floatingIslands (generic test scenario)
+    shading.ts          per-vertex color from the material id (+ grass/rock for GROUND)
+    materials.ts        material ids and their colours (visual only)
+    sdf.ts              SDF primitives + stamps (add/cut into a shape's bounding box)
+    scenarios.ts        scenario list: generator + background/fog
+    generators/         one generator per scenario: insidePC (default), floatingIslands
   game/               gameplay, SAME purity rule as terrain/ (no three.js, no DOM)
     bug.ts              Bug: sphere physics against the field, fixed 60 Hz tick, discrete input
     field.ts            TerrainField (what gameplay may see) + surfaceDistance
@@ -77,7 +80,8 @@ Details and rationale in `docs/ARCHITECTURE.md`. Plan in `docs/ROADMAP.md`.
 - The render reads `match.events` and the game state; it never changes the game state. Randomness in effects is fine (render only).
 - Gameplay runs in fixed ticks (`DT` in `game/bug.ts`), never with the frame time. Rendering interpolates between ticks.
 - Allowed `Math` in `src/terrain/` and `src/game/`: `floor`, `ceil`, `round`, `min`, `max`, `abs`, `sqrt`, `imul`. Not `hypot`, `sin`, `cos`, `pow`, `exp`, `log`, `random` (a test enforces this).
-- A new generator = one file in `terrain/generators/` that implements `TerrainGenerator` and ends with `terrain.commitGeneration()`. It must be deterministic.
+- Scenario parts must be at least ~2 cells thick, with gaps of at least ~2 cells: the grid has one sample per unit, and thinner parts melt into blobs.
+- A new generator = one file in `terrain/generators/` that implements `TerrainGenerator`, starts with `terrain.beginGeneration()` and ends with `terrain.commitGeneration()`, plus an entry in `terrain/scenarios.ts`. It must be deterministic. Prefer SDF stamps (`sdf.ts`) for built shapes: they only touch each shape's bounding box.
 - Any change to the mesher/terrain must keep the integrity tests green (zero open edges, >99% of faces facing outward, no degenerate faces).
 - Do not commit `dist/` or `node_modules/`.
 
@@ -92,6 +96,7 @@ Measured on Node 22 in a cloud VM (one core). They serve as a regression baselin
 | Explosion r=6 (carve + remesh of ~3 chunks) | mean ~5–7 ms · p95 ~9–18 ms |
 | Remesh per chunk | ~2–3 ms |
 | Bug step | ~0.5 µs per bug per tick |
+| Inside a PC, 160×96×160 | generate ~35–55 ms · initial mesh ~100 ms (with ambient occlusion) · explosion r=6 mean ~5–6 ms |
 | Large map 160×96×160 (75 chunks, `?map=5x3x5`) | generate ~700–850 ms · initial mesh ~80–100 ms · explosion r=6 mean ~5 ms |
 
 Target budget: one explosion must not exceed 1 frame (16 ms) on the main thread. Since Phase 3 meshing runs on workers: an explosion costs the main thread ~1–2 ms (region copy + geometry upload) on desktop, 1.8 ms on a Samsung S23 Ultra. Render target: 60 fps on desktop and phones (the S23 Ultra, high-end, holds it: p95 16.7 ms; a mid-range phone is still to be measured).
@@ -102,4 +107,4 @@ Target budget: one explosion must not exceed 1 frame (16 ms) on the main thread.
 
 ## Current status
 
-Phase 0 done: destructible SDF terrain prototype (click to explode, seed, benchmark). Phase 1 done: a controllable bug (ant, spider, cockroach) that walks, jumps, falls into craters and dies off the map, with a follow camera. Phase 2 done: local hot-seat matches (Red Ants vs Blue Spiders, 3 bugs each), turns, wind, 4 weapons, damage, knockback, fall damage, on-screen pad for mouse and touch. Phase 3 done for PC: meshing runs on a Web Worker pool, live performance readouts, the large map (5×3×5) is the default and runs at 60 fps on desktop; WASM and LOD not needed for now. Phone work is postponed (see ROADMAP). Next: Phase 4, procedural scenarios. See `docs/ROADMAP.md`.
+Phase 0 done: destructible SDF terrain prototype (click to explode, seed, benchmark). Phase 1 done: a controllable bug (ant, spider, cockroach) that walks, jumps, falls into craters and dies off the map, with a follow camera. Phase 2 done: local hot-seat matches (Red Ants vs Blue Spiders, 3 bugs each), turns, wind, 4 weapons, damage, knockback, fall damage, on-screen pad for mouse and touch. Phase 3 done for PC: meshing runs on a Web Worker pool, live performance readouts, the large map (5×3×5) is the default and runs at 60 fps on desktop; WASM and LOD not needed for now. Phone work is postponed (see ROADMAP). Phase 4 in progress: SDF stamps, materials, and the first themed scenario, Inside a PC (the default). Next: more scenarios (speaker, fridge, guitar, microwave). See `docs/ROADMAP.md`.

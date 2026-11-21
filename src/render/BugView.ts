@@ -120,6 +120,7 @@ export class BugView {
 
   private part(m: THREE.Material, x: number, y: number, z: number, sx: number, sy: number, sz: number): THREE.Mesh {
     const mesh = new THREE.Mesh(sphere, m);
+    mesh.castShadow = true;
     mesh.position.set(x, y, z);
     mesh.scale.set(sx, sy, sz);
     this.root.add(mesh);
@@ -129,6 +130,7 @@ export class BugView {
   private limb(m: THREE.Material, from: THREE.Vector3, to: THREE.Vector3, thickness: number): THREE.Mesh {
     const dir = to.clone().sub(from);
     const mesh = new THREE.Mesh(limb, m);
+    mesh.castShadow = true;
     mesh.position.copy(from);
     mesh.quaternion.setFromUnitVectors(UP, dir.clone().normalize());
     mesh.scale.set(thickness, dir.length(), thickness);

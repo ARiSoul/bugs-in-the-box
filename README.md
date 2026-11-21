@@ -2,7 +2,7 @@
 
 Turn-based 3D artillery game in the browser. Bugs (ants, spiders, cockroaches and made-up creatures) wage war inside electronic devices: the insides of PCs, speakers, fridges, guitars, microwaves. Destructible, procedurally generated terrain.
 
-> Status: prototype (Phase 2). Local hot-seat matches: two teams take turns on one device, with wind and four weapons. No online play yet.
+> Status: prototype (Phase 4 in progress). Local hot-seat matches: two teams take turns on one device, with wind and four weapons, inside a PC (or on floating islands). Meshing runs on Web Workers. No online play yet.
 
 ## Getting started
 
@@ -19,7 +19,7 @@ Open the address that Vite prints.
 - **Space**: jump · **hold F** to charge, release to fire · **1–4**: weapon · **N**: new match
 - **Drag** to orbit the camera · **scroll** to zoom
 - On a touch screen (or with the mouse), use the pad in the bottom-right corner and tap a weapon.
-- The menu lets you pick the seed (the same seed gives the same map and match) and run a benchmark. It also shows the meshing cost; the frame time is at the top. Add `?mesh=main` to the URL to mesh on the main thread instead of the workers, to compare, and `?map=3x2x3` for the small map (size in chunks of 32; the default is 5x3x5).
+- The menu lets you pick the scenario (Inside a PC, Floating islands) and the seed (the same seed gives the same map and match) and run a benchmark. It also shows the meshing cost; the frame time is at the top. Add `?mesh=main` to the URL to mesh on the main thread instead of the workers, to compare, and `?map=3x2x3` for the small map (size in chunks of 32; the default is 5x3x5).
 
 Each turn lasts 30 s. After a shot, the bug has 3 s to walk away. The last team with bugs left wins.
 

@@ -1,5 +1,5 @@
 import type { ChunkMesh } from '../terrain/mesher';
-import { REGION_BYTES, REGION_SAMPLES, readRegion, regionBox } from '../terrain/region';
+import { REGION_BYTES, readRegion, regionArrays, regionBox } from '../terrain/region';
 import type { Terrain } from '../terrain/Terrain';
 import type { MeshJob, MeshReply, MeshRequest } from '../workers/meshProtocol';
 
@@ -89,7 +89,7 @@ export class MeshWorkers {
     for (const id of terrain.dirty) {
       const buffer = this.spare.pop() ?? new ArrayBuffer(REGION_BYTES);
       const box = regionBox(terrain, id, new Int32Array(6));
-      readRegion(terrain, box, new Float32Array(buffer, 0, REGION_SAMPLES), new Uint8Array(buffer, REGION_SAMPLES * 4));
+      readRegion(terrain, box, regionArrays(buffer));
       const seq = ++this.seq;
       this.latest.set(id, seq);
       parts[n++ % parts.length].push({ id, seq, box, buffer });

@@ -27,6 +27,8 @@ export class Terrain {
   readonly dens: Float32Array;
   /** Visual-only burn mark, 0..255 per sample. */
   readonly scorch: Uint8Array;
+  /** Visual-only material id per sample (see `materials.ts`): what the surface near it is made of. */
+  readonly material: Uint8Array;
   /** Ids of chunks whose mesh is out of date. */
   readonly dirty = new Set<number>();
 
@@ -42,6 +44,7 @@ export class Terrain {
     this.sz = this.D + 1;
     this.dens = new Float32Array(this.sx * this.sy * this.sz).fill(DENSITY_CLAMP);
     this.scorch = new Uint8Array(this.sx * this.sy * this.sz);
+    this.material = new Uint8Array(this.sx * this.sy * this.sz);
   }
 
   get chunkCount(): number {
@@ -65,6 +68,13 @@ export class Terrain {
 
   markAllDirty(): void {
     for (let id = 0; id < this.chunkCount; id++) this.dirty.add(id);
+  }
+
+  /** Generators call this first: the whole grid becomes air, with no material and no scorch. */
+  beginGeneration(): void {
+    this.dens.fill(DENSITY_CLAMP);
+    this.material.fill(0);
+    this.scorch.fill(0);
   }
 
   /** Generators call this when they are done writing `dens`. */

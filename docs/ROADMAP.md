@@ -39,9 +39,11 @@ Goal now: a PC demo first, as a proof of concept. The phone items below are post
 - [x] Camera: when terrain hides the bug it first rises (up to ~60° above the player's angle) to look over it, and only comes closer if that is not enough
 
 ## Phase 4 · Procedural scenarios
-- [ ] Library of SDF primitives (box, cylinder, cone, torus) and boolean operations
-- [ ] First themed scenario: the inside of a PC (PCB, heatsinks, capacitors, fans)
-- [ ] Palette/shading per scenario
+- [x] Library of SDF primitives (sphere, box, rotated box, cylinder, capsule, torus) and boolean stamps (union, smooth union, subtraction), written only into each shape's bounding box
+- [x] First themed scenario: the inside of a PC (motherboard, traces, CPU cooler and fan, RAM, graphics card, PSU, capacitors, chips, cables as bridges); now the default
+- [x] Palette/shading per scenario: a material id per sample, a colour per material, and a background and fog colour per scenario; scenario picker in the menu (`?scenario=pc|islands`)
+- [x] Visual quality, step 1: shadows, image-based light and reflections, per-material roughness/metalness, ambient occlusion from the field, ACES tone mapping; design rule of at least ~2 cells for every part and gap
+- [ ] Visual quality, step 2: sharp edges (Dual Contouring instead of Surface Nets: needs a decision, see CLAUDE.md decision 2)
 - [ ] More scenarios: speaker, fridge, guitar, microwave
 
 ## Phase 5 · Multiplayer
