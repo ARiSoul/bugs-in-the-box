@@ -6,6 +6,9 @@
  */
 import { performance } from 'node:perf_hooks';
 import { runExplosionBenchmark } from '../src/bench/explosions';
+import { Bug } from '../src/game/bug';
+import { dropNear } from '../src/game/spawn';
+import { ANT } from '../src/game/species';
 import { floatingIslands } from '../src/terrain/generators/floatingIslands';
 import { SurfaceNetsMesher } from '../src/terrain/mesher';
 import { Terrain } from '../src/terrain/Terrain';
@@ -50,4 +53,22 @@ for (const radius of [4, 6, 10]) {
   console.log(
     `explosions r=${radius}: mean ${r.meanMs.toFixed(1)} ms  median ${r.medianMs.toFixed(1)}  p95 ${r.p95Ms.toFixed(1)}  worst ${r.worstMs.toFixed(1)}  (${r.meanChunks.toFixed(1)} chunks each)`,
   );
+}
+
+// Bug physics: one walking, turning, jumping bug for 20k ticks (~5.5 min of game time).
+{
+  const world = new Terrain(3, 2, 3);
+  floatingIslands(world, 1234);
+  const bug = new Bug(ANT);
+  const ticks = 20_000;
+  const input = { move: 1 as const, turn: 0 as -1 | 0 | 1, jump: false };
+  const start = performance.now();
+  for (let n = 0; n < ticks; n++) {
+    if (!bug.alive || n % 600 === 0) dropNear(bug, world, world.W / 2, world.D / 2);
+    input.turn = n % 240 < 40 ? 1 : 0;
+    input.jump = n % 90 === 0;
+    bug.step(world, input);
+  }
+  const us = ((performance.now() - start) * 1000) / ticks;
+  console.log(`bug step: ${us.toFixed(1)} µs per bug per tick`);
 }

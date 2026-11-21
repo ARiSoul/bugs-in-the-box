@@ -32,8 +32,13 @@ src/
     noise.ts            deterministic noise, seeded PRNG
     shading.ts          per-vertex color (provisional, depends on the scenario)
     generators/         one generator per scenario; today only floatingIslands (generic test scenario)
-  render/             three.js: stage (renderer/camera/lights), ChunkRenderer (1 mesh per chunk), effects
-  input/              mouse picking against the density field
+  game/               gameplay, SAME purity rule as terrain/ (no three.js, no DOM)
+    bug.ts              Bug: sphere physics against the field, fixed 60 Hz tick, discrete input
+    field.ts            TerrainField (what gameplay may see) + surfaceDistance
+    species.ts          species as data (physics numbers + body proportions)
+    spawn.ts            dropNear: deterministic spawn search
+  render/             three.js: stage (renderer/camera/lights), ChunkRenderer (1 mesh per chunk), BugView, FollowCamera, effects
+  input/              mouse picking against the density field, keyboard -> BugInput
   ui/                 DOM HUD
   bench/              benchmark shared between the in-browser button and scripts/bench.ts
   main.ts             glue: wires terrain, render, input and UI
@@ -58,7 +63,10 @@ Details and rationale in `docs/ARCHITECTURE.md`. Plan in `docs/ROADMAP.md`.
 
 - Strict TypeScript. Everything in English (see "Language" above).
 - In hot loops (`mesher.ts`, `Terrain.carve/sample`, generators): no allocations, no per-iteration closures, no temporary arrays. Reuse buffers (see `SurfaceNetsMesher`).
-- `src/terrain/` does not import three.js, the DOM, or anything from `src/render`, `src/ui`, `src/input`.
+- `src/terrain/` does not import three.js, the DOM, or anything from `src/render`, `src/ui`, `src/input`, `src/game`.
+- `src/game/` does not import three.js, the DOM, or anything from `src/render`, `src/ui`, `src/input`. It sees the terrain only through `TerrainField`.
+- Gameplay runs in fixed ticks (`DT` in `game/bug.ts`), never with the frame time. Rendering interpolates between ticks.
+- Allowed `Math` in `src/terrain/` and `src/game/`: `floor`, `ceil`, `round`, `min`, `max`, `abs`, `sqrt`, `imul`. Not `hypot`, `sin`, `cos`, `pow`, `exp`, `log`, `random` (a test enforces this).
 - A new generator = one file in `terrain/generators/` that implements `TerrainGenerator` and ends with `terrain.commitGeneration()`. It must be deterministic.
 - Any change to the mesher/terrain must keep the integrity tests green (zero open edges, >99% of faces facing outward, no degenerate faces).
 - Do not commit `dist/` or `node_modules/`.
@@ -73,6 +81,7 @@ Measured on Node 22 in a cloud VM (one core). They serve as a regression baselin
 | Initial mesh (18 chunks) | ~30–80 ms |
 | Explosion r=6 (carve + remesh of ~3 chunks) | mean ~5–7 ms · p95 ~9–18 ms |
 | Remesh per chunk | ~2–3 ms |
+| Bug step | ~0.5 µs per bug per tick |
 
 Target budget: one explosion must not exceed 1 frame (16 ms) on the main thread; once meshing moves to a Worker, it stops blocking. Render target: 60 fps on desktop, to be validated on mid-range phones.
 
@@ -82,4 +91,4 @@ Target budget: one explosion must not exceed 1 frame (16 ms) on the main thread;
 
 ## Current status
 
-Phase 0 done: destructible SDF terrain prototype (click to explode, seed, benchmark). Next: Phase 1, the first bug walking/jumping/falling with collision against the density field. See `docs/ROADMAP.md`.
+Phase 0 done: destructible SDF terrain prototype (click to explode, seed, benchmark). Phase 1 done: a controllable bug (ant, spider, cockroach) that walks, jumps, falls into craters and dies off the map, with a follow camera. Next: Phase 2, turns and weapons. See `docs/ROADMAP.md`.

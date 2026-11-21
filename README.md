@@ -2,7 +2,7 @@
 
 Turn-based 3D artillery game in the browser. Bugs (ants, spiders, cockroaches and made-up creatures) wage war inside electronic devices: the insides of PCs, speakers, fridges, guitars, microwaves. Destructible, procedurally generated terrain.
 
-> Status: technical prototype of the terrain (Phase 0). No bugs or turns yet.
+> Status: technical prototype (Phase 1). Destructible terrain and one controllable bug. No turns or weapons yet.
 
 ## Getting started
 
@@ -13,7 +13,11 @@ npm install
 npm run dev
 ```
 
-Open the address that Vite prints. **Click the terrain** to blow it up · **drag** to orbit the camera · **scroll** to zoom · **right-click drag** to pan · the panel lets you pick the seed and the blast radius, and run a benchmark.
+Open the address that Vite prints.
+
+- **WASD / arrows**: walk and turn the bug · **space**: jump · **R**: respawn
+- **Click the terrain** to blow it up · **drag** to orbit the camera · **scroll** to zoom
+- The panel lets you pick the seed, the blast radius and the bug species, and run a benchmark.
 
 ## Scripts
 
@@ -24,7 +28,7 @@ Open the address that Vite prints. **Click the terrain** to blow it up · **drag
 | `npm run preview` | serves the production build |
 | `npm run test` | tests (Vitest) |
 | `npm run typecheck` | `tsc --noEmit` |
-| `npm run bench` | CPU benchmark of the terrain pipeline |
+| `npm run bench` | CPU benchmark of the terrain pipeline and the bug physics |
 
 ## How it works (summary)
 

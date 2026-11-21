@@ -11,7 +11,7 @@
       .panel { position: fixed; left: 12px; top: 12px; max-width: min(560px, calc(100vw - 24px)); background: rgba(12, 16, 28, 0.72); border: 1px solid rgba(160, 185, 255, 0.18); border-radius: 10px; padding: 10px 12px; font-size: 12px; line-height: 1.5; backdrop-filter: blur(6px); }
       #stats { white-space: pre-wrap; margin-bottom: 8px; color: #a9c1ff; }
       .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 6px; }
-      button, input { font: inherit; color: inherit; background: rgba(60, 80, 130, 0.35); border: 1px solid rgba(160, 185, 255, 0.3); border-radius: 6px; padding: 4px 9px; }
+      button, input, select { font: inherit; color: inherit; background: rgba(60, 80, 130, 0.35); border: 1px solid rgba(160, 185, 255, 0.3); border-radius: 6px; padding: 4px 9px; }
       button { cursor: pointer; } button:hover { background: rgba(90, 120, 190, 0.5); }
       input[type=number] { width: 84px; } input[type=range] { padding: 0; width: 110px; accent-color: #ffb04a; }
       .hint { opacity: 0.7; margin-top: 8px; }
@@ -30,7 +30,11 @@
         <label>radius <input id="radius" type="range" min="2" max="12" step="1" value="6" /> <span id="rv">6</span></label>
         <button id="bench">benchmark</button>
       </div>
-      <div class="hint">click the terrain to explode · drag to orbit · scroll to zoom · right-drag to pan</div>
+      <div class="row">
+        <label>bug <select id="species"></select></label>
+        <button id="respawn">respawn (R)</button>
+      </div>
+      <div class="hint">WASD / arrows: walk and turn · space: jump · click the terrain to explode · drag to orbit · scroll to zoom</div>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>

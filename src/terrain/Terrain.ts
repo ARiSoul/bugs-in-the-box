@@ -111,7 +111,7 @@ export class Terrain {
     const nx = this.sample(x + e, y, z) - this.sample(x - e, y, z);
     const ny = this.sample(x, y + e, z) - this.sample(x, y - e, z);
     const nz = this.sample(x, y, z + e) - this.sample(x, y, z - e);
-    const l = Math.hypot(nx, ny, nz) || 1;
+    const l = Math.sqrt(nx * nx + ny * ny + nz * nz) || 1;
     out[0] = nx / l;
     out[1] = ny / l;
     out[2] = nz / l;
@@ -162,7 +162,11 @@ export class Terrain {
       for (let j = j0; j <= j1; j++) {
         for (let i = i0; i <= i1; i++) {
           if (Math.min(i, j, k, sx - 1 - i, sy - 1 - j, sz - 1 - k) < 1) continue;
-          const dist = Math.hypot(i - px, j - py, k - pz);
+          // Math.sqrt, not Math.hypot: hypot's result is not pinned by the spec (engines can differ), and it is slow.
+          const ddx = i - px;
+          const ddy = j - py;
+          const ddz = k - pz;
+          const dist = Math.sqrt(ddx * ddx + ddy * ddy + ddz * ddz);
           const id = i + sx * (j + sy * k);
           const nd = Math.max(dens[id], r - dist);
           dens[id] = nd > DENSITY_CLAMP ? DENSITY_CLAMP : nd;

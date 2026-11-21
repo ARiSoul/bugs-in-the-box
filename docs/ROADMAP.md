@@ -8,12 +8,13 @@ Each phase must end with something playable or measurable. Do not move on to the
 - [x] Carving with spheres, re-meshing only the affected chunks
 - [x] Mesh integrity tests, CPU benchmark, HUD with timings
 
-## Phase 1 · First bug
-- [ ] Generic bug (an ant made of spheres/capsules), with proportions configurable for other species
-- [ ] Movement against the density field: walk on the surface (normal/gradient), jump, fall
-- [ ] React to craters (falls if the ground disappears); dies when leaving the map
-- [ ] Camera that follows the active bug
-- [ ] Tests: bug settles on the ground, does not pass through walls, falls after `carve`
+## Phase 1 · First bug (done)
+- [x] Generic bug (an ant made of spheres/cylinders), with proportions configurable for other species (ant, spider, cockroach)
+- [x] Movement against the density field: walk on the surface (normal/gradient), jump, fall
+- [x] React to craters (falls if the ground disappears); dies when leaving the map
+- [x] Camera that follows the active bug
+- [x] Tests: bug settles on the ground, does not pass through walls, falls after `carve`
+- Left for Phase 2: explosion knockback and fall damage (`lastImpact` is already recorded)
 
 ## Phase 2 · Turns and weapons
 - [ ] Turn manager, teams, health and damage

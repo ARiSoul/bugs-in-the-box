@@ -1,8 +1,14 @@
 import * as THREE from 'three';
 import { runExplosionBenchmark } from './bench/explosions';
+import { Bug, DT } from './game/bug';
+import { dropNear } from './game/spawn';
+import { ANT, SPECIES, type BugSpecies } from './game/species';
+import { KeyboardInput } from './input/keyboard';
 import { pickTerrain } from './input/picking';
+import { BugView } from './render/BugView';
 import { ChunkRenderer } from './render/ChunkRenderer';
 import { ExplosionFlashes } from './render/effects';
+import { FollowCamera } from './render/followCamera';
 import { createStage } from './render/stage';
 import { floatingIslands } from './terrain/generators/floatingIslands';
 import { SurfaceNetsMesher } from './terrain/mesher';
@@ -14,6 +20,7 @@ const terrain = new Terrain(3, 2, 3);
 const stage = createStage(canvas, terrain);
 const chunks = new ChunkRenderer(stage.scene, new SurfaceNetsMesher());
 const flashes = new ExplosionFlashes(stage.scene);
+const follow = new FollowCamera(stage.camera, stage.controls);
 const hud = new Hud();
 
 const state: HudState = {
@@ -22,6 +29,7 @@ const state: HudState = {
   lastExplosionMs: 0,
   lastExplosionChunks: 0,
   triangles: 0,
+  bug: '',
   bench: '',
 };
 const refresh = (): void => {
@@ -32,6 +40,38 @@ const refresh = (): void => {
 let seed = 1234;
 let radius = 6;
 
+// ---- the bug ----
+let bug = new Bug(ANT);
+let view = new BugView(ANT);
+stage.scene.add(view.root);
+const bugPos = new THREE.Vector3();
+
+function spawn(): void {
+  if (!dropNear(bug, terrain, terrain.W / 2, terrain.D / 2)) return;
+  view.update(bug, 1, 0);
+  follow.focus(view.root.position, 30);
+}
+
+function setSpecies(species: BugSpecies): void {
+  view.dispose();
+  bug = new Bug(species);
+  view = new BugView(species);
+  stage.scene.add(view.root);
+  spawn();
+}
+
+let lastBugStatus = '';
+function updateBugStatus(): void {
+  const s = bug.alive
+    ? `${bug.species.id}: ${bug.grounded ? 'on the ground' : 'in the air'} · ` +
+      `(${bug.x.toFixed(1)}, ${bug.y.toFixed(1)}, ${bug.z.toFixed(1)})` +
+      (bug.lastImpact > 0 ? ` · last landing ${bug.lastImpact.toFixed(1)} u/s` : '')
+    : `${bug.species.id} fell out of the world · press R to respawn`;
+  if (s === lastBugStatus) return;
+  lastBugStatus = state.bug = s;
+  refresh();
+}
+
 function newMap(s: number): void {
   const t0 = performance.now();
   floatingIslands(terrain, s);
@@ -40,6 +80,7 @@ function newMap(s: number): void {
   state.lastExplosionMs = 0;
   state.lastExplosionChunks = 0;
   state.bench = '';
+  spawn();
   refresh();
 }
 
@@ -100,7 +141,22 @@ canvas.addEventListener('pointerleave', () => {
 });
 
 // ---- controls ----
+const keyboard = new KeyboardInput(window, (code) => {
+  if (code === 'KeyR') spawn();
+});
 hud.seed.value = String(seed);
+hud.setSpeciesOptions(
+  SPECIES.map((s) => s.id),
+  ANT.id,
+);
+hud.species.addEventListener('change', () => {
+  setSpecies(SPECIES.find((s) => s.id === hud.species.value) ?? ANT);
+  hud.species.blur(); // give the keys back to the bug
+});
+hud.respawn.addEventListener('click', () => {
+  spawn();
+  hud.respawn.blur();
+});
 hud.radius.addEventListener('input', () => {
   radius = Number(hud.radius.value);
   hud.setRadiusLabel(radius);
@@ -123,12 +179,26 @@ hud.bench.addEventListener('click', () => {
   refresh();
 });
 
-// ---- loop ----
+// ---- loop: fixed-step simulation, interpolated rendering ----
 window.addEventListener('resize', stage.resize);
 let frames = 0;
 let lastFps = performance.now();
+let lastFrame = performance.now();
+let accumulator = 0;
 function loop(now: number): void {
   requestAnimationFrame(loop);
+  const dt = Math.min(0.25, (now - lastFrame) / 1000); // after a stall, drop time instead of spiralling
+  lastFrame = now;
+
+  accumulator += dt;
+  while (accumulator >= DT) {
+    bug.step(terrain, keyboard.next());
+    accumulator -= DT;
+  }
+  view.update(bug, accumulator / DT, dt);
+  if (bug.alive) follow.update(bugPos.copy(view.root.position), dt);
+  updateBugStatus();
+
   stage.controls.update();
   flashes.update(now);
   stage.renderer.render(stage.scene, stage.camera);
@@ -144,5 +214,5 @@ newMap(seed);
 requestAnimationFrame(loop);
 
 if (import.meta.env.DEV) {
-  (window as unknown as { __game: unknown }).__game = { terrain, explode, newMap, stage };
+  (window as unknown as { __game: unknown }).__game = { terrain, explode, newMap, stage, bug: () => bug };
 }

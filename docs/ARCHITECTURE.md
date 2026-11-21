@@ -54,6 +54,22 @@ Per chunk, in three steps (`mesher.ts`):
 
 No mesh colliders. `raycast` does sphere tracing over `sample()` (step `max(0.25, d·0.6)`, refined by bisection) because the field is only approximately an SDF. Bugs and projectiles will test `sample()` and the gradient (`normal()`) directly: this is cheaper than rebuilding a collider after every explosion and gives normals for free. Caution: the minimum step of 0.25 can pass through walls thinner than that.
 
+## Bugs (`src/game/`)
+
+`src/game/` is pure like `src/terrain/`: no three.js, no DOM. It sees the terrain only through `TerrainField` (`sample`, `raycast` and the world size), which `Terrain` satisfies.
+
+- **Species** (`species.ts`): one data object per species. Physics reads the radius and the movement numbers; the renderer reads the body proportions (legs, body length, abdomen, head, antennae, colors). A new species is new data, not new code.
+- **Fixed timestep.** `Bug.step` advances one tick of `DT = 1/60` s with one discrete input (`move`, `turn`, `jump`). `main.ts` runs as many ticks as real time requires and renders between the last two ticks (interpolation), so the simulation does not depend on the frame rate.
+- **Collision.** The bug is one sphere. `surfaceDistance` estimates the distance to the nearest surface as `sample / |gradient|` (central differences, half a cell). It divides only when `|gradient| > 1`: that corrects the ground, which is generated as a vertical distance and overestimates on slopes; in concave corners the gradient averages two normals (`|gradient| < 1`) and dividing would let the sphere sink into walls.
+- **Contacts.** A contact with normal Y ≥ 0.64 (~50°) is ground, anything else is wall or ceiling. Ground contacts push the sphere straight up, so a bug standing on a slope does not creep downhill; walls push along their normal. Velocity into the surface is removed.
+- **Walking.** While grounded, the facing is projected onto the ground plane and kept at full speed. After moving, the bug is pulled down by up to 0.3 units to stay on slopes and bumps; if there is no ground within that distance it starts falling. That is also how it reacts to craters: no special case for `carve`.
+- **Air.** Gravity, terminal speed, no air control. Moves are split into substeps of at most 0.35 radius, so the bug cannot skip through walls. The downward speed at landing is kept in `lastImpact` for fall damage later.
+- **Death.** Below `y = -4` the bug has left the world. The outer shell of the box is air, so walking off the edge or falling through a hole that reaches the bottom both end there.
+- **Determinism.** Only `+ - * /`, `Math.sqrt`, `Math.ceil`; turning uses a small-angle series instead of `Math.sin/cos`. A test scans `src/terrain` and `src/game` for banned `Math` functions, and another one replays 10 s of scripted input with explosions twice and compares every bit.
+- **Cost.** About 0.5 µs per bug per tick (`npm run bench`).
+
+Render side: `BugView` builds the body from spheres and cylinders, leans it into the ground normal (smoothed), and animates a tripod gait from the actual ground speed. `FollowCamera` moves the orbit camera and its target together, so the player keeps the angle and zoom; panning is off while following. `KeyboardInput` uses physical key codes (WASD works on any layout).
+
 ## Explosions
 
 `carve(p, r)` does `d = max(d, r - dist)` in a box around the sphere, updates `scorch` and marks as dirty the touched chunks **plus their neighbours** (they share boundary vertices). On average ~3 chunks per explosion with r=6.

@@ -13,6 +13,7 @@ export interface HudState {
   lastExplosionMs: number;
   lastExplosionChunks: number;
   triangles: number;
+  bug: string;
   bench: string;
 }
 
@@ -22,12 +23,25 @@ export class Hud {
   readonly regen = el<HTMLButtonElement>('regen');
   readonly random = el<HTMLButtonElement>('rand');
   readonly bench = el<HTMLButtonElement>('bench');
+  readonly species = el<HTMLSelectElement>('species');
+  readonly respawn = el<HTMLButtonElement>('respawn');
   private readonly stats = el('stats');
   private readonly radiusLabel = el('rv');
   private readonly fps = el('fps');
 
   setRadiusLabel(r: number): void {
     this.radiusLabel.textContent = String(r);
+  }
+
+  setSpeciesOptions(ids: readonly string[], selected: string): void {
+    this.species.replaceChildren(
+      ...ids.map((id) => {
+        const o = document.createElement('option');
+        o.value = o.textContent = id;
+        o.selected = id === selected;
+        return o;
+      }),
+    );
   }
 
   setFps(fps: number): void {
@@ -38,7 +52,8 @@ export class Hud {
     this.stats.textContent =
       `map ${terrain.W}×${terrain.H}×${terrain.D} · ${terrain.chunkCount} chunks of ${CHUNK}³ · ${(s.triangles / 1000).toFixed(1)}k triangles\n` +
       `generate: ${s.generateMs.toFixed(0)} ms · initial mesh: ${s.initialMeshMs.toFixed(0)} ms\n` +
-      `last explosion: ${s.lastExplosionMs.toFixed(1)} ms (${s.lastExplosionChunks} chunks)` +
+      `last explosion: ${s.lastExplosionMs.toFixed(1)} ms (${s.lastExplosionChunks} chunks)\n` +
+      s.bug +
       (s.bench ? `\n${s.bench}` : '');
   }
 }
