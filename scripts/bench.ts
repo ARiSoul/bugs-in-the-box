@@ -55,6 +55,25 @@ for (const radius of [4, 6, 10]) {
   );
 }
 
+// Larger maps (Phase 3): generation and initial meshing scale with the volume; one explosion does not.
+for (const [cx, cy, cz] of [
+  [5, 2, 5],
+  [5, 3, 5],
+]) {
+  const big = new Terrain(cx, cy, cz);
+  let s0 = performance.now();
+  floatingIslands(big, 1234);
+  const g = performance.now() - s0;
+  s0 = performance.now();
+  remesh(big);
+  const m = performance.now() - s0;
+  const r = runExplosionBenchmark(big, () => remesh(big), 6, 60);
+  console.log(
+    `world ${big.W}x${big.H}x${big.D} (${big.chunkCount} chunks): generate ${g.toFixed(0)} ms  initial mesh ${m.toFixed(0)} ms  ` +
+      `explosion r=6 mean ${r.meanMs.toFixed(1)} ms  p95 ${r.p95Ms.toFixed(1)}`,
+  );
+}
+
 // Bug physics: one walking, turning, jumping bug for 20k ticks (~5.5 min of game time).
 {
   const world = new Terrain(3, 2, 3);

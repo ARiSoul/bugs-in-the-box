@@ -22,15 +22,21 @@ Each phase must end with something playable or measurable. Do not move on to the
 - [x] Usable 3D aiming (keyboard, plus an on-screen pad for mouse and touch): camera that follows the projectile and does not get hidden behind islands, aim direction pointer
 - Not done yet: aiming by dragging on the screen, a computer opponent, a match setup screen (teams and sizes are fixed in `main.ts`)
 
-## Phase 3 · Performance
+## Phase 3 · Performance (done for PC)
+
+Goal now: a PC demo first, as a proof of concept. The phone items below are postponed, not dropped.
+
 - [x] Meshing in a Web Worker pool (removes the ~16 ms spikes): main thread ~1–2 ms per explosion
 - [x] Live measurements on screen: frame time (fps, p95, worst), remesh cost on the main thread and on the workers, time until on screen; `?mesh=main` to compare; `npm run dev:lan` to open the game on a phone
 - [x] Measure on a high-end phone: a Samsung S23 Ultra (Chrome) holds 60 fps (p95 16.7 ms), remesh 1.8 ms on the main thread, map generation ~150 ms once per match (numbers in ARCHITECTURE.md). Frame budget: 16.7 ms per frame, of which an explosion may use at most ~2 ms on the main thread
 - [x] WASM: not now. Meshing is off the main thread and costs it < 2 ms; nothing measured points at JS as the limit. Revisit if a larger map or the mid-range phone says otherwise
-- [ ] Measure on a mid-range phone too (the S23 Ultra is high-end): the real target
-- [ ] Find the rare frame spikes (~58 ms) seen on the phone
-- [ ] Move map generation (~150 ms on the phone) off the main thread, if the pause at match start becomes a problem
-- [ ] Larger maps (e.g. 5×3×5 chunks) and LOD for distant chunks
+- [ ] Later (phones): measure on a mid-range phone too (the S23 Ultra is high-end)
+- [ ] Later (phones): find the rare frame spikes (~58 ms) seen on the phone
+- [ ] Move map generation off the main thread (~350 ms on PC for the large map), if the pause at match start becomes a problem
+- [x] Larger maps: 5×3×5 is now the default (`?map=3x2x3` for the small one) (75 chunks, 160×96×160, ~340k triangles). The generator scales the number of islands with the floor area. On desktop: 60 fps, explosions cost the same as on the small map, generation ~350 ms and initial mesh ~120 ms in the browser
+- [ ] Later (phones): measure the large map on phones
+- [ ] LOD for distant chunks: not now. Desktop draws ~340k triangles at 60 fps
+- [x] Camera: when terrain hides the bug it first rises (up to ~60° above the player's angle) to look over it, and only comes closer if that is not enough
 
 ## Phase 4 · Procedural scenarios
 - [ ] Library of SDF primitives (box, cylinder, cone, torus) and boolean operations

@@ -19,7 +19,8 @@ export const floatingIslands: TerrainGenerator = (terrain, seed) => {
   const rand = createRng(seed * 7919 + 13);
 
   const islands: Island[] = [];
-  const count = 5 + Math.floor(rand() * 4);
+  // 5–8 islands on the reference 96×96 floor, more on larger maps (same density).
+  const count = Math.round(((5 + Math.floor(rand() * 4)) * (W * D)) / (96 * 96));
   for (let i = 0; i < count; i++) {
     const rx = 6 + rand() * 9;
     const ry = 3 + rand() * 4;

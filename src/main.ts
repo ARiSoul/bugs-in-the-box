@@ -26,7 +26,10 @@ const TEAMS: TeamSpec[] = [
 ];
 
 const canvas = document.getElementById('c') as HTMLCanvasElement;
-const terrain = new Terrain(3, 2, 3);
+const params = new URLSearchParams(location.search);
+// Map size in chunks of 32, e.g. `?map=3x2x3` for the small map (default 5x3x5), until there is a setup screen.
+const size = (params.get('map') ?? '').match(/^(\d)x(\d)x(\d)$/);
+const terrain = size ? new Terrain(Number(size[1]), Number(size[2]), Number(size[3])) : new Terrain(5, 3, 5);
 const stage = createStage(canvas, terrain);
 const chunks = new ChunkRenderer(stage.scene, new SurfaceNetsMesher());
 const flashes = new ExplosionFlashes(stage.scene);
@@ -55,7 +58,7 @@ const refresh = (): void => {
 
 // Meshing runs on a worker pool; `?mesh=main` keeps it on the main thread (to compare, or as a fallback).
 let initialBatch = -1;
-const workers = new URLSearchParams(location.search).get('mesh') === 'main' ? null : MeshWorkers.create(onMeshBatch);
+const workers = params.get('mesh') === 'main' ? null : MeshWorkers.create(onMeshBatch);
 state.meshing = workers ? `${workers.size} worker${workers.size > 1 ? 's' : ''}` : 'main thread';
 
 /** A batch of chunk meshes is ready: show all of them in this frame (neighbours must change together). */

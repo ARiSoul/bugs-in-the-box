@@ -4,6 +4,8 @@ Turn-based 3D artillery game that runs in the browser. Teams of "bugs" (ants, sp
 
 Author: Ricardo (Marinha Grande, PT). Project priority #1: **the best possible performance**, regardless of the stack.
 
+Current goal: **a PC demo first, as a proof of concept** (desktop browser, keyboard and mouse). Phones are a later concern: keep the on-screen pad and the measurement tools working, but do not let phone limits drive decisions for now. The default map is the large one (5×3×5 chunks, 160×96×160).
+
 ## Language
 
 - **Everything in the repo is in English**: code, comments, docs (`README`, `docs/`, this file), UI text, commit messages and pull requests.
@@ -90,6 +92,7 @@ Measured on Node 22 in a cloud VM (one core). They serve as a regression baselin
 | Explosion r=6 (carve + remesh of ~3 chunks) | mean ~5–7 ms · p95 ~9–18 ms |
 | Remesh per chunk | ~2–3 ms |
 | Bug step | ~0.5 µs per bug per tick |
+| Large map 160×96×160 (75 chunks, `?map=5x3x5`) | generate ~700–850 ms · initial mesh ~80–100 ms · explosion r=6 mean ~5 ms |
 
 Target budget: one explosion must not exceed 1 frame (16 ms) on the main thread. Since Phase 3 meshing runs on workers: an explosion costs the main thread ~1–2 ms (region copy + geometry upload) on desktop, 1.8 ms on a Samsung S23 Ultra. Render target: 60 fps on desktop and phones (the S23 Ultra, high-end, holds it: p95 16.7 ms; a mid-range phone is still to be measured).
 
@@ -99,4 +102,4 @@ Target budget: one explosion must not exceed 1 frame (16 ms) on the main thread.
 
 ## Current status
 
-Phase 0 done: destructible SDF terrain prototype (click to explode, seed, benchmark). Phase 1 done: a controllable bug (ant, spider, cockroach) that walks, jumps, falls into craters and dies off the map, with a follow camera. Phase 2 done: local hot-seat matches (Red Ants vs Blue Spiders, 3 bugs each), turns, wind, 4 weapons, damage, knockback, fall damage, on-screen pad for mouse and touch. Phase 3 in progress: meshing runs on a Web Worker pool, with live performance readouts. Measured on a Samsung S23 Ultra (60 fps); WASM not needed for now. Still open: a mid-range phone, rare frame spikes, larger maps and LOD. See `docs/ROADMAP.md`.
+Phase 0 done: destructible SDF terrain prototype (click to explode, seed, benchmark). Phase 1 done: a controllable bug (ant, spider, cockroach) that walks, jumps, falls into craters and dies off the map, with a follow camera. Phase 2 done: local hot-seat matches (Red Ants vs Blue Spiders, 3 bugs each), turns, wind, 4 weapons, damage, knockback, fall damage, on-screen pad for mouse and touch. Phase 3 done for PC: meshing runs on a Web Worker pool, live performance readouts, the large map (5×3×5) is the default and runs at 60 fps on desktop; WASM and LOD not needed for now. Phone work is postponed (see ROADMAP). Next: Phase 4, procedural scenarios. See `docs/ROADMAP.md`.

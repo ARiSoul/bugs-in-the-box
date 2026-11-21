@@ -19,7 +19,7 @@ Open the address that Vite prints.
 - **Space**: jump · **hold F** to charge, release to fire · **1–4**: weapon · **N**: new match
 - **Drag** to orbit the camera · **scroll** to zoom
 - On a touch screen (or with the mouse), use the pad in the bottom-right corner and tap a weapon.
-- The menu lets you pick the seed (the same seed gives the same map and match) and run a benchmark. It also shows the meshing cost; the frame time is at the top. Add `?mesh=main` to the URL to mesh on the main thread instead of the workers, to compare.
+- The menu lets you pick the seed (the same seed gives the same map and match) and run a benchmark. It also shows the meshing cost; the frame time is at the top. Add `?mesh=main` to the URL to mesh on the main thread instead of the workers, to compare, and `?map=3x2x3` for the small map (size in chunks of 32; the default is 5x3x5).
 
 Each turn lasts 30 s. After a shot, the bug has 3 s to walk away. The last team with bugs left wins.
 
