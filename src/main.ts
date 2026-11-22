@@ -121,7 +121,7 @@ function newMatch(s: number): void {
     v.label.dispose();
   }
   bugViews = match.units.map((u) => {
-    const view = new BugView(u.bug.species);
+    const view = new BugView(u.bug.species, match.teams[u.team].color);
     const label = new UnitLabel(u.name, match.teams[u.team].color);
     stage.scene.add(view.root, label.sprite);
     return { view, label, height: u.bug.species.radius * 2.4 };
@@ -369,6 +369,7 @@ function loop(now: number): void {
     const v = bugViews[i];
     v.view.update(u.bug, alpha, dt);
     const dist = stage.camera.position.distanceTo(v.view.root.position);
+    v.view.setRingScale(dist);
     v.label.update(v.view.root.position, v.height, u.bug.health, u.bug.alive, dist, u.bug.alive && occluded(v.view.root.position, dist));
   });
   projectiles.sync(match.projectiles, alpha);

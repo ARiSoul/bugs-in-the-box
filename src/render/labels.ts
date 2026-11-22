@@ -2,6 +2,9 @@ import * as THREE from 'three';
 
 const hex = (c: number): string => `#${c.toString(16).padStart(6, '0')}`;
 
+/** Label height as a fraction of the view height (about 50 px at 1080p). */
+const LABEL_H = 0.046;
+
 function textSprite(width: number, height: number): { sprite: THREE.Sprite; ctx: CanvasRenderingContext2D; texture: THREE.CanvasTexture } {
   const canvas = document.createElement('canvas');
   canvas.width = width;
@@ -10,7 +13,7 @@ function textSprite(width: number, height: number): { sprite: THREE.Sprite; ctx:
   if (!ctx) throw new Error('2D canvas not available');
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
-  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, depthTest: false, transparent: true, fog: false }));
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, depthTest: false, transparent: true, fog: false, sizeAttenuation: false }));
   sprite.renderOrder = 10;
   return { sprite, ctx, texture };
 }
@@ -30,21 +33,20 @@ export class UnitLabel {
     this.sprite = t.sprite;
     this.ctx = t.ctx;
     this.texture = t.texture;
-    this.sprite.scale.set(4.2, 1.18, 1);
+    this.sprite.scale.set(LABEL_H * (256 / 72), LABEL_H, 1);
   }
 
   /**
-   * `cameraDistance`: the label grows past ~30 units away so it keeps a readable size on screen
-   * (about 60 px wide at 1080p and the default field of view). `hidden`: the bug is behind terrain; the
+   * The label keeps one size on screen (`LABEL_H`), so it reads at any distance and does not shimmer.
+   * `cameraDistance` lifts it a little so it stays above the bug. `hidden`: the bug is behind terrain; the
    * label stays (players need to find their bugs) but dims.
    */
   update(position: THREE.Vector3, height: number, health: number, visible: boolean, cameraDistance = 0, hidden = false): void {
     this.sprite.visible = visible;
     if (!visible) return;
     this.sprite.material.opacity = hidden ? 0.35 : 1;
-    const grow = Math.max(1, cameraDistance / 30);
-    this.sprite.scale.set(4.2 * grow, 1.18 * grow, 1);
-    this.sprite.position.set(position.x, position.y + height + 0.4 * (grow - 1), position.z);
+    // keep the plate clear of the bug: lift it a little more the farther the camera is
+    this.sprite.position.set(position.x, position.y + height + cameraDistance * 0.02, position.z);
     if (health === this.shown) return;
     this.shown = health;
     const { ctx } = this;

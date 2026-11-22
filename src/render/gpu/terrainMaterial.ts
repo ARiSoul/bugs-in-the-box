@@ -10,6 +10,8 @@ import {
   cross,
   dFdx,
   dFdy,
+  fwidth,
+  length,
   dot,
   float,
   If,
@@ -46,7 +48,8 @@ export function createTerrainMaterial(glow: Glow): { material: THREE.MeshStandar
   const sharp = uniform(1);
   const m = new THREE.MeshStandardNodeMaterial({ vertexColors: true });
   const pbr = attribute('pbr', 'vec3');
-  m.roughnessNode = pbr.x;
+  // specular anti-aliasing: where the normal changes fast across a pixel, the surface gets rougher
+  m.roughnessNode = max(pbr.x, clamp(length(fwidth(normalView)).mul(1.2), 0, 0.9));
   m.metalnessNode = pbr.y;
 
   // Hard edges: where the triangle's own normal disagrees strongly with the interpolated one, use it.

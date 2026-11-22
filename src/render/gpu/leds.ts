@@ -3,7 +3,7 @@ import { color, uniform } from 'three/tsl';
 import type { SceneLayout } from '../../terrain/generators/types';
 
 /** Most activity LEDs shown. */
-const MAX_LEDS = 4;
+const MAX_LEDS = 12;
 
 /**
  * Small activity LEDs (amber or green) that blink like disk and network activity: render-only lights on

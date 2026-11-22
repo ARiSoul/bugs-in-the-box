@@ -14,6 +14,7 @@ import {
   max,
   min,
   mix,
+  mrt,
   mx_fractal_noise_float,
   normalize,
   positionView,
@@ -26,6 +27,7 @@ import {
   uniform,
   vec2,
   vec3,
+  vec4,
 } from 'three/tsl';
 import type { SceneLayout } from '../../terrain/generators/types';
 import { Glow, MAX_LIGHTS, hueColor } from './glow';
@@ -47,7 +49,7 @@ export class Atmosphere {
   /** Enclosure, for the dark corners: centre and half size on the floor plane (xz). */
   readonly roomCenter = uniform(new THREE.Vector2(80, 80));
   readonly roomHalf = uniform(new THREE.Vector2(75, 75));
-  readonly cornerDark = uniform(0.72);
+  readonly cornerDark = uniform(0.75);
   readonly sunDir = uniform(new THREE.Vector3(0.4, 0.85, 0.3));
   glass: THREE.Mesh | null = null;
 
@@ -93,19 +95,20 @@ export class Atmosphere {
       Loop(MAX_LIGHTS, ({ i }) => {
         const l = g.lights.element(i) as unknown as THREE.Node<'vec4'>;
         const dl = length(p.sub(l.xyz));
-        tint.addAssign(l.w.mul(exp(dl.mul(dl).mul(-1 / 900))));
+        tint.addAssign(l.w.mul(exp(dl.mul(dl).mul(-1 / 1800))));
       });
       const tintAmount = min(tint.x, 1);
       const layerW = smoothstep(this.layerTop, this.layerTop.sub(9), p.y)
         .mul(float(1).sub(exp(d.mul(-0.012))))
         .mul(this.layerStrength);
-      const layerColor = mix(this.fogColor.mul(1.6), hueColor(g.hue).mul(0.1), tintAmount);
+      // a faint warm haze, taking the colour of the RGB lights near them
+      const layerColor = mix(vec3(0.05, 0.042, 0.036), hueColor(g.hue).mul(0.2), tintAmount);
       const f1 = clamp(distF.add(layerW.mul(float(1).sub(distF))), 0, 1);
       const c1 = mix(this.fogColor, layerColor, layerW.div(max(f1, 1e-4)).mul(float(1).sub(distF)));
       // dark corners: 0 in the middle of the room, 1 against the walls and in the corners
       const q = abs(p.xz.sub(this.roomCenter)).div(this.roomHalf);
       const edge = length(max(q.sub(0.42), 0).div(0.58));
-      const corner = smoothstep(0.2, 0.95, edge).mul(this.cornerDark);
+      const corner = smoothstep(0.1, 0.95, edge).mul(this.cornerDark);
       const f2 = f1.add(float(1).sub(f1).mul(corner));
       const c2 = mix(c1, this.fogColor.mul(0.55), corner.div(max(f2, 1e-4)).mul(float(1).sub(f1)));
       return fog(c2, f2);
@@ -130,6 +133,8 @@ export class Atmosphere {
   private glassMaterial(width: number, depth: number): THREE.MeshBasicNodeMaterial {
     const m = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false, side: THREE.DoubleSide });
     m.fog = false;
+    // transparent: leave the emissive buffer (bloom input) as it is under it, or the glow behind is wiped
+    m.mrtNode = mrt({ emissive: vec4(0, 0, 0, 0) });
     const center = this.roomCenter;
     const half = vec2(width / 2, depth / 2);
     {

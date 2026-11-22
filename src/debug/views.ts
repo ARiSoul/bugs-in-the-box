@@ -54,10 +54,11 @@ const pcCase: ViewBuilder = (t, layout) => {
   const c: [number, number, number] = [W / 2, H * 0.3, D / 2];
   const find = (kind: string, axis?: number) => layout.features.find((f) => f.kind === kind && (axis === undefined || f.axis === axis));
   const pump = find('pump');
-  const radFans = layout.features.filter((f) => f.kind === 'fan' && f.axis === 2);
+  const radFans = layout.features.filter((f) => f.kind === 'fan' && f.axis === 2 && f.facing > 0);
   const radFan = radFans.length ? { x: radFans.reduce((a, f) => a + f.x, 0) / radFans.length, y: radFans[0].y, z: radFans[0].z } : undefined;
   const gpuFans = layout.features.filter((f) => f.kind === 'fan' && f.axis === 0);
-  const bars = layout.features.filter((f) => f.kind === 'lightBar');
+  // RAM light bars (short ones; long strips elsewhere are accents)
+  const bars = layout.features.filter((f) => f.kind === 'lightBar' && f.box[5] - f.box[2] < D * 0.5);
   const p: [number, number, number] = pump ? [pump.x, pump.y, pump.z] : c;
   const rad: [number, number, number] = radFan ? [radFan.x, radFan.y, radFan.z] : [W / 2, 28, 12];
   const gpu: [number, number, number] = gpuFans.length ? [gpuFans[Math.floor(gpuFans.length / 2)].x, gpuFans[0].y, gpuFans[Math.floor(gpuFans.length / 2)].z] : [W * 0.75, 30, D * 0.8];
@@ -66,7 +67,8 @@ const pcCase: ViewBuilder = (t, layout) => {
   const glassY = layout.glassY > 0 ? layout.glassY : H;
   // the start: above the glass, looking down at the pump, the tubes and the RAM
   // (the case fog is measured from the camera: clear for ~40, dark by ~150, so the start stays close)
-  const start = key([c[0] + 8 * s, glassY + 18 * s, c[2] + 30 * s], [p[0] + 14 * s, 18, p[2] - 2 * s]);
+  // seen along the window blinds (along z), so the light sheets in the dust show edge-on as shafts
+  const start = key([c[0] + 4 * s, glassY + 8 * s, c[2] + 58 * s], [c[0] - 2 * s, 20, (p[2] + rad[2]) / 2]);
   const poses = [
     start,
     // 2: AIO wall: radiator fans and the tube bridges, from inside the case

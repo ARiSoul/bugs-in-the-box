@@ -1,5 +1,5 @@
 import * as THREE from 'three/webgpu';
-import { color, cos, float, positionLocal } from 'three/tsl';
+import { abs, cameraPosition, color, cos, dot, float, normalize, normalWorld, positionLocal, positionWorld, pow } from 'three/tsl';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import type { Feature, SceneLayout } from '../../terrain/generators/types';
 import { Glow, hueColor } from './glow';
@@ -7,7 +7,7 @@ import { Glow, hueColor } from './glow';
 /** Brightness of the light rings and bars (HDR, before bloom and tone mapping). */
 const OVERLAY_GLOW = 1.15;
 /** The RAM light bars are the brightest lights (the hero of their view). */
-const BAR_GLOW = 1.9;
+const BAR_GLOW = 1.45;
 /** Tube radius of the smooth rings, and how far they sit in front of the terrain diffuser. */
 const RING_TUBE = 1.4;
 const RING_OUT = 0.5;
@@ -42,12 +42,15 @@ export class LightOverlays {
   ) {
     const m = new THREE.MeshStandardNodeMaterial({ roughness: 0.35, metalness: 0 });
     m.colorNode = color(0x050505);
-    m.emissiveNode = hueColor(glow.hue).mul(float(OVERLAY_GLOW));
+    // a hot core where the tube faces the camera, dimmer towards its silhouette: reads as a light tube
+    const facing = abs(dot(normalWorld, normalize(cameraPosition.sub(positionWorld))));
+    const core = pow(facing, 2).mul(0.7).add(0.55);
+    m.emissiveNode = hueColor(glow.hue).mul(float(OVERLAY_GLOW)).mul(glow.boost).mul(core);
     this.material = m;
     // light bars: the brightest RGB in the case, with a row of LEDs showing through the diffuser
     const b = new THREE.MeshStandardNodeMaterial({ roughness: 0.35, metalness: 0 });
     b.colorNode = color(0x050505);
-    b.emissiveNode = hueColor(glow.hue).mul(float(BAR_GLOW).mul(cos(positionLocal.z.mul(1.6)).mul(0.22).add(0.88)));
+    b.emissiveNode = hueColor(glow.hue).mul(float(BAR_GLOW).mul(cos(positionLocal.z.mul(1.6)).mul(0.22).add(0.88))).mul(glow.boost).mul(core);
     this.barMaterial = b;
   }
 

@@ -2,6 +2,8 @@ import { createRng } from '../noise';
 import {
   ALUMINIUM,
   BLACK_PLASTIC,
+  CABLE_RED,
+  CABLE_YELLOW,
   COPPER,
   DUST,
   GOLD,
@@ -52,6 +54,19 @@ export const pcCase: TerrainGenerator = (terrain, seed, layout) => {
   const put = (f: ReturnType<typeof feature>): void => {
     if (layout) layout.features.push(f);
   };
+  /** A detail: a terrain block (the destructible part) and a clean render shape over it. */
+  const part = (
+    x0: number, y0: number, z0: number, x1: number, y1: number, z1: number,
+    material: number, shape: 'box' | 'cylX' | 'cylY' | 'cylZ', color: number, metal: number, rough: number,
+  ): void => {
+    // the terrain block sits just inside the render shape (no coinciding surfaces: no z-fighting), but
+    // keeps at least 2 cells in every direction
+    const ex = Math.max(-0.3, 1 - (x1 - x0) / 2);
+    const ey = Math.max(-0.3, 1 - (y1 - y0) / 2);
+    const ez = Math.max(-0.3, 1 - (z1 - z0) / 2);
+    add(terrain, boxMinMax(x0 - ex, y0 - ey, z0 - ez, x1 + ex, y1 + ey, z1 + ez, 0.4), material);
+    put(feature('part', (x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2, { shape, box: [x0, y0, z0, x1, y1, z1], color, metal, rough }));
+  };
   if (layout) {
     layout.glassY = glassY;
     layout.floorY = BOARD_TOP;
@@ -95,7 +110,9 @@ export const pcCase: TerrainGenerator = (terrain, seed, layout) => {
       const len = rand(6, 26) * (rng() < 0.5 ? -1 : 1);
       const x2 = alongX ? Math.min(bx1 - 3, Math.max(bx0 + 3, x + len)) : x;
       const z2 = alongX ? z : Math.min(bz1 - 3, Math.max(bz0 + 3, z + len));
-      add(terrain, boxMinMax(Math.min(x, x2) - 1.25, P - 0.5, Math.min(z, z2) - 1.25, Math.max(x, x2) + 1.25, P + 1.5, Math.max(z, z2) + 1.25, 0.5), COPPER);
+      const tb: [number, number, number, number, number, number] = [Math.min(x, x2) - 1.25, P - 0.5, Math.min(z, z2) - 1.25, Math.max(x, x2) + 1.25, P + 1.5, Math.max(z, z2) + 1.25];
+      add(terrain, boxMinMax(tb[0], tb[1], tb[2], tb[3], tb[4], tb[5], 0.5), COPPER);
+      put(feature('trace', (tb[0] + tb[3]) / 2, P, (tb[2] + tb[5]) / 2, { box: tb }));
       x = x2;
       z = z2;
     }
@@ -131,6 +148,26 @@ export const pcCase: TerrainGenerator = (terrain, seed, layout) => {
   put(feature('pump', cx, pumpTop, cz, { radius: pumpR - 3.2 }));
   put(feature('heat', cx, pumpTop, cz, { box: [cx - pumpR, pumpTop + 1, cz - pumpR, cx + pumpR, pumpTop + 15, cz + pumpR] }));
 
+  // ---- VRM heatsinks along two sides of the socket, and the 8-pin CPU power
+  const vrm = (x0: number, z0: number, x1: number, z1: number): void => {
+    if (!free(x0, z0, x1, z1)) return;
+    claim(x0, z0, x1, z1);
+    add(terrain, boxMinMax(x0, P, z0, x1, P + 7, z1, 0.6), SHROUD);
+    // fins across the long side (cut 2 wide, 2 apart)
+    const alongX = x1 - x0 > z1 - z0;
+    const len = alongX ? x1 - x0 : z1 - z0;
+    for (let t = 2; t + 2 <= len - 2; t += 4) {
+      if (alongX) cut(terrain, boxMinMax(x0 + t, P + 4, z0 - 1, x0 + t + 2, P + 8, z1 + 1, 0.3));
+      else cut(terrain, boxMinMax(x0 - 1, P + 4, z0 + t, x1 + 1, P + 8, z0 + t + 2, 0.3));
+    }
+  };
+  vrm(cx - sock, cz + sock + 3, cx + sock, cz + sock + 9);
+  vrm(cx - sock - 10, cz - sock, cx - sock - 3, cz + sock);
+  if (free(cx - sock - 9, cz - sock - 9, cx - sock - 3, cz - sock - 2)) {
+    claim(cx - sock - 9, cz - sock - 9, cx - sock - 3, cz - sock - 2);
+    part(cx - sock - 8.5, P, cz - sock - 8.5, cx - sock - 3.5, P + 5, cz - sock - 2.5, BLACK_PLASTIC, 'box', 0x15161a, 0, 0.55);
+  }
+
   // ---- RGB RAM row beside the pump: four sticks with light bars
   const ramHalf = Math.max(12, 30 * s - 6);
   const ramTop = P + Math.max(14, 19 * s);
@@ -140,6 +177,7 @@ export const pcCase: TerrainGenerator = (terrain, seed, layout) => {
     claim(ramX - 2.5, cz - ramHalf - 1, ramX + 2.5, cz + ramHalf + 1);
     add(terrain, boxMinMax(ramX - 2, P, cz - ramHalf - 1, ramX + 2, P + 3, cz + ramHalf + 1, 0.4), BLACK_PLASTIC);
     add(terrain, boxMinMax(ramX - 1.8, P + 2.5, cz - ramHalf + 1.5, ramX + 1.8, ramTop - 0.5, cz + ramHalf - 1.5, 0.5), SHROUD);
+    put(feature('ramBody', ramX, P + 2.5, cz, { box: [ramX - 1.8, P + 2.5, cz - ramHalf + 1.5, ramX + 1.8, ramTop - 0.5, cz + ramHalf - 1.5] }));
     add(terrain, boxMinMax(ramX - 1.2, ramTop - 0.5, cz - ramHalf + 2.5, ramX + 1.2, ramTop + 1.6, cz + ramHalf - 2.5, 0.6), RGB_LIGHT);
     put(feature('lightBar', ramX, ramTop + 1.6, cz, { box: [ramX - 1.2, ramTop - 0.5, cz - ramHalf + 2.5, ramX + 1.2, ramTop + 1.6, cz + ramHalf - 2.5] }));
   }
@@ -200,6 +238,8 @@ export const pcCase: TerrainGenerator = (terrain, seed, layout) => {
   // ---- PSU shroud plateau along the bottom edge: steel shelf with grommet holes, 24-pin bundle
   const shelfTop = P + 12;
   add(terrain, boxMinMax(WALL1 - 1, TRAY_TOP - 1, WALL1 - 1, psuX1, shelfTop, D - WALL1 + 1, 1), STEEL);
+  add(terrain, boxMinMax(psuX1 - 1.2, shelfTop - 2.5, D * 0.12, psuX1 + 0.4, shelfTop - 0.5, D * 0.88, 0.5), RGB_LIGHT);
+  put(feature('lightBar', psuX1 - 0.4, shelfTop - 0.5, D / 2, { box: [psuX1 - 1.2, shelfTop - 2.5, D * 0.12, psuX1 + 0.4, shelfTop - 0.5, D * 0.88] }));
   const grommetZ = [D * 0.3, cz, D * 0.72];
   for (const gz of grommetZ) {
     const gx = psuX1 - 6;
@@ -212,8 +252,13 @@ export const pcCase: TerrainGenerator = (terrain, seed, layout) => {
   add(terrain, boxMinMax(atxX - 2, P, cz - 7, atxX + 2.5, P + 5, cz + 7, 0.4), BLACK_PLASTIC);
   claim(atxX - 3, cz - 8, atxX + 3.5, cz + 8);
   for (let k = -1; k <= 1; k++) {
-    cable(terrain, [psuX1 - 6, shelfTop - 1, cz + k * 2.9], [atxX, P + 5, cz + k * 2.9], Math.max(6, 9 * s), BLACK_PLASTIC, 1.5, 18);
+    const from: Vec3 = [psuX1 - 6, shelfTop - 1, cz + k * 2.9];
+    const to: Vec3 = [atxX, P + 5, cz + k * 2.9];
+    cable(terrain, from, to, Math.max(6, 9 * s), BLACK_PLASTIC, 1.5, 18);
+    // sleeved strands, white between black
+    put(feature('tube', from[0], from[1], from[2], { path: [...from, ...to, Math.max(6, 9 * s), 1.5], color: k === 0 ? 0xd8d8dc : 0x16161a }));
   }
+  put(feature('connector', atxX, P, cz, { box: [atxX - 2, P, cz - 7, atxX + 2.5, P + 5, cz + 7] }));
   for (const u of [0.3, 0.7]) {
     // zip ties: bands around the bundle where it crests (a slightly wider rounded box)
     const zx = psuX1 - 6 + (atxX - psuX1 + 6) * u;
@@ -254,20 +299,176 @@ export const pcCase: TerrainGenerator = (terrain, seed, layout) => {
   }
   ribbon(terrain, [gx + 6.5, P + 2.5, slotZ], [gx + 6.5, gy0, gz0 + 3], 5, SHROUD, 3, 1, 14);
 
-  // ---- I/O shield on the rear wall, and the vent grid (holes 3 wide, bars 2 wide)
+  // ---- rear I/O: shield plate on the rear wall, the backs of the port stacks, and an I/O cover
+  // (the port faces look out of the back of the case; from inside we see their housings)
   const ioX0 = bx0 + 2;
   const ioX1 = ioX0 + Math.max(18, 30 * s);
-  add(terrain, boxMinMax(ioX0, TRAY_TOP, D - WALL1 - 1.5, ioX1, P + 16, D - WALL1 + 0.5, 0.4), ALUMINIUM);
-  for (let p = 0, x = ioX0 + 3; x + 4 < ioX1; p++, x += 6) {
-    add(terrain, boxMinMax(x, P + 3 + (p % 2) * 5, D - WALL1 - 4, x + 4, P + 7 + (p % 2) * 5, D - WALL1, 0.5), p % 3 === 2 ? GOLD : BLACK_PLASTIC);
+  const ioZ = D - WALL1; // inner face of the rear wall
+  add(terrain, boxMinMax(ioX0, TRAY_TOP, ioZ - 1.5, ioX1, P + 16, ioZ + 0.5, 0.4), ALUMINIUM);
+  claim(ioX0 - 1, ioZ - 24, ioX1 + 1, D);
+  // I/O cover: a dark shroud over the left part of the stack, with an RGB slash on top
+  const coverX1 = ioX0 + (ioX1 - ioX0) * 0.42;
+  part(ioX0, P, ioZ - 20, coverX1, P + 18, ioZ - 1.5, SHROUD, 'box', 0x1d1f24, 0.4, 0.5);
+  add(terrain, boxMinMax(ioX0 + 1.5, P + 17, ioZ - 16, ioX0 + 3.5, P + 19.5, ioZ - 4, 0.6), RGB_LIGHT);
+  put(feature('lightBar', ioX0 + 2.5, P + 19.5, ioZ - 10, { box: [ioX0 + 1.5, P + 17, ioZ - 16, ioX0 + 3.5, P + 19.5, ioZ - 4] }));
+  // port housings, left to right: USB stack, Ethernet (two activity LEDs) under USB, fast USB, Wi-Fi antennas, audio
+  let px = coverX1 + 1;
+  const portW = Math.max(3, (ioX1 - coverX1 - 4) / 4.5);
+  part(px, P, ioZ - 6, px + portW, P + 9, ioZ - 1.5, STEEL, 'box', 0xb9bec6, 0.85, 0.35); // USB stack
+  px += portW + 1;
+  part(px, P, ioZ - 7, px + portW, P + 7, ioZ - 1.5, BLACK_PLASTIC, 'box', 0x15161a, 0, 0.55); // RJ45
+  put(feature('led', px + 0.8, P + 7.6, ioZ - 6.5, { color: 0x3dff6a }));
+  put(feature('led', px + portW - 0.8, P + 7.6, ioZ - 6.5, { color: 0xffa21a }));
+  part(px, P + 7, ioZ - 6, px + portW, P + 12, ioZ - 1.5, STEEL, 'box', 0xb9bec6, 0.85, 0.35); // USB on top
+  px += portW + 1;
+  part(px, P, ioZ - 6, px + portW, P + 10, ioZ - 1.5, STEEL, 'box', 0x5a8fd6, 0.6, 0.4); // fast USB (blue)
+  px += portW + 1;
+  for (const y of [P + 4, P + 10]) {
+    // Wi-Fi antenna connectors: gold threaded barrels through the shield
+    part(px + portW / 2 - 1.1, y - 1.1, ioZ - 4, px + portW / 2 + 1.1, y + 1.1, ioZ - 1.5, GOLD, 'cylZ', 0xd9a441, 1, 0.3);
   }
-  claim(ioX0 - 1, D - WALL1 - 6, ioX1 + 1, D);
+  const antennaX = px + portW / 2;
+  px += portW * 0.5 + 1;
+  const audioX1 = Math.min(px + portW, ioX1 - 0.5);
+  part(px, P, ioZ - 6, audioX1, P + 13, ioZ - 1.5, BLACK_PLASTIC, 'box', 0x15161a, 0, 0.55); // audio jacks
+  // the audio jacks' coloured rings, on the side of the stack
+  const jackColours = [0x2f7fe0, 0x34c759, 0xff5ca8];
+  for (let k = 0; k < 3; k++) {
+    put(feature('part', px - 0.2, P + 2.5 + k * 4, ioZ - 3.5, { shape: 'cylX', box: [px - 0.5, P + 1.6 + k * 4, ioZ - 4.4, px + 0.1, P + 3.4 + k * 4, ioZ - 2.6], color: jackColours[k], metal: 0, rough: 0.4, glow: 0.3 }));
+  }
+
+  // ---- network and Wi-Fi: Wi-Fi card (M.2 E-key) with its antenna leads, LAN controller
+  const wifiZ = ioZ - 30;
+  if (free(antennaX - 6, wifiZ - 4, antennaX + 6, wifiZ + 4)) {
+    claim(antennaX - 6, wifiZ - 4, antennaX + 6, wifiZ + 4);
+    part(antennaX - 5, P, wifiZ - 3, antennaX + 5, P + 1.4, wifiZ + 3, PCB, 'box', 0x1d5a35, 0, 0.6);
+    part(antennaX - 3.5, P + 1.4, wifiZ - 2.2, antennaX + 2.5, P + 2.6, wifiZ + 2.2, STEEL, 'box', 0xc4c8cf, 0.9, 0.3); // RF shield
+    const leads: [number, number][] = [
+      [-1, P + 4],
+      [1, P + 10],
+    ];
+    for (const [k, y] of leads) {
+      put(feature('tube', antennaX + k * 1.2, P + 2.6, wifiZ, { path: [antennaX + k * 1.2, P + 2.6, wifiZ, antennaX, y, ioZ - 4, 3, 0.35], color: 0x1a1a1d }));
+    }
+  }
+  if (free(antennaX + 7, wifiZ - 3, antennaX + 13, wifiZ + 3)) {
+    claim(antennaX + 7, wifiZ - 3, antennaX + 13, wifiZ + 3);
+    part(antennaX + 8, P, wifiZ - 2.5, antennaX + 12.5, P + 1.4, wifiZ + 2, SILICON, 'box', 0x1b1c20, 0.1, 0.45); // LAN controller
+  }
+
+  // ---- audio corner: codec under a metal shield, audio capacitors, a light line along the divide
+  const ax0 = bx0 + 2;
+  const az1 = ioZ - 26;
+  const az0 = az1 - Math.max(14, 22 * s);
+  if (free(ax0, az0, ax0 + 18, az1)) {
+    claim(ax0, az0, ax0 + 18, az1);
+    part(ax0 + 2, P, az1 - 8, ax0 + 8, P + 1.6, az1 - 2, STEEL, 'box', 0xc4c8cf, 0.9, 0.32); // codec shield
+    for (let i = 0; i < 6; i++) {
+      const x = ax0 + 3 + (i % 3) * 4.5;
+      const z = az0 + 3 + Math.floor(i / 3) * 4.5;
+      part(x - 1.3, P, z - 1.3, x + 1.3, P + 3, z + 1.3, GOLD, 'cylY', 0xd9a441, 0.8, 0.35);
+    }
+    add(terrain, boxMinMax(ax0 + 15, P - 0.4, az0, ax0 + 17, P + 0.8, az1, 0.3), RGB_LIGHT);
+    put(feature('lightBar', ax0 + 16, P + 0.8, (az0 + az1) / 2, { box: [ax0 + 15, P - 0.4, az0, ax0 + 17, P + 0.8, az1] }));
+  }
+
+  // ---- PCIe slots: two armoured x16, two x1, a CMOS battery, and a wide chipset / M.2 cover
+  const sx0 = bx0 + Math.max(16, 24 * s);
+  const sx1 = Math.min(gx - 12, sx0 + Math.max(30, 44 * s));
+  let sz = cz + sock + 16;
+  const slots = ['x16', 'x1', 'x16', 'x1'];
+  for (const kind of slots) {
+    const len = kind === 'x16' ? sx1 - sx0 : Math.max(8, (sx1 - sx0) * 0.3);
+    if (sz + 3 > bz1 - 4) break;
+    if (free(sx0, sz - 2, sx0 + len, sz + 2)) {
+      claim(sx0, sz - 2.5, sx0 + len, sz + 2.5);
+      add(terrain, boxMinMax(sx0, P, sz - 1.5, sx0 + len, P + 3, sz + 1.5, 0.4), BLACK_PLASTIC);
+      if (kind === 'x16') part(sx0 - 0.3, P, sz - 1.9, sx0 + len + 0.3, P + 3.4, sz + 1.9, STEEL, 'box', 0xc9cdd3, 0.9, 0.28); // armour
+      else part(sx0, P, sz - 1.5, sx0 + len, P + 3, sz + 1.5, BLACK_PLASTIC, 'box', 0x16171b, 0, 0.5);
+    }
+    sz += kind === 'x16' ? 8 : 7;
+  }
+  if (free(sx1 + 2, sz - 6, sx1 + 9, sz + 1)) {
+    claim(sx1 + 2, sz - 6, sx1 + 9, sz + 1);
+    part(sx1 + 2.3, P, sz - 5.8, sx1 + 8.7, P + 2.2, sz + 0.8, STEEL, 'cylY', 0xd5d9de, 0.95, 0.22); // CMOS battery
+  }
+  const cvz0 = sz + 2;
+  const cvz1 = Math.min(bz1 - 6, cvz0 + Math.max(10, 16 * s));
+  if (cvz1 - cvz0 >= 8 && free(sx0, cvz0, sx1, cvz1)) {
+    claim(sx0, cvz0, sx1, cvz1);
+    part(sx0, P, cvz0, sx1, P + 3, cvz1, SHROUD, 'box', 0x1d1f24, 0.45, 0.45);
+    add(terrain, boxMinMax(sx0 + 3, P + 2.6, cvz0 + 2, sx1 - 3, P + 4, cvz0 + 4, 0.5), RGB_LIGHT);
+    put(feature('lightBar', (sx0 + sx1) / 2, P + 4, cvz0 + 3, { box: [sx0 + 3, P + 2.6, cvz0 + 2, sx1 - 3, P + 4, cvz0 + 4] }));
+  }
+
+  // ---- SATA ports on the near board edge, with two red SATA cables to the drives on the shroud
+  const sataZ = bz0 + 14; // clear of the mounting hole in the corner
+  const sata = free(bx0, sataZ - 4, bx0 + 7, sataZ + 8);
+  if (sata) {
+    claim(bx0, sataZ - 4, bx0 + 7, sataZ + 8);
+    for (let k = 0; k < 2; k++) part(bx0 + 1, P, sataZ - 3 + k * 6, bx0 + 6, P + 4, sataZ + 1 + k * 6, BLACK_PLASTIC, 'box', 0x15161a, 0, 0.55);
+  }
+
+  // ---- drive bay on the PSU shroud: two 2.5" SSDs and a 3.5" drive in a steel cage
+  const dx0 = WALL1 + 2;
+  const dx1 = psuX1 - 4;
+  const ssdLen = Math.max(11, 16 * s);
+  const ssdZ = [WALL1 + 4, WALL1 + 6 + ssdLen];
+  for (const z0 of ssdZ) {
+    part(dx0, shelfTop, z0, dx1, shelfTop + 2.5, z0 + ssdLen, ALUMINIUM, 'box', 0x8e939b, 0.8, 0.38);
+    put(feature('part', (dx0 + dx1) / 2, shelfTop + 2.55, z0 + ssdLen / 2, { shape: 'box', box: [dx0 + 3, shelfTop + 2.4, z0 + 3, dx1 - 3, shelfTop + 2.7, z0 + ssdLen * 0.55], color: 0xd23a3a, metal: 0.1, rough: 0.5 })); // label
+  }
+  if (sata) {
+    ssdZ.forEach((z0, k) => {
+      const from: Vec3 = [bx0 + 3.5, P + 4, sataZ - 1 + k * 6];
+      const to: Vec3 = [dx1 - 1, shelfTop + 2.5, z0 + 4];
+      cable(terrain, from, to, 3, CABLE_RED, 1.1, 16);
+      put(feature('tube', from[0], from[1], from[2], { path: [...from, ...to, 3, 1.1], color: 0xb3201c }));
+    });
+  }
+  const cageZ1 = D - WALL1 - 4;
+  const cageZ0 = cageZ1 - Math.max(16, 24 * s);
+  const bay = Math.max(4.5, 6 * s); // height of one drive bay
+  const cageTop = shelfTop + 2 + 3 * bay;
+  add(terrain, boxMinMax(dx0 - 1, shelfTop, cageZ0, dx1 + 1, cageTop + 2, cageZ1, 0.5), STEEL);
+  // open towards the board (+x) and hollow inside, with a shelf rail between bays
+  cut(terrain, boxMinMax(dx0 + 1, shelfTop + 2, cageZ0 + 2, dx1 + 3, cageTop, cageZ1 - 2, 0.4));
+  for (let k = 0; k < 3; k++) {
+    const y0 = shelfTop + 2 + k * bay;
+    part(dx0 + 1.2, y0 + 0.4, cageZ0 + 2.2, dx1 - 0.5, y0 + bay - 1.2, cageZ1 - 2.2, ALUMINIUM, 'box', 0x7d838c, 0.85, 0.4); // the drive
+    put(feature('part', dx1 + 0.2, y0 + bay / 2 - 0.4, (cageZ0 + cageZ1) / 2, { shape: 'box', box: [dx1 - 0.6, y0 + 0.5, cageZ0 + 3, dx1 + 0.4, y0 + bay - 1.3, cageZ1 - 3], color: 0x1b1d22, metal: 0.3, rough: 0.5 })); // sled handle
+    put(feature('led', dx1 + 0.6, y0 + bay - 1.8, cageZ1 - 4.5, { color: 0x3a7bff }));
+  }
+  // a blue SATA cable from the board to the middle drive: one more bridge
+  if (sata && free(bx0 + 7, sataZ - 4, bx0 + 13, sataZ + 2)) {
+    claim(bx0 + 7, sataZ - 4, bx0 + 13, sataZ + 2);
+    part(bx0 + 7.5, P, sataZ - 3, bx0 + 12.5, P + 4, sataZ + 1, BLACK_PLASTIC, 'box', 0x15161a, 0, 0.55);
+    const from: Vec3 = [bx0 + 10, P + 4, sataZ - 1];
+    const to: Vec3 = [dx1 - 0.5, shelfTop + 2 + bay * 1.5, cageZ0 + 4];
+    cable(terrain, from, to, Math.max(6, 10 * s), CABLE_YELLOW, 1.1, 24);
+    put(feature('tube', from[0], from[1], from[2], { path: [...from, ...to, Math.max(6, 10 * s), 1.1], color: 0x2d7fd8 }));
+  }
+
   const vx0 = ioX1 + 6;
   const vx1 = gx - 10;
   for (let x = Math.floor(vx0) + 0.5; x + 3 <= vx1; x += 5) {
     for (let y = P + 4.5; y + 3 <= Math.min(glassY - 6, P + 4 + 44 * s); y += 5) {
       cut(terrain, boxMinMax(x, y, D - WALL1 - 1, x + 3, y + 3, D - WALL0 + 1, 0.2));
     }
+  }
+
+  // ---- rear exhaust fan over the vent grid, and the expansion slot covers beside the graphics card
+  const exHalf = Math.min(12, (vx1 - vx0) / 2 - 1);
+  if (exHalf >= 7) {
+    const ex = vx0 + exHalf + 1;
+    const ey = P + 6 + exHalf;
+    const ez = ioZ - 2;
+    fan(terrain, ex, ey, ez, 2, exHalf, exHalf - 1.5, true);
+    add(terrain, torus(ex, ey, ez - 2, exHalf - 1.2, 1.05, 2), RGB_LIGHT);
+    put(feature('fan', ex, ey, ez, { axis: 2, facing: -1, radius: exHalf - 1.5 }));
+  }
+  for (let x = vx1 + 1.5; x + 2 <= gx - 3; x += 4) {
+    part(x, P + 2, ioZ - 1.4, x + 2.4, P + 24, ioZ - 0.2, STEEL, 'box', 0x6e737b, 0.85, 0.4);
   }
 
   // ---- M.2 heatsink slab between the socket and the slot
@@ -326,10 +527,10 @@ export const pcCase: TerrainGenerator = (terrain, seed, layout) => {
     if (!corner && !free(x - 4, z - 4, x + 4, z + 4)) continue;
     if (!corner) claim(x - 4, z - 4, x + 4, z + 4);
     const base = corner && n === 1 ? TRAY_TOP : P;
-    const r = rand(1.5, 2.3);
-    add(terrain, sphere(x, base + r * 0.5, z, r), DUST, 1.2);
-    add(terrain, sphere(x + rand(-1.8, 1.8), base + r * 0.4, z + rand(-1.8, 1.8), r * 0.8), DUST, 1.5);
-    add(terrain, sphere(x + rand(-1.5, 1.5), base + r * 0.9, z + rand(-1.5, 1.5), r * 0.6), DUST, 1.5);
+    const r = rand(1.6, 2.1);
+    add(terrain, sphere(x, base + r * 0.1, z, r), DUST, 1.6);
+    add(terrain, sphere(x + rand(-1.8, 1.8), base, z + rand(-1.8, 1.8), r * 0.85), DUST, 1.8);
+    put(feature('dust', x, base, z, { radius: r }));
     n++;
   }
 

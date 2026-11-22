@@ -1,6 +1,7 @@
 import * as THREE from 'three/webgpu';
-import { emissive, mix, mrt, output, pass, screenUV, select, smoothstep, uniform, vec4 } from 'three/tsl';
+import { emissive, mix, mrt, output, pass, renderOutput, screenUV, select, smoothstep, uniform, vec4 } from 'three/tsl';
 import { bilateralBlur } from 'three/examples/jsm/tsl/display/BilateralBlurNode.js';
+import { fxaa } from 'three/examples/jsm/tsl/display/FXAANode.js';
 import { bloom } from 'three/examples/jsm/tsl/display/BloomNode.js';
 import { godrays } from 'three/examples/jsm/tsl/display/GodraysNode.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
@@ -16,18 +17,21 @@ import { HeatShimmer } from './heat';
 import { ActivityLeds } from './leds';
 import { HeroOverlays } from './heroOverlays';
 import { LightOverlays, type SolidField } from './lightOverlays';
+import { LightSheets } from './lightSheets';
 import { createTerrainMaterial } from './terrainMaterial';
 
 /** Key light direction on this path: steeper from the side, so the walls cast long shafts. */
-const SUN_OFFSET = new THREE.Vector3(-105, 125, 62);
+const SUN_OFFSET = new THREE.Vector3(-72, 150, 48);
 /** Strength of the god rays added to the image. */
-const RAYS = 0.35;
+const RAYS = 0.5;
+/** Bloom strength (at magenta; more towards teal, see `render`). */
+const BLOOM = 0.42;
 /** Ray-march steps of the god rays (half resolution). */
 const RAY_STEPS = 16;
 /** Window blinds of the room, above the glass: render-only slats that only cast shadows. */
 const BLINDS_ABOVE_GLASS = 16;
-const SLAT_WIDTH = 2.4;
-const SLAT_PITCH = 11;
+const SLAT_WIDTH = 3.6;
+const SLAT_PITCH = 12;
 
 /**
  * The WebGPU render path (three.js WebGPURenderer + TSL). Same scene graph as the WebGL path, plus:
@@ -50,7 +54,7 @@ export async function createGpuStage(canvas: HTMLCanvasElement, terrain: Terrain
   await renderer.init();
   const isGPU = (renderer.backend as unknown as { isWebGPUBackend?: boolean }).isWebGPUBackend === true;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.1;
+  renderer.toneMappingExposure = 1.2;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFShadowMap; // soft: filtered with `shadow.radius` below
 
@@ -65,9 +69,9 @@ export async function createGpuStage(canvas: HTMLCanvasElement, terrain: Terrain
   scene.add(new THREE.HemisphereLight(0x9fb4d8, 0x2a221c, 0.22));
   const [sun, sunTarget] = keyLight(terrain, SUN_OFFSET);
   // warmer than the WebGL path's key light (0xfff0d8): late sun through the blinds of a warm room
-  sun.color.setHex(0xffcf9a);
-  sun.intensity = 3.3;
-  sun.shadow.radius = 6;
+  sun.color.setHex(0xffb878);
+  sun.intensity = 3.4;
+  sun.shadow.radius = 5;
   scene.add(sun, sunTarget);
 
   const glow = new Glow();
@@ -79,6 +83,7 @@ export async function createGpuStage(canvas: HTMLCanvasElement, terrain: Terrain
   const leds = new ActivityLeds(scene);
   const overlays = new LightOverlays(scene, glow);
   const heroes = new HeroOverlays(scene, glow);
+  const sheets = new LightSheets(scene, new THREE.Color(0xffb36b), glow.time);
   const dust = isGPU ? new DustMotes(renderer, glow, uniform(sunDir), options.seed) : null;
   if (dust) scene.add(dust.sprite);
 
@@ -89,7 +94,11 @@ export async function createGpuStage(canvas: HTMLCanvasElement, terrain: Terrain
   let bloomRef: ReturnType<typeof bloom> | null = null;
   const buildPipeline = (): THREE.RenderPipeline => {
     const scenePass = pass(scene, camera, { samples: 4 });
-    scenePass.setMRT(mrt({ output, emissive }));
+    // the emissive target blends like the material does: otherwise every transparent surface (glass,
+    // light sheets, labels) overwrites the emissive under it and the glow behind it loses its bloom
+    const sceneMRT = mrt({ output, emissive });
+    sceneMRT.setBlendMode('emissive', new THREE.BlendMode(THREE.MaterialBlending));
+    scenePass.setMRT(sceneMRT);
     const sceneColor = scenePass.getTextureNode('output');
     const sceneEmissive = scenePass.getTextureNode('emissive');
     const sceneDepth = scenePass.getTextureNode('depth');
@@ -100,7 +109,7 @@ export async function createGpuStage(canvas: HTMLCanvasElement, terrain: Terrain
     rays.maxDensity.value = 0.42;
     const raysBlur = bilateralBlur(rays.getTextureNode());
     const raysTex = raysBlur.getTextureNode();
-    const bloomPass = bloom(sceneEmissive, 0.5, 0.38, 0.4);
+    const bloomPass = bloom(sceneEmissive, BLOOM, 0.4, 0.25);
     bloomRef = bloomPass;
     const base = sceneColor.sample(heat.uv(screenUV));
     // a little warm veil where the air is lit, and the shafts on top of it
@@ -110,7 +119,9 @@ export async function createGpuStage(canvas: HTMLCanvasElement, terrain: Terrain
     // debug views: 1 = god rays only, 2 = bloom only, 3 = emissive buffer
     const raysView = mix(base.rgb.mul(0.15), sunColor, raysTex.sample(screenUV).r);
     const viewN = select(debugView.lessThan(2.5), bloomPass.rgb, sceneEmissive.sample(screenUV).rgb);
-    p.outputNode = vec4(select(debugView.lessThan(0.5), final, select(debugView.lessThan(1.5), raysView, viewN)), 1);
+    // tone map here, then FXAA on the display image (edges and thin highlights stop crawling)
+    p.outputColorTransform = false;
+    p.outputNode = fxaa(renderOutput(vec4(select(debugView.lessThan(0.5), final, select(debugView.lessThan(1.5), raysView, viewN)), 1)));
     return p;
   };
   const raysAmount = uniform(RAYS);
@@ -132,6 +143,7 @@ export async function createGpuStage(canvas: HTMLCanvasElement, terrain: Terrain
     const [x0, , z0, x1, , z1] = layout.inner;
     blindsY = layout.glassY + BLINDS_ABOVE_GLASS;
     dust?.setBlinds(x0 - 30, SLAT_PITCH, SLAT_WIDTH, blindsY);
+    sheets.set(x0 - 30, SLAT_PITCH, blindsY, SUN_OFFSET, x0, x1, z0, z1, layout.glassY, layout.floorY);
     // reach past the case on the side the light comes from (the shadows land shifted the other way)
     const from = x0 - 30;
     const n = Math.ceil((x1 - from) / SLAT_PITCH);
@@ -191,6 +203,8 @@ export async function createGpuStage(canvas: HTMLCanvasElement, terrain: Terrain
       // look at something new does not stall a frame on a shader compile
       if (++frames === 30 || frames === 240) void renderer.compileAsync(scene, camera);
       glow.update(seconds);
+      // a teal halo over the green board reads weaker than a magenta one: give the bloom more at teal
+      if (bloomRef) bloomRef.strength.value = BLOOM * (1 + 0.25 * glow.tealness());
       heat.update(camera, seconds);
       leds.update(seconds);
       overlays.update();
@@ -205,8 +219,10 @@ export async function createGpuStage(canvas: HTMLCanvasElement, terrain: Terrain
     frameNumber: () => renderer.info.frame,
     tune: {
       rays: raysAmount,
+      sheets: sheets.strength,
       view: debugView,
       sharp: look.sharp,
+      hueLock: { get value() { return glow.lock; }, set value(v: number) { glow.lock = v; } },
       fogClear: atmosphere.clear,
       fogSpan: atmosphere.span,
       layerTop: atmosphere.layerTop,

@@ -84,11 +84,11 @@ describe('Tower Case (pc-case)', () => {
       it('has all four set pieces and the render features', () => {
         const { t, layout } = make(1234, cx, cy, cz);
         const fans = layout.features.filter((f) => f.kind === 'fan');
-        expect(fans.filter((f) => f.axis === 2).length).toBe(2); // radiator fans on the front wall
+        expect(fans.filter((f) => f.axis === 2 && f.facing > 0).length).toBe(2); // radiator fans on the front wall
         expect(fans.filter((f) => f.axis === 0).length).toBeGreaterThanOrEqual(2); // vertical GPU
         expect(count(layout, 'pump')).toBe(1);
         expect(count(layout, 'lightBar')).toBeGreaterThanOrEqual(cx >= 5 ? 4 : 2);
-        expect(count(layout, 'led')).toBe(3);
+        expect(count(layout, 'led')).toBeGreaterThanOrEqual(3);
         expect(count(layout, 'heat')).toBe(2);
         // every fan ring and light bar really is RGB light in the grid
         for (const f of layout.features) {

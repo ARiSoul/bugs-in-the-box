@@ -23,13 +23,19 @@ export type Box3 = [number, number, number, number, number, number];
  * - `lightBar`: an RGB light bar (`box`).
  * - `led`: a small activity LED at the centre, `color` 0xRRGGBB.
  * - `heat`: air that shimmers above something hot (`box`).
+ * - `connector`: a power connector block on the board (`box`).
+ * - `part`: a small detail with a clean render shape over a coarser terrain block: `box`, `shape`
+ *   ('box' | 'cylX' | 'cylY' | 'cylZ'), `color`, `metal`, `rough`, `glow` (self-lit, 0 = none).
+ * - `trace`: a straight copper trace (`box`). `ramBody`: the heat spreader of a RAM stick (`box`).
+ * - `dust`: a dust bunny lying at (x, y, z), `radius`.
  * - `pad`: a round solder pad on the board, centre on the board top, `radius`.
  * - `grommet`: a rubber grommet ring lying flat, centre on the surface, `radius` of the ring.
  * - `capacitor`: an electrolytic capacitor standing on the board at (x, y, z), `radius`, top at `box[4]`.
- * - `tube`: a thick tube or cable along the arc of `parts.cable`: `path` = [ax, ay, az, bx, by, bz, lift, radius].
+ * - `tube`: a thick tube or cable along the arc of `parts.cable`: `path` = [ax, ay, az, bx, by, bz, lift, radius],
+ *   `color` its sleeve (0xffffff: plain black rubber).
  */
 export interface Feature {
-  kind: 'fan' | 'pump' | 'lightBar' | 'led' | 'heat' | 'tube' | 'capacitor' | 'grommet' | 'pad';
+  kind: 'fan' | 'pump' | 'lightBar' | 'led' | 'heat' | 'tube' | 'capacitor' | 'grommet' | 'pad' | 'connector' | 'dust' | 'trace' | 'ramBody' | 'part';
   x: number;
   y: number;
   z: number;
@@ -40,6 +46,10 @@ export interface Feature {
   color: number;
   box: Box3;
   path: number[];
+  shape?: 'box' | 'cylX' | 'cylY' | 'cylZ';
+  metal?: number;
+  rough?: number;
+  glow?: number;
 }
 
 export interface SceneLayout {

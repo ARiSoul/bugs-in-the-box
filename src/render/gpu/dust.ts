@@ -126,10 +126,15 @@ export class DustMotes {
     const drawn = max(mote.w, minSize);
     m.scaleNode = vec2(drawn, drawn);
     // fade: sub-pixel motes lose energy instead of flickering; far motes fade with the fog
-    const cover = varying(pow(mote.w.div(drawn), 2).mul(smoothstep(110, 50, dist)).mul(smoothstep(2.5, 9, dist)));
+    // and none in the dark corners and against the walls (same falloff as the fog's dark corners)
+    const centre = this.boxMin.xz.add(this.boxMax.xz).mul(0.5);
+    const half = this.boxMax.xz.sub(this.boxMin.xz).mul(0.5);
+    const q = mote.xz.sub(centre).abs().div(half);
+    const wall = smoothstep(0.1, 0.7, length(max(q.sub(0.42), 0).div(0.58)));
+    const cover = varying(pow(mote.w.div(drawn), 2).mul(smoothstep(110, 50, dist)).mul(smoothstep(12, 30, dist)).mul(float(1).sub(wall)));
     // light: forward scattering toward the key light, plus the colour of nearby RGB lights
     const view = normalize(mote.xyz.sub(cameraPosition));
-    const phase = pow(max(dot(view, sunDir), 0), 4).mul(2.6).add(0.25);
+    const phase = pow(max(dot(view, sunDir), 0), 4).mul(2.6).add(0.1);
     // in the light? follow the ray to the sun up to the blinds and see if it passes between two slats
     const b = this.blinds;
     const along = b.w.sub(mote.y).div(max(sunDir.y, 0.05));
@@ -158,7 +163,7 @@ export class DustMotes {
     const [x0, , z0, x1, y1, z1] = layout.inner;
     this.boxMin.value.set(x0, boardTop + 1, z0);
     this.boxMax.value.set(x1, y1 - 1, z1);
-    const fans = layout.features.filter((f) => f.kind === 'fan' && f.axis === 2);
+    const fans = layout.features.filter((f) => f.kind === 'fan' && f.axis === 2 && f.facing > 0);
     if (fans.length > 0) {
       let fx0 = Infinity;
       let fx1 = -Infinity;

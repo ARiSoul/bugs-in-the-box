@@ -29,9 +29,29 @@ export class BugView {
   private readonly basis = new THREE.Matrix4();
   private readonly target = new THREE.Vector3();
   private phase = 0;
+  private ring: THREE.Mesh | null = null;
 
-  constructor(readonly species: BugSpecies) {
+  /** Grow the team ring with the camera distance (from ~40 units, at most 2.2×), so the bug can be found from afar. */
+  setRingScale(cameraDistance: number): void {
+    if (this.ring) this.ring.scale.setScalar(Math.min(2.2, Math.max(1, cameraDistance / 40)));
+  }
+
+  /** `teamColor`: a soft ring in the team colour under the bug, so it reads from far away. */
+  constructor(
+    readonly species: BugSpecies,
+    teamColor?: number,
+  ) {
     const r = species.radius;
+    if (teamColor !== undefined) {
+      const ringMat = new THREE.MeshBasicMaterial({ color: teamColor, transparent: true, opacity: 0.85, depthWrite: false, side: THREE.DoubleSide });
+      this.materials.push(ringMat);
+      const ring = new THREE.Mesh(new THREE.RingGeometry(r * 1.1, r * 1.9, 32), ringMat);
+      ring.rotation.x = -Math.PI / 2;
+      ring.position.y = -r + 0.12;
+      ring.renderOrder = 5;
+      this.root.add(ring);
+      this.ring = ring;
+    }
     const body = this.material(species.color, 0.45);
     const dark = this.material(species.accent, 0.6);
     const eye = this.material(0x050505, 0.2);

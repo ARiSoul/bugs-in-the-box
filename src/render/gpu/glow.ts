@@ -10,11 +10,11 @@ import type { Feature, SceneLayout } from '../../terrain/generators/types';
 
 /** Most fans / lights the shaders look at. */
 export const MAX_FANS = 8;
-export const MAX_LIGHTS = 12;
+export const MAX_LIGHTS = 16;
 /** Seconds for the hue to sweep teal -> magenta and back. */
 const HUE_PERIOD = 14;
 /** Hue range of the sweep (0..1 around the colour wheel): teal to magenta. */
-const HUE_FROM = 0.47;
+const HUE_FROM = 0.5;
 const HUE_TO = 0.86;
 
 export class Glow {
@@ -29,6 +29,10 @@ export class Glow {
   readonly lights = uniformArray(Array.from({ length: MAX_LIGHTS }, () => new THREE.Vector4(0, -1000, 0, 0)), 'vec4');
   /** Current RGB colour (linear), for CPU-side uses (dust tint, LEDs). */
   readonly rgb = new THREE.Color();
+  /** Extra brightness towards teal (a teal glow reads weaker over the green board than magenta). */
+  readonly boost = uniform(1);
+  /** Debug: hold the hue at this value (0..1); -1 lets it sweep. */
+  lock = -1;
 
   setLayout(layout: SceneLayout): void {
     const fans = layout.features.filter((f) => f.kind === 'fan');
@@ -45,25 +49,36 @@ export class Glow {
     }
   }
 
+  /** 1 at the teal end of the sweep, 0 at magenta. */
+  tealness(): number {
+    return Math.min(1, Math.max(0, (HUE_TO - this.hue.value) / (HUE_TO - HUE_FROM)));
+  }
+
   update(seconds: number): void {
     this.time.value = seconds;
     // smooth ping-pong between the two hues
     const p = (seconds / HUE_PERIOD) % 1;
     const tri = p < 0.5 ? p * 2 : 2 - p * 2;
     const eased = tri * tri * (3 - 2 * tri);
-    this.hue.value = HUE_FROM + (HUE_TO - HUE_FROM) * eased;
+    this.hue.value = this.lock >= 0 ? this.lock : HUE_FROM + (HUE_TO - HUE_FROM) * eased;
     hueToRgb(this.hue.value, this.rgb);
+    this.boost.value = 1 + 0.1 * this.tealness();
   }
 }
 
-/** Luminance every hue is scaled to, so teal is not brighter than magenta. */
-const HUE_LUMA = 0.3;
+/**
+ * Every hue is scaled so that half its luminance plus half its strongest channel is the same: equal
+ * luminance alone makes magenta's channels run hot (it clips to pink-white), equal peaks alone makes
+ * teal much brighter than magenta.
+ */
+const HUE_LEVEL = 0.55;
 
-/** Fully saturated colour of hue `h` (0..1), at the same luminance for every hue, in a shader. */
+/** Fully saturated colour of hue `h` (0..1), at the same level for every hue (see HUE_LEVEL), in a shader. */
 export function hueColor(h: THREE.Node<'float'>): THREE.Node<'vec3'> {
   const k = fract(vec3(h, h, h).add(vec3(0, 2 / 3, 1 / 3))).mul(6).sub(3);
   const c = clamp(abs(k).sub(1), float(0), float(1));
-  return c.mul(float(HUE_LUMA).div(max(dot(c, vec3(0.2126, 0.7152, 0.0722)), 0.05)));
+  const level = dot(c, vec3(0.2126, 0.7152, 0.0722)).mul(0.5).add(max(c.x, max(c.y, c.z)).mul(0.5));
+  return c.mul(float(HUE_LEVEL).div(max(level, 0.05)));
 }
 
 /** Same as `hueColor`, on the CPU (sRGB-ish primaries treated as linear, like the shader). */
@@ -72,6 +87,7 @@ export function hueToRgb(h: number, out: THREE.Color): THREE.Color {
   const r = ch(0);
   const g = ch(2 / 3);
   const b = ch(1 / 3);
-  const k = HUE_LUMA / Math.max(0.2126 * r + 0.7152 * g + 0.0722 * b, 0.05);
+  const level = 0.5 * (0.2126 * r + 0.7152 * g + 0.0722 * b) + 0.5 * Math.max(r, g, b);
+  const k = HUE_LEVEL / Math.max(level, 0.05);
   return out.setRGB(r * k, g * k, b * k);
 }
