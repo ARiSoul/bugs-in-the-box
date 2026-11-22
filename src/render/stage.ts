@@ -53,6 +53,8 @@ export interface Stage {
   render(seconds: number, dt: number): void;
   /** The renderer's frame counter (matches the GPU timer's frame numbers). */
   frameNumber(): number;
+  /** The turntable's turn so far (quarter turns), on paths that draw one. */
+  setTurntable?(turns: number): void;
   /** Look-tuning knobs (uniforms) for the console, on paths that have them. */
   tune?: Record<string, { value: unknown }>;
 }

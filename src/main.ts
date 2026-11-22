@@ -119,7 +119,9 @@ function newMatch(s: number): void {
   state.lastExplosionChunks = 0;
   state.bench = '';
 
-  match = new Match(terrain, TEAMS, s, { strictBounds: scenario.strictBounds, spawnLevels: scenario.spawnLevels === true });
+  match = new Match(terrain, TEAMS, s, { strictBounds: scenario.strictBounds, spawnLevels: scenario.spawnLevels === true, turntable: scenario.turntable?.(terrain.W, terrain.H, terrain.D) });
+
+  prevTurns = 0;
   for (const v of bugViews) {
     v.view.dispose();
     v.label.dispose();
@@ -412,6 +414,8 @@ let frameCount = 0;
 let lastFps = performance.now();
 let lastFrame = performance.now();
 let accumulator = 0;
+/** The turntable's turns before the last tick (render interpolates the plate between ticks). */
+let prevTurns = 0;
 let paused = false;
 function loop(now: number): void {
   requestAnimationFrame(loop);
@@ -445,6 +449,7 @@ function loop(now: number): void {
   let faced = false;
   accumulator += dt;
   while (accumulator >= DT) {
+    prevTurns = match.turntableTurns;
     // a debug camera (or the intro) owns the view: the match keeps running without input
     if (debugCamera || intro) match.step(NO_INPUT);
     else {
@@ -456,6 +461,7 @@ function loop(now: number): void {
   }
   syncTerrain();
   const alpha = accumulator / DT;
+  stage.setTurntable?.(prevTurns + (match.turntableTurns - prevTurns) * alpha);
 
   match.units.forEach((u, i) => {
     const v = bugViews[i];

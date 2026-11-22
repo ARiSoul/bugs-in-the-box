@@ -45,6 +45,12 @@ export type Box3 = [number, number, number, number, number, number];
  *   `facing` -1: a flat blade at its start (a screwdriver tip); `axis` 0: a fluted grip.
  * - `room`: the floor of the room far below the map, at height y, `color` (a drop off the map reads as one).
  * - `lamp`: a small light at (x, y, z) (a fridge's bulb): `color`, `glow` its intensity, `radius` its reach.
+ * - `turntable`: a microwave's glass plate on its roller ring, axis at (x, z), the plate's top at y, `radius`
+ *   the plate's; `path` = [ring radius, cavity floor y]. It turns with the match (render reads the turns).
+ * - `perforated`: a perforated sheet (`box`, a sharp plate), its face across `axis`, holes `radius` apart,
+ *   `color`; `path` = [cos, sin] tilts it about x like a `part`.
+ * - `marble`: a polished marble sheet with fine veins (`box`), its face across `axis`.
+ * - `blower`: a fan's impeller facing along `axis` at (x, y, z): hub, swept blades, a wire guard; `radius`, `color`.
  *
  * A `part` with `opacity` below 1 is see-through (glass shelves, clear plastic drawers and bins). A `part`
  * with `path` = [cos, sin] is turned about x by that angle round its box's centre (a board leaning on a shelf).
@@ -55,7 +61,8 @@ export type PartShape = 'box' | 'plate' | 'soft' | 'dome' | 'ball' | 'cylX' | 'c
 export interface Feature {
   kind:
     | 'fan' | 'pump' | 'lightBar' | 'led' | 'heat' | 'tube' | 'capacitor' | 'grommet' | 'pad' | 'connector'
-    | 'dust' | 'trace' | 'ramBody' | 'part' | 'screw' | 'wire' | 'driver' | 'port' | 'rod' | 'room' | 'lamp';
+    | 'dust' | 'trace' | 'ramBody' | 'part' | 'screw' | 'wire' | 'driver' | 'port' | 'rod' | 'room' | 'lamp'
+    | 'turntable' | 'perforated' | 'marble' | 'blower';
   x: number;
   y: number;
   z: number;

@@ -14,6 +14,9 @@ export class Craters {
   private readonly count = uniform(0, 'int');
   private n = 0;
 
+  /** `position`: where a fragment is tested (the world; a turning part passes its own frame). */
+  constructor(private readonly position: THREE.Node<'vec3'> = positionWorld as unknown as THREE.Node<'vec3'>) {}
+
   /** A crater of `radius` at (x, y, z), as `Terrain.carve` makes it. */
   add(x: number, y: number, z: number, radius: number): void {
     if (this.n >= MAX_CRATERS) return;
@@ -46,7 +49,7 @@ export class Craters {
       const keep = bool(true).toVar();
       Loop(count, ({ i }) => {
         const c = list.element(i) as unknown as THREE.Node<'vec4'>;
-        If(length(positionWorld.sub(c.xyz)).lessThan(c.w), () => {
+        If(length(this.position.sub(c.xyz)).lessThan(c.w), () => {
           keep.assign(false);
         });
       });

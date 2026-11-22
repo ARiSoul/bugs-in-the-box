@@ -18,6 +18,7 @@ import { HeatShimmer } from './heat';
 import { ActivityLeds } from './leds';
 import { HeroOverlays } from './heroOverlays';
 import { LightOverlays } from './lightOverlays';
+import { MicrowaveParts } from './microwaveParts';
 import { SpeakerParts } from './speakerParts';
 import { createTerrainMaterial } from './terrainMaterial';
 
@@ -85,6 +86,7 @@ export async function createGpuStage(canvas: HTMLCanvasElement, terrain: Terrain
   const overlays = new LightOverlays(scene, glow, craters);
   const heroes = new HeroOverlays(scene, glow, craters);
   const speakerParts = new SpeakerParts(scene, craters);
+  const microwaveParts = new MicrowaveParts(scene, craters);
   const dust = isGPU ? new DustMotes(renderer, glow, uniform(sunDir), options.seed) : null;
   if (dust) scene.add(dust.sprite);
 
@@ -163,7 +165,22 @@ export async function createGpuStage(canvas: HTMLCanvasElement, terrain: Terrain
     look: { material: look.material, setSharp: (on) => (look.sharp.value = on ? 1 : 0) },
     gpuTimer: timer,
     resize,
-    craters,
+    // (the turntable keeps its own craters, in its own frame: they turn with it)
+    craters: {
+      add(x: number, y: number, z: number, radius: number) {
+        craters.add(x, y, z, radius);
+        microwaveParts.addCrater(x, y, z, radius);
+      },
+      addTunnel(x1: number, y1: number, z1: number, x2: number, y2: number, z2: number, radius: number) {
+        craters.addTunnel(x1, y1, z1, x2, y2, z2, radius);
+        const dx = x2 - x1;
+        const dy = y2 - y1;
+        const dz = z2 - z1;
+        const steps = Math.max(1, Math.ceil(Math.sqrt(dx * dx + dy * dy + dz * dz) / (radius * 0.7)));
+        for (let i = 0; i <= steps; i++) microwaveParts.addCrater(x1 + (dx * i) / steps, y1 + (dy * i) / steps, z1 + (dz * i) / steps, radius);
+      },
+    },
+    setTurntable: (turns: number) => microwaveParts.setTurns(turns),
     setScenario(sc: Scenario, layout: SceneLayout) {
       document.body.style.background = sc.sky.css;
       sunOffset.copy(SUN_OFFSET);
@@ -186,6 +203,7 @@ export async function createGpuStage(canvas: HTMLCanvasElement, terrain: Terrain
       overlays.setLayout(layout);
       heroes.setLayout(layout);
       speakerParts.setLayout(layout);
+      microwaveParts.setLayout(layout);
       dust?.setLayout(layout, layout.floorY);
       // the top of the scene: the glass, or (an open scene) the top of the inner box
       const top = layout.glassY > 0 ? layout.glassY : layout.inner[4];

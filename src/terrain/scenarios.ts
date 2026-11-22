@@ -1,6 +1,7 @@
 import { floatingIslands } from './generators/floatingIslands';
 import { fridge } from './generators/fridge';
 import { insidePC } from './generators/insidePC';
+import { microwave, microwavePlan } from './generators/microwave';
 import { pcCase } from './generators/pcCase';
 import { speaker } from './generators/speaker';
 import type { TerrainGenerator } from './generators/types';
@@ -35,6 +36,8 @@ export interface Scenario {
   chaseElevation?: number;
   /** Bugs may start on any level (shelves under shelves), not only on the topmost surface. */
   spawnLevels?: boolean;
+  /** A turntable that turns a quarter between turns (gameplay), for a map of this size. */
+  turntable?: (W: number, H: number, D: number) => { x: number; z: number; radius: number; j0: number; j1: number; surface: number };
 }
 
 export const SCENARIOS: readonly Scenario[] = [
@@ -91,6 +94,26 @@ export const SCENARIOS: readonly Scenario[] = [
     chaseElevation: 0.5,
     // shelves under shelves: bugs start on any level
     spawnLevels: true,
+  },
+  {
+    id: 'microwave',
+    name: 'Microwave',
+    generate: microwave,
+    sharpEdges: true,
+    // a bright kitchen: a pale marble worktop, a warm dim room behind
+    sky: { css: 'radial-gradient(ellipse at 50% 40%, #2a2622 0%, #0a0908 72%)', fog: 0x100e0c, fogClear: 90, fogSpan: 230, cornerDark: 0.2, backdrop: 0x34302b },
+    render: 'webgpu',
+    strictBounds: true,
+    // high in front, from the right: into the cavity, onto the bay
+    sun: [40, 160, 140],
+    sunColor: 0xfff2e4,
+    sunIntensity: 2.8,
+    chaseElevation: 0.5,
+    spawnLevels: true,
+    turntable: (W, H, D) => {
+      const t = microwavePlan(W, H, D).turntable;
+      return { x: t.x, z: t.z, radius: t.radius, j0: t.j0, j1: t.j1, surface: t.surface };
+    },
   },
   {
     id: 'islands',

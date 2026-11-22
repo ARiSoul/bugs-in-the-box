@@ -40,6 +40,8 @@ export const LINER = 26; // a fridge's white moulded plastic inside
 export const TILE = 27; // glazed floor tiles (the grout lines are drawn on top)
 export const FROST = 28; // frost on a freezer's walls
 export const PAINT = 29; // a painted kitchen wall
+export const CHASSIS_RED = 30; // a retro appliance's glossy red painted steel
+export const MARBLE = 31; // a pale marble worktop and splashback
 
 /**
  * Glow of each material (`MATERIAL_PBR[id][2]`): what the renderer may light up. Signed so that the
@@ -84,6 +86,8 @@ export const MATERIAL_PBR: readonly (readonly [number, number, number])[] = [
   [0.28, 0, 0], // TILE: glazed
   [0.9, 0, GLOW_FUZZ], // FROST: soft, lets light in like the wadding
   [0.85, 0, 0], // PAINT: matte
+  [0.36, 0.04, 0], // CHASSIS_RED: glossy enamel
+  [0.22, 0, 0], // MARBLE: polished
 ];
 
 /**
@@ -91,12 +95,15 @@ export const MATERIAL_PBR: readonly (readonly [number, number, number])[] = [
  * Clean painted and moulded surfaces barely vary; a white one shows any variation as dirt.
  */
 export const MATERIAL_NOISE: readonly number[] = (() => {
-  const n = new Array<number>(PAINT + 1).fill(0.24);
+  const n = new Array<number>(MARBLE + 1).fill(0.24);
   n[ENAMEL] = 0.025;
   n[LINER] = 0.025;
   n[TILE] = 0.1;
   n[FROST] = 0.12;
   n[PAINT] = 0.05;
+  n[CHASSIS_RED] = 0.03;
+  n[MARBLE] = 0; // (drawn sheets with veins lie over it)
+  n[STEEL] = 0.08; // (galvanised and brushed sheet: a cloudy swing reads as dirt)
   return n;
 })();
 
@@ -132,4 +139,6 @@ export const MATERIAL_RGB: readonly (readonly [number, number, number])[] = [
   [0.5, 0.47, 0.43], // TILE: warm grey stone
   [0.82, 0.88, 0.94], // FROST: blue-white
   [0.36, 0.4, 0.37], // PAINT: pale sage
+  [0.5, 0.025, 0.02], // CHASSIS_RED
+  [0.74, 0.74, 0.72], // MARBLE: warm white
 ];

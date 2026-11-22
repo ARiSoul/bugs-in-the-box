@@ -1,4 +1,5 @@
 import { fridgePlan } from '../terrain/generators/fridge';
+import { microwavePlan } from '../terrain/generators/microwave';
 import type { SceneLayout } from '../terrain/generators/types';
 import type { Terrain } from '../terrain/Terrain';
 
@@ -221,7 +222,55 @@ const fridge: ViewBuilder = (t) => {
   return { start, poses, path, duration: 60 };
 };
 
-const BUILDERS: Record<string, ViewBuilder> = { 'pc-case': pcCase, speaker, fridge };
+/** Microwave: into the cavity from the front, the turntable, the bay from above, the door, the worktop. */
+const microwave: ViewBuilder = (t) => {
+  const { W, H, D } = t;
+  const p = microwavePlan(W, H, D);
+  const [bx0, bz0, bx1, bz1, top] = p.body;
+  const [cx0, cz0, cx1, , floor, ceil] = p.cavity;
+  const tt = p.turntable;
+  const s = (bx1 - bx0) / 104;
+  const ex = (p.bay[0] + p.bay[1]) / 2;
+  const start = key([bx0 + 70 * s, top + 40 * s, bz1 + 86 * s], [bx0 + 50 * s, floor + 6 * s, bz0 + 40 * s]);
+  const poses = [
+    start,
+    // 2: into the cavity through the open front: the turntable, the walls, the vents
+    key([tt.x + 6 * s, floor + 18 * s, bz1 + 30 * s], [tt.x - 2 * s, tt.surface, tt.z - 6 * s]),
+    // 3: the electronics bay from above: magnetron, transformer, capacitor, fan, board
+    key([ex + 10 * s, top + 34 * s, bz1 + 18 * s], [ex, floor + 4 * s, bz0 + 34 * s]),
+    // 4: the door leaning on the sill, from the side
+    key([bx0 - 12 * s, floor + 14 * s, bz1 + 40 * s], [(cx0 + cx1) / 2, floor - 4 * s, bz1 + 22 * s]),
+    // 5: the control panel and its dials
+    key([bx1 + 26 * s, floor + 30 * s, bz1 + 36 * s], [ex, floor + 20 * s, bz1 + 2]),
+    // 6: behind: the back panel, the mains cable to the socket
+    // (from behind on the right, low by the wall: the back panel's face at an angle, its vents and screws)
+    key([bx1 + 14 * s, floor + 6 * s, 8 + 1 * s], [bx1 - 26 * s, floor + 13 * s, bz0 + 1 * s]),
+    // 7 (detail): the cavity's top and the magnetron on its waveguide
+    key([cx1 + 24 * s, ceil + 26 * s, bz1 - 2 * s], [cx1, ceil, cz0 + 30 * s]),
+    // 8 (detail): the worktop: the multimeter and its leads, the screwdriver
+    key([bx1 + 30 * s, floor + 20 * s, bz1 + 50 * s], [bx1 + 12 * s, floor - 8 * s, bz1 + 12 * s]),
+    // 9 (detail): the turntable close, from the front: the rim, the roller ring and the coupler through the glass
+    key([tt.x + 4 * s, tt.surface + 7 * s, tt.z + tt.plateRadius + 10 * s], [tt.x, tt.surface - 2 * s, tt.z]),
+    // 10 (detail): the magnetron's terminals and the high-voltage wiring, from above
+    key([cx1 + 22 * s, ceil + 16 * s, cz0 + 50 * s], [cx1 + 10 * s, floor + 10 * s, cz0 + 30 * s]),
+    // 11 (detail): the capacitor's terminals and the transformer's windings
+    key([bx1 + 10 * s, floor + 18 * s, bz0 + 66 * s], [bx1 - 10 * s, floor - 2 * s, bz0 + 36 * s]),
+    // 12 (detail): the fuse in its clips, the grommet, the mains wires
+    key([bx1 + 12 * s, floor + 22 * s, bz0 + 36 * s], [bx1 - 7 * s, floor - 3 * s, bz0 + 2 * s]),
+    // 13 (detail): the dials and the release bar, close
+    key([ex + 18 * s, floor + 24 * s, bz1 + 34 * s], [ex, floor + 10 * s, bz1 + 2]),
+    // 14 (detail): the door's hinge pins and its foot on the worktop
+    key([cx0 - 14 * s, floor + 6 * s, bz1 + 36 * s], [cx0 + 4 * s, floor - 6 * s, bz1 + 30 * s]),
+    // 15 (detail): the multimeter's face, close
+    key([bx1 + 22 * s, floor + 16 * s, bz1 + 22 * s], [bx1 + 14 * s, floor - 6 * s, bz1 + 6 * s]),
+    // 16 (detail): the screws and the screwdriver on the worktop
+    key([bx1 + 24 * s, floor + 6 * s, bz0 + 48 * s], [bx1 + 10 * s, floor - 7 * s, bz0 + 34 * s]),
+  ];
+  const path: CameraKey[] = [start, poses[1], poses[3], poses[4], poses[2], poses[6], poses[5], poses[7]];
+  return { start, poses, path, duration: 60 };
+};
+
+const BUILDERS: Record<string, ViewBuilder> = { 'pc-case': pcCase, speaker, fridge, microwave };
 
 export function viewsFor(scenarioId: string, t: Terrain, layout: SceneLayout): ScenarioViews {
   return (BUILDERS[scenarioId] ?? generic)(t, layout);
