@@ -10,6 +10,8 @@ export interface TerrainField {
   raycast(ox: number, oy: number, oz: number, dx: number, dy: number, dz: number, maxT?: number): number;
   /** Remove a sphere of terrain (explosions, digging). */
   carve(x: number, y: number, z: number, r: number): void;
+  /** Turn a turntable a quarter turn (+x to +z) about the sample (cx, cz): rows j0..j1, radius r. Optional. */
+  rotateQuarter?(cx: number, cz: number, j0: number, j1: number, r: number): void;
 }
 
 /** Central-difference step for the gradient. Half a cell: smooths the per-cell trilinear kinks. */

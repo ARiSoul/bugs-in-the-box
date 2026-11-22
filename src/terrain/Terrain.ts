@@ -194,4 +194,50 @@ export class Terrain {
     for (let z = c0z; z <= c1z; z++)
       for (let y = c0y; y <= c1y; y++) for (let x = c0x; x <= c1x; x++) this.dirty.add(this.chunkId(x, y, z));
   }
+
+  /**
+   * Turn a vertical cylinder of the grid (a turntable) a quarter turn about the vertical axis through the
+   * sample (cx, cz): rows j0..j1, radius `r` (whole samples). +x goes to +z. The samples only move (density,
+   * material and scorch): exact and lossless, so any number of turns keeps every shape and crater. Marks
+   * the chunks it touches dirty.
+   */
+  rotateQuarter(cx: number, cz: number, j0: number, j1: number, r: number): void {
+    const { sx, sy, dens, material, scorch } = this;
+    const n = 2 * r + 1;
+    const r2 = r * r;
+    const rows = j1 - j0 + 1;
+    const tmpD = new Float32Array(n * n * rows);
+    const tmpM = new Uint8Array(n * n * rows);
+    const tmpS = new Uint8Array(n * n * rows);
+    // copy the cylinder out...
+    for (let j = 0; j < rows; j++)
+      for (let b = -r; b <= r; b++)
+        for (let a = -r; a <= r; a++) {
+          if (a * a + b * b > r2) continue;
+          const t = a + r + n * (b + r + n * j);
+          const id = cx + a + sx * (j0 + j + sy * (cz + b));
+          tmpD[t] = dens[id];
+          tmpM[t] = material[id];
+          tmpS[t] = scorch[id];
+        }
+    // ...and write it back turned: the sample at offset (a, b) goes to (-b, a)
+    for (let j = 0; j < rows; j++)
+      for (let b = -r; b <= r; b++)
+        for (let a = -r; a <= r; a++) {
+          if (a * a + b * b > r2) continue;
+          const t = a + r + n * (b + r + n * j);
+          const id = cx - b + sx * (j0 + j + sy * (cz + a));
+          dens[id] = tmpD[t];
+          material[id] = tmpM[t];
+          scorch[id] = tmpS[t];
+        }
+    const c0x = Math.max(0, Math.floor((cx - r - 1) / CHUNK));
+    const c1x = Math.min(this.cx - 1, Math.floor((cx + r + 1) / CHUNK));
+    const c0y = Math.max(0, Math.floor((j0 - 1) / CHUNK));
+    const c1y = Math.min(this.cy - 1, Math.floor((j1 + 1) / CHUNK));
+    const c0z = Math.max(0, Math.floor((cz - r - 1) / CHUNK));
+    const c1z = Math.min(this.cz - 1, Math.floor((cz + r + 1) / CHUNK));
+    for (let z = c0z; z <= c1z; z++)
+      for (let y = c0y; y <= c1y; y++) for (let x = c0x; x <= c1x; x++) this.dirty.add(this.chunkId(x, y, z));
+  }
 }

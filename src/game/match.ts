@@ -16,6 +16,7 @@ import { WEAPONS, type Weapon } from './weapons';
  *   aim     the active bug walks, jumps, aims, picks a weapon and fires (AIM_SECONDS)
  *   flight  projectiles fly; the shooter may retreat for RETREAT_SECONDS but not fire again
  *   settle  wait until every bug and projectile is at rest; bugs at 0 health die
+ *   spin    (maps with a turntable) the turntable turns a quarter, carrying what rests on it
  *   -> next team's turn, or 'over' when at most one team has bugs left
  */
 
@@ -55,7 +56,28 @@ const SPAWN_SETTLE_TICKS = 3 * TICK_RATE;
 /** After bugs die at the end of a turn, wait this long (their death on screen) before the next turn. */
 export const DEATH_HOLD_TICKS = Math.round(1.6 * TICK_RATE);
 
-export type Phase = 'aim' | 'flight' | 'settle' | 'over';
+export type Phase = 'aim' | 'flight' | 'settle' | 'spin' | 'over';
+
+/**
+ * A turntable (a microwave's glass plate): it turns a quarter turn (+x towards +z) between turns, over
+ * SPIN_TICKS, carrying the bugs that rest on it. (x, z): its axis, on a sample; `radius`: of the grid
+ * cylinder that turns (whole samples); rows j0..j1 of the grid turn with it; `surface`: the plate's top.
+ */
+export interface TurntableSpec {
+  x: number;
+  z: number;
+  radius: number;
+  j0: number;
+  j1: number;
+  surface: number;
+}
+
+/** How long the turntable takes for its quarter turn. */
+export const SPIN_TICKS = 90;
+/** (cos, sin) of one tick's share of the quarter turn, from their series (no Math.sin/cos in gameplay). */
+const SPIN_A = 1.5707963267948966 / SPIN_TICKS; // (a quarter turn: pi / 2)
+const SPIN_C = 1 - (SPIN_A * SPIN_A) / 2 + (SPIN_A * SPIN_A * SPIN_A * SPIN_A) / 24;
+const SPIN_S = SPIN_A - (SPIN_A * SPIN_A * SPIN_A) / 6 + (SPIN_A * SPIN_A * SPIN_A * SPIN_A * SPIN_A) / 120;
 
 export interface TeamSpec {
   readonly name: string;
@@ -127,6 +149,8 @@ export interface MatchOptions {
    * floors under floors, such as shelves). Default false.
    */
   spawnLevels?: boolean;
+  /** A turntable that turns between turns (see TurntableSpec). */
+  turntable?: TurntableSpec;
 }
 
 export class Match {
@@ -158,6 +182,13 @@ export class Match {
   private stillTicks = 0;
   /** Ticks left of the pause after deaths (-1: none). */
   private deathTicks = -1;
+  /** Quarter turns the turntable has made, and the ticks into the current one. */
+  private quarterTurns = 0;
+  private spinTicks = 0;
+  private spinC = 1;
+  private spinS = 0;
+  /** What the turntable carries this spin: the unit and its offset from the axis and facing at the start. */
+  private readonly carried: { u: Unit; dx: number; dz: number; fx: number; fz: number }[] = [];
   /** How long the turn and aim keys have been held in the same direction (ticks). */
   private turnHeld = 0;
   private turnDir = 0;
@@ -234,10 +265,14 @@ export class Match {
       if (this.projectiles.length === 0 && this.retreatTicks === 0) this.startSettle();
     } else if (this.phase === 'settle') {
       this.settleTick();
+    } else if (this.phase === 'spin') {
+      this.spinTick();
     }
 
     for (const u of this.units) {
       const b = u.bug;
+      // (what rides the turntable is moved by it, not by its own physics)
+      if (this.phase === 'spin' && this.isCarried(u)) continue;
       b.step(this.field, u === unit ? move : IDLE);
       if (b.justLanded && b.lastImpact > FALL_SAFE_SPEED) this.damage(u, Math.round((b.lastImpact - FALL_SAFE_SPEED) * FALL_DAMAGE));
       if (!b.alive && !u.dead) this.announceDeath(u);
@@ -331,7 +366,7 @@ export class Match {
     if (this.deathTicks >= 0) {
       if (this.deathTicks-- === 0) {
         this.deathTicks = -1;
-        this.beginTurn(this.units[this.active].team + 1);
+        this.endTurn();
       }
       return;
     }
@@ -348,7 +383,76 @@ export class Match {
         died = true;
       }
     if (died) this.deathTicks = DEATH_HOLD_TICKS;
-    else this.beginTurn(this.units[this.active].team + 1);
+    else this.endTurn();
+  }
+
+  /** The turn is over: the turntable turns first (if there is one and the match goes on), then the next team. */
+  private endTurn(): void {
+    const tt = this.options.turntable;
+    let alive = 0;
+    for (let t = 0; t < this.teams.length; t++) if (this.teamHealth(t) > 0) alive++;
+    if (!tt || alive <= 1) {
+      this.beginTurn(this.units[this.active].team + 1);
+      return;
+    }
+    this.phase = 'spin';
+    this.spinTicks = 0;
+    this.spinC = 1;
+    this.spinS = 0;
+    this.carried.length = 0;
+    const r = tt.radius - 0.5;
+    for (const u of this.units) {
+      const b = u.bug;
+      const dx = b.x - tt.x;
+      const dz = b.z - tt.z;
+      if (dx * dx + dz * dz > r * r || b.y < tt.surface - 0.5 || b.y > tt.surface + 6) continue;
+      this.carried.push({ u, dx, dz, fx: b.fx, fz: b.fz });
+    }
+  }
+
+  private isCarried(u: Unit): boolean {
+    for (const c of this.carried) if (c.u === u) return true;
+    return false;
+  }
+
+  /** One tick of the quarter turn: carry the riders round the axis; at the end, turn the grid with them. */
+  private spinTick(): void {
+    const tt = this.options.turntable as TurntableSpec;
+    this.spinTicks++;
+    const last = this.spinTicks >= SPIN_TICKS;
+    if (last) {
+      // (exactly a quarter at the end: the grid turns by whole samples)
+      this.spinC = 0;
+      this.spinS = 1;
+    } else {
+      const c = this.spinC * SPIN_C - this.spinS * SPIN_S;
+      this.spinS = this.spinS * SPIN_C + this.spinC * SPIN_S;
+      this.spinC = c;
+    }
+    const c = this.spinC;
+    const sn = this.spinS;
+    for (const k of this.carried) {
+      const b = k.u.bug;
+      b.px = b.x;
+      b.py = b.y;
+      b.pz = b.z;
+      b.x = tt.x + k.dx * c - k.dz * sn;
+      b.z = tt.z + k.dx * sn + k.dz * c;
+      b.fx = k.fx * c - k.fz * sn;
+      b.fz = k.fx * sn + k.fz * c;
+      b.vx = 0;
+      b.vz = 0;
+    }
+    if (!last) return;
+    this.field.rotateQuarter?.(tt.x, tt.z, tt.j0, tt.j1, tt.radius);
+    this.quarterTurns++;
+    this.carried.length = 0;
+    this.beginTurn(this.units[this.active].team + 1);
+  }
+
+  /** The turntable's turn so far, in quarter turns (render: interpolate and draw the plate turned). */
+  get turntableTurns(): number {
+    return this.quarterTurns + (this.phase === 'spin' ? this.spinTicks / SPIN_TICKS : 0);
   }
 
   /** Give the turn to the next team (from `team` on) that still has bugs, or end the match. */
