@@ -306,6 +306,7 @@ export class SpeakerParts {
       const blade = new THREE.Mesh(geo, m);
       blade.position.copy(a).addScaledVector(dir, -len / 2 + 0.2);
       blade.quaternion.setFromUnitVectors(UP, dir);
+      blade.rotateY(Math.PI / 2); // (the flat faces up and down: the blade lies flat, wide seen from above)
       g.add(blade);
     }
     if (f.axis === 2) {

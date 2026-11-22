@@ -166,8 +166,9 @@ export class HeroOverlays {
     if (!m) {
       m = this.craters.cut(new THREE.MeshStandardNodeMaterial({ color: c, roughness: 0.82, metalness: 0 })); // matte: no thin crawling highlight
       if (c === EARTH_COLOR) {
-        // green and yellow, in a helical stripe along the wire
-        const st = step(0.5, fract(uv().x.mul(36).add(uv().y)));
+        // green with a yellow stripe along the wire
+        // (a broad yellow stripe running along the wire, with a slow twist)
+        const st = step(0.62, fract(uv().y.add(uv().x.mul(2))));
         m.colorNode = mix(color(0x2f7d3a), color(0xd8c23a), st);
       }
       if (c === FOAM_SLEEVE_COLOR) {
