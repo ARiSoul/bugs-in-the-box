@@ -38,6 +38,12 @@ import { Glow, MAX_LIGHTS, hueColor } from './glow';
  * the nearest RGB lights, and corners that fall to near-black so the lit centre reads first. Plus the
  * dark-room backdrop and the render-only glass panel.
  */
+/**
+ * Layer of the meshes that only draw inside the post pipeline's MRT scene pass (their materials write the
+ * emissive target only through `mrtNode`); the camera turns it on once that pipeline exists.
+ */
+export const POST_LAYER = 1;
+
 export class Atmosphere {
   readonly fogColor = uniform(new THREE.Color(0x0b1016));
   /** Distance fog: clear up to `clear`, nearly full at `clear + span`. */
@@ -77,6 +83,7 @@ export class Atmosphere {
       this.glass = new THREE.Mesh(g, this.glassMaterial(x1 - x0 + 2, z1 - z0 + 2));
       this.glass.position.set((x0 + x1) / 2, layout.glassY, (z0 + z1) / 2);
       this.glass.renderOrder = 10;
+      this.glass.layers.set(POST_LAYER);
       this.scene.add(this.glass);
     }
   }
@@ -101,8 +108,8 @@ export class Atmosphere {
       const layerW = smoothstep(this.layerTop, this.layerTop.sub(9), p.y)
         .mul(float(1).sub(exp(d.mul(-0.012))))
         .mul(this.layerStrength);
-      // a faint warm haze, taking the colour of the RGB lights near them
-      const layerColor = mix(vec3(0.05, 0.042, 0.036), hueColor(g.hue).mul(0.2), tintAmount);
+      // a faint cool haze (blue-black like the depth fog), taking a little of the colour of the RGB lights near them
+      const layerColor = mix(vec3(0.03, 0.036, 0.048), hueColor(g.hue).mul(0.1), tintAmount);
       const f1 = clamp(distF.add(layerW.mul(float(1).sub(distF))), 0, 1);
       const c1 = mix(this.fogColor, layerColor, layerW.div(max(f1, 1e-4)).mul(float(1).sub(distF)));
       // dark corners: 0 in the middle of the room, 1 against the walls and in the corners
@@ -110,7 +117,7 @@ export class Atmosphere {
       const edge = length(max(q.sub(0.42), 0).div(0.58));
       const corner = smoothstep(0.1, 0.95, edge).mul(this.cornerDark);
       const f2 = f1.add(float(1).sub(f1).mul(corner));
-      const c2 = mix(c1, this.fogColor.mul(0.55), corner.div(max(f2, 1e-4)).mul(float(1).sub(f1)));
+      const c2 = mix(c1, this.fogColor.mul(1.1), corner.div(max(f2, 1e-4)).mul(float(1).sub(f1)));
       return fog(c2, f2);
     })();
   }
@@ -160,7 +167,8 @@ export class Atmosphere {
       const along = dot(pxz.sub(center).div(half), normalize(vec2(1, -0.6)));
       const streak = smoothstep(0.5, 0, abs(along.sub(0.25))).mul(0.012).mul(float(0.4).add(fres.mul(3)));
       const rgb = sky.mul(fres).add(vec3(0.55, 0.57, 0.58).mul(smudge)).add(vec3(0.03, 0.09, 0.06).mul(edge)).add(vec3(1, 0.96, 0.88).mul(streak));
-      const alpha = clamp(fres.add(smudge).add(edge.mul(0.3)).add(streak), 0, 0.9);
+      // capped: at grazing angles a near-opaque dark reflection would swallow the lights far behind the glass
+      const alpha = clamp(fres.add(smudge).add(edge.mul(0.3)).add(streak), 0, 0.55);
       m.colorNode = rgb.div(max(alpha, 1e-3));
       m.opacityNode = alpha;
     }

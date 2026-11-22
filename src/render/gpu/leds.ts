@@ -14,6 +14,8 @@ export class ActivityLeds {
   private readonly meshes: THREE.Mesh[] = [];
   private readonly levels: { value: number }[] = [];
   private readonly colors: { value: THREE.Color }[] = [];
+  /** LEDs that stay on (power) instead of blinking (feature `glow` 1). */
+  private readonly steady: boolean[] = [];
   private active = 0;
 
   constructor(scene: THREE.Scene) {
@@ -41,6 +43,7 @@ export class ActivityLeds {
       mesh.position.set(f.x, f.y, f.z);
       mesh.visible = true;
       this.colors[this.active].value.setHex(f.color).convertSRGBToLinear();
+      this.steady[this.active] = f.glow === 1;
       this.active++;
     }
     for (let i = this.active; i < MAX_LEDS; i++) this.meshes[i].visible = false;
@@ -52,7 +55,7 @@ export class ActivityLeds {
       const t = seconds * (1.3 + i * 0.37) + i * 2.1;
       const burst = Math.sin(t * 0.9) > 0.15 ? 1 : 0;
       const flick = Math.sin(t * 23.0 + Math.sin(t * 3.1) * 4) > 0 ? 1 : 0.15;
-      this.levels[i].value = i === 1 ? 0.55 + 0.45 * burst : burst * flick + 0.04;
+      this.levels[i].value = this.steady[i] ? 0.8 : i === 1 ? 0.55 + 0.45 * burst : burst * flick + 0.04;
     }
   }
 }

@@ -33,9 +33,14 @@ export type Box3 = [number, number, number, number, number, number];
  * - `capacitor`: an electrolytic capacitor standing on the board at (x, y, z), `radius`, top at `box[4]`.
  * - `tube`: a thick tube or cable along the arc of `parts.cable`: `path` = [ax, ay, az, bx, by, bz, lift, radius],
  *   `color` its sleeve (0xffffff: plain black rubber).
+ * - `wire`: a thin render-only cable (no terrain) from (ax, ay, az) to (bx, by, bz) that rises off the first
+ *   point and comes level into the second (along `axis`, from its `facing` side), sagging by `lift`:
+ *   `path` = [ax, ay, az, bx, by, bz, lift, radius, ...via], where optional `via` points (x, y, z triples) replace
+ *   the sag and steer the run in between.
+ * - `screw`: a board mounting hole at (x, y, z): copper ring of `radius` and a screw head.
  */
 export interface Feature {
-  kind: 'fan' | 'pump' | 'lightBar' | 'led' | 'heat' | 'tube' | 'capacitor' | 'grommet' | 'pad' | 'connector' | 'dust' | 'trace' | 'ramBody' | 'part';
+  kind: 'fan' | 'pump' | 'lightBar' | 'led' | 'heat' | 'tube' | 'capacitor' | 'grommet' | 'pad' | 'connector' | 'dust' | 'trace' | 'ramBody' | 'part' | 'screw' | 'wire';
   x: number;
   y: number;
   z: number;
@@ -50,6 +55,8 @@ export interface Feature {
   metal?: number;
   rough?: number;
   glow?: number;
+  /** Where the render checks that the terrain under a `part` is still there (default: the box centre). */
+  probe?: [number, number, number];
 }
 
 export interface SceneLayout {

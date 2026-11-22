@@ -1,7 +1,7 @@
 /**
  * Repeatable debug hooks from the URL, shared by every map (none of them is scenario-specific):
  *
- *   ?pose=1..6        freeze the camera on one of the scenario's fixed poses
+ *   ?pose=1..6        freeze the camera on one of the scenario's fixed poses (7+: extra detail poses, if any)
  *   ?flythrough=1     fly the scenario's scripted 60 s camera path (loops)
  *   ?fly=1            free debug camera (WASD, Q/E, mouse look, Shift/Ctrl, wheel, R)
  *   ?perf=1           log frame times (and GPU time where the renderer has timestamps); export JSON
@@ -22,7 +22,7 @@ export interface DebugHooks {
 }
 
 export function readHooks(params: URLSearchParams): DebugHooks {
-  const pose = Math.max(0, Math.min(6, Number(params.get('pose') ?? 0) | 0));
+  const pose = Math.max(0, Math.min(9, Number(params.get('pose') ?? 0) | 0));
   const flythrough = params.get('flythrough') === '1';
   const fly = params.get('fly') === '1';
   const res = (params.get('res') ?? '').match(/^(\d{3,4})x(\d{3,4})$/);

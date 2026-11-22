@@ -3,7 +3,7 @@
 Shared procedure for every scenario (the hooks live in `src/debug/`, not in a generator).
 
 1. Start the dev server: `npm run dev`.
-2. For each pose N in 1..6, open
+2. For each pose N in 1..8 (the scenario may define fewer), open
    `http://localhost:5173/?scenario=<id>&pose=N&res=1920x1080&hud=0`
    and, after the pose has settled (6 s of fixed-step render time), run in the console:
    `await __debug.capture('<id>-pose-N')`

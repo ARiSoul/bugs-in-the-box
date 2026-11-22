@@ -75,12 +75,16 @@ const pcCase: ViewBuilder = (t, layout) => {
     key([rad[0] + 2 * s, rad[1] + 52 * s, rad[2] + 34 * s], [rad[0], rad[1] - 2, rad[2] + 3]),
     // 3: vertical GPU on its riser, fans and ribbon
     key([gpu[0] - 40 * s, gpu[1] + 16 * s, gpu[2] - 30 * s], [gpu[0], gpu[1] - 2, gpu[2] + 4 * s]),
-    // 4: PSU shroud plateau and the 24-pin bundle, the cutout beside it
-    key([44 * s + 20, 40 * s + 16, p[2] + 30 * s], [18 * s + 6, 24, p[2] - 6 * s]),
+    // 4: PSU shroud plateau from the rear: drive cage, grommets, the 24-pin bundle, the cutout beside it
+    key([40 * s + 14, 36 * s + 20, D - 16 * s - 8], [12 * s + 4, 26, p[2] + 6 * s]),
     // 5: RGB RAM row, the brightest pose
     key([ram[0] + 16 * s, ram[1] + 14 * s, ram[2] + 36 * s], [ram[0] - 4, ram[1] - 3, ram[2] - 4]),
     // 6: low across the board under the tubes, toward the radiator
     key([p[0] - 4 * s, p[1] + 5, p[2] + 30 * s], [p[0] - 12 * s, p[1] + 4, rad[2] + 4]),
+    // 7 (detail): the rear I/O corner: I/O cover, port housings, Wi-Fi card, audio corner
+    key([W * 0.42, 52 * s + 6, D - 52 * s], [W * 0.2, 20, D - 14 * s]),
+    // 8 (detail): the drives on the shroud and the SATA cables to the board
+    key([42 * s + 10, 34 * s + 18, 8], [14 * s + 4, 26, 40 * s + 8]),
   ];
   const path: CameraKey[] = [
     start,

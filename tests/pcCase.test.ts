@@ -4,7 +4,7 @@ import { Match, type TeamSpec } from '../src/game/match';
 import { ANT, SPIDER } from '../src/game/species';
 import { BOARD_TOP, pcCase } from '../src/terrain/generators/pcCase';
 import { createLayout, type SceneLayout } from '../src/terrain/generators/types';
-import { ALUMINIUM, BLACK_PLASTIC, DUST, FAN, GOLD, PCB, RGB_LIGHT, STEEL } from '../src/terrain/materials';
+import { ALUMINIUM, BLACK_PLASTIC, FAN, GOLD, PCB, RGB_LIGHT, STEEL } from '../src/terrain/materials';
 import { SCENARIOS, scenarioById } from '../src/terrain/scenarios';
 import { Terrain } from '../src/terrain/Terrain';
 import { analyze, meshAll } from './helpers/meshIntegrity';
@@ -65,7 +65,11 @@ describe('Tower Case (pc-case)', () => {
         const { t, layout } = make(7, cx, cy, cz);
         expect(layout.glassY).toBe(t.H - 6);
         const used = new Set(t.material);
-        for (const m of [PCB, STEEL, ALUMINIUM, BLACK_PLASTIC, FAN, GOLD, RGB_LIGHT, DUST]) expect(used.has(m)).toBe(true);
+        for (const m of [PCB, STEEL, ALUMINIUM, BLACK_PLASTIC, FAN, GOLD, RGB_LIGHT]) expect(used.has(m)).toBe(true);
+        // dust bunnies, thin cables and screw heads are render-only details
+        expect(count(layout, 'dust')).toBeGreaterThan(0);
+        if (cx === 5) expect(count(layout, 'wire')).toBe(5); // two SATA, one blue SATA, two antenna leads
+        expect(count(layout, 'screw')).toBe(5);
         // walls: solid steel 3 cells thick near the top on all four sides, air in the two outer layers
         const y = t.H - 9; // above the rear vent grid, below the glass
         const mid = Math.round(t.W / 2);

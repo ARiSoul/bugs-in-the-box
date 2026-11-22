@@ -19,6 +19,9 @@ interface Leg {
  * The look of one bug: a few spheres and cylinders built from its species proportions.
  * Purely cosmetic: reads the simulation state, never writes it. Local frame: +Z forward, +Y up.
  */
+/** Rotation that lays a ring (made in the xy plane) flat on the floor. */
+const FLAT = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2);
+
 export class BugView {
   readonly root = new THREE.Group();
   private readonly legs: Leg[] = [];
@@ -30,10 +33,19 @@ export class BugView {
   private readonly target = new THREE.Vector3();
   private phase = 0;
   private ring: THREE.Mesh | null = null;
+  /** Height of the bug's centre from the last `update` (before the far-away lift). */
+  private groundY = 0;
 
-  /** Grow the team ring with the camera distance (from ~40 units, at most 2.2×), so the bug can be found from afar. */
-  setRingScale(cameraDistance: number): void {
-    if (this.ring) this.ring.scale.setScalar(Math.min(2.2, Math.max(1, cameraDistance / 40)));
+  /**
+   * Readability from afar (render only): the bug grows with the camera distance (from ~50 units, at most
+   * 1.7×, lifted so its feet stay on the floor) and its team ring a little more (at most 1.6× the bug).
+   * Call after `update`.
+   */
+  setCameraDistance(cameraDistance: number): void {
+    const s = Math.min(1.7, Math.max(1, cameraDistance / 50));
+    this.root.scale.setScalar(s);
+    this.root.position.y = this.groundY + (s - 1) * this.species.radius;
+    if (this.ring) this.ring.scale.setScalar(Math.min(1.6, Math.max(1, cameraDistance / 45)));
   }
 
   /** `teamColor`: a soft ring in the team colour under the bug, so it reads from far away. */
@@ -43,16 +55,18 @@ export class BugView {
   ) {
     const r = species.radius;
     if (teamColor !== undefined) {
-      const ringMat = new THREE.MeshBasicMaterial({ color: teamColor, transparent: true, opacity: 0.85, depthWrite: false, side: THREE.DoubleSide });
+      const ringMat = new THREE.MeshBasicMaterial({ color: teamColor, transparent: true, opacity: 0.85, depthWrite: false, side: THREE.DoubleSide, fog: false });
       this.materials.push(ringMat);
-      const ring = new THREE.Mesh(new THREE.RingGeometry(r * 1.1, r * 1.9, 32), ringMat);
-      ring.rotation.x = -Math.PI / 2;
+      const ring = new THREE.Mesh(new THREE.RingGeometry(r * 1.05, r * 1.6, 32), ringMat);
+      ring.quaternion.copy(FLAT);
       ring.position.y = -r + 0.12;
       ring.renderOrder = 5;
       this.root.add(ring);
       this.ring = ring;
     }
     const body = this.material(species.color, 0.45);
+    // a faint glow in the team colour: the bug reads from far away and in the dark
+    if (teamColor !== undefined) body.emissive.setHex(teamColor).multiplyScalar(0.22);
     const dark = this.material(species.accent, 0.6);
     const eye = this.material(0x050505, 0.2);
     const len = species.bodyLength * r;
@@ -103,6 +117,7 @@ export class BugView {
       bug.py + (bug.y - bug.py) * alpha,
       bug.pz + (bug.z - bug.pz) * alpha,
     );
+    this.groundY = this.root.position.y;
 
     // Lean into the ground normal while standing, level out in the air. Smoothed so bumps do not jitter.
     if (bug.grounded) this.target.set(bug.nx, bug.ny, bug.nz);
@@ -113,6 +128,8 @@ export class BugView {
     this.side.crossVectors(this.up, this.fwd);
     this.basis.makeBasis(this.side, this.up, this.fwd);
     this.root.quaternion.setFromRotationMatrix(this.basis);
+    // the team ring stays flat on the floor whatever the bug leans into
+    if (this.ring) this.ring.quaternion.copy(this.root.quaternion).invert().multiply(FLAT);
 
     // Walk cycle driven by actual ground speed; legs tuck in while airborne.
     const dx = bug.x - bug.px;
@@ -133,7 +150,8 @@ export class BugView {
   }
 
   private material(color: number, roughness: number): THREE.MeshStandardMaterial {
-    const m = new THREE.MeshStandardMaterial({ color, roughness, metalness: 0.05 });
+    // no fog: a bug reads in the far, dark corners too
+    const m = new THREE.MeshStandardMaterial({ color, roughness, metalness: 0.05, fog: false });
     this.materials.push(m);
     return m;
   }

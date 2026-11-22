@@ -130,17 +130,21 @@ export class DustMotes {
     const centre = this.boxMin.xz.add(this.boxMax.xz).mul(0.5);
     const half = this.boxMax.xz.sub(this.boxMin.xz).mul(0.5);
     const q = mote.xz.sub(centre).abs().div(half);
-    const wall = smoothstep(0.1, 0.7, length(max(q.sub(0.42), 0).div(0.58)));
+    const wall = smoothstep(0.0, 0.5, length(max(q.sub(0.42), 0).div(0.58)));
     const cover = varying(pow(mote.w.div(drawn), 2).mul(smoothstep(110, 50, dist)).mul(smoothstep(12, 30, dist)).mul(float(1).sub(wall)));
     // light: forward scattering toward the key light, plus the colour of nearby RGB lights
     const view = normalize(mote.xyz.sub(cameraPosition));
-    const phase = pow(max(dot(view, sunDir), 0), 4).mul(2.6).add(0.1);
+    const phase = pow(max(dot(view, sunDir), 0), 4).mul(2.6).add(0.06);
     // in the light? follow the ray to the sun up to the blinds and see if it passes between two slats
     const b = this.blinds;
     const along = b.w.sub(mote.y).div(max(sunDir.y, 0.05));
     const px = mote.x.add(sunDir.x.mul(along));
     const off = fract(px.sub(b.x).div(b.y).add(0.5)).sub(0.5).abs().mul(b.y);
-    const lit = smoothstep(b.z.mul(0.5), b.z.mul(0.5).add(1.2), off);
+    // ...and that it came in through the glass: motes under the case's solid edges stay dark
+    const pz = mote.z.add(sunDir.z.mul(along));
+    const inX = smoothstep(this.boxMin.x, this.boxMin.x.add(3), px).mul(smoothstep(this.boxMax.x, this.boxMax.x.sub(3), px));
+    const inZ = smoothstep(this.boxMin.z, this.boxMin.z.add(3), pz).mul(smoothstep(this.boxMax.z, this.boxMax.z.sub(3), pz));
+    const lit = smoothstep(b.z.mul(0.5), b.z.mul(0.5).add(1.2), off).mul(inX).mul(inZ);
     const tint = float(0).toVar();
     const tintNode = Fn(() => {
       Loop(MAX_LIGHTS, ({ i }) => {
@@ -150,9 +154,9 @@ export class DustMotes {
       });
       return min(tint, 1.5);
     })();
-    const light = varying(vec3(1, 0.78, 0.52).mul(phase).mul(lit).add(hueColor(glow.hue).mul(tintNode).mul(0.35)));
+    const light = varying(vec3(1, 0.78, 0.52).mul(phase).mul(lit).add(hueColor(glow.hue).mul(tintNode).mul(0.15)));
     const disc = smoothstep(0.5, 0.1, length(uv().sub(0.5)));
-    m.colorNode = vec4(light.mul(disc).mul(cover).mul(0.42), 1);
+    m.colorNode = vec4(light.mul(disc).mul(cover).mul(0.3), 1);
     this.sprite = new THREE.Sprite(m);
     this.sprite.count = DUST_COUNT;
     this.sprite.frustumCulled = false;

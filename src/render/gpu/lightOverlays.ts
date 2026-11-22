@@ -5,11 +5,11 @@ import type { Feature, SceneLayout } from '../../terrain/generators/types';
 import { Glow, hueColor } from './glow';
 
 /** Brightness of the light rings and bars (HDR, before bloom and tone mapping). */
-const OVERLAY_GLOW = 1.15;
+const OVERLAY_GLOW = 0.95;
 /** The RAM light bars are the brightest lights (the hero of their view). */
-const BAR_GLOW = 1.45;
+const BAR_GLOW = 1.1;
 /** Tube radius of the smooth rings, and how far they sit in front of the terrain diffuser. */
-const RING_TUBE = 1.4;
+const RING_TUBE = 1.1;
 const RING_OUT = 0.5;
 
 /** Reads the terrain: an overlay goes dark when its diffuser has been blown away. */
@@ -44,7 +44,7 @@ export class LightOverlays {
     m.colorNode = color(0x050505);
     // a hot core where the tube faces the camera, dimmer towards its silhouette: reads as a light tube
     const facing = abs(dot(normalWorld, normalize(cameraPosition.sub(positionWorld))));
-    const core = pow(facing, 2).mul(0.7).add(0.55);
+    const core = pow(facing, 2).mul(0.6).add(0.7);
     m.emissiveNode = hueColor(glow.hue).mul(float(OVERLAY_GLOW)).mul(glow.boost).mul(core);
     this.material = m;
     // light bars: the brightest RGB in the case, with a row of LEDs showing through the diffuser

@@ -1,5 +1,6 @@
 import * as THREE from 'three/webgpu';
 import { abs, cameraPosition, clamp, dot, float, length, mrt, mx_noise_float, normalize, positionWorld, smoothstep, uniform, uv, vec3, vec4 } from 'three/tsl';
+import { POST_LAYER } from './atmosphere';
 
 /** Brightness of the light sheets (additive, before tone mapping). */
 const SHEET_GLOW = 0.03;
@@ -71,6 +72,7 @@ export class LightSheets {
       g.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
       g.setIndex([0, 1, 2, 2, 1, 3]);
       const mesh = new THREE.Mesh(g, this.material);
+      mesh.layers.set(POST_LAYER);
       mesh.frustumCulled = false;
       mesh.renderOrder = 8;
       this.group.add(mesh);

@@ -13,6 +13,8 @@ function textSprite(width: number, height: number): { sprite: THREE.Sprite; ctx:
   if (!ctx) throw new Error('2D canvas not available');
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
+  texture.generateMipmaps = false;
+  texture.minFilter = THREE.LinearFilter;
   const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, depthTest: false, transparent: true, fog: false, sizeAttenuation: false }));
   sprite.renderOrder = 10;
   return { sprite, ctx, texture };
@@ -34,19 +36,21 @@ export class UnitLabel {
     this.ctx = t.ctx;
     this.texture = t.texture;
     this.sprite.scale.set(LABEL_H * (256 / 72), LABEL_H, 1);
+    this.sprite.center.set(0.5, 0); // anchored at its bottom edge: it sits above the bug, never on it
   }
 
   /**
    * The label keeps one size on screen (`LABEL_H`), so it reads at any distance and does not shimmer.
    * `cameraDistance` lifts it a little so it stays above the bug. `hidden`: the bug is behind terrain; the
-   * label stays (players need to find their bugs) but dims.
+   * label hides, unless it is the active bug's (`active`), which dims.
    */
-  update(position: THREE.Vector3, height: number, health: number, visible: boolean, cameraDistance = 0, hidden = false): void {
-    this.sprite.visible = visible;
-    if (!visible) return;
-    this.sprite.material.opacity = hidden ? 0.35 : 1;
-    // keep the plate clear of the bug: lift it a little more the farther the camera is
-    this.sprite.position.set(position.x, position.y + height + cameraDistance * 0.02, position.z);
+  update(position: THREE.Vector3, height: number, health: number, visible: boolean, cameraDistance = 0, hidden = false, active = false): void {
+    // a bug hidden behind terrain shows no label, except the one whose turn it is (dimmed)
+    this.sprite.visible = visible && (!hidden || active);
+    if (!this.sprite.visible) return;
+    this.sprite.material.opacity = hidden ? 0.45 : 1;
+    // a small gap over the top of the bug (`height` is from its centre), a little more from afar
+    this.sprite.position.set(position.x, position.y + height + 0.4 + cameraDistance * 0.008, position.z);
     if (health === this.shown) return;
     this.shown = health;
     const { ctx } = this;
@@ -71,12 +75,27 @@ export class UnitLabel {
     this.texture.needsUpdate = true;
   }
 
+  /**
+   * Put the label's centre on a whole pixel of a `width` × `height` view, so its text does not crawl
+   * by sub-pixel steps as the camera moves. Call after `update`, once per frame.
+   */
+  snap(camera: THREE.Camera, width: number, height: number): void {
+    if (!this.sprite.visible) return;
+    const p = SNAP.copy(this.sprite.position).project(camera);
+    if (p.z > 1) return;
+    p.x = ((Math.round(((p.x + 1) / 2) * width) + 0.5) / width) * 2 - 1;
+    p.y = ((Math.round(((p.y + 1) / 2) * height) + 0.5) / height) * 2 - 1;
+    this.sprite.position.copy(p.unproject(camera));
+  }
+
   dispose(): void {
     this.texture.dispose();
     this.sprite.material.dispose();
     this.sprite.removeFromParent();
   }
 }
+
+const SNAP = new THREE.Vector3();
 
 interface Floating {
   sprite: THREE.Sprite;

@@ -35,6 +35,8 @@ export interface Stage {
   /** What actually draws: 'WebGL', 'WebGPU', or 'WebGL2 (no WebGPU)' for the fallback. */
   backend: string;
   scene: THREE.Scene;
+  /** Screen-space overlays (labels): drawn after every post effect, so they stay crisp and still. */
+  hud: THREE.Scene;
   camera: THREE.PerspectiveCamera;
   controls: OrbitControls;
   look: TerrainLook;
@@ -102,10 +104,12 @@ export function createStage(canvas: HTMLCanvasElement, terrain: Terrain, options
   resize();
 
   const sharp = { value: 1 };
+  const hud = new THREE.Scene();
   return {
     kind: 'webgl',
     backend: 'WebGL',
     scene,
+    hud,
     camera,
     controls,
     look: { material: terrainMaterial(sharp), setSharp: (on) => (sharp.value = on ? 1 : 0) },
@@ -117,6 +121,9 @@ export function createStage(canvas: HTMLCanvasElement, terrain: Terrain, options
     },
     render() {
       renderer.render(scene, camera);
+      renderer.autoClear = false;
+      renderer.render(hud, camera);
+      renderer.autoClear = true;
     },
     frameNumber: () => renderer.info.render.frame,
   };

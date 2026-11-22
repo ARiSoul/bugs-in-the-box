@@ -48,7 +48,7 @@ const stage: Stage =
 const chunks = new ChunkRenderer(stage.scene, stage.look);
 const flashes = new ExplosionFlashes(stage.scene);
 const lines = new LineFlashes(stage.scene);
-const texts = new FloatingTexts(stage.scene);
+const texts = new FloatingTexts(stage.hud);
 const projectiles = new ProjectileViews(stage.scene);
 const aim = new AimView(stage.scene);
 const follow = new FollowCamera(stage.camera, stage.controls);
@@ -123,7 +123,8 @@ function newMatch(s: number): void {
   bugViews = match.units.map((u) => {
     const view = new BugView(u.bug.species, match.teams[u.team].color);
     const label = new UnitLabel(u.name, match.teams[u.team].color);
-    stage.scene.add(view.root, label.sprite);
+    stage.scene.add(view.root);
+    stage.hud.add(label.sprite);
     return { view, label, height: u.bug.species.radius * 2.4 };
   });
   hud.setupMatch(match, WEAPONS, (i) => controls.selectWeapon(i));
@@ -261,7 +262,7 @@ function startCamera(): void {
   stage.camera.lookAt(stage.controls.target);
   if (debugCamera) {
     stage.controls.enabled = false;
-    if (hooks.pose > 0) applyPose(stage.camera, views.poses[hooks.pose - 1]);
+    if (hooks.pose > 0) applyPose(stage.camera, views.poses[Math.min(hooks.pose, views.poses.length) - 1]);
     // the path keeps clear of the terrain inside the map; above the top layers (over the walls, the glass)
     // it may pass freely
     const top = layout.glassY > 0 ? layout.glassY - 2 : terrain.H;
@@ -368,9 +369,6 @@ function loop(now: number): void {
   match.units.forEach((u, i) => {
     const v = bugViews[i];
     v.view.update(u.bug, alpha, dt);
-    const dist = stage.camera.position.distanceTo(v.view.root.position);
-    v.view.setRingScale(dist);
-    v.label.update(v.view.root.position, v.height, u.bug.health, u.bug.alive, dist, u.bug.alive && occluded(v.view.root.position, dist));
   });
   projectiles.sync(match.projectiles, alpha);
   const active = bugViews[match.active];
@@ -401,6 +399,7 @@ function loop(now: number): void {
   flashes.update(now);
   lines.update(now);
   texts.update(now);
+  placeLabels();
   stage.render(renderSeconds(now), renderStep(dt));
   perf?.record(interval);
   if (now - lastFps > 500) {
@@ -414,6 +413,21 @@ if (!hooks.hud) document.body.classList.add('no-hud');
 requestAnimationFrame(loop);
 
 // Debug API (console, and the scripted review): poses, fly-through time, captures, perf runs.
+/**
+ * Size the bugs and place their labels for the camera as it is now (call right before drawing): the
+ * labels snap to whole pixels of this very frame, so they do not crawl.
+ */
+function placeLabels(): void {
+  stage.camera.updateMatrixWorld();
+  match.units.forEach((u, i) => {
+    const v = bugViews[i];
+    const dist = stage.camera.position.distanceTo(v.view.root.position);
+    v.view.setCameraDistance(dist);
+    v.label.update(v.view.root.position, v.height * v.view.root.scale.y, u.bug.health, u.bug.alive, dist, u.bug.alive && occluded(v.view.root.position, dist), i === match.active);
+    v.label.snap(stage.camera, canvas.width, canvas.height);
+  });
+}
+
 const debugApi = {
   terrain,
   stage,
@@ -440,6 +454,7 @@ const debugApi = {
   capture(name: string, opts: { t?: number; dt?: number; jpeg?: boolean } = {}): Promise<string> {
     const t = opts.t ?? pathFrozenAt ?? (performance.now() - pathStart) / 1000;
     if (path) path.at(t, stage.camera, pathTarget);
+    placeLabels();
     stage.render(opts.t !== undefined ? opts.t : renderSeconds(performance.now()), opts.dt ?? 0);
     return captureCanvas(canvas, name, opts.jpeg === true);
   },

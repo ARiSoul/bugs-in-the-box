@@ -27,10 +27,14 @@ interface Piece {
 export class HeroOverlays {
   private readonly pieces: Piece[] = [];
   private readonly rubber = new THREE.MeshStandardNodeMaterial({ color: 0x0c0c0e, roughness: 0.62, metalness: 0 });
+  private readonly grommetRubber = new THREE.MeshStandardNodeMaterial({ color: 0x08080a, roughness: 0.85, metalness: 0 });
+  private readonly screwHead = new THREE.MeshStandardNodeMaterial({ color: 0xb4b9c0, roughness: 0.32, metalness: 1 });
   private readonly rotor: THREE.MeshStandardNodeMaterial;
-  private readonly cap = new THREE.MeshStandardNodeMaterial({ color: 0x3a3e45, roughness: 0.35, metalness: 0.8 });
+  private readonly capRing: THREE.MeshStandardNodeMaterial;
+  private readonly cap = new THREE.MeshStandardNodeMaterial({ color: 0x16181c, roughness: 0.22, metalness: 0.6 });
   private readonly sleeve = new THREE.MeshStandardNodeMaterial({ color: 0x14161a, roughness: 0.45, metalness: 0 });
-  private readonly capTop = new THREE.MeshStandardNodeMaterial({ color: 0x9aa0a8, roughness: 0.42, metalness: 0.8 });
+  private readonly capTop = new THREE.MeshStandardNodeMaterial({ color: 0x7d838c, roughness: 0.45, metalness: 0.8 });
+  private readonly capScore = new THREE.MeshStandardNodeMaterial({ color: 0x2a2c30, roughness: 0.6, metalness: 0.3 });
   private readonly hole = new THREE.MeshBasicNodeMaterial({ color: 0x020203 });
   private readonly fitting = new THREE.MeshStandardNodeMaterial({ color: 0x2a2c31, roughness: 0.3, metalness: 0.7 });
   private readonly gold = new THREE.MeshStandardNodeMaterial({ color: 0xd9a441, roughness: 0.38, metalness: 1 });
@@ -41,10 +45,10 @@ export class HeroOverlays {
     const m = new THREE.MeshStandardNodeMaterial({ roughness: 1, metalness: 0 });
     const v = normalize(cameraPosition.sub(positionWorld));
     const rim = pow(float(1).sub(abs(dot(normalWorld, v))), 2.2);
-    m.colorNode = mix(color(0x3e3f42), color(0x8a8c90), rim);
+    m.colorNode = mix(color(0x8d8b87), color(0xd6d3ce), rim);
     return m;
   })();
-  private readonly copper = new THREE.MeshStandardNodeMaterial({ color: 0xb06c38, roughness: 0.55, metalness: 0.9 });
+  private readonly copper = new THREE.MeshStandardNodeMaterial({ color: 0xc47a3e, roughness: 0.34, metalness: 1 });
   private readonly ramBody = new THREE.MeshStandardNodeMaterial({ color: 0x24262c, roughness: 0.4, metalness: 0.6 });
   private readonly group = new THREE.Group();
   private field: SolidField | null = null;
@@ -60,6 +64,10 @@ export class HeroOverlays {
     const r = p.x.mul(p.x).add(p.y.mul(p.y)).sqrt();
     m.emissiveNode = hueColor(glow.hue).mul(pow(cos(ang).mul(0.5).add(0.5), 24).mul(smoothstep(1.5, 6, r)).mul(float(0.8)));
     this.rotor = m;
+    const cr = new THREE.MeshStandardNodeMaterial({ roughness: 0.4, metalness: 0 });
+    cr.colorNode = color(0x050505);
+    cr.emissiveNode = hueColor(glow.hue).mul(float(1.4));
+    this.capRing = cr;
     scene.add(this.group);
   }
 
@@ -84,6 +92,8 @@ export class HeroOverlays {
       else if (f.kind === 'trace') this.addTrace(f);
       else if (f.kind === 'ramBody') this.addBlock(f.box, this.ramBody, 0.6);
       else if (f.kind === 'part') this.addPart(f);
+      else if (f.kind === 'screw') this.addScrew(f);
+      else if (f.kind === 'wire') this.addWire(f);
     }
   }
 
@@ -143,7 +153,13 @@ export class HeroOverlays {
     const mesh = new THREE.Mesh(new THREE.CylinderGeometry(r, r, 1.6, 40), this.cap);
     mesh.position.set(f.x, f.y + 0.6, f.z);
     mesh.castShadow = true;
-    this.push(mesh, [f.x, f.y, f.z]);
+    // a thin light ring set into the glossy cap
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(r * 0.55, 0.18, 10, 48), this.capRing);
+    ring.rotation.x = Math.PI / 2;
+    ring.position.set(f.x, f.y + 1.42, f.z);
+    const g = new THREE.Group();
+    g.add(mesh, ring);
+    this.push(g, [f.x, f.y, f.z]);
   }
 
   private readonly sleeves = new Map<number, THREE.MeshStandardNodeMaterial>();
@@ -151,7 +167,7 @@ export class HeroOverlays {
     if (c === 0xffffff) return this.rubber;
     let m = this.sleeves.get(c);
     if (!m) {
-      m = new THREE.MeshStandardNodeMaterial({ color: c, roughness: 0.7, metalness: 0 });
+      m = new THREE.MeshStandardNodeMaterial({ color: c, roughness: 0.82, metalness: 0 }); // matte: no thin crawling highlight
       this.sleeves.set(c, m);
     }
     return m;
@@ -187,7 +203,64 @@ export class HeroOverlays {
     mesh.position.set((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2);
     mesh.castShadow = true;
     mesh.receiveShadow = true;
-    this.push(mesh, [(x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2]);
+    this.push(mesh, f.probe ?? [(x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2]);
+  }
+
+  /**
+   * A thin cable with no terrain under it (SATA, antenna leads): it rises off the first point, sags a
+   * little on the way and comes level into the second. Hides with the terrain under its first end.
+   */
+  private addWire(f: Feature): void {
+    const [ax, ay, az, bx, by, bz, sag, radius] = f.path;
+    const via = f.path.slice(8);
+    const top = Math.max(ay, by);
+    const dx = bx - ax;
+    const dz = bz - az;
+    // come in level into the socket, along `axis` from its `facing` side
+    const inX = f.axis === 0 ? f.facing * 3 : 0;
+    const inZ = f.axis === 2 ? f.facing * 3 : 0;
+    const pts = [new THREE.Vector3(ax, ay, az), new THREE.Vector3(ax, ay + 2.2, az)];
+    if (via.length >= 3) {
+      for (let i = 0; i + 2 < via.length; i += 3) pts.push(new THREE.Vector3(via[i], via[i + 1], via[i + 2]));
+    } else {
+      pts.push(new THREE.Vector3(ax + dx * 0.3, top + 3 - sag * 0.4, az + dz * 0.28), new THREE.Vector3(ax + dx * 0.62, top + 2 - sag, az + dz * 0.66));
+    }
+    pts.push(new THREE.Vector3(bx + inX, by + 0.6, bz + inZ), new THREE.Vector3(bx, by, bz));
+    const curve = new THREE.CatmullRomCurve3(pts, false, 'centripetal');
+    const mesh = new THREE.Mesh(new THREE.TubeGeometry(curve, 48, radius, 10, false), this.sleeveFor(f.color));
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    this.push(mesh, [ax, ay - 1, az]);
+  }
+
+  /** A board mounting hole: a flat copper ring and a domed screw head with a cross recess. */
+  private addScrew(f: Feature): void {
+    const r = f.radius;
+    const g = new THREE.Group();
+    const ringProfile = [
+      new THREE.Vector2(r - 1.05, -0.2),
+      new THREE.Vector2(r - 1.05, 1.0),
+      new THREE.Vector2(r - 0.85, 1.18),
+      new THREE.Vector2(r + 0.95, 1.18),
+      new THREE.Vector2(r + 1.15, 1.0),
+      new THREE.Vector2(r + 1.15, -0.2),
+    ];
+    const ring = new THREE.Mesh(new THREE.LatheGeometry(ringProfile.reverse(), 40) /* reversed: faces point outward */, this.copper);
+    ring.position.set(f.x, f.y, f.z);
+    const head = new THREE.Mesh(new THREE.CylinderGeometry(r - 0.95, r - 0.7, 1.3, 32), this.screwHead);
+    head.position.set(f.x, f.y + 1.6, f.z);
+    g.add(ring, head);
+    for (const rot of [0, Math.PI / 2]) {
+      const s = new THREE.Mesh(new THREE.BoxGeometry(2 * (r - 1.5), 0.3, 0.42), this.capScore);
+      s.position.set(f.x, f.y + 2.2, f.z);
+      s.rotation.y = rot + Math.PI / 4;
+      g.add(s);
+    }
+    g.traverse((o) => {
+      o.castShadow = true;
+      o.receiveShadow = true;
+    });
+    this.push(g, [f.x, f.y - 0.5, f.z]);
   }
 
   /** A copper trace, cut into short pieces (each hides on its own when blown away). */
@@ -224,11 +297,18 @@ export class HeroOverlays {
   /** A dust bunny: a few soft, flattened tufts with a velvet sheen at their rims (reads as fluff). */
   private addDust(f: Feature): void {
     const g = new THREE.Group();
+    // many small soft tufts, light grey: reads as a fluffy clump rather than one solid lump
     const tufts: [number, number, number, number][] = [
-      [0, 0.35, 0, 1],
-      [0.75, 0.25, 0.45, 0.72],
-      [-0.6, 0.22, -0.5, 0.65],
-      [0.15, 0.55, -0.35, 0.55],
+      [0, 0.3, 0, 0.8],
+      [0.7, 0.22, 0.4, 0.6],
+      [-0.6, 0.2, -0.45, 0.58],
+      [0.2, 0.5, -0.35, 0.5],
+      [-0.35, 0.45, 0.55, 0.48],
+      [0.85, 0.18, -0.5, 0.42],
+      [-0.9, 0.15, 0.25, 0.4],
+      [0.05, 0.62, 0.3, 0.38],
+      [0.45, 0.4, 0.85, 0.36],
+      [-0.25, 0.2, -1, 0.36],
     ];
     for (const [dx, dy, dz, k] of tufts) {
       const t = new THREE.Mesh(this.tuftGeometry, this.fluff);
@@ -236,7 +316,7 @@ export class HeroOverlays {
       t.position.set(f.x + dx * f.radius, f.y + dy * f.radius, f.z + dz * f.radius);
       g.add(t);
     }
-    this.push(g, [f.x, f.y + 0.2, f.z]);
+    this.push(g, [f.x, f.y - 0.6, f.z]);
   }
 
   /** A clean connector block with a darker plug face. */
@@ -257,18 +337,29 @@ export class HeroOverlays {
     this.push(bead, [f.x, f.y + 0.6, f.z]);
   }
 
-  /** A clean rubber grommet: a round lip and a dark opening. */
+  /** A rubber grommet: a thin flat flange flush on the panel over the hole's edge, a lip down into it, a dark opening. */
   private addGrommet(f: Feature): void {
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(f.radius, 1.45, 16, 48), this.rubber);
-    ring.rotation.x = Math.PI / 2;
-    ring.position.set(f.x, f.y + 0.15, f.z);
-    const hole = new THREE.Mesh(new THREE.CircleGeometry(f.radius - 0.6, 40), this.hole);
+    const r = f.radius;
+    const profile = [
+      new THREE.Vector2(r - 1.1, -2.2),
+      new THREE.Vector2(r - 1.1, 0.25),
+      new THREE.Vector2(r - 0.85, 0.42),
+      new THREE.Vector2(r + 1.7, 0.42),
+      new THREE.Vector2(r + 2.0, 0.12),
+      new THREE.Vector2(r + 2.0, -0.05),
+      new THREE.Vector2(r - 0.2, -0.05),
+      new THREE.Vector2(r - 0.2, -2.2),
+    ];
+    const ring = new THREE.Mesh(new THREE.LatheGeometry(profile.reverse(), 48) /* reversed: faces point outward */, this.grommetRubber);
+    ring.position.set(f.x, f.y, f.z);
+    ring.castShadow = true;
+    ring.receiveShadow = true;
+    const hole = new THREE.Mesh(new THREE.CircleGeometry(r - 1.05, 40), this.hole);
     hole.rotation.x = -Math.PI / 2;
-    hole.position.set(f.x, f.y - 0.6, f.z);
+    hole.position.set(f.x, f.y - 1.6, f.z);
     const g = new THREE.Group();
     g.add(ring, hole);
-    ring.castShadow = true;
-    this.push(g, [f.x + f.radius, f.y, f.z]);
+    this.push(g, [f.x + r + 1, f.y - 0.6, f.z]);
   }
 
   /** A clean capacitor: sleeve with a rounded shoulder and a scored aluminium top. */
@@ -281,6 +372,13 @@ export class HeroOverlays {
     top.position.set(f.x, f.y + h - 0.3, f.z);
     const g = new THREE.Group();
     g.add(sleeve, top);
+    // the vent score on top: a thin cross
+    for (const rot of [0, Math.PI / 2]) {
+      const s = new THREE.Mesh(new THREE.BoxGeometry(2 * (r - 0.6), 0.12, 0.28), this.capScore);
+      s.position.set(f.x, f.y + h + 0.02, f.z);
+      s.rotation.y = rot;
+      g.add(s);
+    }
     // small round tops catch the blind stripes as flickering patches in motion: no received shadow
     g.traverse((o) => {
       o.castShadow = true;

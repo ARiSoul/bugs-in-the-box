@@ -49,11 +49,6 @@ export class Glow {
     }
   }
 
-  /** 1 at the teal end of the sweep, 0 at magenta. */
-  tealness(): number {
-    return Math.min(1, Math.max(0, (HUE_TO - this.hue.value) / (HUE_TO - HUE_FROM)));
-  }
-
   update(seconds: number): void {
     this.time.value = seconds;
     // smooth ping-pong between the two hues
@@ -62,7 +57,7 @@ export class Glow {
     const eased = tri * tri * (3 - 2 * tri);
     this.hue.value = this.lock >= 0 ? this.lock : HUE_FROM + (HUE_TO - HUE_FROM) * eased;
     hueToRgb(this.hue.value, this.rgb);
-    this.boost.value = 1 + 0.1 * this.tealness();
+    this.boost.value = 1;
   }
 }
 
@@ -72,22 +67,34 @@ export class Glow {
  * teal much brighter than magenta.
  */
 const HUE_LEVEL = 0.55;
+/** Share of the luminance in that level (the rest is the strongest channel). */
+const LUM_WEIGHT = 0.6;
+/** Red and green added to pure blue (less towards violet and cyan): blue LEDs look lighter than pure blue. */
+const BLUE_LIFT = [0.18, 0.24] as const;
+/** White added on top at pure blue (it still reads darkest of all hues through the fog). */
+const BLUE_WHITE = 0.06;
 
 /** Fully saturated colour of hue `h` (0..1), at the same level for every hue (see HUE_LEVEL), in a shader. */
 export function hueColor(h: THREE.Node<'float'>): THREE.Node<'vec3'> {
   const k = fract(vec3(h, h, h).add(vec3(0, 2 / 3, 1 / 3))).mul(6).sub(3);
-  const c = clamp(abs(k).sub(1), float(0), float(1));
-  const level = dot(c, vec3(0.2126, 0.7152, 0.0722)).mul(0.5).add(max(c.x, max(c.y, c.z)).mul(0.5));
-  return c.mul(float(HUE_LEVEL).div(max(level, 0.05)));
+  const c0 = clamp(abs(k).sub(1), float(0), float(1));
+  const blue = c0.z.mul(float(1).sub(max(c0.x, c0.y)));
+  const c = c0.add(vec3(BLUE_LIFT[0], BLUE_LIFT[1], 0).mul(blue));
+  const level = dot(c, vec3(0.2126, 0.7152, 0.0722)).mul(LUM_WEIGHT).add(max(c.x, max(c.y, c.z)).mul(1 - LUM_WEIGHT));
+  const n = c.mul(float(HUE_LEVEL).div(max(level, 0.05)));
+  // pure blue gets a little white (only blue: white in the other hues turns them pastel)
+  return n.add(blue.mul(BLUE_WHITE));
 }
 
 /** Same as `hueColor`, on the CPU (sRGB-ish primaries treated as linear, like the shader). */
 export function hueToRgb(h: number, out: THREE.Color): THREE.Color {
   const ch = (o: number): number => Math.min(1, Math.max(0, Math.abs((((h + o) % 1) + 1) % 1 * 6 - 3) - 1));
-  const r = ch(0);
-  const g = ch(2 / 3);
   const b = ch(1 / 3);
-  const level = 0.5 * (0.2126 * r + 0.7152 * g + 0.0722 * b) + 0.5 * Math.max(r, g, b);
+  const blue = b * (1 - Math.max(ch(0), ch(2 / 3)));
+  const r = ch(0) + BLUE_LIFT[0] * blue;
+  const g = ch(2 / 3) + BLUE_LIFT[1] * blue;
+  const level = LUM_WEIGHT * (0.2126 * r + 0.7152 * g + 0.0722 * b) + (1 - LUM_WEIGHT) * Math.max(r, g, b);
   const k = HUE_LEVEL / Math.max(level, 0.05);
-  return out.setRGB(r * k, g * k, b * k);
+  const add = blue * BLUE_WHITE;
+  return out.setRGB(r * k + add, g * k + add, b * k + add);
 }
