@@ -67,7 +67,6 @@ const pcCase: ViewBuilder = (t, layout) => {
   const glassY = layout.glassY > 0 ? layout.glassY : H;
   // the start: above the glass, looking down at the pump, the tubes and the RAM
   // (the case fog is measured from the camera: clear for ~40, dark by ~150, so the start stays close)
-  // seen along the window blinds (along z), so the light sheets in the dust show edge-on as shafts
   const start = key([c[0] + 4 * s, glassY + 8 * s, c[2] + 58 * s], [c[0] - 2 * s, 20, (p[2] + rad[2]) / 2]);
   const poses = [
     start,

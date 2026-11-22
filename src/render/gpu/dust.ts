@@ -7,7 +7,6 @@ import {
   dot,
   exp,
   float,
-  fract,
   hash,
   instanceIndex,
   instancedArray,
@@ -50,8 +49,8 @@ export class DustMotes {
   private readonly intakeMax = uniform(new THREE.Vector3(1, 1, 1));
   private readonly heatA = uniform(new THREE.Vector3(0, -1000, 0));
   private readonly heatB = uniform(new THREE.Vector3(0, -1000, 0));
-  /** Blinds over the case (first slat x, pitch, slat width, height): motes shine only in the light between slats. */
-  private readonly blinds = uniform(new THREE.Vector4(0, 1, 0, 1e4));
+  /** Top of the scene (the glass): motes shine only where the key light came in through it. */
+  private readonly top = uniform(1e4);
   /** World size of one pixel at distance 1 (set from the camera and the canvas height). */
   readonly pixelAngle = uniform(0.001);
   private readonly positions;
@@ -135,16 +134,14 @@ export class DustMotes {
     // light: forward scattering toward the key light, plus the colour of nearby RGB lights
     const view = normalize(mote.xyz.sub(cameraPosition));
     const phase = pow(max(dot(view, sunDir), 0), 4).mul(2.6).add(0.06);
-    // in the light? follow the ray to the sun up to the blinds and see if it passes between two slats
-    const b = this.blinds;
-    const along = b.w.sub(mote.y).div(max(sunDir.y, 0.05));
+    // in the light? follow the ray to the sun up to the top and see that it came in through the glass:
+    // motes under the case's solid edges stay dark
+    const along = this.top.sub(mote.y).div(max(sunDir.y, 0.05));
     const px = mote.x.add(sunDir.x.mul(along));
-    const off = fract(px.sub(b.x).div(b.y).add(0.5)).sub(0.5).abs().mul(b.y);
-    // ...and that it came in through the glass: motes under the case's solid edges stay dark
     const pz = mote.z.add(sunDir.z.mul(along));
     const inX = smoothstep(this.boxMin.x, this.boxMin.x.add(3), px).mul(smoothstep(this.boxMax.x, this.boxMax.x.sub(3), px));
     const inZ = smoothstep(this.boxMin.z, this.boxMin.z.add(3), pz).mul(smoothstep(this.boxMax.z, this.boxMax.z.sub(3), pz));
-    const lit = smoothstep(b.z.mul(0.5), b.z.mul(0.5).add(1.2), off).mul(inX).mul(inZ);
+    const lit = inX.mul(inZ);
     const tint = float(0).toVar();
     const tintNode = Fn(() => {
       Loop(MAX_LIGHTS, ({ i }) => {
@@ -189,8 +186,8 @@ export class DustMotes {
     this.frame.value = 0;
   }
 
-  setBlinds(firstX: number, pitch: number, width: number, y: number): void {
-    this.blinds.value.set(firstX, pitch, width, y);
+  setTop(y: number): void {
+    this.top.value = y;
   }
 
   /** Advance the motes by `dt` seconds (on the GPU). */

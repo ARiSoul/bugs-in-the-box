@@ -18,7 +18,6 @@ import { HeatShimmer } from './heat';
 import { ActivityLeds } from './leds';
 import { HeroOverlays } from './heroOverlays';
 import { LightOverlays } from './lightOverlays';
-import { LightSheets } from './lightSheets';
 import { SpeakerParts } from './speakerParts';
 import { createTerrainMaterial } from './terrainMaterial';
 
@@ -30,12 +29,6 @@ const RAYS = 0.5;
 const BLOOM = 0.3;
 /** Ray-march steps of the god rays (half resolution). */
 const RAY_STEPS = 16;
-/** Window blinds of the room, above the glass: render-only slats that only cast shadows. */
-const BLINDS_ABOVE_GLASS = 16;
-const SLAT_WIDTH = 3.6;
-const SLAT_PITCH = 12;
-/** Layer of meshes that only cast shadows (the key light's shadow camera sees it, no other camera does). */
-const SHADOW_ONLY_LAYER = 2;
 
 /**
  * The WebGPU render path (three.js WebGPURenderer + TSL). Same scene graph as the WebGL path, plus:
@@ -75,7 +68,7 @@ export async function createGpuStage(canvas: HTMLCanvasElement, terrain: Terrain
   const [sun, sunTarget] = keyLight(terrain, SUN_OFFSET);
   /** Where the key light stands, from the map centre (the scenario may set its own). */
   const sunOffset = SUN_OFFSET.clone();
-  // warmer than the WebGL path's key light (0xfff0d8): late sun through the blinds of a warm room
+  // warmer than the WebGL path's key light (0xfff0d8): late sun in a warm room
   sun.color.setHex(0xffb878);
   sun.intensity = 3.9;
   sun.shadow.radius = 5;
@@ -92,7 +85,6 @@ export async function createGpuStage(canvas: HTMLCanvasElement, terrain: Terrain
   const overlays = new LightOverlays(scene, glow, craters);
   const heroes = new HeroOverlays(scene, glow, craters);
   const speakerParts = new SpeakerParts(scene, craters);
-  const sheets = new LightSheets(scene, new THREE.Color(0xffb36b), glow.time);
   const dust = isGPU ? new DustMotes(renderer, glow, uniform(sunDir), options.seed) : null;
   if (dust) scene.add(dust.sprite);
 
@@ -104,7 +96,7 @@ export async function createGpuStage(canvas: HTMLCanvasElement, terrain: Terrain
   const buildPipeline = (): THREE.RenderPipeline => {
     const scenePass = pass(scene, camera, { samples: 4 });
     // the emissive target blends like the material does: otherwise every transparent surface (glass,
-    // light sheets, labels) overwrites the emissive under it and the glow behind it loses its bloom
+    // labels) overwrites the emissive under it and the glow behind it loses its bloom
     const sceneMRT = mrt({ output, emissive });
     sceneMRT.setBlendMode('emissive', new THREE.BlendMode(THREE.MaterialBlending));
     scenePass.setMRT(sceneMRT);
@@ -141,41 +133,6 @@ export async function createGpuStage(canvas: HTMLCanvasElement, terrain: Terrain
   const debugView = uniform(0);
   /** The shafts in the dust are warmer than the light itself (scattering in warm, dusty air). */
   const sunColor = uniform(new THREE.Color(0xffb36b));
-
-  // The key light reaches the case through the room's window blinds: slats above the glass that the
-  // camera never sees (no colour, no depth) but that the shadow map does, so the light falls in
-  // slanted sheets through the dusty air (god rays) and in soft stripes on the board.
-  // They live on a layer only the key light's shadow camera sees: drawn in the scene pass (even fully
-  // transparent) they would still write the emissive target and cut the bloom behind them in bands.
-  const blindsMaterial = new THREE.MeshBasicNodeMaterial();
-  sun.shadow.camera.layers.enable(SHADOW_ONLY_LAYER);
-  const slat = new THREE.BoxGeometry(1, 0.6, 1);
-  let blinds: THREE.InstancedMesh | null = null;
-  let blindsY = 0;
-  const setBlinds = (layout: SceneLayout): void => {
-    if (blinds) scene.remove(blinds);
-    blinds = null;
-    // the top of the scene: the glass, or (an open scene) the top of the inner box
-    const top = layout.glassY > 0 ? layout.glassY : layout.inner[4];
-    if (top <= 0) return;
-    const [x0, , z0, x1, , z1] = layout.inner;
-    blindsY = top + BLINDS_ABOVE_GLASS;
-    dust?.setBlinds(x0 - 30, SLAT_PITCH, SLAT_WIDTH, blindsY);
-    sheets.set(x0 - 30, SLAT_PITCH, blindsY, sunOffset, x0, x1, z0, z1, top, layout.floorY);
-    // reach past the case on the side the light comes from (the shadows land shifted the other way)
-    const from = x0 - 30;
-    const n = Math.ceil((x1 + 30 - from) / SLAT_PITCH); // (and past the far side, for light from either side)
-    blinds = new THREE.InstancedMesh(slat, blindsMaterial, n);
-    const m = new THREE.Matrix4();
-    for (let i = 0; i < n; i++) {
-      m.makeScale(SLAT_WIDTH, 1, z1 - z0 + 60).setPosition(from + i * SLAT_PITCH, blindsY, (z0 + z1) / 2);
-      blinds.setMatrixAt(i, m);
-    }
-    blinds.castShadow = true;
-    blinds.layers.set(SHADOW_ONLY_LAYER);
-    blinds.frustumCulled = false;
-    scene.add(blinds);
-  };
 
   const controls = new OrbitControls(camera, canvas);
   controls.target.copy(center);
@@ -230,8 +187,10 @@ export async function createGpuStage(canvas: HTMLCanvasElement, terrain: Terrain
       heroes.setLayout(layout);
       speakerParts.setLayout(layout);
       dust?.setLayout(layout, layout.floorY);
-      setBlinds(layout);
-      fitShadow(sun, layout, blindsY);
+      // the top of the scene: the glass, or (an open scene) the top of the inner box
+      const top = layout.glassY > 0 ? layout.glassY : layout.inner[4];
+      dust?.setTop(top);
+      fitShadow(sun, layout, top);
     },
     render(seconds: number, dt: number) {
       // compile every material in the scene ahead of use (also those still out of view), so the first
@@ -259,7 +218,6 @@ export async function createGpuStage(canvas: HTMLCanvasElement, terrain: Terrain
     frameNumber: () => renderer.info.frame,
     tune: {
       rays: raysAmount,
-      sheets: sheets.strength,
       view: debugView,
       sharp: look.sharp,
       hueLock: { get value() { return glow.lock; }, set value(v: number) { glow.lock = v; } },
