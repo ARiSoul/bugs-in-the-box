@@ -29,6 +29,11 @@ Special abilities per species (for when each bug gets its proper treatment; to t
 - **Ant:** climbs tall vertical walls, up and down (today every bug only climbs low or thin obstacles: cables, ledges, small parts).
 - **Cockroach and others:** to be defined, each with an ability of its own.
 
+Special skills as attacks, each with its own attack animation (a skill is a weapon only that species has):
+
+- **Spider web bow:** the spider spins a web between two points and uses it as a bow: it pulls back and shoots, like an arrow. Aimed and charged like the other shots.
+- More of the same kind: an attack that comes from the creature's body or habits, not a borrowed weapon.
+
 Technically these fit the existing data: a species already holds its physics numbers, so an ability would be one more field (for example the ant's climb height), with any new action sent as a turn event like a shot.
 
 ## Music-driven mechanics
