@@ -4,6 +4,7 @@ import {
   BLACK_PLASTIC,
   CABLE_BLUE,
   CABLE_RED,
+  COLLIDER,
   COPPER,
   GOLD,
   PCB,
@@ -78,6 +79,8 @@ export const pcCase: TerrainGenerator = (terrain, seed, layout) => {
     const pts = wirePath(ctrl, 8);
     // (the solid cable stops one span short of each end: the bends into the plugs would poke out of the tube)
     if (material >= 0) wire(terrain, pts.slice(24, -24), radius - 0.3, material);
+    // (a drawn-only lead still stops bugs: a hidden collision body along it)
+    else wire(terrain, pts, Math.max(0.55, radius * 0.9), COLLIDER, true);
     put(feature('wire', a[0], a[1], a[2], { path: [radius, ...pts], color }));
   };
   if (layout) {

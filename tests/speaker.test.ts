@@ -156,6 +156,24 @@ describe('Studio Monitor (speaker)', () => {
     }
   });
 
+  it('bugs cannot pass through drawn cables: the field is solid along every wire and collar', () => {
+    const { t, layout } = make(1234);
+    for (const w of all(layout, 'wire')) {
+      const p = w.path;
+      // (along the run: a thin wire's collision body stops ~1.2 short of what it plugs into)
+      const m = p.length - 3;
+      const nearEnd = (i: number): boolean => Math.hypot(p[i] - p[1], p[i + 1] - p[2], p[i + 2] - p[3]) < 1.6 || Math.hypot(p[i] - p[m], p[i + 1] - p[m + 1], p[i + 2] - p[m + 2]) < 1.6;
+      for (let i = 1; i + 2 < p.length; i += 9) {
+        if (nearEnd(i)) continue;
+        expect(t.sample(p[i], p[i + 1], p[i + 2]), `wire point ${p[i].toFixed(1)}, ${p[i + 1].toFixed(1)}, ${p[i + 2].toFixed(1)}`).toBeLessThan(0.2);
+      }
+    }
+    for (const r of all(layout, 'rod').filter((f) => f.color === 0x111113)) {
+      const [x0, y0, z0, x1, y1, z1] = r.path;
+      expect(t.sample((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2)).toBeLessThan(0);
+    }
+  });
+
   it('a bug walks up the screwdriver from the desk onto the rim', () => {
     const { t, layout } = make(7);
     const [shaft, , handle] = all(layout, 'rod').filter((r) => r.color !== 0x111113);

@@ -16,6 +16,7 @@ import {
   float,
   If,
   max,
+  min,
   mix,
   normalView,
   normalize,
@@ -31,7 +32,7 @@ import {
   mx_noise_float,
   positionViewDirection,
 } from 'three/tsl';
-import { GLOW_FAN, GLOW_FUZZ, GLOW_GRAIN, GLOW_PEEL, GLOW_RGB } from '../../terrain/materials';
+import { GLOW_FAN, GLOW_FUZZ, GLOW_GRAIN, GLOW_PEEL, GLOW_RGB, HIDDEN_ROUGHNESS } from '../../terrain/materials';
 import { Glow, MAX_FANS, hueColor } from './glow';
 
 /** How bright the RGB diffusers glow (HDR, before bloom and tone mapping). */
@@ -54,7 +55,10 @@ export function createTerrainMaterial(glow: Glow): { material: THREE.MeshStandar
   const m = new THREE.MeshStandardNodeMaterial({ vertexColors: true });
   const pbr = attribute('pbr', 'vec3');
   // specular anti-aliasing: where the normal changes fast across a pixel, the surface gets rougher
-  m.roughnessNode = max(pbr.x, clamp(length(fwidth(normalView)).mul(1.2), 0, 0.9));
+  m.roughnessNode = min(max(pbr.x, clamp(length(fwidth(normalView)).mul(1.2), 0, 0.9)), 1);
+  // collision bodies of drawn-only parts (COLLIDER, marked by an impossible roughness): never drawn, in
+  // colour or in the shadow pass
+  m.maskNode = pbr.x.lessThan((HIDDEN_ROUGHNESS + 1) / 2);
 
   // fibrous wadding (GLOW_FUZZ): a velvet sheen towards the silhouette and a fine fibre mottling
   m.colorNode = Fn(() => {

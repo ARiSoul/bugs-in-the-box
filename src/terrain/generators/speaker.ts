@@ -3,6 +3,7 @@ import {
   ALUMINIUM,
   BLACK_PLASTIC,
   CABLE_YELLOW,
+  COLLIDER,
   CONE,
   DAMPER,
   FERRITE,
@@ -14,7 +15,7 @@ import {
   VINYL,
   WOOD,
 } from '../materials';
-import { add, box, boxMinMax, capsule, cone, cut, cylinder, paint, rotatedBox, sphere } from '../sdf';
+import { add, addHidden, box, boxMinMax, capsule, cone, cut, cylinder, paint, rotatedBox, sphere, type Shape } from '../sdf';
 import { createPlacement, detail, wire, wirePath } from './parts';
 import { feature, resetLayout, type Feature, type PartShape as Shape2, type TerrainGenerator } from './types';
 
@@ -80,12 +81,38 @@ export const speaker: TerrainGenerator = (terrain, seed, layout) => {
     x0: number, y0: number, z0: number, x1: number, y1: number, z1: number,
     material: number, shape: Shape2, color: number, metal: number, rough: number,
   ): void => detail(terrain, features, x0, y0, z0, x1, y1, z1, material, shape, color, metal, rough);
+  /**
+   * A polyline without its last ~1.2 units at each end: a thin wire's hidden collision body stops short of
+   * what the wire plugs into (touching it, the hidden material would blend into that surface as a dark
+   * mark); a bug (radius 1) still cannot pass through the gap.
+   */
+  const shortened = (pts: readonly number[]): number[] => {
+    const n = pts.length / 3;
+    const cut = (from: number, step: number): number => {
+      let d = 0;
+      let i = from;
+      while (i + step >= 0 && i + step < n && d < 1.2) {
+        const j = i + step;
+        d += Math.sqrt((pts[j * 3] - pts[i * 3]) ** 2 + (pts[j * 3 + 1] - pts[i * 3 + 1]) ** 2 + (pts[j * 3 + 2] - pts[i * 3 + 2]) ** 2);
+        i = j;
+      }
+      return i;
+    };
+    const a = cut(0, 1);
+    const b = cut(n - 1, -1);
+    return b > a ? pts.slice(a * 3, b * 3 + 3) : [];
+  };
+  /** A hidden collision body for something only the renderer draws (see COLLIDER). */
+  const hide = (s: Shape): void => addHidden(terrain, s, COLLIDER);
   /** A render-only detail (too small or thin for the terrain). */
   const deco = (x0: number, y0: number, z0: number, x1: number, y1: number, z1: number, shape: Shape2, color: number, metal: number, rough: number, glow = 0): void =>
     put(feature('part', (x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2, { shape, box: [x0, y0, z0, x1, y1, z1], color, metal, rough, glow }));
   /** A soft cable along `ctrl` (x, y, z control points); with a `material`, also in the terrain (thinner). */
   const cableAlong = (ctrl: number[], radius: number, color: number, material = -1, trim = 0): void => {
     const pts = wirePath(ctrl, 8);
+    // a hidden collision body along the whole cable (bugs never walk through a drawn cable), then the
+    // drawn-solid core where there is one (it keeps its own material)
+    wire(terrain, material >= 0 ? pts : shortened(pts), Math.max(0.55, material >= 0 ? radius - 0.45 : radius * 0.9), COLLIDER, true);
     if (material >= 0) wire(terrain, trim > 0 ? pts.slice(trim * 3, -trim * 3) : pts, radius - 0.45, material);
     put(feature('wire', ctrl[0], ctrl[1], ctrl[2], { path: [radius, ...pts], color }));
   };
@@ -123,6 +150,8 @@ export const speaker: TerrainGenerator = (terrain, seed, layout) => {
     }
     put(feature('wire', a[0], a[1], a[2], { path: [radius, ...a], color: redLeft ? 0xb8221c : 0x18181a }));
     put(feature('wire', b[0], b[1], b[2], { path: [radius, ...b], color: redLeft ? 0x18181a : 0xb8221c }));
+    wire(terrain, shortened(a), 0.55, COLLIDER, true);
+    wire(terrain, shortened(b), 0.55, COLLIDER, true);
   };
   /** A small solder joint where a wire goes into a board at (x, y, z) (render only). */
   /**
@@ -141,6 +170,7 @@ export const speaker: TerrainGenerator = (terrain, seed, layout) => {
       else deco(c - w, y0, u0, c + w, y1, u1, shape, col, metal, rough);
     };
     box(b0, b1, y - r, y + r, r, color, alongX ? 'cylX' : 'cylZ', 0, 0.6);
+    hide(alongX ? capsule(b0 + r, y, c, b1 - r, y, c, 0.6) : capsule(c, y, b0 + r, c, y, b1 - r, 0.6));
     for (const [o, col] of bands) box(b0 + o, b0 + o + 0.2, y - r - 0.02, y + r + 0.02, r + 0.02, col, alongX ? 'cylX' : 'cylZ', 0, 0.6);
     for (const [p0, p1] of [[a, b0], [b1, b]]) box(Math.min(p0, p1), Math.max(p0, p1), y - 0.06, y + 0.06, 0.06, 0xc9cdd2, 'plate', 0.9, 0.35);
     for (const pin of [a, b]) {
@@ -306,6 +336,7 @@ export const speaker: TerrainGenerator = (terrain, seed, layout) => {
   part(termX - 1.6, FLOOR + 2.4, termZ - 3, termX + 1.6, FLOOR + 4.6, termZ + 3, BLACK_PLASTIC, 'box', 0x6b4a2b, 0, 0.6);
   for (const s of [-1, 1]) {
     deco(termX - 0.15, FLOOR + 4.6, termZ + s * 1.7 - 0.55, termX + 0.15, FLOOR + 6.9, termZ + s * 1.7 + 0.55, 'plate', 0xc9cdd2, 0.9, 0.3);
+    hide(boxMinMax(termX - 0.3, FLOOR + 4.4, termZ + s * 1.7 - 0.5, termX + 0.3, FLOOR + 6.8, termZ + s * 1.7 + 0.5, 0.2));
     solder(termX - 0.3, FLOOR + 5.4, termZ + s * 1.7, 0.42);
     solder(termX + 0.3, FLOOR + 6.4, termZ + s * 1.7, 0.42);
     deco(termX - 0.5, FLOOR + 4.55, termZ + s * 2.7 - 0.1, termX + 0.5, FLOOR + 4.75, termZ + s * 2.7 + 0.1, 'cylY', 0xb4b9c0, 0.9, 0.4);
@@ -428,6 +459,7 @@ export const speaker: TerrainGenerator = (terrain, seed, layout) => {
     // TO-220: the body flat on the wall, its metal tab above with the screw, three legs into the board
     part(x - 2.2, PB + 1.4, hz1, x + 2.2, PB + 7.5, hz1 + 1.4, BLACK_PLASTIC, 'box', 0x111113, 0, 0.45);
     deco(x - 2.2, PB + 7.5, hz1, x + 2.2, PB + 10, hz1 + 0.4, 'plate', 0xc9cdd2, 0.9, 0.35);
+    hide(boxMinMax(x - 2.1, PB + 7.4, hz1 - 0.2, x + 2.1, PB + 9.9, hz1 + 0.35, 0.2));
     deco(x - 1, PB + 8.1, hz1 + 0.4, x + 1, PB + 9.4, hz1 + 1, 'cylZ', 0x9aa0a8, 0.9, 0.35);
     for (const lx of [-1.3, 0, 1.3]) {
       deco(x + lx - 0.2, PB, hz1 + 0.6, x + lx + 0.2, PB + 1.45, hz1 + 0.95, 'plate', 0xc9cdd2, 0.9, 0.35);
@@ -521,6 +553,7 @@ export const speaker: TerrainGenerator = (terrain, seed, layout) => {
   // (the LED's resistor: a beige body with colour bands, its legs on two pads)
   deco(ax1 - 13.5, PB + 0.06, lz - 1, ax1 - 12.5, PB + 0.18, lz, 'cylY', 0x9d9a90, 0.9, 0.4);
   axial(PB + 0.08, true, lz - 0.5, ax1 - 13, ax1 - 9.5, 2, 0xd8c7a0, [[0.3, 0x8a4a26], [0.7, 0x18181a], [1.1, 0xb8221c], [1.6, 0xc9a43a]]);
+  hide(sphere(ax1 - 6, PB + 1.6, az0 + 8 + 30 * ka, 0.8));
   put(feature('led', ax1 - 6, PB + 1.6, az0 + 8 + 30 * ka, { color: 0x3dff6a }));
   for (const dz of [-0.5, 0.5]) deco(ax1 - 6.12, PB, az0 + 8 + 30 * ka + dz - 0.12, ax1 - 5.88, PB + 0.9, az0 + 8 + 30 * ka + dz + 0.12, 'plate', 0xc9cdd2, 0.9, 0.35);
 
@@ -619,7 +652,10 @@ export const speaker: TerrainGenerator = (terrain, seed, layout) => {
       return [x, PT + 8.9, z];
     };
     /** A female spade with a short insulating boot (the wire's colour) pushed onto a tab, where a wire ends. */
-    const boot = (x: number, top: number, z: number, color: number): void => deco(x - 1.05, top - 0.7, z - 0.42, x + 1.05, top + 0.55, z + 0.42, 'box', color, 0, 0.35);
+    const boot = (x: number, top: number, z: number, color: number): void => {
+      deco(x - 1.05, top - 0.7, z - 0.42, x + 1.05, top + 0.55, z + 0.42, 'box', color, 0, 0.35);
+      hide(boxMinMax(x - 0.95, PT + 6.8, z - 0.4, x + 0.95, top + 0.45, z + 0.4, 0.3));
+    };
     const live = spade(ax0 + 9.5, az1 - 7);
     const neutral = spade(ax0 + 16.5, az1 - 7);
     const earth = spade(ax0 + 13, az1 - 10.5);
@@ -692,6 +728,7 @@ export const speaker: TerrainGenerator = (terrain, seed, layout) => {
     const dy = (ny - y) / l;
     const dz = (nz - z) / l;
     put(feature('rod', x, y, z, { radius: 2.02, axis: 2, path: [x - dx * 1.3, y - dy * 1.3, z - dz * 1.3, x + dx * 2.6, y + dy * 2.6, z + dz * 2.6], color: 0x111113, metal: 0, rough: 0.8 }));
+    hide(capsule(x - dx * 0.8, y - dy * 0.8, z - dz * 0.8, x + dx * 2.4, y + dy * 2.4, z + dz * 2.4, 1.8));
   };
   collar(sx, sy, sz0, s1[0], s1[1], s1[2]);
   collar(plugX - 5, PB + 3.2, plugZ, cx1 + 3.5, PT + 10, overZ - 6);
@@ -731,6 +768,7 @@ export const speaker: TerrainGenerator = (terrain, seed, layout) => {
   // the tip: a thinner rod under the drawn flat blade (the blade covers it), then the shaft
   const tipLen = 3;
   add(terrain, capsule(p0x + ux * 2, p0y + uy * 2, sz, p0x + ux * tipLen, p0y + uy * tipLen, sz, 0.7), STEEL);
+  hide(capsule(p0x + ux * 0.4, p0y + uy * 0.4, sz, p0x + ux * 2, p0y + uy * 2, sz, 0.55)); // (the drawn blade)
   seg(tipLen, handle - 3, 1.5, STEEL, 0xc4c8ce, 1, 0.25, { facing: -1 }); // (a blade before its start)
   seg(handle - 3, handle, 2.2, STEEL, 0xb4b9c0, 1, 0.3);
   seg(handle, len, 3.2, CABLE_YELLOW, 0xd98e1a, 0, 0.25, { axis: 0 }); // (a fluted grip)

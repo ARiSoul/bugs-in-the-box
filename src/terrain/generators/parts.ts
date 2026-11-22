@@ -1,5 +1,5 @@
 import { FAN } from '../materials';
-import { add, box, boxMinMax, capsule, cut, cylinder, rotatedBox, type Axis } from '../sdf';
+import { add, addHidden, box, boxMinMax, capsule, cut, cylinder, rotatedBox, type Axis } from '../sdf';
 import type { Terrain } from '../Terrain';
 import { feature, type Feature, type PartShape } from './types';
 
@@ -137,9 +137,11 @@ export function wirePath(ctrl: readonly number[], perSegment: number): number[] 
 }
 
 /** Solid cable along a polyline (x, y, z triples): capsules of `radius` between its points. */
-export function wire(t: Terrain, points: readonly number[], radius: number, material: number): void {
+export function wire(t: Terrain, points: readonly number[], radius: number, material: number, hidden = false): void {
   for (let i = 3; i + 2 < points.length; i += 3) {
-    add(t, capsule(points[i - 3], points[i - 2], points[i - 1], points[i], points[i + 1], points[i + 2], radius), material);
+    const s = capsule(points[i - 3], points[i - 2], points[i - 1], points[i], points[i + 1], points[i + 2], radius);
+    if (hidden) addHidden(t, s, material);
+    else add(t, s, material);
   }
 }
 

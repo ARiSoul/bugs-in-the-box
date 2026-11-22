@@ -178,7 +178,9 @@ function terrainMaterial(sharp: { value: number }): THREE.MeshStandardMaterial {
           'normal = normalize(mix(normal, faceNormal, uSharp * smoothstep(0.84, 0.7, dot(faceNormal, normal))));',
         ].join('\n'),
       )
-      .replace('#include <roughnessmap_fragment>', 'float roughnessFactor = vPbr.x;')
+      // (a collision body of a drawn-only part, marked by an impossible roughness: never drawn)
+      .replace('#include <clipping_planes_fragment>', ['#include <clipping_planes_fragment>', 'if (vPbr.x > 2.0) discard;'].join('\n'))
+      .replace('#include <roughnessmap_fragment>', 'float roughnessFactor = min(vPbr.x, 1.0);')
       .replace('#include <metalnessmap_fragment>', 'float metalnessFactor = vPbr.y;');
   };
   return m;

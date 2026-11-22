@@ -26,6 +26,15 @@ export const DAMPER = 20; // the speaker's spider (the corrugated suspension): g
 export const FERRITE = 21; // the speaker's ring magnet: dark grey ceramic
 export const WOOD = 22; // the desk top
 export const SLEEVE = 23; // the grey foam sleeve around a speaker cable bundle
+/**
+ * Solid but never drawn: the collision body of a part that only the renderer draws (a thin wire, a
+ * collar, a small component). Gameplay collides with it like any terrain; the renderer drops its
+ * surface (roughness HIDDEN_ROUGHNESS, impossible for a real material, marks it), and its smooth
+ * stand-in shows instead. Explosions carve it like everything else.
+ */
+export const COLLIDER = 24;
+/** Roughness that marks a hidden surface (real materials stay within 0..1). */
+export const HIDDEN_ROUGHNESS = 3;
 
 /**
  * Glow of each material (`MATERIAL_PBR[id][2]`): what the renderer may light up. Signed so that the
@@ -64,6 +73,7 @@ export const MATERIAL_PBR: readonly (readonly [number, number, number])[] = [
   [0.8, 0.1, 0], // FERRITE
   [0.55, 0, GLOW_GRAIN], // WOOD: lacquered
   [0.95, 0, 0], // SLEEVE
+  [HIDDEN_ROUGHNESS, 0, 0], // COLLIDER: never drawn
 ];
 
 /** Base colour of each material (linear RGB, 0..1), indexed by id. */
@@ -92,4 +102,5 @@ export const MATERIAL_RGB: readonly (readonly [number, number, number])[] = [
   [0.13, 0.13, 0.14], // FERRITE
   [0.5, 0.31, 0.16], // WOOD
   [0.11, 0.11, 0.12], // SLEEVE
+  [0.02, 0.02, 0.02], // COLLIDER (never drawn; dark where a border blends into it)
 ];

@@ -239,12 +239,21 @@ const ZERO_GAP = 0.01;
  * `smooth` > 0 blends it into what is already there (fillet of about that size).
  */
 export function add(t: Terrain, s: Shape, material: number, smooth = 0): void {
-  stamp(t, s, material, smooth, false);
+  stamp(t, s, material, smooth, false, false);
+}
+
+/**
+ * Add a hidden solid (a COLLIDER): a union like `add`, but it only takes over samples that were air, so
+ * the surfaces already there keep their material where it touches them (no hidden patch in a floor
+ * under a wire lying on it).
+ */
+export function addHidden(t: Terrain, s: Shape, material: number): void {
+  stamp(t, s, material, 0, false, true);
 }
 
 /** Cut the shape away (subtraction). Materials are kept: the cut shows what was there. */
 export function cut(t: Terrain, s: Shape): void {
-  stamp(t, s, -1, 0, true);
+  stamp(t, s, -1, 0, true, false);
 }
 
 /**
@@ -269,7 +278,7 @@ export function paint(t: Terrain, s: Shape, material: number): void {
   }
 }
 
-function stamp(t: Terrain, s: Shape, material: number, smooth: number, subtract: boolean): void {
+function stamp(t: Terrain, s: Shape, material: number, smooth: number, subtract: boolean, airOnly: boolean): void {
   shapeBounds(s);
   const { sx, sy, sz, dens } = t;
   const mat = t.material;
@@ -296,7 +305,7 @@ function stamp(t: Terrain, s: Shape, material: number, smooth: number, subtract:
           } else {
             nd = d < old ? d : old;
           }
-          if (d < old && d < MATERIAL_BAND) mat[id] = material;
+          if (d < old && d < MATERIAL_BAND && (!airOnly || old > 0)) mat[id] = material;
         }
         // A surface exactly on a sample (a box face at a whole coordinate) would put several mesh
         // vertices on the same point and make degenerate triangles: keep samples off zero.
