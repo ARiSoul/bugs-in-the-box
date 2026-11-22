@@ -1,4 +1,5 @@
 import { floatingIslands } from './generators/floatingIslands';
+import { fridge } from './generators/fridge';
 import { insidePC } from './generators/insidePC';
 import { pcCase } from './generators/pcCase';
 import { speaker } from './generators/speaker';
@@ -32,6 +33,8 @@ export interface Scenario {
   sunIntensity?: number;
   /** Lowest angle of the chase view above the active bug (radians; default 0.42): higher over tall walls. */
   chaseElevation?: number;
+  /** Bugs may start on any level (shelves under shelves), not only on the topmost surface. */
+  spawnLevels?: boolean;
 }
 
 export const SCENARIOS: readonly Scenario[] = [
@@ -71,6 +74,23 @@ export const SCENARIOS: readonly Scenario[] = [
     sunIntensity: 3,
     // the cabinet walls stand tall around the play: the chase view looks down over them
     chaseElevation: 0.66,
+  },
+  {
+    id: 'fridge',
+    name: 'Mini Fridge',
+    generate: fridge,
+    sharpEdges: true,
+    // a kitchen at night: the fridge's light and a soft key light from the front, a dim warm room behind
+    sky: { css: 'radial-gradient(ellipse at 50% 40%, #24211e 0%, #080706 72%)', fog: 0x0e0c0b, fogClear: 90, fogSpan: 230, cornerDark: 0.2, backdrop: 0x2e2a26 },
+    render: 'webgpu',
+    strictBounds: true,
+    // high in front, a little from the right: into the open fridge, onto the door's bins
+    sun: [25, 160, 140],
+    sunColor: 0xfff0e0,
+    sunIntensity: 2.6,
+    chaseElevation: 0.5,
+    // shelves under shelves: bugs start on any level
+    spawnLevels: true,
   },
   {
     id: 'islands',

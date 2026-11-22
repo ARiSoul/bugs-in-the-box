@@ -22,7 +22,7 @@ export interface DebugHooks {
 }
 
 export function readHooks(params: URLSearchParams): DebugHooks {
-  const pose = Math.max(0, Math.min(9, Number(params.get('pose') ?? 0) | 0));
+  const pose = Math.max(0, Math.min(16, Number(params.get('pose') ?? 0) | 0));
   const flythrough = params.get('flythrough') === '1';
   const fly = params.get('fly') === '1';
   const res = (params.get('res') ?? '').match(/^(\d{3,4})x(\d{3,4})$/);

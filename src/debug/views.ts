@@ -1,3 +1,4 @@
+import { fridgePlan } from '../terrain/generators/fridge';
 import type { SceneLayout } from '../terrain/generators/types';
 import type { Terrain } from '../terrain/Terrain';
 
@@ -158,7 +159,69 @@ const speaker: ViewBuilder = (t, layout) => {
   return { start, poses, path, duration: 60 };
 };
 
-const BUILDERS: Record<string, ViewBuilder> = { 'pc-case': pcCase, speaker };
+/** Mini Fridge: into the open fridge from the front, its levels, the door's bins, the back and the top. */
+const fridge: ViewBuilder = (t) => {
+  const { W, H, D } = t;
+  const p = fridgePlan(W, H, D);
+  const [bx0, bz0, bx1, bz1, top] = p.body;
+  const [ix0, iz0, ix1, , iy0, iy1] = p.inside;
+  const s = (bx1 - bx0) / 64;
+  const cx = (ix0 + ix1) / 2;
+  const cz = (iz0 + bz1) / 2;
+  // the start: in front, a little to the right and above: the whole opening, the door and the floor
+  const start = key([cx + 46 * s, top + 26 * s, bz1 + 92 * s], [cx - 4 * s, (iy0 + iy1) / 2 - 6 * s, cz + 6 * s]);
+  const poses = [
+    start,
+    // 2: the glass shelf and the crisper under it, with the chopping board
+    key([cx + 22 * s, p.glassTop + 9 * s, bz1 + 34 * s], [cx - 2 * s, p.glassTop - 3 * s, cz]),
+    // 3: the wire rack and the cucumber up to it
+    key([ix1 + 10 * s, p.rackTop + 10 * s, bz1 + 30 * s], [(ix0 + p.rackX1) / 2 + 6 * s, p.rackTop - 4 * s, cz]),
+    // 4: the ice box, its frost and the flap
+    key([cx + 16 * s, p.iceTop + 4 * s, bz1 + 26 * s], [cx, p.iceTop + 4 * s, iz0 + 10 * s]),
+    // 5: the door's bins: bottles, cans, eggs
+    key([bx0 + 40 * s, top - 22 * s, bz1 + 52 * s], [bx0 + 2 * s, (iy0 + iy1) / 2 - 4 * s, bz1 + 32 * s]),
+    // 6: behind: the compressor and the condenser coil, the cable to the socket
+    // (from behind the fridge, by the wall: down onto the compressor, the coil above it)
+    key([bx1 - 2 * s, iy0 + 40 * s, bz0 - 18 * s], [ix1 - 18 * s, iy0 - 8 * s, bz0 + 2 * s]),
+    // 7 (detail): the top of the fridge from the door's hinge
+    key([bx0 + 26 * s, top + 30 * s, bz1 + 30 * s], [bx0 + 30 * s, top, bz0 + 22 * s]),
+    // 8 (detail): the floor in front: the board's foot, the apple, the melting ice cube
+    key([bx1 + 50 * s, iy0 + 18 * s, bz1 + 76 * s], [bx1 + 4 * s, iy0 - 8 * s, bz1 + 30 * s]),
+    // 9 (detail): the crisper's produce through the glass, close
+    key([ix1 - 6 * s, p.glassTop + 12 * s, bz1 + 2 * s], [cx - 4 * s, iy0 + 3 * s, cz]),
+    // 10 (detail): the cucumber's top end on the rack, the jar and the butter
+    key([ix1 - 2 * s, p.rackTop + 2 * s, iz0 + 40 * s], [p.rackX1 - 6 * s, p.rackTop + 1 * s, iz0 + 24 * s]),
+    // 11 (detail): inside the ice box: the tray, the peas, the frost, the flap's hinge
+    key([cx + 6 * s, p.iceTop + 5 * s, bz1 + 4 * s], [cx - 2 * s, p.iceTop + 2 * s, iz0 + 8 * s]),
+    // 12 (detail): the ceiling housing: the light and the dial
+    key([cx + 14 * s, iy1 - 10 * s, bz1 + 12 * s], [cx + 2 * s, iy1 - 4 * s, bz1 - 8 * s]),
+    // 13 (detail): the door's top bin, the gasket and the top hinge
+    key([bx0 + 22 * s, top + 8 * s, bz1 + 30 * s], [bx0 + 1 * s, top - 14 * s, bz1 + 18 * s]),
+    // 14 (detail): the board's top end on the glass's front edge
+    key([ix1 + 6 * s, p.glassTop + 8 * s, bz1 + 16 * s], [ix1 - 14 * s, p.glassTop, bz1 - 2 * s]),
+    // 15 (detail): the socket, the plug and the cable at the wall
+    key([bx1 + 44 * s, iy0 + 10 * s, bz0 + 14 * s], [bx1 + 32 * s, iy0 - 2 * s, 8]),
+    // 16 (detail): the floor: the apple and the melting ice cube
+    key([bx1 + 30 * s, iy0 + 2 * s, bz1 + 64 * s], [bx1 + 18 * s, iy0 - 8 * s, bz1 + 40 * s]),
+  ];
+  const path: CameraKey[] = [
+    start,
+    poses[1],
+    key([ix1 + 30 * s, p.glassTop + 20 * s, bz1 + 50 * s], [cx, p.rackTop, cz]),
+    poses[2],
+    poses[3],
+    key([bx0 + 60 * s, top + 10 * s, bz1 + 70 * s], [bx0, (iy0 + iy1) / 2, bz1 + 32 * s]),
+    poses[4],
+    poses[6],
+    key([bx1 + 30 * s, top + 30 * s, bz0 + 10 * s], [bx1 - 20 * s, top, bz0]),
+    poses[5],
+    key([W - 12, iy0 + 26 * s, D * 0.55], [bx1, iy0, bz1 + 30 * s]),
+    poses[7],
+  ];
+  return { start, poses, path, duration: 60 };
+};
+
+const BUILDERS: Record<string, ViewBuilder> = { 'pc-case': pcCase, speaker, fridge };
 
 export function viewsFor(scenarioId: string, t: Terrain, layout: SceneLayout): ScenarioViews {
   return (BUILDERS[scenarioId] ?? generic)(t, layout);

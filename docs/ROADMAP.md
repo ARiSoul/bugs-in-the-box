@@ -46,7 +46,8 @@ Goal now: a PC demo first, as a proof of concept. The phone items below are post
 - [x] Visual quality, step 2: sharp edges with Dual Contouring for built scenarios (normals from the most linear neighbouring cell), hard-edge shading; Surface Nets stays for natural terrain
 - [x] Tower Case (`pc-case`): a gaming tower on its side under a glass panel (AIO cooler, vertical GPU, RGB RAM, VRM heatsinks, PCIe slots, audio corner, Wi-Fi and LAN, rear I/O, SATA drives and a drive cage on the PSU shroud, rear exhaust fan), on the new WebGPU render path (height fog, god rays, bloom, glass, dust compute, heat shimmer, RGB that cycles); shared debug hooks (`?pose`, `?flythrough`, `?fly`, `?perf`, `?res`) and visual-review tooling for every later map
 - [x] Studio Monitor (`?scenario=speaker`): a speaker opened up on a desk, the woofer's back as the central hill, the port as a drop into the void, the amp plate on the desk, a screwdriver as the ramp; visual-critic loop to "none"
-- [ ] More scenarios: fridge, guitar, microwave (same quality bar: priorities, frame-time gates, determinism, visual-critic loop)
+- [x] Mini Fridge (`?scenario=fridge`): a bar fridge in a kitchen corner, door open; levels (glass shelf, wire rack, ice box, top, door bins) joined by ramps (a chopping board, a cucumber, the ice box flap); bugs spawn on any level; visual critic to "none", detail critic to "accept"
+- [ ] More scenarios: guitar, microwave (same quality bar: priorities, frame-time gates, determinism, visual-critic loop)
 
 ## Phase 5 · Multiplayer
 - [ ] Deterministic simulation validated across clients (same seed + same events = same map)
