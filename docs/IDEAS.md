@@ -23,6 +23,14 @@ How to compose each one from SDF primitives + noise (suggestions):
 
 Ants, spiders, cockroaches and made-up creatures. Technical idea: one configurable base model (length, number of legs, head size, color) to generate different species without modelling each one by hand.
 
+Special abilities per species (for when each bug gets its proper treatment; to tune later):
+
+- **Spider:** spins webs. A web can trap enemies, or let the spider lower itself safely from a tall drop on a thread instead of falling (no fall damage).
+- **Ant:** climbs tall vertical walls, up and down (today every bug only climbs low or thin obstacles: cables, ledges, small parts).
+- **Cockroach and others:** to be defined, each with an ability of its own.
+
+Technically these fit the existing data: a species already holds its physics numbers, so an ability would be one more field (for example the ant's climb height), with any new action sent as a turn event like a shot.
+
 ## Music-driven mechanics
 
 Use the project's musical DNA: parts of the scenario that pulse to the beat of a track (the speaker cone vibrating, VU meters going up and down, a fan speeding up in the chorus). Each scenario can have its own music and its own hazard rhythms.
