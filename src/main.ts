@@ -5,7 +5,7 @@ import { captureCanvas } from './debug/capture';
 import { readHooks, usesDebugCamera } from './debug/hooks';
 import { PerfLog } from './debug/perf';
 import { viewsFor, type ScenarioViews } from './debug/views';
-import { DT } from './game/bug';
+import { DT, KILL_Y } from './game/bug';
 import { Match, NO_INPUT, type MatchEvent, type TeamSpec } from './game/match';
 import { ANT, SPIDER } from './game/species';
 import { SOLDER_BLOB, WEAPONS } from './game/weapons';
@@ -52,6 +52,8 @@ const texts = new FloatingTexts(stage.hud);
 const projectiles = new ProjectileViews(stage.scene);
 const aim = new AimView(stage.scene);
 const follow = new FollowCamera(stage.camera, stage.controls);
+// the right button turns the view (and the bug with it), the wheel zooms; the left button stays free
+stage.controls.mouseButtons = { LEFT: null, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.ROTATE };
 const hud = new Hud();
 
 const state: HudState = {
@@ -152,7 +154,14 @@ function handleEvents(events: readonly MatchEvent[]): void {
         break;
       case 'turn':
         chasePending = true;
+        deathFocus = -1;
         break;
+      case 'death': {
+        // a bug that fell out of the world is just gone; any other dies on screen, and the camera looks
+        const u = match.units[e.unit];
+        if (u.bug.y > KILL_Y && deathFocus < 0) deathFocus = e.unit;
+        break;
+      }
       case 'damage': {
         const u = match.units[e.unit];
         texts.spawn(`-${e.amount}`, match.teams[u.team].color, at.set(u.bug.x, u.bug.y + bugViews[e.unit].height + 1, u.bug.z));
@@ -250,6 +259,25 @@ const INTRO_GLIDE = 1.6;
 let introT = -1;
 /** A turn started: glide to the chase view of the new active bug. */
 let chasePending = false;
+/** A bug dying at the end of a turn: the camera looks at it until the next turn (-1: none). */
+let deathFocus = -1;
+/** The player is turning the view with the right button: the active bug faces where the view looks. */
+let orbiting = false;
+/** Seconds the bug keeps facing the view after the button is released (the orbit damping still turns it). */
+const ORBIT_TAIL = 0.6;
+let orbitTail = 0;
+canvas.addEventListener('pointerdown', (e) => {
+  if (e.button === 2) orbiting = true;
+});
+window.addEventListener('pointerup', (e) => {
+  if (e.button !== 2 || !orbiting) return;
+  orbiting = false;
+  orbitTail = ORBIT_TAIL;
+});
+window.addEventListener('blur', () => {
+  orbiting = false;
+  orbitTail = 0;
+});
 /** Whose facing the camera turns with, and that facing last frame (radians, render only). */
 let chaseUnit = -1;
 let chaseYaw = 0;
@@ -371,10 +399,24 @@ function loop(now: number): void {
   lastFrame = now;
 
   const intro = !debugCamera && updateIntro(dt);
+  // while the player turns the view, the bug faces where it looks (aiming, or walking away after a shot)
+  const steering = match.phase === 'aim' || (match.phase === 'flight' && match.retreatTicks > 0);
+  const viewTurns = orbiting || orbitTail > 0;
+  orbitTail = Math.max(0, orbitTail - dt);
+  if (viewTurns && !debugCamera && !intro && !follow.gliding && steering && match.activeUnit.bug.alive) {
+    const c = stage.camera.position;
+    const t = stage.controls.target;
+    controls.face(t.x - c.x, t.z - c.z);
+  }
+  let faced = false;
   accumulator += dt;
   while (accumulator >= DT) {
     // a debug camera (or the intro) owns the view: the match keeps running without input
-    match.step(debugCamera || intro ? NO_INPUT : controls.next());
+    if (debugCamera || intro) match.step(NO_INPUT);
+    else {
+      match.step(controls.next());
+      faced ||= controls.faced;
+    }
     handleEvents(match.events);
     accumulator -= DT;
   }
@@ -383,7 +425,7 @@ function loop(now: number): void {
 
   match.units.forEach((u, i) => {
     const v = bugViews[i];
-    v.view.update(u.bug, alpha, dt);
+    v.view.update(u.bug, alpha, dt, terrain);
   });
   projectiles.sync(match.projectiles, alpha);
   const active = bugViews[match.active];
@@ -396,7 +438,8 @@ function loop(now: number): void {
     if (chasePending && match.phase === 'aim') {
       chasePending = false;
       follow.chase(terrain, active.view.root.position, b.fx, b.fz, 0.9);
-    } else if (chaseUnit === match.active && match.phase === 'aim' && !follow.gliding) {
+    } else if (chaseUnit === match.active && match.phase === 'aim' && !follow.gliding && !faced && !viewTurns) {
+      // (when the view turned the bug, the view is already where it should be)
       let d = yaw - chaseYaw;
       if (d > Math.PI) d -= Math.PI * 2;
       else if (d < -Math.PI) d += Math.PI * 2;
@@ -406,10 +449,15 @@ function loop(now: number): void {
     chaseYaw = yaw;
   }
 
-  // follow the shot while it flies, otherwise the bug whose turn it is
-  if (!debugCamera && !intro && (projectiles.first(target) || match.activeUnit.bug.alive)) {
-    if (match.projectiles.length === 0) target.copy(active.view.root.position);
-    follow.update(target, dt);
+  // follow the shot while it flies, then a bug that dies, otherwise the bug whose turn it is
+  if (!debugCamera && !intro) {
+    let tracking = true;
+    if (match.projectiles.length > 0 && projectiles.first(target)) {
+      // the shot
+    } else if (deathFocus >= 0 && match.phase === 'settle') target.copy(bugViews[deathFocus].view.root.position);
+    else if (match.activeUnit.bug.alive) target.copy(active.view.root.position);
+    else tracking = false;
+    if (tracking) follow.update(target, dt);
   }
 
   // wind arrow in screen space: project the wind onto the camera's ground-plane axes

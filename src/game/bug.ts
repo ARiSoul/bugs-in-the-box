@@ -47,14 +47,17 @@ const CEILING_NY = -0.3;
 export interface BugInput {
   /** +1 forward, -1 backward. */
   move: -1 | 0 | 1;
-  /** +1 turn right (clockwise seen from above), -1 turn left. */
-  turn: -1 | 0 | 1;
+  /** +1 turn right (clockwise seen from above) at full rate, -1 turn left; in between: slower. */
+  turn: number;
   jump: boolean;
   /** Run instead of walk (forward and back). */
   run?: boolean;
+  /** Face this horizontal direction (any length) before moving; (0, 0) or absent: keep the facing. */
+  faceX?: number;
+  faceZ?: number;
 }
 
-export const IDLE: Readonly<BugInput> = Object.freeze({ move: 0, turn: 0, jump: false, run: false });
+export const IDLE: Readonly<BugInput> = Object.freeze({ move: 0, turn: 0, jump: false, run: false, faceX: 0, faceZ: 0 });
 
 // Scratch buffers: no allocations per tick.
 const n = new Float64Array(3);
@@ -132,6 +135,13 @@ export class Bug {
     this.py = this.y;
     this.pz = this.z;
 
+    const faceX = input.faceX ?? 0;
+    const faceZ = input.faceZ ?? 0;
+    const faceL = Math.sqrt(faceX * faceX + faceZ * faceZ);
+    if (faceL > 1e-6) {
+      this.fx = faceX / faceL;
+      this.fz = faceZ / faceL;
+    }
     if (input.turn !== 0) this.rotate(-input.turn * sp.turnRate * DT);
 
     let stick = false;

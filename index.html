@@ -36,8 +36,10 @@
       #power > div { background: linear-gradient(90deg, #ffe066, #ff6a3d); }
 
       #teams { left: 12px; bottom: 12px; min-width: 170px; }
-      .team { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; align-items: center; }
-      .team .meter { grid-column: 1 / 3; width: 100%; }
+      .team { display: grid; grid-template-columns: 1fr auto auto; gap: 2px 8px; align-items: center; }
+      .team .meter { grid-column: 1 / 4; width: 100%; }
+      .team .alive { letter-spacing: 1px; font-size: 11px; }
+      #aim { font-size: 12px; opacity: 0.85; margin-bottom: 4px; }
 
       #pad { right: 12px; bottom: 12px; display: grid; grid-template-columns: repeat(3, 48px); grid-auto-rows: 44px; gap: 6px; padding: 8px; }
       #pad button { padding: 0; font-size: 16px; }
@@ -71,7 +73,7 @@
         <button id="bench">benchmark</button>
       </div>
       <div class="hint">
-        W/S walk · shift run · A/D or ←/→ turn · space jump · ↑/↓ aim · hold F to charge, release to fire · 1–4 weapon · N new match · drag to orbit · scroll to zoom
+        W/S walk · shift run · A/D or ←/→ turn · space jump · ↑/↓ aim (tap for fine steps) · hold F to charge, release to fire · 1–4 weapon · N new match · right drag to turn the view (the bug turns with it) · scroll to zoom
       </div>
     </details>
 
@@ -82,6 +84,7 @@
     </div>
 
     <div id="weapons" class="box">
+      <div id="aim"></div>
       <div id="power" class="meter"><div></div></div>
       <div id="weaponList" class="row" style="margin-top: 0"></div>
     </div>

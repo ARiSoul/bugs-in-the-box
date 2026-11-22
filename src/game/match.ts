@@ -31,6 +31,12 @@ export const CHARGE_TICKS = 72;
 const MIN_POWER = 0.12;
 /** Pitch rate of the aim, radians per second. */
 const AIM_RATE = 1.2;
+/**
+ * Fine control with keys: turning and aiming start at this fraction of their full rate and reach it after
+ * RAMP_TICKS of holding, so a tap moves a fraction of a degree and a long press still sweeps fast.
+ */
+const RAMP_START = 0.15;
+const RAMP_TICKS = Math.round(0.6 * TICK_RATE);
 /** Aim pitch limits, as the vertical component of the aim vector. */
 const AIM_MAX_UP = 0.995;
 const AIM_MAX_DOWN = -0.8;
@@ -46,6 +52,8 @@ const FALL_DAMAGE = 2.5;
 /** Bugs are placed at least this far apart at the start. */
 const SPAWN_SPACING = 14;
 const SPAWN_SETTLE_TICKS = 3 * TICK_RATE;
+/** After bugs die at the end of a turn, wait this long (their death on screen) before the next turn. */
+export const DEATH_HOLD_TICKS = Math.round(1.6 * TICK_RATE);
 
 export type Phase = 'aim' | 'flight' | 'settle' | 'over';
 
@@ -72,6 +80,12 @@ export interface Unit {
 export interface MatchInput {
   move: -1 | 0 | 1;
   turn: -1 | 0 | 1;
+  /**
+   * Face this horizontal direction (the camera's, while the player turns the view); (0, 0): keep the
+   * facing. Plain numbers, so they travel with the other input of the tick.
+   */
+  faceX: number;
+  faceZ: number;
   jump: boolean;
   /** Run instead of walk. */
   run: boolean;
@@ -83,7 +97,7 @@ export interface MatchInput {
   weapon: number;
 }
 
-export const NO_INPUT: Readonly<MatchInput> = Object.freeze({ move: 0, turn: 0, jump: false, run: false, aim: 0, fire: false, weapon: -1 });
+export const NO_INPUT: Readonly<MatchInput> = Object.freeze({ move: 0, turn: 0, faceX: 0, faceZ: 0, jump: false, run: false, aim: 0, fire: false, weapon: -1 });
 
 export type MatchEvent =
   | { type: 'turn'; unit: number }
@@ -96,7 +110,12 @@ export type MatchEvent =
   | { type: 'over'; winner: number };
 
 const COS45 = 0.7071067811865476;
-const bugInput: BugInput = { move: 0, turn: 0, jump: false, run: false };
+const bugInput: BugInput = { move: 0, turn: 0, jump: false, run: false, faceX: 0, faceZ: 0 };
+
+/** Fraction of the full rate after holding a key for `held` ticks (see RAMP_START). */
+function ramp(held: number): number {
+  return held >= RAMP_TICKS ? 1 : RAMP_START + ((1 - RAMP_START) * held) / RAMP_TICKS;
+}
 
 export interface MatchOptions {
   /** false: skip random placement (tests place the bugs themselves). Default true. */
@@ -132,6 +151,13 @@ export class Match {
   private readonly nextInTeam: number[];
   private settleTicks = 0;
   private stillTicks = 0;
+  /** Ticks left of the pause after deaths (-1: none). */
+  private deathTicks = -1;
+  /** How long the turn and aim keys have been held in the same direction (ticks). */
+  private turnHeld = 0;
+  private turnDir = 0;
+  private aimHeld = 0;
+  private aimDir = 0;
   private fireWasDown = false;
   private nextProjectileId = 1;
   private readonly bugs: Bug[] = [];
@@ -166,6 +192,13 @@ export class Match {
     return WEAPONS[this.weapon];
   }
 
+  /** Bugs still alive per team. */
+  teamAlive(team: number): number {
+    let n = 0;
+    for (const u of this.units) if (u.team === team && u.bug.alive) n++;
+    return n;
+  }
+
   /** Total health left per team. */
   teamHealth(team: number): number {
     let h = 0;
@@ -180,6 +213,10 @@ export class Match {
     const unit = this.units[this.active];
     const fireDown = input.fire && !this.fireWasDown;
     this.fireWasDown = input.fire;
+    this.turnHeld = input.turn !== 0 && input.turn === this.turnDir ? this.turnHeld + 1 : 0;
+    this.turnDir = input.turn;
+    this.aimHeld = input.aim !== 0 && input.aim === this.aimDir ? this.aimHeld + 1 : 0;
+    this.aimDir = input.aim;
 
     let move: Readonly<BugInput> = IDLE;
     if (this.phase === 'aim') {
@@ -224,7 +261,7 @@ export class Match {
   private aimTick(unit: Unit, input: Readonly<MatchInput>, fireDown: boolean): Readonly<BugInput> {
     if (!this.charging && input.weapon >= 0 && input.weapon < WEAPONS.length) this.weapon = input.weapon;
     if (input.aim !== 0) {
-      rotate2(unit.aimH, unit.aimV, input.aim * AIM_RATE * DT);
+      rotate2(unit.aimH, unit.aimV, input.aim * AIM_RATE * ramp(this.aimHeld) * DT);
       if (rot[1] <= AIM_MAX_UP && rot[1] >= AIM_MAX_DOWN) {
         unit.aimH = rot[0];
         unit.aimV = rot[1];
@@ -254,7 +291,9 @@ export class Match {
 
   private movement(input: Readonly<MatchInput>): Readonly<BugInput> {
     bugInput.move = input.move;
-    bugInput.turn = input.turn;
+    bugInput.turn = input.turn * ramp(this.turnHeld);
+    bugInput.faceX = input.faceX;
+    bugInput.faceZ = input.faceZ;
     bugInput.jump = input.jump;
     bugInput.run = input.run;
     return bugInput;
@@ -280,20 +319,31 @@ export class Match {
     this.phase = 'settle';
     this.settleTicks = 0;
     this.stillTicks = 0;
+    this.deathTicks = -1;
   }
 
   private settleTick(): void {
+    if (this.deathTicks >= 0) {
+      if (this.deathTicks-- === 0) {
+        this.deathTicks = -1;
+        this.beginTurn(this.units[this.active].team + 1);
+      }
+      return;
+    }
     this.settleTicks++;
     let still = this.projectiles.length === 0;
     for (const b of this.bugs) if (!b.settled) still = false;
     this.stillTicks = still ? this.stillTicks + 1 : 0;
     if (this.stillTicks < SETTLE_HOLD_TICKS && this.settleTicks < SETTLE_MAX_TICKS) return;
+    let died = false;
     for (const u of this.units)
       if (u.bug.alive && u.bug.health <= 0) {
         u.bug.alive = false;
         this.announceDeath(u);
+        died = true;
       }
-    this.beginTurn(this.units[this.active].team + 1);
+    if (died) this.deathTicks = DEATH_HOLD_TICKS;
+    else this.beginTurn(this.units[this.active].team + 1);
   }
 
   /** Give the turn to the next team (from `team` on) that still has bugs, or end the match. */

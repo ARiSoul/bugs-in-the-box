@@ -17,7 +17,7 @@ Open the address that Vite prints.
 
 - **W / S**: walk (hold **shift** to run) · **A / D** or **← / →**: turn · **↑ / ↓**: aim higher / lower
 - **Space**: jump · **hold F** to charge, release to fire · **1–4**: weapon · **N**: new match
-- **Drag** to orbit the camera · **scroll** to zoom
+- **Right drag** to turn the view (the active bug turns with it, for fine aiming) · **scroll** to zoom
 - On a touch screen (or with the mouse), use the pad in the bottom-right corner and tap a weapon.
 - The menu lets you pick the scenario (Inside a PC, Floating islands) and the seed (the same seed gives the same map and match) and run a benchmark. It also shows the meshing cost; the frame time is at the top. Add `?mesh=main` to the URL to mesh on the main thread instead of the workers, to compare, and `?map=3x2x3` for the small map (size in chunks of 32; the default is 5x3x5).
 

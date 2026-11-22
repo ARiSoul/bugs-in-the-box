@@ -3,10 +3,10 @@ import type { MatchInput } from '../game/match';
 /**
  * Turns held keys and on-screen buttons into one MatchInput per simulation tick.
  *
- *   W / S        walk forward / back        A / D, ← / →   turn
+ *   W / S        walk forward / back        A / D, ← / →   turn (a tap turns a little)
  *   shift        run (held with W / S)      space          jump
  *   ↑ / ↓        aim higher / lower         F (hold)       charge, release to fire
- *   1–4          pick a weapon
+ *   1–4          pick a weapon              right drag     turn the view; the bug turns with it
  *
  * Key codes are physical positions, so this works on any keyboard layout. On-screen buttons
  * (elements with `data-code`) press the same codes, so mouse and touch play the same game.
@@ -27,7 +27,11 @@ export class Controls {
   private readonly held = new Set<string>();
   private jumpQueued = false;
   private weaponQueued = -1;
-  private readonly out: MatchInput = { move: 0, turn: 0, jump: false, run: false, aim: 0, fire: false, weapon: -1 };
+  private faceX = 0;
+  private faceZ = 0;
+  /** True if the last `next()` carried a facing (from `face`). */
+  faced = false;
+  private readonly out: MatchInput = { move: 0, turn: 0, faceX: 0, faceZ: 0, jump: false, run: false, aim: 0, fire: false, weapon: -1 };
 
   constructor(
     target: Window,
@@ -68,6 +72,17 @@ export class Controls {
     }
   }
 
+  /**
+   * Make the bug face the horizontal direction (x, z) on the next tick (the view's, while the player turns
+   * it). Rounded to 1/4096, so the input is short and the same on every client.
+   */
+  face(x: number, z: number): void {
+    const l = Math.sqrt(x * x + z * z);
+    if (l < 1e-6) return;
+    this.faceX = Math.round((x / l) * 4096) / 4096;
+    this.faceZ = Math.round((z / l) * 4096) / 4096;
+  }
+
   selectWeapon(index: number): void {
     this.weaponQueued = index;
   }
@@ -93,8 +108,13 @@ export class Controls {
     this.out.fire = any(FIRE);
     this.out.jump = this.jumpQueued;
     this.out.weapon = this.weaponQueued;
+    this.out.faceX = this.faceX;
+    this.out.faceZ = this.faceZ;
+    this.faced = this.faceX !== 0 || this.faceZ !== 0;
     this.jumpQueued = false;
     this.weaponQueued = -1;
+    this.faceX = 0;
+    this.faceZ = 0;
     return this.out;
   }
 }

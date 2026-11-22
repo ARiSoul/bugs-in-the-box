@@ -1,11 +1,26 @@
 import * as THREE from 'three';
-import { TICK_RATE, WALKABLE_NY, type Bug } from '../game/bug';
+import { KILL_Y, TICK_RATE, WALKABLE_NY, type Bug } from '../game/bug';
 import type { BugSpecies } from '../game/species';
 
 const sphere = new THREE.SphereGeometry(1, 16, 12);
 /** Unit cylinder along +Y from y=0 to y=1, so it can be stretched between two points. */
 const limb = new THREE.CylinderGeometry(1, 1, 1, 6).translate(0, 0.5, 0);
 const UP = new THREE.Vector3(0, 1, 0);
+const FORWARD = new THREE.Vector3(0, 0, 1);
+
+/** What a dead bug's body needs to fall onto the terrain below it (render only: the density field). */
+export interface CorpseGround {
+  raycast(ox: number, oy: number, oz: number, dx: number, dy: number, dz: number, maxT?: number): number;
+}
+
+/** Death on screen: seconds to roll onto the back, of twitching, and of fading to the corpse colours. */
+const DEATH_ROLL = 0.5;
+const DEATH_TWITCH = 2.2;
+const DEATH_FADE = 1.4;
+/** A body falls with this gravity (render only) when the ground under it is blown away. */
+const CORPSE_GRAVITY = 40;
+/** Corpse colours: this much of the way to dull grey, and this dark. */
+const CORPSE_GREY = new THREE.Color(0x3a3833);
 
 interface Leg {
   pivot: THREE.Object3D;
@@ -34,6 +49,19 @@ export class BugView {
   private readonly target = new THREE.Vector3();
   private phase = 0;
   private ring: THREE.Mesh | null = null;
+  private ringMaterial: THREE.MeshBasicMaterial | null = null;
+  /** Colours to fade from when the bug dies. */
+  private readonly tints: { m: THREE.MeshStandardMaterial; color: THREE.Color; emissive: THREE.Color }[] = [];
+  /** Seconds since death (-1: alive). */
+  private deadT = -1;
+  /** Fell out of the world: nothing left to show. */
+  private gone = false;
+  /** The body: centre at rest, falling speed, orientation at death, the side it rolls to. */
+  private readonly corpse = new THREE.Vector3();
+  private corpseVy = 0;
+  private readonly deathQ = new THREE.Quaternion();
+  private readonly roll = new THREE.Quaternion();
+  private rollSide = 1;
   /** Height of the bug's centre from the last `update` (before the far-away lift). */
   private groundY = 0;
 
@@ -58,6 +86,7 @@ export class BugView {
     if (teamColor !== undefined) {
       const ringMat = new THREE.MeshBasicMaterial({ color: teamColor, transparent: true, opacity: 0.85, depthWrite: false, side: THREE.DoubleSide, fog: false });
       this.materials.push(ringMat);
+      this.ringMaterial = ringMat;
       const ring = new THREE.Mesh(new THREE.RingGeometry(r * 1.05, r * 1.6, 32), ringMat);
       ring.quaternion.copy(FLAT);
       ring.position.y = -r + 0.12;
@@ -110,9 +139,12 @@ export class BugView {
    * Place the view between the previous and the current tick (`alpha` in [0,1]) and animate it.
    * `dt` is the frame time in seconds (render smoothing only).
    */
-  update(bug: Bug, alpha: number, dt: number): void {
-    this.root.visible = bug.alive;
-    if (!bug.alive) return;
+  update(bug: Bug, alpha: number, dt: number, ground?: CorpseGround): void {
+    if (!bug.alive) {
+      this.updateDead(bug, dt, ground);
+      return;
+    }
+    this.root.visible = true;
     this.root.position.set(
       bug.px + (bug.x - bug.px) * alpha,
       bug.py + (bug.y - bug.py) * alpha,
@@ -153,6 +185,78 @@ export class BugView {
     }
   }
 
+  /**
+   * A dead bug rolls onto its back with a little hop, kicks its legs, curls them up and goes dull; the body
+   * stays where it died (and falls if the ground under it is blown away). One that fell out of the world
+   * is just gone.
+   */
+  private updateDead(bug: Bug, dt: number, ground?: CorpseGround): void {
+    const r = this.species.radius;
+    if (this.deadT < 0) {
+      this.deadT = 0;
+      this.gone = bug.y <= KILL_Y;
+      this.corpse.set(bug.x, bug.y, bug.z);
+      this.corpseVy = 0;
+      this.fwd.set(bug.fx, 0, bug.fz).normalize();
+      this.side.crossVectors(UP, this.fwd);
+      this.basis.makeBasis(this.side, UP, this.fwd);
+      this.deathQ.setFromRotationMatrix(this.basis);
+      this.rollSide = Math.random() < 0.5 ? -1 : 1; // render only
+      for (const tint of this.tints) {
+        tint.color.copy(tint.m.color);
+        tint.emissive.copy(tint.m.emissive);
+      }
+    }
+    if (this.gone) {
+      this.root.visible = false;
+      return;
+    }
+    this.deadT += dt;
+    const t = this.deadT;
+
+    // the body falls (render only) while there is air under it
+    if (ground) {
+      const below = ground.raycast(this.corpse.x, this.corpse.y, this.corpse.z, 0, -1, 0, 80);
+      if (below < 0 || below > r + 0.05) {
+        this.corpseVy += CORPSE_GRAVITY * dt;
+        const drop = this.corpseVy * dt;
+        this.corpse.y -= below < 0 ? drop : Math.min(drop, below - r);
+        if (this.corpse.y < KILL_Y) {
+          this.gone = true;
+          this.root.visible = false;
+          return;
+        }
+      } else this.corpseVy = 0;
+    }
+
+    // roll onto the back with a hop, then lie a little lower (the legs up)
+    const u = Math.min(1, t / DEATH_ROLL);
+    const e = u * u * (3 - 2 * u);
+    this.roll.setFromAxisAngle(FORWARD, this.rollSide * Math.PI * e);
+    this.root.quaternion.copy(this.deathQ).multiply(this.roll);
+    this.root.position.set(this.corpse.x, this.corpse.y + Math.sin(Math.PI * u) * r * 1.1 - r * 0.3 * e, this.corpse.z);
+    this.groundY = this.root.position.y;
+    this.root.visible = true;
+
+    // the legs kick, slower and weaker, then stay curled over the belly
+    const kick = t < DEATH_TWITCH ? Math.sin(t * 26) * 0.45 * (1 - t / DEATH_TWITCH) : 0;
+    for (const leg of this.legs) {
+      leg.pivot.rotation.y = leg.side * kick * (leg.offset ? 0.6 : -0.6);
+      leg.pivot.rotation.z = -leg.side * (1.1 * e) + kick * 0.5;
+    }
+
+    // dull colours; the team ring fades away
+    const f = Math.min(1, t / DEATH_FADE);
+    for (const tint of this.tints) {
+      tint.m.color.copy(tint.color).lerp(CORPSE_GREY, f * 0.6);
+      tint.m.emissive.copy(tint.emissive).multiplyScalar(1 - f);
+    }
+    if (this.ring && this.ringMaterial) {
+      this.ringMaterial.opacity = 0.85 * (1 - f);
+      this.ring.visible = f < 1;
+    }
+  }
+
   dispose(): void {
     for (const m of this.materials) m.dispose();
     this.root.removeFromParent();
@@ -162,6 +266,7 @@ export class BugView {
     // no fog: a bug reads in the far, dark corners too
     const m = new THREE.MeshStandardMaterial({ color, roughness, metalness: 0.05, fog: false });
     this.materials.push(m);
+    this.tints.push({ m, color: new THREE.Color(), emissive: new THREE.Color() });
     return m;
   }
 

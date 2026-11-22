@@ -20,7 +20,7 @@ Each phase must end with something playable or measurable. Do not move on to the
 - [x] Ballistic projectiles with wind; explosion = `carve` + distance-based damage and knockback; fall damage
 - [x] 4 original weapons: Solder Blob, Capacitor, Short Circuit, Soldering Iron (see IDEAS.md)
 - [x] Usable 3D aiming (keyboard, plus an on-screen pad for mouse and touch): camera that follows the projectile and does not get hidden behind islands, aim direction pointer
-- Not done yet: aiming by dragging on the screen, a computer opponent, a match setup screen (teams and sizes are fixed in `main.ts`)
+- Not done yet: turning the bug by dragging on a touch screen (the right mouse button does it on PC), a computer opponent, a match setup screen (teams and sizes are fixed in `main.ts`)
 
 ## Phase 3 · Performance (done for PC)
 

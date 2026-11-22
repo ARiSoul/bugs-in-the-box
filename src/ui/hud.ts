@@ -43,11 +43,12 @@ export class Hud {
   private readonly windArrow = el('windArrow');
   private readonly windBar = el('windBar');
   private readonly power = el('power').firstElementChild as HTMLElement;
+  private readonly aim = el('aim');
   private readonly weaponList = el('weaponList');
   private readonly teams = el('teams');
   private readonly banner = el('banner');
   private weaponButtons: HTMLButtonElement[] = [];
-  private teamRows: { hp: HTMLElement; bar: HTMLElement; max: number }[] = [];
+  private teamRows: { alive: HTMLElement; hp: HTMLElement; bar: HTMLElement; max: number; size: number }[] = [];
   private readonly last = new Map<string, string>();
 
   private readonly sorted = new Float32Array(120);
@@ -97,14 +98,17 @@ export class Hud {
         const name = document.createElement('span');
         name.textContent = t.name;
         name.style.color = hex(t.color);
+        const alive = document.createElement('span');
+        alive.className = 'alive';
+        alive.style.color = hex(t.color);
         const hp = document.createElement('span');
         const meter = document.createElement('div');
         meter.className = 'meter';
         const bar = document.createElement('div');
         bar.style.background = hex(t.color);
         meter.append(bar);
-        row.append(name, hp, meter);
-        this.teamRows.push({ hp, bar, max: Math.max(1, match.teamHealth(i)) });
+        row.append(name, alive, hp, meter);
+        this.teamRows.push({ alive, hp, bar, max: Math.max(1, match.teamHealth(i)), size: t.size });
         return row;
       }),
     );
@@ -141,12 +145,20 @@ export class Hud {
 
     match.teams.forEach((_t, i) => {
       const h = match.teamHealth(i);
+      const n = match.teamAlive(i);
       const row = this.teamRows[i];
       this.set(`team${i}`, () => {
+        // one dot per bug: filled while it lives
+        row.alive.textContent = '●'.repeat(n) + '○'.repeat(Math.max(0, row.size - n));
+        row.alive.title = `${n} of ${row.size} bugs alive`;
         row.hp.textContent = String(h);
         row.bar.style.width = `${((h / row.max) * 100).toFixed(1)}%`;
-      }, String(h));
+      }, `${h}|${n}`);
     });
+
+    // the aim angle above the horizon, in degrees, for fine aiming
+    const aim = match.phase === 'aim' ? `aim ${((Math.atan2(u.aimV, u.aimH) * 180) / Math.PI).toFixed(1)}°` : '';
+    this.set('aim', () => (this.aim.textContent = aim), aim);
 
     const banner =
       match.phase !== 'over' ? '' : match.winner >= 0 ? `${match.teams[match.winner].name} win!` : 'Draw: nobody is left';

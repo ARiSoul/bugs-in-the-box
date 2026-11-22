@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { TICK_RATE } from '../src/game/bug';
-import { AIM_TICKS, Match, NO_INPUT, type MatchEvent, type MatchInput } from '../src/game/match';
+import { AIM_TICKS, DEATH_HOLD_TICKS, Match, NO_INPUT, type MatchEvent, type MatchInput } from '../src/game/match';
 import { ANT, SPIDER } from '../src/game/species';
 import { CAPACITOR, SHORT_CIRCUIT, SOLDER_BLOB, WEAPONS } from '../src/game/weapons';
 import { floatingIslands } from '../src/terrain/generators/floatingIslands';
@@ -264,6 +264,82 @@ describe('turns', () => {
     expect(m.winner).toBe(0);
     expect(events.some((e) => e.type === 'death' && e.unit === 1)).toBe(true);
     expect(blue.alive).toBe(false);
+    expect(m.teamAlive(0)).toBe(1);
+    expect(m.teamAlive(1)).toBe(0);
+    // the death plays on screen before the match ends
+    const death = events.findIndex((e) => e.type === 'death');
+    const over = events.findIndex((e) => e.type === 'over');
+    expect(over).toBeGreaterThan(death);
+  });
+
+  it('waits for the deaths on screen before the next turn', () => {
+    const t = flat(10);
+    const m = setup(t, [
+      [16, 32],
+      [48, 32],
+      [16, 52],
+      [48, 52],
+    ]);
+    const blue = m.units[1].bug;
+    blue.health = 5;
+    m.explode(blue.x, blue.y - 1, blue.z, SOLDER_BLOB);
+    let deathTick = -1;
+    let turnTick = -1;
+    for (let n = 0; n < AIM_TICKS + TICK_RATE * 15 && turnTick < 0; n++) {
+      m.step(NO_INPUT);
+      for (const e of m.events) {
+        if (e.type === 'death') deathTick = m.tick;
+        if (e.type === 'turn' && deathTick >= 0) turnTick = m.tick;
+      }
+    }
+    expect(deathTick).toBeGreaterThan(0);
+    expect(turnTick - deathTick).toBeGreaterThanOrEqual(DEATH_HOLD_TICKS);
+    expect(m.teamAlive(1)).toBe(1);
+  });
+});
+
+describe('fine control', () => {
+  it('the view turns the active bug: it faces the given direction', () => {
+    const m = setup(flat(10), [
+      [16, 32],
+      [48, 32],
+    ]);
+    press(m, { faceX: -3, faceZ: 3 });
+    const b = m.units[0].bug;
+    expect(b.fx).toBeCloseTo(-Math.SQRT1_2, 9);
+    expect(b.fz).toBeCloseTo(Math.SQRT1_2, 9);
+    // the other team's bug does not turn
+    const other = m.units[1].bug;
+    const [ofx, ofz] = [other.fx, other.fz];
+    press(m, { faceX: 1, faceZ: 0 });
+    expect([other.fx, other.fz]).toEqual([ofx, ofz]);
+  });
+
+  it('a tap aims and turns a fraction of what a held key does per tick', () => {
+    const m = setup(flat(10), [
+      [16, 32],
+      [48, 32],
+    ]);
+    const u = m.units[0];
+    const pitch = (): number => Math.atan2(u.aimV, u.aimH);
+    const yaw = (): number => Math.atan2(u.bug.fx, u.bug.fz);
+    let p0 = pitch();
+    let y0 = yaw();
+    press(m, { aim: -1, turn: 1 });
+    const tapAim = Math.abs(pitch() - p0);
+    const tapTurn = Math.abs(yaw() - y0);
+    press(m, { aim: -1, turn: 1 }, TICK_RATE);
+    p0 = pitch();
+    y0 = yaw();
+    press(m, { aim: -1, turn: 1 });
+    const fullAim = Math.abs(pitch() - p0);
+    const fullTurn = Math.abs(yaw() - y0);
+    expect(tapAim).toBeGreaterThan(0);
+    expect(tapAim).toBeLessThan(fullAim * 0.25);
+    expect(tapTurn).toBeGreaterThan(0);
+    expect(tapTurn).toBeLessThan(fullTurn * 0.25);
+    // under half a degree per tick at first
+    expect(tapAim).toBeLessThan(0.5 * (Math.PI / 180));
   });
 });
 
