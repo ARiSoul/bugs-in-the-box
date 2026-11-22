@@ -16,7 +16,16 @@ export function shadeVertex(
   scorch01: number,
   material: number,
 ): void {
-  const n = vnoise3(x * 0.35, y * 0.35, z * 0.35, 3);
+  shadeWithNoise(out, o, vnoise3(x * 0.35, y * 0.35, z * 0.35, 3), ny, scorch01, material);
+}
+
+/** The value noise `shadeVertex` uses at (x, y, z): compute it once when shading several materials. */
+export function shadeNoise(x: number, y: number, z: number): number {
+  return vnoise3(x * 0.35, y * 0.35, z * 0.35, 3);
+}
+
+/** `shadeVertex` with the noise value already computed (see `shadeNoise`). */
+export function shadeWithNoise(out: Float32Array, o: number, n: number, ny: number, scorch01: number, material: number): void {
   const burn = Math.min(1, scorch01 * 1.4);
   const keep = 1 - burn * 0.87;
   if (material === GROUND || material >= MATERIAL_RGB.length) {

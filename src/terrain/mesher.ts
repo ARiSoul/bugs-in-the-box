@@ -1,6 +1,6 @@
 import { CHUNK } from './constants';
 import { MATERIAL_PBR } from './materials';
-import { shadeVertex } from './shading';
+import { shadeNoise, shadeVertex, shadeWithNoise } from './shading';
 import type { Terrain } from './Terrain';
 
 export interface ChunkMesh {
@@ -8,7 +8,7 @@ export interface ChunkMesh {
   normals: Float32Array;
   /** Linear RGB with ambient occlusion already applied. */
   colors: Float32Array;
-  /** Roughness, metalness per vertex (from the material). */
+  /** Roughness, metalness and glow kind per vertex (from the material, see `MATERIAL_PBR`). */
   pbr: Float32Array;
   indices: Uint32Array;
 }
@@ -32,6 +32,12 @@ const EDGE_B = [1, 3, 5, 7, 2, 3, 6, 7, 4, 5, 6, 7];
 const QEF_BIAS = 0.05;
 /** Keep Dual Contouring vertices this far inside their cell. */
 const CELL_MARGIN = 0.02;
+/**
+ * A cell is a sharp feature (edge or corner) only if two of its crossing normals differ by more than
+ * this (cosine; 0.8 ≈ 37°). Smooth curved cells (tubes, rounded rims) keep the Surface Nets point: the
+ * QEF fit on a gently curved surface snaps vertices to small ridges, a saw-tooth along the curve.
+ */
+const FEATURE_DOT = 0.8;
 
 /**
  * Mesher over a chunk of the global density grid: Dual Contouring (default) or naive Surface Nets.
@@ -59,6 +65,8 @@ export class ChunkMesher {
   constructor(readonly sharp = true) {}
 
   private readonly gn = new Float64Array(3);
+  /** One corner's colour, while blending the materials of a cell. */
+  private readonly tmpCol = new Float32Array(3);
 
   private readonly vmap = new Int32Array(REGION); // -1 none, -2 exists but not emitted, >=0 output index
   private readonly vpos = new Float32Array(REGION * 3);
@@ -66,7 +74,7 @@ export class ChunkMesher {
   private readonly opos = new Float32Array(REGION * 3);
   private readonly onrm = new Float32Array(REGION * 3);
   private readonly ocol = new Float32Array(REGION * 3);
-  private readonly opbr = new Float32Array(REGION * 2);
+  private readonly opbr = new Float32Array(REGION * 3);
   private readonly oidx = new Uint32Array(REGION * 18);
   private readonly cv = new Float32Array(8);
 
@@ -113,6 +121,8 @@ export class ChunkMesher {
           // QEF terms (Dual Contouring): AtA (symmetric) and Atb, in cell-local coordinates
           let a00 = 0, a01 = 0, a02 = 0, a11 = 0, a12 = 0, a22 = 0;
           let b0 = 0, b1 = 0, b2 = 0;
+          let f0x = 0, f0y = 0, f0z = 0;
+          let minDot = 1;
           for (let e = 0; e < 12; e++) {
             const a = EDGE_A[e];
             const bb = EDGE_B[e];
@@ -136,6 +146,14 @@ export class ChunkMesher {
               const ny = gn[1];
               const nz = gn[2];
               const d = nx * qx + ny * qy + nz * qz;
+              if (cnt === 1) {
+                f0x = nx;
+                f0y = ny;
+                f0z = nz;
+              } else {
+                const dd = nx * f0x + ny * f0y + nz * f0z;
+                if (dd < minDot) minDot = dd;
+              }
               a00 += nx * nx; a01 += nx * ny; a02 += nx * nz;
               a11 += ny * ny; a12 += ny * nz; a22 += nz * nz;
               b0 += nx * d; b1 += ny * d; b2 += nz * d;
@@ -144,7 +162,7 @@ export class ChunkMesher {
           px /= cnt;
           py /= cnt;
           pz /= cnt;
-          if (this.sharp) {
+          if (this.sharp && minDot < FEATURE_DOT) {
             // Solve (AtA + bias I) y = Atb - AtA c around the mass point c, then x = c + y.
             const r0 = b0 - (a00 * px + a01 * py + a02 * pz);
             const r1 = b1 - (a01 * px + a11 * py + a12 * pz);
@@ -206,8 +224,58 @@ export class ChunkMesher {
       onrm[o3 + 1] = vnrm[l3 + 1];
       onrm[o3 + 2] = vnrm[l3 + 2];
       const si = Math.round(x) + sx * (Math.round(y) + sy * Math.round(z));
-      const mat = material[si];
-      shadeVertex(ocol, o3, x, y, z, vnrm[l3 + 1], scorch[si] / 255, mat);
+      const burn = scorch[si] / 255;
+      // Materials: where the cell's corners disagree, blend their colours and finishes (trilinear,
+      // solid corners count more) so material borders follow the surface smoothly instead of in steps.
+      const ix = Math.min(Math.floor(x), t.W - 1);
+      const iy = Math.min(Math.floor(y), t.H - 1);
+      const iz = Math.min(Math.floor(z), t.D - 1);
+      const c0 = ix + sx * (iy + sy * iz);
+      const m0 = material[c0];
+      let mixed = false;
+      for (let c = 1; c < 8 && !mixed; c++) {
+        if (material[c0 + (c & 1) + (c & 2 ? sx : 0) + (c & 4 ? sk : 0)] !== m0) mixed = true;
+      }
+      let pr = 0;
+      let pmet = 0;
+      let pglow = 0;
+      if (!mixed) {
+        shadeVertex(ocol, o3, x, y, z, vnrm[l3 + 1], burn, m0);
+        const pm = m0 < MATERIAL_PBR.length ? m0 : 0;
+        pr = PBR[pm * 3];
+        pmet = PBR[pm * 3 + 1];
+        pglow = PBR[pm * 3 + 2];
+      } else {
+        const fx = x - ix;
+        const fy = y - iy;
+        const fz = z - iz;
+        const tc = this.tmpCol;
+        const n = shadeNoise(x, y, z);
+        let r = 0;
+        let g = 0;
+        let b = 0;
+        let wsum = 0;
+        for (let c = 0; c < 8; c++) {
+          const ci = c0 + (c & 1) + (c & 2 ? sx : 0) + (c & 4 ? sk : 0);
+          const w = (c & 1 ? fx : 1 - fx) * (c & 2 ? fy : 1 - fy) * (c & 4 ? fz : 1 - fz) * (dens[ci] < 0 ? 1 : 0.3) + 1e-6;
+          const cm = material[ci];
+          shadeWithNoise(tc, 0, n, vnrm[l3 + 1], burn, cm);
+          r += tc[0] * w;
+          g += tc[1] * w;
+          b += tc[2] * w;
+          const pm = cm < MATERIAL_PBR.length ? cm : 0;
+          pr += PBR[pm * 3] * w;
+          pmet += PBR[pm * 3 + 1] * w;
+          pglow += PBR[pm * 3 + 2] * w;
+          wsum += w;
+        }
+        ocol[o3] = r / wsum;
+        ocol[o3 + 1] = g / wsum;
+        ocol[o3 + 2] = b / wsum;
+        pr /= wsum;
+        pmet /= wsum;
+        pglow /= wsum;
+      }
       // Ambient occlusion from the field itself: probe outward along the normal; where something is
       // closer than the probe distance, the vertex sits in a crease and gets darker.
       let occ = 0;
@@ -221,9 +289,9 @@ export class ChunkMesher {
       ocol[o3] *= ao;
       ocol[o3 + 1] *= ao;
       ocol[o3 + 2] *= ao;
-      const pm = mat < MATERIAL_PBR.length ? mat : 0;
-      opbr[vi * 2] = PBR[pm * 2];
-      opbr[vi * 2 + 1] = PBR[pm * 2 + 1];
+      opbr[vi * 3] = pr;
+      opbr[vi * 3 + 1] = pmet;
+      opbr[vi * 3 + 2] = pglow;
       vmap[local] = vi;
       return vi;
     };
@@ -272,7 +340,7 @@ export class ChunkMesher {
       positions: opos.slice(0, nv * 3),
       normals: onrm.slice(0, nv * 3),
       colors: ocol.slice(0, nv * 3),
-      pbr: opbr.slice(0, nv * 2),
+      pbr: opbr.slice(0, nv * 3),
       indices: oidx.slice(0, ni),
     };
   }

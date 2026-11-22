@@ -4,6 +4,8 @@ import type { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js
 /** What the camera needs to see the terrain (the density field, never the mesh). */
 export interface CameraObstacles {
   raycast(ox: number, oy: number, oz: number, dx: number, dy: number, dz: number, maxT?: number): number;
+  sample(x: number, y: number, z: number): number;
+  normal(x: number, y: number, z: number, out?: [number, number, number]): [number, number, number];
 }
 
 /** The view ray starts this far from the target, so the ground under the bug does not count. */
@@ -22,6 +24,8 @@ const RISE_SPEED = 2.5;
 const SETTLE_DELAY = 0.8;
 /** Never closer to straight down than this (polar angle from +Y). */
 const MIN_PHI = 0.12;
+/** The camera keeps at least this much distance field around it (inside walls the field is negative). */
+const CLEARANCE = 1.2;
 
 /**
  * Keeps the orbit camera centred on a moving point. The player can still orbit and zoom:
@@ -32,6 +36,7 @@ export class FollowCamera {
   private readonly offset = new THREE.Vector3();
   private readonly sph = new THREE.Spherical();
   private readonly dir = new THREE.Vector3();
+  private readonly n: [number, number, number] = [0, 0, 0];
   /** Distance and polar angle the player chose. The camera only rises or comes closer while terrain is in the way. */
   private wanted = -1;
   private basePhi = 0;
@@ -126,8 +131,22 @@ export class FollowCamera {
     }
     this.sph.set(next, phi, theta);
     this.camera.position.setFromSpherical(this.sph).add(target);
+    this.pushOut(obstacles);
     this.placed = next;
     this.placedPhi = phi;
+  }
+
+  /** Softly push the camera out of solid terrain (a wall behind it), along the field's gradient. */
+  private pushOut(obstacles: CameraObstacles): void {
+    const p = this.camera.position;
+    for (let i = 0; i < 4; i++) {
+      const d = obstacles.sample(p.x, p.y, p.z);
+      if (d >= CLEARANCE) return;
+      const n = obstacles.normal(p.x, p.y, p.z, this.n);
+      p.x += n[0] * (CLEARANCE - d);
+      p.y += n[1] * (CLEARANCE - d);
+      p.z += n[2] * (CLEARANCE - d);
+    }
   }
 
   /** Distance along the view ray (from RAY_START) to the first terrain, or -1 if clear up to `range`. */

@@ -98,6 +98,13 @@ export type MatchEvent =
 const COS45 = 0.7071067811865476;
 const bugInput: BugInput = { move: 0, turn: 0, jump: false, run: false };
 
+export interface MatchOptions {
+  /** false: skip random placement (tests place the bugs themselves). Default true. */
+  placeBugs?: boolean;
+  /** Discard projectiles as soon as they leave the map box (sides and top). Default: a 20-unit margin, no top. */
+  strictBounds?: boolean;
+}
+
 export class Match {
   readonly units: Unit[] = [];
   readonly projectiles: Projectile[] = [];
@@ -133,8 +140,7 @@ export class Match {
     readonly field: TerrainField,
     readonly teams: readonly TeamSpec[],
     seed: number,
-    /** Skip random placement (tests place the bugs themselves). */
-    placeBugs = true,
+    readonly options: MatchOptions = {},
   ) {
     this.rng = createRng(seed * 2654435761 + 97);
     let id = 0;
@@ -148,7 +154,7 @@ export class Match {
         this.bugs.push(bug);
       }
     this.nextInTeam = teams.map(() => 0);
-    if (placeBugs) this.placeBugs();
+    if (options.placeBugs !== false) this.placeBugs();
     this.beginTurn(0);
   }
 
@@ -198,7 +204,7 @@ export class Match {
 
     for (let i = 0; i < this.projectiles.length; i++) {
       const p = this.projectiles[i];
-      const r = p.step(this.field, this.windX, this.windZ, this.bugs);
+      const r = p.step(this.field, this.windX, this.windZ, this.bugs, this.options.strictBounds === true);
       if (r === 'fly') continue;
       if (r === 'explode') this.explode(p.x, p.y, p.z, p.weapon);
       this.projectiles.splice(i--, 1);

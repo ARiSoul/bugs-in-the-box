@@ -15,7 +15,7 @@ const teams = (size: number) => [
 
 /** Match on `t` with bugs dropped at the given (x, z), in unit order (red, blue, red, blue...). */
 function setup(t: Terrain, at: [number, number][]): Match {
-  const m = new Match(t, teams(Math.ceil(at.length / 2)), 1, false);
+  const m = new Match(t, teams(Math.ceil(at.length / 2)), 1, { placeBugs: false });
   at.forEach(([x, z], i) => expect(m.units[i].bug.drop(t, x, z)).toBe(true));
   // an odd count leaves one unplaced bug: take it out of the game
   for (const u of m.units.slice(at.length)) {

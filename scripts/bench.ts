@@ -11,6 +11,7 @@ import { dropNear } from '../src/game/spawn';
 import { ANT } from '../src/game/species';
 import { floatingIslands } from '../src/terrain/generators/floatingIslands';
 import { insidePC } from '../src/terrain/generators/insidePC';
+import { pcCase } from '../src/terrain/generators/pcCase';
 import { ChunkMesher } from '../src/terrain/mesher';
 import { Terrain } from '../src/terrain/Terrain';
 
@@ -77,21 +78,24 @@ for (const [cx, cy, cz] of [
   );
 }
 
-// Phase 4 scenario: Inside a PC on the default large map (built from SDF stamps).
-{
+// Phase 4 scenarios on the default large map (built from SDF stamps, Dual Contouring).
+for (const [label, gen] of [
+  ['inside a PC', insidePC],
+  ['tower case (pc-case)', pcCase],
+] as const) {
   const warm = new Terrain(5, 3, 5);
-  insidePC(warm, 1); // warm-up
+  gen(warm, 1); // warm-up
   remesh(warm, sharp);
   const pc = new Terrain(5, 3, 5);
   let s0 = performance.now();
-  insidePC(pc, 1234);
+  gen(pc, 1234);
   const g = performance.now() - s0;
   s0 = performance.now();
   remesh(pc, sharp);
   const m = performance.now() - s0;
   const r = runExplosionBenchmark(pc, () => remesh(pc, sharp), 6, 60);
   console.log(
-    `inside a PC (Dual Contouring) ${pc.W}x${pc.H}x${pc.D}: generate ${g.toFixed(0)} ms  initial mesh ${m.toFixed(0)} ms  ` +
+    `${label} (Dual Contouring) ${pc.W}x${pc.H}x${pc.D}: generate ${g.toFixed(0)} ms  initial mesh ${m.toFixed(0)} ms  ` +
       `explosion r=6 mean ${r.meanMs.toFixed(1)} ms  p95 ${r.p95Ms.toFixed(1)}`,
   );
 }

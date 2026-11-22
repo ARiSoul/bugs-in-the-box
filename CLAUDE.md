@@ -38,7 +38,7 @@ src/
     materials.ts        material ids and their colours (visual only)
     sdf.ts              SDF primitives + stamps (add/cut into a shape's bounding box)
     scenarios.ts        scenario list: generator + background/fog
-    generators/         one generator per scenario: insidePC (default), floatingIslands
+    generators/         one generator per scenario: insidePC (default), pcCase, floatingIslands; parts.ts (shared fans, cables, ribbons, placement); types.ts (TerrainGenerator, SceneLayout)
   game/               gameplay, SAME purity rule as terrain/ (no three.js, no DOM)
     bug.ts              Bug: sphere physics against the field, fixed 60 Hz tick, discrete input
     field.ts            TerrainField (what gameplay may see) + surfaceDistance
@@ -48,7 +48,9 @@ src/
     projectile.ts       shells and grenades (gravity, wind, bounces)
     weapons.ts          weapons as data (Solder Blob, Capacitor, Short Circuit, Soldering Iron)
     math.ts             rotate2: deterministic rotation without sin/cos
-  render/             three.js: stage, ChunkRenderer (1 mesh per chunk), MeshWorkers (worker pool), BugView, FollowCamera, labels, projectiles, aim, effects
+  render/             three.js: stage (Stage interface + WebGL path), ChunkRenderer (1 mesh per chunk), MeshWorkers (worker pool), BugView, FollowCamera, labels, projectiles, aim, effects
+    gpu/                WebGPU render path (TSL): terrain material + glow, atmosphere (fog, glass, backdrop), god rays + bloom post, dust compute, heat shimmer, LEDs
+  debug/              shared hooks for every map: ?pose, ?flythrough, ?fly, ?perf, ?res, ?hud; camera views per scenario; perf log; captures
   workers/            mesh.worker.ts (runs the mesher on a mirror grid) + message types; no three.js, no DOM
   input/              Controls (keyboard + on-screen pad -> MatchInput), picking against the density field
   ui/                 DOM HUD
@@ -96,7 +98,8 @@ Measured on Node 22 in a cloud VM (one core). They serve as a regression baselin
 | Explosion r=6 (carve + remesh of ~3 chunks) | mean ~5–7 ms · p95 ~9–18 ms |
 | Remesh per chunk | ~2–3 ms |
 | Bug step | ~0.5 µs per bug per tick |
-| Inside a PC, 160×96×160 (Dual Contouring) | generate ~35 ms · initial mesh ~100 ms (CPU, one thread) · explosion r=6 mean ~7.5 ms (on the workers) |
+| Inside a PC, 160×96×160 (Dual Contouring) | generate ~35 ms · initial mesh ~115 ms (CPU, one thread) · explosion r=6 mean ~8.5 ms (on the workers) |
+| Tower Case (`pc-case`), 160×96×160 | generate ~60 ms · initial mesh ~210 ms (CPU, one thread) · explosion r=6 mean ~11.6 ms (on the workers) |
 | Large map 160×96×160 (75 chunks, `?map=5x3x5`) | generate ~700–850 ms · initial mesh ~80–100 ms · explosion r=6 mean ~5 ms |
 
 Target budget: one explosion must not exceed 1 frame (16 ms) on the main thread. Since Phase 3 meshing runs on workers: an explosion costs the main thread ~1–2 ms (region copy + geometry upload) on desktop, 1.8 ms on a Samsung S23 Ultra. Render target: 60 fps on desktop and phones (the S23 Ultra, high-end, holds it: p95 16.7 ms; a mid-range phone is still to be measured).
@@ -107,4 +110,4 @@ Target budget: one explosion must not exceed 1 frame (16 ms) on the main thread.
 
 ## Current status
 
-Phase 0 done: destructible SDF terrain prototype (click to explode, seed, benchmark). Phase 1 done: a controllable bug (ant, spider, cockroach) that walks, jumps, falls into craters and dies off the map, with a follow camera. Phase 2 done: local hot-seat matches (Red Ants vs Blue Spiders, 3 bugs each), turns, wind, 4 weapons, damage, knockback, fall damage, on-screen pad for mouse and touch. Phase 3 done for PC: meshing runs on a Web Worker pool, live performance readouts, the large map (5×3×5) is the default and runs at 60 fps on desktop; WASM and LOD not needed for now. Phone work is postponed (see ROADMAP). Phase 4 in progress: SDF stamps, materials, and the first themed scenario, Inside a PC (the default). Next: more scenarios (speaker, fridge, guitar, microwave). See `docs/ROADMAP.md`.
+Phase 0 done: destructible SDF terrain prototype (click to explode, seed, benchmark). Phase 1 done: a controllable bug (ant, spider, cockroach) that walks, jumps, falls into craters and dies off the map, with a follow camera. Phase 2 done: local hot-seat matches (Red Ants vs Blue Spiders, 3 bugs each), turns, wind, 4 weapons, damage, knockback, fall damage, on-screen pad for mouse and touch. Phase 3 done for PC: meshing runs on a Web Worker pool, live performance readouts, the large map (5×3×5) is the default and runs at 60 fps on desktop; WASM and LOD not needed for now. Phone work is postponed (see ROADMAP). Phase 4 in progress: SDF stamps, materials, the first themed scenario, Inside a PC (the default), and Tower Case (`pc-case`) on the new WebGPU render path with shared debug hooks and review tooling. Next: more scenarios (speaker, fridge, guitar, microwave). See `docs/ROADMAP.md`.

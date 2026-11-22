@@ -6,30 +6,18 @@ import {
   CABLE_YELLOW,
   CAP_SLEEVE,
   COPPER,
-  FAN,
   GOLD,
   PCB,
   SHROUD,
   SILICON,
   STEEL,
 } from '../materials';
-import { add, box, boxMinMax, capsule, cut, cylinder, rotatedBox, torus, type Axis } from '../sdf';
-import type { Terrain } from '../Terrain';
+import { add, box, boxMinMax, cut, cylinder, torus } from '../sdf';
+import { cable, createPlacement, fan, fanRotor, type Vec3 } from './parts';
 import type { TerrainGenerator } from './types';
 
 /** Height of the top of the motherboard. Below it there is nothing: fall off the board and you are gone. */
 const BOARD_TOP = 16;
-const SQRT3_2 = 0.8660254037844386;
-/** Six blade directions, 60° apart, as exact (cos, sin) pairs (no Math.sin/cos). */
-const BLADES: readonly (readonly [number, number])[] = [
-  [1, 0],
-  [0.5, SQRT3_2],
-  [-0.5, SQRT3_2],
-  [-1, 0],
-  [-0.5, -SQRT3_2],
-  [0.5, -SQRT3_2],
-];
-
 type Rect = [number, number, number, number];
 
 /**
@@ -47,15 +35,7 @@ export const insidePC: TerrainGenerator = (terrain, seed) => {
   const rng = createRng(seed * 4099 + 7);
   const rand = (a: number, b: number): number => a + rng() * (b - a);
   const P = BOARD_TOP;
-  const used: Rect[] = [];
-  const free = (x0: number, z0: number, x1: number, z1: number): boolean => {
-    if (x0 < 9 || z0 < 9 || x1 > W - 9 || z1 > D - 9) return false;
-    for (const r of used) if (x0 < r[2] && x1 > r[0] && z0 < r[3] && z1 > r[1]) return false;
-    return true;
-  };
-  const claim = (x0: number, z0: number, x1: number, z1: number): void => {
-    used.push([x0, z0, x1, z1]);
-  };
+  const { free, claim } = createPlacement(W, D, 9);
 
   // ---- motherboard, with plated mounting holes in the corners
   add(terrain, boxMinMax(6, P - 3, 6, W - 6, P, D - 6, 0.8), PCB);
@@ -208,8 +188,8 @@ export const insidePC: TerrainGenerator = (terrain, seed) => {
   }
 
   // ---- power cables from the PSU, arcing over the board: bridges (two strands side by side)
-  const from = (k: number): [number, number, number] => [psu[0] + 8 + k * 9, P + 14, psu[3] + 1];
-  const targets: [number, number, number][] = [];
+  const from = (k: number): Vec3 => [psu[0] + 8 + k * 9, P + 14, psu[3] + 1];
+  const targets: Vec3[] = [];
   if (atx) targets.push([atxX, P + 5, cz]);
   targets.push([gpuPowerX, P + 22.2, gz]);
   if (eps) targets.push([epsX, P + 5, epsZ]);
@@ -217,59 +197,3 @@ export const insidePC: TerrainGenerator = (terrain, seed) => {
 
   terrain.commitGeneration();
 };
-
-/**
- * A fan: square frame with a round opening (if `framed`), hub and six blades. `axis` 1 = blowing up,
- * 2 = facing -z. `half` is the frame's half size, `radius` the opening.
- */
-function fan(t: Terrain, x: number, y: number, z: number, axis: Axis, half: number, radius: number, framed: boolean): void {
-  if (framed) {
-    add(t, box(x, y, z, half, 2, half, 0.6), FAN);
-    cut(t, cylinder(x, y, z, radius, 2.2, axis));
-  } else {
-    cut(t, cylinder(x, y, z, radius, 2.5, axis));
-  }
-  fanRotor(t, x, y, axis === 2 ? z + 1 : z, axis, 0, radius - 0.8);
-}
-
-/** Hub and six blades of a fan rotor centred at (x, y, z), spinning about `axis` (1 or 2). */
-function fanRotor(t: Terrain, x: number, y: number, z: number, axis: Axis, hubRadius: number, reach: number): void {
-  const hub = hubRadius > 0 ? hubRadius : reach * 0.32;
-  add(t, cylinder(x, y, z, hub, 1.3, axis, 1), FAN);
-  const len = (reach - hub) / 2;
-  const mid = hub + len - 0.3;
-  for (const [c, s] of BLADES) {
-    if (axis === 1) add(t, rotatedBox(x + c * mid, y, z + s * mid, len, 1, reach * 0.2, 1, c, s, 0.4), FAN);
-    else add(t, rotatedBox(x + c * mid, y + s * mid, z, len, reach * 0.2, 1, 2, c, s, 0.4), FAN);
-  }
-}
-
-/**
- * A thick cable from `a` to `b`: a cubic arc that leaves and arrives vertically (so it clears the parts
- * next to its ends) and peaks about `lift` above the higher end. Wide enough to walk on: a bridge.
- */
-function cable(t: Terrain, a: [number, number, number], b: [number, number, number], lift: number, material: number): void {
-  // Control points straight above the ends; at u = 0.5 the curve is 0.75 of the way up to them.
-  const top = Math.max(a[1], b[1]) + lift;
-  const c1y = a[1] + (top - (a[1] + b[1]) / 2) / 0.75;
-  const c2y = b[1] + (top - (a[1] + b[1]) / 2) / 0.75;
-  const SEGMENTS = 24;
-  let lx = a[0];
-  let ly = a[1];
-  let lz = a[2];
-  for (let i = 1; i <= SEGMENTS; i++) {
-    const u = i / SEGMENTS;
-    const v = 1 - u;
-    const w0 = v * v * v;
-    const w1 = 3 * v * v * u;
-    const w2 = 3 * v * u * u;
-    const w3 = u * u * u;
-    const x = (w0 + w1) * a[0] + (w2 + w3) * b[0];
-    const y = w0 * a[1] + w1 * c1y + w2 * c2y + w3 * b[1];
-    const z = (w0 + w1) * a[2] + (w2 + w3) * b[2];
-    add(t, capsule(lx, ly, lz, x, y, z, 1.8), material); // hard union: a smooth one would bulge at the joints
-    lx = x;
-    ly = y;
-    lz = z;
-  }
-}

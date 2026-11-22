@@ -44,7 +44,8 @@ Goal now: a PC demo first, as a proof of concept. The phone items below are post
 - [x] Palette/shading per scenario: a material id per sample, a colour per material, and a background and fog colour per scenario; scenario picker in the menu (`?scenario=pc|islands`)
 - [x] Visual quality, step 1: shadows, image-based light and reflections, per-material roughness/metalness, ambient occlusion from the field, ACES tone mapping; design rule of at least ~2 cells for every part and gap
 - [x] Visual quality, step 2: sharp edges with Dual Contouring for built scenarios (normals from the most linear neighbouring cell), hard-edge shading; Surface Nets stays for natural terrain
-- [ ] More scenarios: speaker, fridge, guitar, microwave
+- [x] Tower Case (`pc-case`): a gaming tower on its side under a glass panel, on the new WebGPU render path (height fog, god rays, bloom, glass, dust compute, heat shimmer, RGB that cycles); shared debug hooks (`?pose`, `?flythrough`, `?fly`, `?perf`, `?res`) and visual-review tooling for every later map
+- [ ] More scenarios: speaker, fridge, guitar, microwave (same quality bar: priorities, frame-time gates, determinism, visual-critic loop)
 
 ## Phase 5 · Multiplayer
 - [ ] Deterministic simulation validated across clients (same seed + same events = same map)

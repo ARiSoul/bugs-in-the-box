@@ -55,7 +55,7 @@ export class Projectile {
    * contact with terrain or a bug; grenades bounce off terrain and explode when the fuse runs out.
    * On 'explode' the projectile sits at the explosion point.
    */
-  step(field: TerrainField, windX: number, windZ: number, bugs: readonly Bug[]): ProjectileResult {
+  step(field: TerrainField, windX: number, windZ: number, bugs: readonly Bug[], strictBounds = false): ProjectileResult {
     const w = this.weapon;
     this.px = this.x;
     this.py = this.y;
@@ -85,7 +85,9 @@ export class Projectile {
       }
     }
 
-    if (this.y < KILL_Y || this.x < -20 || this.z < -20 || this.x > field.W + 20 || this.z > field.D + 20) return 'lost';
+    const m = strictBounds ? 0 : 20;
+    if (this.y < KILL_Y || this.x < -m || this.z < -m || this.x > field.W + m || this.z > field.D + m) return 'lost';
+    if (strictBounds && this.y > field.H) return 'lost';
     return 'fly';
   }
 

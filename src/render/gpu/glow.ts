@@ -1,0 +1,77 @@
+import * as THREE from 'three/webgpu';
+import { abs, clamp, dot, float, fract, max, uniform, uniformArray, vec3 } from 'three/tsl';
+import type { Feature, SceneLayout } from '../../terrain/generators/types';
+
+/**
+ * Shared state of the RGB lighting on the WebGPU path: one hue that every RGB light shows at the same
+ * time (render-only: a time-based offset, never seen by gameplay), the fans (for the spinning stripe
+ * on their blades) and the light positions (for the coloured fog near them).
+ */
+
+/** Most fans / lights the shaders look at. */
+export const MAX_FANS = 8;
+export const MAX_LIGHTS = 12;
+/** Seconds for the hue to sweep teal -> magenta and back. */
+const HUE_PERIOD = 14;
+/** Hue range of the sweep (0..1 around the colour wheel): teal to magenta. */
+const HUE_FROM = 0.47;
+const HUE_TO = 0.86;
+
+export class Glow {
+  /** Current hue (0..1), set by `update`. */
+  readonly hue = uniform(HUE_FROM);
+  /** Seconds since start, for the fan stripe and the LEDs. */
+  readonly time = uniform(0);
+  /** Fan centre (xyz) and opening radius (w); axis in `fanAxis` (0, 1, 2). */
+  readonly fans = uniformArray(Array.from({ length: MAX_FANS }, () => new THREE.Vector4(0, -1000, 0, 0)), 'vec4');
+  readonly fanAxis = uniformArray(new Array<number>(MAX_FANS).fill(1), 'float');
+  /** RGB light positions (xyz) and strength (w, 0 = unused). */
+  readonly lights = uniformArray(Array.from({ length: MAX_LIGHTS }, () => new THREE.Vector4(0, -1000, 0, 0)), 'vec4');
+  /** Current RGB colour (linear), for CPU-side uses (dust tint, LEDs). */
+  readonly rgb = new THREE.Color();
+
+  setLayout(layout: SceneLayout): void {
+    const fans = layout.features.filter((f) => f.kind === 'fan');
+    for (let i = 0; i < MAX_FANS; i++) {
+      const f: Feature | undefined = fans[i];
+      (this.fans.array[i] as THREE.Vector4).set(f ? f.x : 0, f ? f.y : -1000, f ? f.z : 0, f ? f.radius : 0);
+      this.fanAxis.array[i] = f ? f.axis : 1;
+    }
+    const lights = layout.features.filter((f) => f.kind === 'fan' || f.kind === 'pump' || f.kind === 'lightBar');
+    for (let i = 0; i < MAX_LIGHTS; i++) {
+      const f: Feature | undefined = lights[i];
+      const strength = !f ? 0 : f.kind === 'lightBar' ? 0.7 : 1;
+      (this.lights.array[i] as THREE.Vector4).set(f ? f.x : 0, f ? f.y : -1000, f ? f.z : 0, strength);
+    }
+  }
+
+  update(seconds: number): void {
+    this.time.value = seconds;
+    // smooth ping-pong between the two hues
+    const p = (seconds / HUE_PERIOD) % 1;
+    const tri = p < 0.5 ? p * 2 : 2 - p * 2;
+    const eased = tri * tri * (3 - 2 * tri);
+    this.hue.value = HUE_FROM + (HUE_TO - HUE_FROM) * eased;
+    hueToRgb(this.hue.value, this.rgb);
+  }
+}
+
+/** Luminance every hue is scaled to, so teal is not brighter than magenta. */
+const HUE_LUMA = 0.3;
+
+/** Fully saturated colour of hue `h` (0..1), at the same luminance for every hue, in a shader. */
+export function hueColor(h: THREE.Node<'float'>): THREE.Node<'vec3'> {
+  const k = fract(vec3(h, h, h).add(vec3(0, 2 / 3, 1 / 3))).mul(6).sub(3);
+  const c = clamp(abs(k).sub(1), float(0), float(1));
+  return c.mul(float(HUE_LUMA).div(max(dot(c, vec3(0.2126, 0.7152, 0.0722)), 0.05)));
+}
+
+/** Same as `hueColor`, on the CPU (sRGB-ish primaries treated as linear, like the shader). */
+export function hueToRgb(h: number, out: THREE.Color): THREE.Color {
+  const ch = (o: number): number => Math.min(1, Math.max(0, Math.abs((((h + o) % 1) + 1) % 1 * 6 - 3) - 1));
+  const r = ch(0);
+  const g = ch(2 / 3);
+  const b = ch(1 / 3);
+  const k = HUE_LUMA / Math.max(0.2126 * r + 0.7152 * g + 0.0722 * b, 0.05);
+  return out.setRGB(r * k, g * k, b * k);
+}

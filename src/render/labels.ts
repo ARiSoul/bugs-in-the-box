@@ -10,7 +10,7 @@ function textSprite(width: number, height: number): { sprite: THREE.Sprite; ctx:
   if (!ctx) throw new Error('2D canvas not available');
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
-  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, depthTest: false, transparent: true }));
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, depthTest: false, transparent: true, fog: false }));
   sprite.renderOrder = 10;
   return { sprite, ctx, texture };
 }
@@ -33,19 +33,33 @@ export class UnitLabel {
     this.sprite.scale.set(4.2, 1.18, 1);
   }
 
-  update(position: THREE.Vector3, height: number, health: number, visible: boolean): void {
+  /**
+   * `cameraDistance`: the label grows past ~30 units away so it keeps a readable size on screen
+   * (about 60 px wide at 1080p and the default field of view). `hidden`: the bug is behind terrain; the
+   * label stays (players need to find their bugs) but dims.
+   */
+  update(position: THREE.Vector3, height: number, health: number, visible: boolean, cameraDistance = 0, hidden = false): void {
     this.sprite.visible = visible;
     if (!visible) return;
-    this.sprite.position.set(position.x, position.y + height, position.z);
+    this.sprite.material.opacity = hidden ? 0.35 : 1;
+    const grow = Math.max(1, cameraDistance / 30);
+    this.sprite.scale.set(4.2 * grow, 1.18 * grow, 1);
+    this.sprite.position.set(position.x, position.y + height + 0.4 * (grow - 1), position.z);
     if (health === this.shown) return;
     this.shown = health;
     const { ctx } = this;
     ctx.clearRect(0, 0, 256, 72);
+    // backing plate, so the text reads on bright and busy backgrounds
+    ctx.fillStyle = 'rgba(6, 8, 12, 0.55)';
+    ctx.beginPath();
+    ctx.roundRect(36, 2, 184, 68, 12);
+    ctx.fill();
     ctx.font = '600 26px ui-monospace, Consolas, monospace';
     ctx.textAlign = 'center';
     ctx.lineWidth = 6;
     ctx.strokeStyle = 'rgba(0,0,0,0.75)';
-    ctx.fillStyle = hex(this.color);
+    // the team colour lifted towards white, so dark team colours read on the plate
+    ctx.fillStyle = `color-mix(in srgb, ${hex(this.color)} 65%, white)`;
     ctx.strokeText(this.name, 128, 28);
     ctx.fillText(this.name, 128, 28);
     ctx.font = '700 30px ui-monospace, Consolas, monospace';

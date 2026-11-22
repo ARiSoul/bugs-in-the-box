@@ -1,7 +1,12 @@
 import * as THREE from 'three';
 import { runExplosionBenchmark } from './bench/explosions';
+import { applyPose, CameraPath, FlyCamera } from './debug/camera';
+import { captureCanvas } from './debug/capture';
+import { readHooks, usesDebugCamera } from './debug/hooks';
+import { PerfLog } from './debug/perf';
+import { viewsFor, type ScenarioViews } from './debug/views';
 import { DT } from './game/bug';
-import { Match, type MatchEvent, type TeamSpec } from './game/match';
+import { Match, NO_INPUT, type MatchEvent, type TeamSpec } from './game/match';
 import { ANT, SPIDER } from './game/species';
 import { SOLDER_BLOB, WEAPONS } from './game/weapons';
 import { Controls } from './input/controls';
@@ -14,7 +19,8 @@ import { FollowCamera } from './render/followCamera';
 import { MeshWorkers, type MeshBatch } from './render/MeshWorkers';
 import { FloatingTexts, UnitLabel } from './render/labels';
 import { ProjectileViews } from './render/projectiles';
-import { createStage } from './render/stage';
+import { createStage, type Stage, type StageOptions } from './render/stage';
+import { createLayout } from './terrain/generators/types';
 import { SCENARIOS, scenarioById, type Scenario } from './terrain/scenarios';
 import { Terrain } from './terrain/Terrain';
 import { Hud, type HudState } from './ui/hud';
@@ -26,11 +32,20 @@ const TEAMS: TeamSpec[] = [
 
 const canvas = document.getElementById('c') as HTMLCanvasElement;
 const params = new URLSearchParams(location.search);
+const hooks = readHooks(params);
 // Map size in chunks of 32, e.g. `?map=3x2x3` for the small map (default 5x3x5), until there is a setup screen.
 const size = (params.get('map') ?? '').match(/^(\d)x(\d)x(\d)$/);
 const terrain = size ? new Terrain(Number(size[1]), Number(size[2]), Number(size[3])) : new Terrain(5, 3, 5);
-const stage = createStage(canvas, terrain);
-const chunks = new ChunkRenderer(stage.scene);
+let seed = 1234;
+let scenario: Scenario = scenarioById(params.get('scenario'));
+const layout = createLayout();
+const stageOptions: StageOptions = { fixedSize: hooks.fixedSize, timestamps: hooks.perf, seed };
+// The scenario picks the render path; the WebGPU one is loaded only when needed (it is large).
+const stage: Stage =
+  scenario.render === 'webgpu'
+    ? await import('./render/gpu/gpuStage').then((m) => m.createGpuStage(canvas, terrain, stageOptions))
+    : createStage(canvas, terrain, stageOptions);
+const chunks = new ChunkRenderer(stage.scene, stage.look);
 const flashes = new ExplosionFlashes(stage.scene);
 const lines = new LineFlashes(stage.scene);
 const texts = new FloatingTexts(stage.scene);
@@ -58,7 +73,7 @@ const refresh = (): void => {
 // Meshing runs on a worker pool; `?mesh=main` keeps it on the main thread (to compare, or as a fallback).
 let initialBatch = -1;
 const workers = params.get('mesh') === 'main' ? null : MeshWorkers.create(onMeshBatch);
-state.meshing = workers ? `${workers.size} worker${workers.size > 1 ? 's' : ''}` : 'main thread';
+state.meshing = `${workers ? `${workers.size} worker${workers.size > 1 ? 's' : ''}` : 'main thread'} · ${stage.backend}`;
 
 /** A batch of chunk meshes is ready: show all of them in this frame (neighbours must change together). */
 function onMeshBatch(b: MeshBatch): void {
@@ -76,17 +91,17 @@ function onMeshBatch(b: MeshBatch): void {
   refresh();
 }
 
-let seed = 1234;
-let scenario: Scenario = scenarioById(params.get('scenario'));
 let match: Match;
-let views: { view: BugView; label: UnitLabel; height: number }[] = [];
+let views: ScenarioViews;
+let bugViews: { view: BugView; label: UnitLabel; height: number }[] = [];
 
 /** New map and new match from one number: the seed is all two players need to share. */
 function newMatch(s: number): void {
   const t0 = performance.now();
-  scenario.generate(terrain, s);
-  applySky(scenario);
+  scenario.generate(terrain, s, layout);
+  stage.setScenario(scenario, layout, terrain);
   chunks.setSharp(scenario.sharpEdges);
+  views = viewsFor(scenario.id, terrain, layout);
   state.generateMs = performance.now() - t0;
   if (workers) {
     workers.reset();
@@ -100,21 +115,21 @@ function newMatch(s: number): void {
   state.lastExplosionChunks = 0;
   state.bench = '';
 
-  match = new Match(terrain, TEAMS, s);
-  for (const v of views) {
+  match = new Match(terrain, TEAMS, s, { strictBounds: scenario.strictBounds });
+  for (const v of bugViews) {
     v.view.dispose();
     v.label.dispose();
   }
-  views = match.units.map((u) => {
+  bugViews = match.units.map((u) => {
     const view = new BugView(u.bug.species);
     const label = new UnitLabel(u.name, match.teams[u.team].color);
     stage.scene.add(view.root, label.sprite);
     return { view, label, height: u.bug.species.radius * 2.4 };
   });
   hud.setupMatch(match, WEAPONS, (i) => controls.selectWeapon(i));
-  const active = views[match.active];
+  const active = bugViews[match.active];
   active.view.update(match.activeUnit.bug, 1, 0);
-  follow.focus(active.view.root.position, 34);
+  startCamera();
   refresh();
 }
 
@@ -134,7 +149,7 @@ function handleEvents(events: readonly MatchEvent[]): void {
         break;
       case 'damage': {
         const u = match.units[e.unit];
-        texts.spawn(`-${e.amount}`, match.teams[u.team].color, at.set(u.bug.x, u.bug.y + views[e.unit].height + 1, u.bug.z));
+        texts.spawn(`-${e.amount}`, match.teams[u.team].color, at.set(u.bug.x, u.bug.y + bugViews[e.unit].height + 1, u.bug.z));
         break;
       }
       default:
@@ -175,16 +190,18 @@ hud.scenario.replaceChildren(
 );
 hud.scenario.value = scenario.id;
 hud.scenario.addEventListener('change', () => {
-  scenario = scenarioById(hud.scenario.value);
+  const next = scenarioById(hud.scenario.value);
+  params.set('scenario', next.id);
+  if (next.render !== scenario.render) {
+    // another render path needs another canvas context: reload with the new scenario
+    location.search = params.toString();
+    return;
+  }
+  scenario = next;
+  history.replaceState(null, '', `?${params.toString()}`);
   newMatch(seed);
   hud.scenario.blur();
 });
-
-/** The look around the map: page background behind the canvas and the fog colour. */
-function applySky(sc: Scenario): void {
-  document.body.style.background = sc.sky.css;
-  (stage.scene.fog as THREE.Fog).color.setHex(sc.sky.fog);
-}
 hud.regen.addEventListener('click', () => {
   seed = Number(hud.seed.value) | 0;
   newMatch(seed);
@@ -197,7 +214,7 @@ hud.random.addEventListener('click', () => {
   hud.random.blur();
 });
 hud.bench.addEventListener('click', () => {
-  scenario.generate(terrain, seed);
+  scenario.generate(terrain, seed, layout);
   chunks.sync(terrain);
   const r = runExplosionBenchmark(terrain, () => chunks.sync(terrain).chunks, 6, 60);
   newMatch(seed);
@@ -220,6 +237,102 @@ if (import.meta.env.DEV) {
   });
 }
 
+// ---- cameras: the game's orbit/follow camera, or a debug camera (pose, fly-through, free) ----
+/** The game camera starts on the scenario's start pose, holds it, then glides to the first bug. */
+const INTRO_HOLD = 2.2;
+const INTRO_GLIDE = 1.6;
+let introT = -1;
+let introReady = false;
+const introFrom = new THREE.Vector3();
+const introFromTarget = new THREE.Vector3();
+const introTo = new THREE.Vector3();
+const introToTarget = new THREE.Vector3();
+const debugCamera = usesDebugCamera(hooks);
+let fly: FlyCamera | null = null;
+let path: CameraPath | null = null;
+/** Fly-through time; null: follows the clock, a number: frozen there (`__debug.seek`). */
+let pathFrozenAt: number | null = null;
+let pathStart = performance.now();
+
+function startCamera(): void {
+  const k = views.start;
+  stage.camera.position.set(...k.p);
+  stage.controls.target.set(...k.t);
+  stage.camera.lookAt(stage.controls.target);
+  if (debugCamera) {
+    stage.controls.enabled = false;
+    if (hooks.pose > 0) applyPose(stage.camera, views.poses[hooks.pose - 1]);
+    // the path keeps clear of the terrain inside the map; above the top layers (over the walls, the glass)
+    // it may pass freely
+    const top = layout.glassY > 0 ? layout.glassY - 2 : terrain.H;
+    if (hooks.flythrough) path = new CameraPath(views.path, views.duration, { sample: (x, y, z) => (y > top ? 99 : terrain.sample(x, y, z)) });
+    if (hooks.fly && !fly) fly = new FlyCamera(stage.camera, canvas, views.start);
+    pathStart = performance.now();
+    return;
+  }
+  stage.controls.update();
+  introT = 0;
+  introReady = false;
+}
+
+/** Hold the start pose, then glide from it to where the follow camera will be. True while it runs. */
+function updateIntro(dt: number): boolean {
+  if (introT < 0) return false;
+  introT += dt;
+  if (introT < INTRO_HOLD) return true;
+  if (!introReady) {
+    introReady = true;
+    introFrom.copy(stage.camera.position);
+    introFromTarget.copy(stage.controls.target);
+    follow.focus(bugViews[match.active].view.root.position, 34);
+    introTo.copy(stage.camera.position);
+    introToTarget.copy(stage.controls.target);
+  }
+  const u = Math.min(1, (introT - INTRO_HOLD) / INTRO_GLIDE);
+  const e = u * u * (3 - 2 * u);
+  stage.camera.position.lerpVectors(introFrom, introTo, e);
+  stage.controls.target.lerpVectors(introFromTarget, introToTarget, e);
+  stage.camera.lookAt(stage.controls.target);
+  if (u < 1) return true;
+  introT = -1;
+  follow.focus(stage.controls.target, 34);
+  return false;
+}
+
+const perf = hooks.perf
+  ? new PerfLog(stage.gpuTimer, () => ({
+      scenario: scenario.id,
+      map: `${terrain.cx}x${terrain.cy}x${terrain.cz}`,
+      backend: stage.backend,
+      resolution: `${canvas.width}x${canvas.height}`,
+    }))
+  : null;
+const pathTarget = new THREE.Vector3();
+
+/**
+ * Render-only time (RGB hue, LEDs, dust, shimmer). On a fixed pose it runs at a fixed 60 Hz step for
+ * POSE_SETTLE seconds and then stops, so a pose renders the same image on every run.
+ */
+const POSE_SETTLE = 6;
+let renderFrames = 0;
+function renderSeconds(now: number): number {
+  if (hooks.pose > 0) return Math.min(renderFrames, POSE_SETTLE * 60) / 60;
+  return now / 1000;
+}
+function renderStep(dt: number): number {
+  if (hooks.pose > 0) return renderFrames++ < POSE_SETTLE * 60 ? 1 / 60 : 0;
+  return dt;
+}
+
+/** True if terrain lies between the camera and `p` (the density field, as gameplay sees it). */
+const toBug = new THREE.Vector3();
+function occluded(p: THREE.Vector3, dist: number): boolean {
+  const c = stage.camera.position;
+  toBug.copy(p).sub(c).divideScalar(dist || 1);
+  const hit = terrain.raycast(c.x, c.y, c.z, toBug.x, toBug.y, toBug.z, dist - 1.5);
+  return hit >= 0;
+}
+
 // ---- loop: fixed-step simulation, interpolated rendering ----
 window.addEventListener('resize', stage.resize);
 const target = new THREE.Vector3();
@@ -229,15 +342,23 @@ let frameCount = 0;
 let lastFps = performance.now();
 let lastFrame = performance.now();
 let accumulator = 0;
+let paused = false;
 function loop(now: number): void {
   requestAnimationFrame(loop);
+  if (paused) {
+    lastFrame = now;
+    return;
+  }
   const dt = Math.min(0.25, (now - lastFrame) / 1000); // after a stall, drop time instead of spiralling
-  frameMs[frameCount++ % frameMs.length] = now - lastFrame;
+  const interval = now - lastFrame;
+  frameMs[frameCount++ % frameMs.length] = interval;
   lastFrame = now;
 
+  const intro = !debugCamera && updateIntro(dt);
   accumulator += dt;
   while (accumulator >= DT) {
-    match.step(controls.next());
+    // a debug camera (or the intro) owns the view: the match keeps running without input
+    match.step(debugCamera || intro ? NO_INPUT : controls.next());
     handleEvents(match.events);
     accumulator -= DT;
   }
@@ -245,16 +366,17 @@ function loop(now: number): void {
   const alpha = accumulator / DT;
 
   match.units.forEach((u, i) => {
-    const v = views[i];
+    const v = bugViews[i];
     v.view.update(u.bug, alpha, dt);
-    v.label.update(v.view.root.position, v.height, u.bug.health, u.bug.alive);
+    const dist = stage.camera.position.distanceTo(v.view.root.position);
+    v.label.update(v.view.root.position, v.height, u.bug.health, u.bug.alive, dist, u.bug.alive && occluded(v.view.root.position, dist));
   });
   projectiles.sync(match.projectiles, alpha);
-  const active = views[match.active];
+  const active = bugViews[match.active];
   aim.update(match, active.view.root.position, active.height, now);
 
   // follow the shot while it flies, otherwise the bug whose turn it is
-  if (projectiles.first(target) || match.activeUnit.bug.alive) {
+  if (!debugCamera && !intro && (projectiles.first(target) || match.activeUnit.bug.alive)) {
     if (match.projectiles.length === 0) target.copy(active.view.root.position);
     follow.update(target, dt);
   }
@@ -268,12 +390,18 @@ function loop(now: number): void {
   const away = match.windX * fx + match.windZ * fz;
   hud.renderMatch(match, Math.atan2(-away, right));
 
-  stage.controls.update();
-  follow.avoid(terrain, dt);
+  if (debugCamera) {
+    if (path) path.at(pathFrozenAt ?? (now - pathStart) / 1000, stage.camera, pathTarget);
+    if (fly) fly.update(dt);
+  } else if (!intro) {
+    stage.controls.update();
+    follow.avoid(terrain, dt);
+  }
   flashes.update(now);
   lines.update(now);
   texts.update(now);
-  stage.renderer.render(stage.scene, stage.camera);
+  stage.render(renderSeconds(now), renderStep(dt));
+  perf?.record(interval);
   if (now - lastFps > 500) {
     hud.setFrames(frameMs, Math.min(frameCount, frameMs.length));
     lastFps = now;
@@ -281,8 +409,60 @@ function loop(now: number): void {
 }
 
 newMatch(seed);
+if (!hooks.hud) document.body.classList.add('no-hud');
 requestAnimationFrame(loop);
 
-if (import.meta.env.DEV) {
-  (window as unknown as { __game: unknown }).__game = { terrain, stage, chunks, controls, match: () => match, newMatch };
+// Debug API (console, and the scripted review): poses, fly-through time, captures, perf runs.
+const debugApi = {
+  terrain,
+  stage,
+  chunks,
+  controls,
+  layout,
+  match: () => match,
+  newMatch,
+  views: () => views,
+  /** Freeze the fly-through at `t` seconds (null: back to the clock). */
+  seek(t: number | null): void {
+    pathFrozenAt = t;
+    if (t === null) pathStart = performance.now();
+  },
+  /** Stop (or resume) the live loop, so captures alone advance the frames. */
+  pause(on: boolean): void {
+    paused = on;
+  },
+  /**
+   * Draw a frame now and save it as captures/<name>.png (dev server only). With `t`, the fly-through
+   * and the render-only animation are at time `t`, and `dt` advances the dust: with the loop paused, a
+   * sequence of captures is the same on every run.
+   */
+  capture(name: string, opts: { t?: number; dt?: number; jpeg?: boolean } = {}): Promise<string> {
+    const t = opts.t ?? pathFrozenAt ?? (performance.now() - pathStart) / 1000;
+    if (path) path.at(t, stage.camera, pathTarget);
+    stage.render(opts.t !== undefined ? opts.t : renderSeconds(performance.now()), opts.dt ?? 0);
+    return captureCanvas(canvas, name, opts.jpeg === true);
+  },
+  /** Restart the fly-through and the perf log together; resolves with the report after `seconds`. */
+  perfRun(seconds = 60): Promise<unknown> {
+    const log = perf;
+    if (!log) return Promise.reject(new Error('open with ?perf=1'));
+    pathFrozenAt = null;
+    pathStart = performance.now();
+    log.start(performance.now(), stage.frameNumber() + 1);
+    return new Promise((resolve) =>
+      setTimeout(() => {
+        log.stop();
+        // let the last GPU timings arrive
+        setTimeout(() => resolve(log.report(performance.now())), 600);
+      }, seconds * 1000),
+    );
+  },
+  perfDownload: (): void => perf?.download(performance.now()),
+};
+(window as unknown as { __debug: unknown }).__debug = debugApi;
+if (perf && 'gpu' in navigator) {
+  void navigator.gpu.requestAdapter({ powerPreference: 'high-performance' }).then((a) => {
+    const info = (a as unknown as { info?: { vendor?: string; architecture?: string; description?: string } } | null)?.info;
+    perf.gpuAdapter = info ? `${info.vendor ?? ''} ${info.architecture ?? ''} ${info.description ?? ''}`.trim() : 'unknown';
+  });
 }
