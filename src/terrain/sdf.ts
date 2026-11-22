@@ -14,7 +14,7 @@ import type { Terrain } from './Terrain';
  * that the caller builds from exact values (e.g. √3/2), never Math.sin/cos.
  */
 
-export const Kind = { Sphere: 0, Box: 1, Cylinder: 2, Capsule: 3, Torus: 4 } as const;
+export const Kind = { Sphere: 0, Box: 1, Cylinder: 2, Capsule: 3, Torus: 4, Cone: 5 } as const;
 export type Kind = (typeof Kind)[keyof typeof Kind];
 
 /** Axis of a cylinder, a torus, or a box rotation: 0 = x, 1 = y, 2 = z. */
@@ -26,7 +26,10 @@ export interface Shape {
   x: number;
   y: number;
   z: number;
-  /** Box: half sizes. Cylinder: radius, half height, (unused). Capsule: second end. Torus: ring radius, tube radius. Sphere: radius. */
+  /**
+   * Box: half sizes. Cylinder: radius, half height, (unused). Capsule: second end. Torus: ring radius, tube radius.
+   * Sphere: radius. Cone: half height, bottom radius, top radius.
+   */
   a: number;
   b: number;
   c: number;
@@ -84,6 +87,13 @@ export const capsule = (x0: number, y0: number, z0: number, x1: number, y1: numb
 /** Ring around `axis`. */
 export const torus = (x: number, y: number, z: number, ring: number, tube: number, axis: Axis = 1): Shape =>
   shape(Kind.Torus, x, y, z, ring, tube, 0, 0, axis);
+
+/**
+ * Capped cone along y, from `radiusBottom` at `yBottom` to `radiusTop` at `yTop` (either may be the wider;
+ * a radius of 0 makes a point). A loudspeaker cone, a funnel, a lamp shade.
+ */
+export const cone = (x: number, yBottom: number, z: number, radiusBottom: number, yTop: number, radiusTop: number): Shape =>
+  shape(Kind.Cone, x, (yBottom + yTop) / 2, z, (yTop - yBottom) / 2, radiusBottom, radiusTop);
 
 /** Signed distance from (px, py, pz) to the shape: negative inside. */
 export function distance(s: Shape, px: number, py: number, pz: number): number {
@@ -145,6 +155,25 @@ export function distance(s: Shape, px: number, py: number, pz: number): number {
       const qr = Math.sqrt(r2 > 0 ? r2 : 0) - s.a;
       return Math.sqrt(qr * qr + axial * axial) - s.b;
     }
+    case Kind.Cone: {
+      // exact capped cone (Inigo Quilez): q = (distance from the axis, height from the middle)
+      const h = s.a;
+      const r1 = s.b;
+      const r2 = s.c;
+      const qx = Math.sqrt(dx * dx + dz * dz);
+      const qy = dy;
+      const cax = qx - Math.min(qx, qy < 0 ? r1 : r2);
+      const cay = Math.abs(qy) - h;
+      const k2x = r2 - r1;
+      const k2y = 2 * h;
+      const kk = k2x * k2x + k2y * k2y;
+      let u = kk > 0 ? ((r2 - qx) * k2x + (h - qy) * k2y) / kk : 0;
+      u = u < 0 ? 0 : u > 1 ? 1 : u;
+      const cbx = qx - r2 + k2x * u;
+      const cby = qy - h + k2y * u;
+      const sign = cbx < 0 && cay < 0 ? -1 : 1;
+      return sign * Math.sqrt(Math.min(cax * cax + cay * cay, cbx * cbx + cby * cby));
+    }
   }
 }
 
@@ -179,6 +208,10 @@ function shapeBounds(s: Shape): void {
       ez = s.axis === 2 ? along : radial;
       break;
     }
+    case Kind.Cone:
+      ex = ez = Math.max(s.b, s.c);
+      ey = s.a;
+      break;
     case Kind.Capsule:
       bounds[0] = Math.min(s.x, s.a) - s.r;
       bounds[1] = Math.min(s.y, s.b) - s.r;
@@ -212,6 +245,28 @@ export function add(t: Terrain, s: Shape, material: number, smooth = 0): void {
 /** Cut the shape away (subtraction). Materials are kept: the cut shows what was there. */
 export function cut(t: Terrain, s: Shape): void {
   stamp(t, s, -1, 0, true);
+}
+
+/**
+ * Give every sample inside the shape (and up to half a cell outside) `material`, without changing the
+ * density: the colour of a surface already there (the raw inside of a box built from another material).
+ */
+export function paint(t: Terrain, s: Shape, material: number): void {
+  shapeBounds(s);
+  const { sx, sy } = t;
+  const mat = t.material;
+  const i0 = Math.max(0, Math.floor(bounds[0] - 1));
+  const j0 = Math.max(0, Math.floor(bounds[1] - 1));
+  const k0 = Math.max(0, Math.floor(bounds[2] - 1));
+  const i1 = Math.min(sx - 1, Math.ceil(bounds[3] + 1));
+  const j1 = Math.min(sy - 1, Math.ceil(bounds[4] + 1));
+  const k1 = Math.min(t.sz - 1, Math.ceil(bounds[5] + 1));
+  for (let k = k0; k <= k1; k++) {
+    for (let j = j0; j <= j1; j++) {
+      let id = i0 + sx * (j + sy * k);
+      for (let i = i0; i <= i1; i++, id++) if (distance(s, i, j, k) < 0.5) mat[id] = material;
+    }
+  }
 }
 
 function stamp(t: Terrain, s: Shape, material: number, smooth: number, subtract: boolean): void {

@@ -36,9 +36,16 @@ export type Box3 = [number, number, number, number, number, number];
  * - `wire`: a soft cable along a polyline: `path` = [radius, x0, y0, z0, x1, y1, z1, ...] (the terrain may hold
  *   the same cable, thinner, so bugs can walk on it).
  * - `screw`: a board mounting hole at (x, y, z): copper ring of `radius` and a screw head.
+ * - `driver`: a loudspeaker seen from behind, standing on the floor at (x, y, z) with its basket `radius`
+ *   (`box`: its bounds). A woofer has `path` = [cone top, spider top, magnet bottom, magnet top] (heights);
+ *   a tweeter has none.
+ * - `port`: a bass port duct (`box`) with its slot `radius` half wide; the top of the duct at y.
+ * - `rod`: a straight round rod from `path` [x0, y0, z0] to [x1, y1, z1], `radius`, `color`, `metal`, `rough`.
  */
 export interface Feature {
-  kind: 'fan' | 'pump' | 'lightBar' | 'led' | 'heat' | 'tube' | 'capacitor' | 'grommet' | 'pad' | 'connector' | 'dust' | 'trace' | 'ramBody' | 'part' | 'screw' | 'wire';
+  kind:
+    | 'fan' | 'pump' | 'lightBar' | 'led' | 'heat' | 'tube' | 'capacitor' | 'grommet' | 'pad' | 'connector'
+    | 'dust' | 'trace' | 'ramBody' | 'part' | 'screw' | 'wire' | 'driver' | 'port' | 'rod';
   x: number;
   y: number;
   z: number;

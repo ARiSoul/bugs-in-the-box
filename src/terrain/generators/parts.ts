@@ -1,6 +1,7 @@
 import { FAN } from '../materials';
-import { add, box, capsule, cut, cylinder, rotatedBox, type Axis } from '../sdf';
+import { add, box, boxMinMax, capsule, cut, cylinder, rotatedBox, type Axis } from '../sdf';
 import type { Terrain } from '../Terrain';
+import { feature, type Feature } from './types';
 
 /**
  * Parts shared by the scenario generators (fans, cables, ribbons, placement), built from SDF stamps.
@@ -162,4 +163,22 @@ export function ribbon(t: Terrain, a: Vec3, b: Vec3, lift: number, material: num
       material,
     );
   }
+}
+
+/**
+ * A small detail: a terrain block (the destructible part) and a clean render shape over it, pushed to
+ * `features` (if any). The terrain block sits just inside the render shape (no coinciding surfaces, so no
+ * z-fighting) but keeps at least 2 cells in every direction.
+ */
+export function detail(
+  t: Terrain,
+  features: Feature[] | null,
+  x0: number, y0: number, z0: number, x1: number, y1: number, z1: number,
+  material: number, shape: 'box' | 'cylX' | 'cylY' | 'cylZ', color: number, metal: number, rough: number,
+): void {
+  const ex = Math.max(-0.3, 1 - (x1 - x0) / 2);
+  const ey = Math.max(-0.3, 1 - (y1 - y0) / 2);
+  const ez = Math.max(-0.3, 1 - (z1 - z0) / 2);
+  add(t, boxMinMax(x0 - ex, y0 - ey, z0 - ez, x1 + ex, y1 + ey, z1 + ez, 0.4), material);
+  features?.push(feature('part', (x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2, { shape, box: [x0, y0, z0, x1, y1, z1], color, metal, rough }));
 }

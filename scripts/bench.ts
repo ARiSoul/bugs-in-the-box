@@ -12,6 +12,7 @@ import { ANT } from '../src/game/species';
 import { floatingIslands } from '../src/terrain/generators/floatingIslands';
 import { insidePC } from '../src/terrain/generators/insidePC';
 import { pcCase } from '../src/terrain/generators/pcCase';
+import { speaker } from '../src/terrain/generators/speaker';
 import { ChunkMesher } from '../src/terrain/mesher';
 import { Terrain } from '../src/terrain/Terrain';
 
@@ -82,6 +83,7 @@ for (const [cx, cy, cz] of [
 for (const [label, gen] of [
   ['inside a PC', insidePC],
   ['tower case (pc-case)', pcCase],
+  ['studio monitor (speaker)', speaker],
 ] as const) {
   const warm = new Terrain(5, 3, 5);
   gen(warm, 1); // warm-up

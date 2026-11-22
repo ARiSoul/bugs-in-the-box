@@ -1,6 +1,7 @@
 import { floatingIslands } from './generators/floatingIslands';
 import { insidePC } from './generators/insidePC';
 import { pcCase } from './generators/pcCase';
+import { speaker } from './generators/speaker';
 import type { TerrainGenerator } from './generators/types';
 
 /** A scenario: a generator plus the look around it. Data only (the render reads `sky`). */
@@ -10,8 +11,11 @@ export interface Scenario {
   generate: TerrainGenerator;
   /** Mesh with sharp edges (Dual Contouring, for built things) or smooth (Surface Nets, for natural terrain). */
   sharpEdges: boolean;
-  /** Background: CSS gradient behind the canvas, and the fog colour (0xRRGGBB). */
-  sky: { css: string; fog: number };
+  /**
+   * Background: CSS gradient behind the canvas, and the fog colour (0xRRGGBB). WebGPU path: the distance
+   * fog is clear up to `fogClear` and nearly full `fogSpan` further (defaults 40 and 110: a closed case).
+   */
+  sky: { css: string; fog: number; fogClear?: number; fogSpan?: number };
   /**
    * Render path: 'webgl' (the classic look) or 'webgpu' (the atmosphere path: height fog, god rays,
    * bloom, glass, dust). A 'webgpu' scenario still runs where WebGPU is missing, on WebGL2, with less.
@@ -19,6 +23,8 @@ export interface Scenario {
   render: 'webgl' | 'webgpu';
   /** Projectiles that leave the map box (sides and top) are discarded. */
   strictBounds: boolean;
+  /** WebGPU path: where the key light stands, from the map centre (default: high on the low-x side). */
+  sun?: [number, number, number];
 }
 
 export const SCENARIOS: readonly Scenario[] = [
@@ -39,6 +45,18 @@ export const SCENARIOS: readonly Scenario[] = [
     sky: { css: 'radial-gradient(ellipse at 50% 45%, #1a1d24 0%, #050608 70%)', fog: 0x0b1016 },
     render: 'webgpu',
     strictBounds: true,
+  },
+  {
+    id: 'speaker',
+    name: 'Studio Monitor',
+    generate: speaker,
+    sharpEdges: true,
+    // an open desk: the fog only darkens the far end of the room
+    sky: { css: 'radial-gradient(ellipse at 50% 40%, #221d19 0%, #070605 72%)', fog: 0x0d0b09, fogClear: 80, fogSpan: 220 },
+    render: 'webgpu',
+    strictBounds: true,
+    // from the amp side and high: into the open cabinet, over its far wall
+    sun: [40, 170, 30],
   },
   {
     id: 'islands',

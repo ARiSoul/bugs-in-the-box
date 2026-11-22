@@ -25,8 +25,13 @@ import {
   select,
   smoothstep,
   uniform,
+  sin,
+  vec3,
+  vertexColor,
+  mx_noise_float,
+  positionViewDirection,
 } from 'three/tsl';
-import { GLOW_FAN, GLOW_RGB } from '../../terrain/materials';
+import { GLOW_FAN, GLOW_FUZZ, GLOW_GRAIN, GLOW_RGB } from '../../terrain/materials';
 import { Glow, MAX_FANS, hueColor } from './glow';
 
 /** How bright the RGB diffusers glow (HDR, before bloom and tone mapping). */
@@ -50,6 +55,29 @@ export function createTerrainMaterial(glow: Glow): { material: THREE.MeshStandar
   const pbr = attribute('pbr', 'vec3');
   // specular anti-aliasing: where the normal changes fast across a pixel, the surface gets rougher
   m.roughnessNode = max(pbr.x, clamp(length(fwidth(normalView)).mul(1.2), 0, 0.9));
+
+  // fibrous wadding (GLOW_FUZZ): a velvet sheen towards the silhouette and a fine fibre mottling
+  m.colorNode = Fn(() => {
+    const base = vertexColor().rgb.toVar();
+    // (the special shadings are codes in the glow channel; the mesher blends them across borders)
+    const fuzz = clamp(float(1).sub(abs(pbr.z.sub(GLOW_FUZZ)).div(0.15)), 0, 1);
+    const grain = clamp(float(1).sub(abs(pbr.z.sub(GLOW_GRAIN)).div(0.15)), 0, 1);
+    If(grain.greaterThan(0.01), () => {
+      // long grain along x: wavy lines from a stretched noise, darker late wood, a few wider bands
+      const p = positionWorld;
+      const warp = mx_noise_float(p.mul(vec3(0.02, 0.2, 0.12))).mul(3);
+      const lines = sin(p.z.mul(1.9).add(warp.mul(2.4))).mul(0.5).add(0.5);
+      const bands = mx_noise_float(p.mul(vec3(0.008, 0.1, 0.05))).mul(0.5).add(0.5);
+      const tone = float(0.82).add(lines.mul(lines).mul(0.22)).add(bands.mul(0.16));
+      base.assign(mix(base, base.mul(tone), grain));
+    });
+    If(fuzz.greaterThan(0.01), () => {
+      const rim = pow(float(1).sub(abs(dot(normalView, positionViewDirection))), 2);
+      const fibre = mx_noise_float(positionWorld.mul(1.7)).mul(0.5).add(mx_noise_float(positionWorld.mul(5.3)).mul(0.25));
+      base.assign(mix(base, base.mul(float(0.92).add(fibre.mul(0.3))).add(rim.mul(0.22)), fuzz));
+    });
+    return base;
+  })();
   m.metalnessNode = pbr.y;
 
   // Hard edges: where the triangle's own normal disagrees strongly with the interpolated one, use it.

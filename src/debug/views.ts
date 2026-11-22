@@ -103,7 +103,62 @@ const pcCase: ViewBuilder = (t, layout) => {
   return { start, poses, path, duration: 60 };
 };
 
-const BUILDERS: Record<string, ViewBuilder> = { 'pc-case': pcCase };
+/** Studio Monitor: the open cabinet from above, the woofer, the port, the amp plate and the screwdriver. */
+const speaker: ViewBuilder = (t, layout) => {
+  const { W, D } = t;
+  const rim = layout.inner[4];
+  const floor = layout.floorY + 6;
+  const drivers = layout.features.filter((f) => f.kind === 'driver');
+  const woofer = drivers.find((f) => f.path.length === 4);
+  const tweeter = drivers.find((f) => f.path.length === 0);
+  const port = layout.features.find((f) => f.kind === 'port');
+  const heat = layout.features.find((f) => f.kind === 'heat');
+  const rods = layout.features.filter((f) => f.kind === 'rod');
+  const s = Math.min(1, Math.min(W, D) / 160);
+  const w: [number, number, number] = woofer ? [woofer.x, woofer.path[0], woofer.z] : [W * 0.33, floor + 12, D * 0.55];
+  const top = woofer ? woofer.path[3] : floor + 34;
+  const tw: [number, number, number] = tweeter ? [tweeter.x, floor + 6, tweeter.z] : [W * 0.33, floor + 6, D * 0.2];
+  const pt: [number, number, number] = port ? [port.x, port.y, port.z] : [W * 0.33, floor + 20, D * 0.86];
+  const amp: [number, number, number] = heat ? [heat.x, heat.y - 8, heat.z + 30 * s] : [W * 0.8, layout.floorY + 6, D * 0.3];
+  const sd = rods.length ? rods[0].path : [W - 8, layout.floorY, D * 0.75, W * 0.62, rim, D * 0.75];
+  const cab = W * 0.625;
+  // the start: from the amp side, over the rim, down into the cabinet at the woofer
+  const start = key([W * 0.95, rim + 40 * s, D * 0.1], [w[0] + 6 * s, w[1], w[2] - 10 * s]);
+  const poses = [
+    start,
+    // 2: the woofer's back close: magnet tower, arms, the spider under the magnet
+    key([w[0] + 26 * s, top + 14 * s, w[2] + 28 * s], [w[0], w[1] + 2, w[2]]),
+    // 3: the port over the desk's edge, from inside the cabinet
+    key([pt[0] - 30 * s, rim + 8, pt[2] - 8 * s], [pt[0] + 10 * s, pt[1] - 10, pt[2]]),
+    // 4: the amp plate: heatsink, capacitors, transformer
+    key([amp[0] - 22 * s, amp[1] + 34 * s, amp[2] + 36 * s], [amp[0], amp[1], amp[2] - 8 * s]),
+    // 5: the screwdriver from the desk up to the rim
+    key([sd[0] + 6, sd[1] + 18 * s, sd[2] - 42 * s], [(sd[0] + sd[3]) / 2, (sd[1] + sd[4]) / 2, sd[2]]),
+    // 6: the tweeter and the wadding, from above the near wall
+    key([tw[0] + 22 * s, rim - 2, tw[2] + 30 * s], [tw[0] - 4 * s, tw[1] - 2, tw[2] - 4 * s]),
+    // 7 (detail): low on the cone, into the gap under the magnet
+    key([w[0] + 34 * s, w[1] + 6 * s, w[2] - 14 * s], [w[0], w[1] + 4 * s, w[2]]),
+    // 8 (detail): the cable bundle over the rim, from the desk
+    key([cab + 30 * s, rim + 10 * s, w[2] - 2 * s], [cab - 2, rim - 6, w[2] - 30 * s]),
+  ];
+  const path: CameraKey[] = [
+    start,
+    key([cab + 20 * s, rim + 30 * s, w[2] - 30 * s], [w[0], w[1], w[2]]),
+    poses[1],
+    key([w[0] - 26 * s, top + 10 * s, w[2] + 20 * s], [w[0], w[1], w[2] - 10 * s]),
+    poses[2],
+    key([pt[0] - 30 * s, rim + 8 * s, pt[2] - 50 * s], tw),
+    poses[5],
+    key([cab + 10 * s, rim + 26 * s, tw[2] + 10 * s], [amp[0], amp[1], amp[2] - 20 * s]),
+    poses[3],
+    key([W - 12, amp[1] + 26 * s, amp[2] + 50 * s], [(sd[0] + sd[3]) / 2, (sd[1] + sd[4]) / 2, sd[2]]),
+    poses[4],
+    key([W * 0.5, rim + 50 * s, D * 0.5], [w[0], w[1], w[2]]),
+  ];
+  return { start, poses, path, duration: 60 };
+};
+
+const BUILDERS: Record<string, ViewBuilder> = { 'pc-case': pcCase, speaker };
 
 export function viewsFor(scenarioId: string, t: Terrain, layout: SceneLayout): ScenarioViews {
   return (BUILDERS[scenarioId] ?? generic)(t, layout);

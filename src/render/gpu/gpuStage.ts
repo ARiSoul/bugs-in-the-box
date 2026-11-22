@@ -19,6 +19,7 @@ import { ActivityLeds } from './leds';
 import { HeroOverlays } from './heroOverlays';
 import { LightOverlays } from './lightOverlays';
 import { LightSheets } from './lightSheets';
+import { SpeakerParts } from './speakerParts';
 import { createTerrainMaterial } from './terrainMaterial';
 
 /** Key light direction on this path: steeper from the side, so the walls cast long shafts. */
@@ -72,6 +73,8 @@ export async function createGpuStage(canvas: HTMLCanvasElement, terrain: Terrain
   scene.environmentIntensity = 0.4;
   scene.add(new THREE.HemisphereLight(0x9fb4d8, 0x2a221c, 0.22));
   const [sun, sunTarget] = keyLight(terrain, SUN_OFFSET);
+  /** Where the key light stands, from the map centre (the scenario may set its own). */
+  const sunOffset = SUN_OFFSET.clone();
   // warmer than the WebGL path's key light (0xfff0d8): late sun through the blinds of a warm room
   sun.color.setHex(0xffb878);
   sun.intensity = 3.9;
@@ -88,6 +91,7 @@ export async function createGpuStage(canvas: HTMLCanvasElement, terrain: Terrain
   const craters = new Craters();
   const overlays = new LightOverlays(scene, glow, craters);
   const heroes = new HeroOverlays(scene, glow, craters);
+  const speakerParts = new SpeakerParts(scene, craters);
   const sheets = new LightSheets(scene, new THREE.Color(0xffb36b), glow.time);
   const dust = isGPU ? new DustMotes(renderer, glow, uniform(sunDir), options.seed) : null;
   if (dust) scene.add(dust.sprite);
@@ -151,14 +155,16 @@ export async function createGpuStage(canvas: HTMLCanvasElement, terrain: Terrain
   const setBlinds = (layout: SceneLayout): void => {
     if (blinds) scene.remove(blinds);
     blinds = null;
-    if (layout.glassY <= 0) return;
+    // the top of the scene: the glass, or (an open scene) the top of the inner box
+    const top = layout.glassY > 0 ? layout.glassY : layout.inner[4];
+    if (top <= 0) return;
     const [x0, , z0, x1, , z1] = layout.inner;
-    blindsY = layout.glassY + BLINDS_ABOVE_GLASS;
+    blindsY = top + BLINDS_ABOVE_GLASS;
     dust?.setBlinds(x0 - 30, SLAT_PITCH, SLAT_WIDTH, blindsY);
-    sheets.set(x0 - 30, SLAT_PITCH, blindsY, SUN_OFFSET, x0, x1, z0, z1, layout.glassY, layout.floorY);
+    sheets.set(x0 - 30, SLAT_PITCH, blindsY, sunOffset, x0, x1, z0, z1, top, layout.floorY);
     // reach past the case on the side the light comes from (the shadows land shifted the other way)
     const from = x0 - 30;
-    const n = Math.ceil((x1 - from) / SLAT_PITCH);
+    const n = Math.ceil((x1 + 30 - from) / SLAT_PITCH); // (and past the far side, for light from either side)
     blinds = new THREE.InstancedMesh(slat, blindsMaterial, n);
     const m = new THREE.Matrix4();
     for (let i = 0; i < n; i++) {
@@ -203,6 +209,13 @@ export async function createGpuStage(canvas: HTMLCanvasElement, terrain: Terrain
     craters,
     setScenario(sc: Scenario, layout: SceneLayout) {
       document.body.style.background = sc.sky.css;
+      sunOffset.copy(SUN_OFFSET);
+      if (sc.sun) sunOffset.set(...sc.sun);
+      sun.position.copy(sun.target.position).add(sunOffset);
+      sunDir.copy(sunOffset).normalize();
+      atmosphere.clear.value = sc.sky.fogClear ?? 40;
+      atmosphere.span.value = sc.sky.fogSpan ?? 110;
+      atmosphere.sunDir.value.copy(sunDir);
       glow.setLayout(layout);
       atmosphere.setLayout(layout, sc.sky.fog);
       heat.setLayout(layout);
@@ -210,6 +223,7 @@ export async function createGpuStage(canvas: HTMLCanvasElement, terrain: Terrain
       craters.clear();
       overlays.setLayout(layout);
       heroes.setLayout(layout);
+      speakerParts.setLayout(layout);
       dust?.setLayout(layout, layout.floorY);
       setBlinds(layout);
       fitShadow(sun, layout, blindsY);
