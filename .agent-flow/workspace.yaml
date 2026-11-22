@@ -1,0 +1,12 @@
+# Workspace of Agent Flow Studio: flows/, agents/, connections.yaml (no secrets),
+# variables and environments. Variables are never secrets.
+version: 1
+name: bugs-in-the-box
+title: Bugs in the Box
+roots:
+  app:
+    path: .
+    description: This repository
+environments:
+  dev: {}
+default_environment: dev
