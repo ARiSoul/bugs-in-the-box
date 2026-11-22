@@ -318,7 +318,7 @@ export const speaker: TerrainGenerator = (terrain, seed, layout) => {
     termX - 7, FLOOR + 3, termZ - 2,
     termX - 3, FLOOR + 5.2, termZ,
     termX - 1.6, FLOOR + 5.4, termZ,
-    termX - 0.08, FLOOR + 5.4, termZ,
+    termX - 0.17, FLOOR + 5.4, termZ,
   ], 1, 1.7, false);
 
   // ---- the bass port: a slot duct with flared lips, open through the baffle (over the desk's edge)
@@ -488,6 +488,11 @@ export const speaker: TerrainGenerator = (terrain, seed, layout) => {
   deco(ax1 - 6.5, PB + 0.06, lz + 4.5, ax1 - 5.5, PB + 0.18, lz + 5.5, 'cylY', 0x9d9a90, 0.9, 0.4);
   deco(ax1 - 9.5, PB + 0.06, lz - 0.72, ax1 - 6, PB + 0.15, lz - 0.28, 'plate', TRACE_GREEN, 0, 0.45);
   deco(ax1 - 10, PB + 0.06, lz - 1, ax1 - 9, PB + 0.18, lz, 'cylY', 0x9d9a90, 0.9, 0.4);
+  // (the LED's resistor: a beige body with colour bands, its legs on two pads)
+  deco(ax1 - 13.5, PB + 0.06, lz - 1, ax1 - 12.5, PB + 0.18, lz, 'cylY', 0x9d9a90, 0.9, 0.4);
+  deco(ax1 - 12.4, PB + 0.4, lz - 0.95, ax1 - 10.1, PB + 1.3, lz - 0.05, 'cylX', 0xd8c7a0, 0, 0.6);
+  for (const [bx, c] of [[-11.9, 0x8a4a26], [-11.4, 0x18181a], [-10.9, 0xb8221c], [-10.5, 0xc9a43a]] as const) deco(ax1 + bx, PB + 0.38, lz - 0.97, ax1 + bx + 0.22, PB + 1.32, lz - 0.03, 'cylX', c, 0, 0.6);
+  for (const lx of [-12.9, -9.6]) deco(ax1 + lx - 0.6, PB + 0.75, lz - 0.55, ax1 + lx + 0.6, PB + 0.95, lz - 0.45, 'plate', 0xc9cdd2, 0.9, 0.35);
   put(feature('led', ax1 - 6, PB + 1.6, az0 + 8 + 30 * ka, { color: 0x3dff6a }));
   for (const dz of [-0.5, 0.5]) deco(ax1 - 6.12, PB, az0 + 8 + 30 * ka + dz - 0.12, ax1 - 5.88, PB + 0.9, az0 + 8 + 30 * ka + dz + 0.12, 'plate', 0xc9cdd2, 0.9, 0.35);
 
@@ -497,6 +502,7 @@ export const speaker: TerrainGenerator = (terrain, seed, layout) => {
   const full = (i: number): boolean => (used.get(i) ?? 0) >= 2;
   const pairs = new Set<string>();
   bodies.push([ax1 - 7, az0 + 7 + 30 * ka, ax1 - 5, az0 + 9 + 30 * ka]); // (the LED)
+  anchors.push([ax1 - 14, bz1 - 3], [ax1 - 14, bz1 - 3]); // (the transformer's white lead lands here: a pad with traces)
   const clearLeg = (x0: number, z0: number, x1: number, z1: number): boolean => {
     // (clear of every part's outline, and on the board; its ends are the parts' own pads)
     const ax = Math.min(x0, x1) - 0.3, bx = Math.max(x0, x1) + 0.3, az = Math.min(z0, z1) - 0.3, bz = Math.max(z0, z1) + 0.3;
@@ -619,6 +625,11 @@ export const speaker: TerrainGenerator = (terrain, seed, layout) => {
   if (tz1 + 3 < az1 && sx0 + 12 < ax1 - 4) {
     cableAlong([(tx0 + tx1) / 2 + 1.1, PT + 6, tz0 - 1.6, (tx0 + tx1) / 2 + 1.1, PT + 6.5, tz0 - 4, sx0 + 1, PB + 4.5, pz0 + 1, sx0 + 10.5, PB + 3.5, pz0 + 1.2, sx0 + 12.5, PB + 2.2, pz0 + 4.5, sx0 + 12.5, PB + 0.2, pz0 + 6], 0.3, 0xb8221c);
     solder(sx0 + 12.5, PB, pz0 + 6);
+    // (on to a rectifier diode: a trace, two pads, a black body with a silver band)
+    deco(sx0 + 12.28, PB + 0.06, pz0 + 6, sx0 + 12.72, PB + 0.15, pz0 + 9.5, 'plate', TRACE_GREEN, 0, 0.45);
+    for (const dz of [9.5, 13]) deco(sx0 + 12, PB + 0.06, pz0 + dz - 0.5, sx0 + 13, PB + 0.18, pz0 + dz + 0.5, 'cylY', 0x9d9a90, 0.9, 0.4);
+    deco(sx0 + 12.05, PB + 0.35, pz0 + 10.2, sx0 + 12.95, PB + 1.25, pz0 + 12.3, 'cylZ', 0x161618, 0, 0.5);
+    deco(sx0 + 12.02, PB + 0.33, pz0 + 11.8, sx0 + 12.98, PB + 1.27, pz0 + 12.1, 'cylZ', 0xb4b9c0, 0.9, 0.4);
     cableAlong([(tx0 + tx1) / 2 - 1.1, PT + 6, tz0 - 1.6, (tx0 + tx1) / 2 - 1.1, PT + 6.5, tz0 - 4, tx0 + 8, PB + 3, bz1 + 1, ax1 - 14, PB + 2, bz1 - 3, ax1 - 14, PB + 0.2, bz1 - 3], 0.3, 0xe8e4da);
     solder(ax1 - 14, PB, bz1 - 3);
   }
@@ -664,7 +675,7 @@ export const speaker: TerrainGenerator = (terrain, seed, layout) => {
     sx - cdx * 2.2, sy - cdy * 2.2, sz0 - cdz * 2.2,
     termX + 2.6, FLOOR + 5.6, termZ - 2.2,
     termX + 1.3, FLOOR + 6.4, termZ - 0.3,
-    termX + 0.08, FLOOR + 6.4, termZ,
+    termX + 0.17, FLOOR + 6.4, termZ,
   ], 0.4, 1.7, true);
   pairAlong([plugX - 5.3, PB + 3.2, plugZ, plugX - 3, PB + 2.4, plugZ, plugX + 0.3, PB + 1.8, plugZ], 0.4, 0.8, true);
   // the plug: wire entries on its back, a small latch ramp on one side
