@@ -1,8 +1,8 @@
 import * as THREE from 'three/webgpu';
-import { abs, atan, cameraPosition, color, cos, dot, float, mix, mx_noise_float, normalize, normalWorld, positionLocal, positionWorld, pow, smoothstep, uniform } from 'three/tsl';
+import { abs, atan, cameraPosition, color, cos, dot, float, mix, mx_noise_float, normalize, step, fract, uv, normalWorld, positionLocal, positionWorld, pow, smoothstep, uniform } from 'three/tsl';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { arcPoint, type Vec3 } from '../../terrain/generators/parts';
-import { FOAM_SLEEVE_COLOR } from '../../terrain/generators/speaker';
+import { EARTH_COLOR, FOAM_SLEEVE_COLOR } from '../../terrain/generators/speaker';
 import type { Feature, SceneLayout } from '../../terrain/generators/types';
 import { Glow, hueColor } from './glow';
 import type { Craters } from './craters';
@@ -165,6 +165,11 @@ export class HeroOverlays {
     let m = this.sleeves.get(c);
     if (!m) {
       m = this.craters.cut(new THREE.MeshStandardNodeMaterial({ color: c, roughness: 0.82, metalness: 0 })); // matte: no thin crawling highlight
+      if (c === EARTH_COLOR) {
+        // green and yellow, in a helical stripe along the wire
+        const st = step(0.5, fract(uv().x.mul(36).add(uv().y)));
+        m.colorNode = mix(color(0x2f7d3a), color(0xd8c23a), st);
+      }
       if (c === FOAM_SLEEVE_COLOR) {
         // open-cell foam: dark pores in a fine mottle, a soft sheen towards the silhouette
         m.roughness = 1;
@@ -199,6 +204,9 @@ export class HeroOverlays {
       g = new RoundedBoxGeometry(w, h, d, 2, Math.min(0.35, Math.min(w, h, d) * 0.3));
     } else if (shape === 'plate') {
       g = new THREE.BoxGeometry(w, h, d);
+    } else if (shape === 'dome') {
+      // a half sphere on its base, filling the box (a solder joint)
+      g = new THREE.SphereGeometry(0.5, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2).scale(w, h * 2, d).translate(0, -h / 2, 0);
     } else {
       const along = shape === 'cylX' ? w : shape === 'cylY' ? h : d;
       const r = (shape === 'cylX' ? Math.min(h, d) : shape === 'cylY' ? Math.min(w, d) : Math.min(w, h)) / 2;

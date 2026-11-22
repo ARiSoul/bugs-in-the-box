@@ -64,7 +64,8 @@ export function createTerrainMaterial(glow: Glow): { material: THREE.MeshStandar
     const grain = clamp(float(1).sub(abs(pbr.z.sub(GLOW_GRAIN)).div(0.15)), 0, 1);
     // (only on near-black surfaces: where two other materials meet, the blended code passes through
     // this one, and a mottle on a light surface would draw dashed lines along the border)
-    const peel = clamp(float(1).sub(abs(pbr.z.sub(GLOW_PEEL)).div(0.1)), 0, 1).mul(smoothstep(0.07, 0.035, base.r.add(base.g).add(base.b)));
+    // (a narrow window: borders between the vinyl and other black parts blend to codes just off it)
+    const peel = clamp(float(1).sub(abs(pbr.z.sub(GLOW_PEEL)).div(0.035)), 0, 1).mul(smoothstep(0.07, 0.035, base.r.add(base.g).add(base.b)));
     If(peel.greaterThan(0.01), () => {
       // orange-peel mottle (breaks up the light bands on the black wrap) and a cool sheen at the edges
       // (so a black wall in front of the camera still reads as a surface, not as the void)

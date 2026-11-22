@@ -142,7 +142,16 @@ describe('Studio Monitor (speaker)', () => {
         // within a cell or two of the surface of what it plugs into (a board, a winding, a terminal), or
         // inside one of the drawn small parts (a spade tab, a solder tab)
         const onPart = layout.features.some((f) => f.kind === 'part' && x > f.box[0] - 0.6 && x < f.box[3] + 0.6 && y > f.box[1] - 0.6 && y < f.box[4] + 0.6 && z > f.box[2] - 0.6 && z < f.box[5] + 0.6);
-        if (!onPart) expect(t.sample(x, y, z), `wire end at ${x.toFixed(1)}, ${y.toFixed(1)}, ${z.toFixed(1)}`).toBeLessThan(2);
+        // (or inside a drawn rod: the sleeve's heat-shrink collars)
+        const inRod = layout.features.some((f) => {
+          if (f.kind !== 'rod') return false;
+          const [x0, y0, z0, x1, y1, z1] = f.path;
+          const vx = x1 - x0, vy = y1 - y0, vz = z1 - z0;
+          const u = Math.max(0, Math.min(1, ((x - x0) * vx + (y - y0) * vy + (z - z0) * vz) / (vx * vx + vy * vy + vz * vz)));
+          const dx = x0 + vx * u - x, dy = y0 + vy * u - y, dz = z0 + vz * u - z;
+          return Math.sqrt(dx * dx + dy * dy + dz * dz) < f.radius + 0.5;
+        });
+        if (!onPart && !inRod) expect(t.sample(x, y, z), `wire end at ${x.toFixed(1)}, ${y.toFixed(1)}, ${z.toFixed(1)}`).toBeLessThan(2);
       }
     }
   });

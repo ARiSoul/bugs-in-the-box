@@ -171,7 +171,7 @@ export class SpeakerParts {
     g.add(new THREE.Mesh(shellPatch(rLow, lowY, rHigh, plateY, BASKET_THICK, 0, sSill, 0, full), this.basket));
     g.add(new THREE.Mesh(shellPatch(rLow, lowY, rHigh, plateY, BASKET_THICK, sHead, 1, 0, full), this.basket));
     // (the drawn ribs a little wider than the terrain's, so its cut edges stay inside them)
-    const w = WINDOW_HALF * k - 0.5;
+    const w = WINDOW_HALF * k - 0.8;
     const rib = (r: number): number => Math.PI / 4 - Math.asin(Math.min(1, w / r));
     for (let i = 0; i < 4; i++) g.add(new THREE.Mesh(shellPatch(rLow, lowY, rHigh, plateY, BASKET_THICK, sSill - 0.02, sHead + 0.02, (i * Math.PI) / 2, rib), this.basket));
     // a solid collar where the frame meets the magnet's bottom plate (closed underneath: seen from the gap)
@@ -293,18 +293,41 @@ export class SpeakerParts {
       // a flat wedge blade from the generator's tip (3 before the rod's start) to the rod: as wide as the
       // shaft, thin at its straight edge, thick enough over the thin terrain tip inside it
       const len = 3.2;
-      // (forged from the shaft: as thick as the shaft where they meet, thinning to the edge)
-      const geo = new THREE.BoxGeometry(f.radius * 2 + 0.1, len, f.radius * 2 + 0.1, 1, 10, 1);
+      // (forged from the shaft: round where it meets the shaft, flattening and a little wider to the edge)
+      const r = f.radius + 0.05;
+      const geo = new THREE.CylinderGeometry(r, r, len, 32, 12, false);
       const p = geo.getAttribute('position');
       for (let i = 0; i < p.count; i++) {
         const u = (p.getY(i) + len / 2) / len; // 0 at the edge, 1 at the rod
         p.setZ(i, p.getZ(i) * (0.16 + 0.84 * Math.min(1, u * u * 1.6)));
+        p.setX(i, p.getX(i) * (1 + 0.12 * (1 - u)));
       }
       geo.computeVertexNormals();
       const blade = new THREE.Mesh(geo, m);
       blade.position.copy(a).addScaledVector(dir, -len / 2 + 0.2);
       blade.quaternion.setFromUnitVectors(UP, dir);
       g.add(blade);
+    }
+    if (f.axis === 2) {
+      // a heat-shrink collar: a tight tube over the sleeve's cut end, shrunk down onto the leads over
+      // its first 1.3 (where the sleeve has already ended)
+      const len = a.distanceTo(b);
+      const r = f.radius;
+      // (from the axis at the start, out and up the side, in over the end: the faces point outward)
+      const profile = [
+        new THREE.Vector2(0, 0),
+        new THREE.Vector2(r * 0.5, 0),
+        new THREE.Vector2(r * 0.55, 0.15),
+        new THREE.Vector2(r, 1.3),
+        new THREE.Vector2(r, len),
+        new THREE.Vector2(0, len),
+      ];
+      const tube = new THREE.Mesh(new THREE.LatheGeometry(profile, 32), m);
+      tube.position.copy(a);
+      tube.quaternion.setFromUnitVectors(UP, dir);
+      tube.castShadow = true;
+      this.push(tube);
+      return;
     }
     const rod = this.capsule(a, b, f.radius + 0.05, m, f.axis === 0 ? 80 : 32);
     if (f.axis === 0) flute(rod.geometry, f.radius + 0.05);
