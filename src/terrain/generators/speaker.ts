@@ -178,6 +178,10 @@ export const speaker: TerrainGenerator = (terrain, seed, layout) => {
   paint(terrain, boxMinMax(cx0, DESK_TOP - 1, cz0 - 0.5, cx1, rim, cz0 + 1.4), VINYL);
   paint(terrain, boxMinMax(cx0, DESK_TOP - 1, cz1 - 1.4, cx1, rim, cz1 + 0.5), VINYL);
   paint(terrain, boxMinMax(cx0 + 1.2, rim - 0.6, cz0 + 1.2, cx1 - 1.2, rim + 2, cz1 - 1.2), MDF);
+  // a serial label and a small warning sticker on the outside of the amp-side wall (render only)
+  deco(cx1 - 0.05, DESK_TOP + 14, cz0 + 24, cx1 + 0.12, DESK_TOP + 21, cz0 + 38, 'box', 0xe6e3da, 0, 0.7);
+  for (let i = 0; i < 3; i++) deco(cx1 + 0.12, DESK_TOP + 15.5 + i * 1.6, cz0 + 25.5, cx1 + 0.16, DESK_TOP + 16.1 + i * 1.6, cz0 + 33 - i * 2, 'box', 0x3a3833, 0, 0.7);
+  deco(cx1 - 0.05, DESK_TOP + 14, cz0 + 41, cx1 + 0.12, DESK_TOP + 19, cz0 + 47, 'box', 0xd9b62c, 0, 0.6);
 
   // ---- the desk
   add(terrain, boxMinMax(2.5, 2.5, 2.5, W - 2.5, DESK_TOP, deskZ1, 1), WOOD);
@@ -329,6 +333,9 @@ export const speaker: TerrainGenerator = (terrain, seed, layout) => {
   // deep fins over most of the height, on a thin base
   // (open at both ends, so the fins show from the board side too)
   for (let x = hx0 + 2; x + 2 <= hx1 - 2; x += 4) cut(terrain, boxMinMax(x, PB + 2, hz0 - 1, x + 2, hTop + 1, hz1 + 1, 0.3));
+  // the drawn heatsink: crisp flat fins rising from a base plate (over the terrain's rounded ones)
+  deco(hx0 - 0.15, PB - 0.5, hz0 - 0.15, hx1 + 0.15, PB + 2.1, hz1 + 0.15, 'box', 0xb4b9c0, 0.85, 0.4);
+  for (let x = hx0; x + 2 <= hx1 + 0.01; x += 4) deco(x - 0.15, PB + 2, hz0 - 0.15, Math.min(hx1, x + 2) + 0.15, hTop + 0.15, hz1 + 0.15, 'box', 0xb4b9c0, 0.85, 0.4);
   claim(hx0 - 1, hz0 - 1, hx1 + 1, hz1 + 2.5);
   for (let i = 0; i < 3; i++) {
     const x = hx0 + ((hx1 - hx0) * (i + 1)) / 4;
@@ -423,7 +430,11 @@ export const speaker: TerrainGenerator = (terrain, seed, layout) => {
     deco(ax0 + 8, PT + 7, az1 - 12.5, ax0 + 13, PT + 7.6, az1 - 10, 'box', 0x1c1c1f, 0, 0.5);
     for (const dx of [8, 12.5, 17]) deco(ax0 + dx - 0.9, PT + 7, az1 - 7.4, ax0 + dx + 0.9, PT + 9.2, az1 - 7, 'box', 0xc9b98a, 1, 0.35);
     part(ax0 + 25, PT, az1 - 12, ax0 + 32, PT + 6, az1 - 5, BLACK_PLASTIC, 'box', 0x121214, 0, 0.5);
-    deco(ax0 + 26.5, PT + 6, az1 - 10, ax0 + 30.5, PT + 7.2, az1 - 7, 'box', 0x8a1a16, 0, 0.5);
+    // the rocker: a black paddle with the on mark (I) and the off mark (O)
+    deco(ax0 + 26.3, PT + 6, az1 - 10.6, ax0 + 30.7, PT + 7, az1 - 6.4, 'box', 0x1c1c1f, 0, 0.4);
+    deco(ax0 + 27, PT + 7, az1 - 9.8, ax0 + 30, PT + 7.6, az1 - 8.6, 'box', 0x1c1c1f, 0, 0.4);
+    deco(ax0 + 28.3, PT + 7.6, az1 - 9.6, ax0 + 28.7, PT + 7.65, az1 - 8.8, 'box', 0xe8e4da, 0, 0.6);
+    deco(ax0 + 28, PT + 7.0, az1 - 7.6, ax0 + 29, PT + 7.05, az1 - 7.2, 'cylY', 0xe8e4da, 0, 0.6);
     for (const dz of [-10.5, -6.5]) deco(ax0 + 32, PT + 2, az1 + dz - 0.4, ax0 + 33.6, PT + 4.4, az1 + dz + 0.4, 'box', 0xc9b98a, 1, 0.35);
     cableAlong([ax0 + 12.5, PT + 9, az1 - 7.2, ax0 + 14, PT + 12, az1 - 2, ax0 + 30, PT + 9, az1 - 1, ax0 + 33.8, PT + 3.2, az1 - 6.5], 0.5, 0x18181a);
   }
@@ -448,7 +459,7 @@ export const speaker: TerrainGenerator = (terrain, seed, layout) => {
   // (a bug climbs onto the thin tip from the desk, walks up the shaft and over the handle)
   const sz = deskZ1 - 6;
   const p0x = W - 8;
-  const p0y = DESK_TOP + 1.1; // the tip rests on the desk: a low step up from it
+  const p0y = DESK_TOP - 0.25; // the blade's edge rests on the desk: a low step up from it
   const p1x = cx1 - 1.5;
   const p1y = rim + 3.2;
   const len = Math.sqrt((p1x - p0x) * (p1x - p0x) + (p1y - p0y) * (p1y - p0y));
@@ -465,7 +476,7 @@ export const speaker: TerrainGenerator = (terrain, seed, layout) => {
   const handle = len - Math.min(24, len * 0.34);
   // the tip: a thinner rod under the drawn flat blade (the blade covers it), then the shaft
   const tipLen = 3;
-  add(terrain, capsule(p0x + ux * 0.6, p0y - 0.4 + uy * 0.6, sz, p0x + ux * tipLen, p0y + uy * tipLen, sz, 0.95), STEEL);
+  add(terrain, capsule(p0x + ux * 1.5, p0y + uy * 1.5, sz, p0x + ux * tipLen, p0y + uy * tipLen, sz, 0.7), STEEL);
   seg(tipLen, handle - 3, 1.5, STEEL, 0xc4c8ce, 1, 0.25, { facing: -1 }); // (a blade before its start)
   seg(handle - 3, handle, 2.2, STEEL, 0xb4b9c0, 1, 0.3);
   seg(handle, len, 3.2, CABLE_YELLOW, 0xd98e1a, 0, 0.25, { axis: 0 }); // (a fluted grip)

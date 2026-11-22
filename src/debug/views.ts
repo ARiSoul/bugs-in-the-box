@@ -124,7 +124,7 @@ const speaker: ViewBuilder = (t, layout) => {
   const cab = W * 0.625;
   // the start: from the amp side, over the rim, down into the cabinet at the woofer
   // high over the desk's front edge (the overhang and the drop below it), the whole opening and the amp
-  const start = key([W * 0.5, rim + 76 * s, D + 26 * s], [W * 0.47, layout.floorY, D * 0.42]);
+  const start = key([W * 0.47, rim + 92 * s, D + 40 * s], [W * 0.47, layout.floorY, D * 0.44]);
   const poses = [
     start,
     // 2: the woofer's back close: magnet tower, arms, the spider under the magnet

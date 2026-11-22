@@ -108,6 +108,9 @@ export function createTerrainMaterial(glow: Glow): { material: THREE.MeshStandar
     const fanW = clamp(pbr.z.mul(GLOW_FAN), 0, 1);
     const rgb = hueColor(glow.hue);
     const out = rgb.mul(rgbW.mul(rgbW).mul(RGB_GLOW)).toVar();
+    // wadding lets light through: its folds never fall fully dark (a little of its own colour)
+    const fuzzW = clamp(float(1).sub(abs(pbr.z.sub(GLOW_FUZZ)).div(0.15)), 0, 1);
+    out.addAssign(vertexColor().rgb.mul(fuzzW.mul(0.12)));
     // (skipped entirely while the rotor stand-ins carry the stripe)
     if (FAN_STRIPE > 0) If(fanW.greaterThan(0.01), () => {
       const stripe = float(0).toVar();

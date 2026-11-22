@@ -289,10 +289,18 @@ export class SpeakerParts {
     const dir = new THREE.Vector3().subVectors(b, a).normalize();
     const g = new THREE.Group();
     if (f.facing === -1) {
-      // a flat blade before the start, down to the desk: crisp, wider than the rod, flat sides up
-      const len = 3.4;
-      const blade = new THREE.Mesh(roundedBar(f.radius * 2.1, len, 2.15, 0.25), m);
-      blade.position.copy(a).addScaledVector(dir, -len / 2 + 0.4);
+      // a flat wedge blade from the generator's tip (3 before the rod's start) to the rod: as wide as the
+      // shaft, thin at its straight edge, thick enough over the thin terrain tip inside it
+      const len = 3.2;
+      const geo = new THREE.BoxGeometry(f.radius * 2, len, 1.6, 1, 8, 1);
+      const p = geo.getAttribute('position');
+      for (let i = 0; i < p.count; i++) {
+        const u = (p.getY(i) + len / 2) / len; // 0 at the edge, 1 at the rod
+        p.setZ(i, p.getZ(i) * Math.min(1, 0.3 + (0.7 * u) / 0.55));
+      }
+      geo.computeVertexNormals();
+      const blade = new THREE.Mesh(geo, m);
+      blade.position.copy(a).addScaledVector(dir, -len / 2 + 0.2);
       blade.quaternion.setFromUnitVectors(UP, dir);
       g.add(blade);
     }
