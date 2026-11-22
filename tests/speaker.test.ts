@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { Bug, IDLE, type BugInput } from '../src/game/bug';
 import { Match, type TeamSpec } from '../src/game/match';
 import { ANT, SPIDER } from '../src/game/species';
-import { DESK_TOP, speaker } from '../src/terrain/generators/speaker';
+import { CAB_X0, DESK_TOP, speaker } from '../src/terrain/generators/speaker';
 import { createLayout, type SceneLayout } from '../src/terrain/generators/types';
 import { CONE, DAMPER, FERRITE, FOAM, MDF, VINYL, WOOD } from '../src/terrain/materials';
 import { scenarioById } from '../src/terrain/scenarios';
@@ -87,12 +87,12 @@ describe('Studio Monitor (speaker)', () => {
         expect(t.material[t.idx(Math.round(t.W * 0.66), DESK_TOP - 1, Math.round(t.D * 0.5))]).toBe(WOOD);
         // the cabinet walls stand to the rim; the inside is open from above
         const rim = layout.inner[4];
-        expect(t.sample(8, rim - 1, t.D / 2)).toBeLessThan(0);
+        expect(t.sample(CAB_X0 + 2, rim - 1, t.D / 2)).toBeLessThan(0);
         // nothing of the lining comes through the walls: the outer faces stay flat vinyl
         const cx1 = Math.round(t.W * 0.625);
-        for (let z = 12; z < t.D - 12; z += 2) {
+        for (let z = 18; z < t.D - 12; z += 2) {
           for (let y = DESK_TOP + 8; y < rim - 4; y += 2) {
-            expect(t.sample(4.5, y, z)).toBeGreaterThan(0);
+            expect(t.sample(CAB_X0 - 1.5, y, z)).toBeGreaterThan(0);
             // (the outer face at high x, except where the speaker cable hangs down it)
             if (Math.abs(z - woofer.z + 30 * k) > 14) expect(t.sample(cx1 + 1.5, y, z)).toBeGreaterThan(0);
           }

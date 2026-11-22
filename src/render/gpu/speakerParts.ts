@@ -21,7 +21,10 @@ function roundedDisc(radius: number, y0: number, y1: number, bevel: number, inne
     p.push(new THREE.Vector2(radius - b + Math.sin(a) * b, y1 - b + Math.cos(a) * b));
   }
   p.push(new THREE.Vector2(radius, y0));
-  if (closed) p.push(new THREE.Vector2(inner, y0));
+  if (closed) {
+    p.push(new THREE.Vector2(inner, y0));
+    if (inner > 0) p.push(new THREE.Vector2(inner, y1)); // (a ring: its inner wall too)
+  }
   // (a lathe's faces point outward when the profile runs up the outside and in over the top)
   return p.reverse();
 }
@@ -163,11 +166,15 @@ export class SpeakerParts {
     const sSill = sAt(ringTop + WINDOW_SILL);
     const sHead = sAt(plateY - WINDOW_HEAD);
     const full = (): number => Math.PI;
-    g.add(new THREE.Mesh(shellPatch(rLow, lowY, rHigh, plateY, BASKET_THICK, sAt(ringTop), sSill, 0, full), this.basket));
+    g.add(new THREE.Mesh(shellPatch(rLow, lowY, rHigh, plateY, BASKET_THICK, 0, sSill, 0, full), this.basket));
     g.add(new THREE.Mesh(shellPatch(rLow, lowY, rHigh, plateY, BASKET_THICK, sHead, 1, 0, full), this.basket));
     const w = WINDOW_HALF * k;
     const rib = (r: number): number => Math.PI / 4 - Math.asin(Math.min(1, w / r));
     for (let i = 0; i < 4; i++) g.add(new THREE.Mesh(shellPatch(rLow, lowY, rHigh, plateY, BASKET_THICK, sSill - 0.02, sHead + 0.02, (i * Math.PI) / 2, rib), this.basket));
+    // a solid collar where the frame meets the magnet's bottom plate (closed underneath: seen from the gap)
+    const headY = plateY - WINDOW_HEAD;
+    const collarOut = rHigh + ((rLow - rHigh) * WINDOW_HEAD) / (plateY - lowY) + OUT + 0.2;
+    lathe(roundedDisc(collarOut, headY - 0.4, plateY + 0.1, 0.5, rHigh - BASKET_THICK - OUT - 0.3, true), this.basket);
     // the cone: straight paper from the ring up to the neck, just outside the terrain's shell
     const coneAt = (y: number): number => 29 * k - (20 * k * (y - y0)) / (coneTop - y0);
     const cone: THREE.Vector2[] = [];

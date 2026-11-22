@@ -4,6 +4,7 @@ import {
   BLACK_PLASTIC,
   CABLE_YELLOW,
   CONE,
+  COPPER,
   DAMPER,
   FERRITE,
   FOAM,
@@ -20,6 +21,9 @@ import { feature, resetLayout, type Feature, type TerrainGenerator } from './typ
 
 /** Top of the desk the speaker lies on. */
 export const DESK_TOP = 8;
+/** The cabinet's low corner on the desk (x, z): the lit desk shows around it. */
+export const CAB_X0 = 14;
+export const CAB_Z0 = 12;
 /** Thickness of the front baffle (the cabinet's floor, face down), of the walls, and of the wadding lining. */
 const BAFFLE = 6;
 const WALL = 5;
@@ -35,7 +39,7 @@ const S22 = 0.3826834323650898;
  */
 export const BASKET_LOW = 31.5;
 export const BASKET_HIGH = 22;
-export const BASKET_THICK = 2.6;
+export const BASKET_THICK = 3;
 export const WINDOW_SILL = 2;
 export const WINDOW_HEAD = 2.5;
 export const WINDOW_HALF = 14.5;
@@ -83,9 +87,9 @@ export const speaker: TerrainGenerator = (terrain, seed, layout) => {
   const FLOOR = DESK_TOP + BAFFLE;
   const rim = DESK_TOP + Math.round((H - DESK_TOP) * 0.5);
   // the cabinet, and inside its lining
-  const cx0 = 6;
+  const cx0 = CAB_X0;
   const cx1 = Math.round(W * 0.625);
-  const cz0 = 6;
+  const cz0 = CAB_Z0;
   const cz1 = D - 6;
   const ix0 = cx0 + WALL + LINING;
   const ix1 = cx1 - WALL - LINING;
@@ -108,19 +112,12 @@ export const speaker: TerrainGenerator = (terrain, seed, layout) => {
     layout.inner = [2, DESK_TOP, 2, W - 2, rim, D - 2];
   }
 
-  // ---- the desk
-  add(terrain, boxMinMax(2.5, 2.5, 2.5, W - 2.5, DESK_TOP, deskZ1, 1), WOOD);
-  // a pale edge band along the desk's sides: where the desk ends (and the drop begins) reads from afar
-  deco(2.35, 2.8, deskZ1 - 0.6, W - 2.35, DESK_TOP - 0.4, deskZ1 + 0.15, 'box', 0xc08a52, 0, 0.45);
-  deco(W - 2.6, 2.8, 2.35, W - 2.35 + 0.2, DESK_TOP - 0.4, deskZ1 + 0.15, 'box', 0xc08a52, 0, 0.45);
-
   // ---- the cabinet: black vinyl outside, raw MDF inside and on the cut edge, a rebate where the back sat
   add(terrain, boxMinMax(cx0, DESK_TOP - 0.5, cz0, cx1, rim, cz1, 2), VINYL);
   cut(terrain, boxMinMax(cx0 + WALL, FLOOR, cz0 + WALL, cx1 - WALL, rim + 6, cz1 - WALL, 1));
   cut(terrain, boxMinMax(cx0 + 3, rim - 3, cz0 + 3, cx1 - 3, rim + 6, cz1 - 3, 0.5));
   // raw fibreboard inside (more than 2 cells in from the vinyl) and on the cut edge at the top
   paint(terrain, boxMinMax(cx0 + 2.2, DESK_TOP + 1, cz0 + 2.2, cx1 - 2.2, rim + 2, cz1 - 2.2), MDF);
-  paint(terrain, boxMinMax(cx0 - 1, rim - 0.6, cz0 - 1, cx1 + 1, rim + 2, cz1 + 1), MDF);
   // the back panel's screw holes along the rebate
   for (let i = 0; i < 4; i++) {
     const z = cz0 + 12 + ((cz1 - cz0 - 24) * i) / 3;
@@ -133,15 +130,14 @@ export const speaker: TerrainGenerator = (terrain, seed, layout) => {
   add(terrain, boxMinMax(ix1, FLOOR - 0.5, cz0 + WALL - 0.5, cx1 - WALL + 0.5, liningTop, cz1 - WALL + 0.5, 1.2), FOAM);
   add(terrain, boxMinMax(cx0 + WALL - 0.5, FLOOR - 0.5, cz0 + WALL - 0.5, cx1 - WALL + 0.5, liningTop, iz0, 1.2), FOAM);
   add(terrain, boxMinMax(cx0 + WALL - 0.5, FLOOR - 0.5, iz1, cx1 - WALL + 0.5, liningTop, cz1 - WALL + 0.5, 1.2), FOAM);
-  // soft, broad billows: scattered at random (no grid), low (sunk into the slab); small enough that
-  // their backs stay inside the wall (lining and wall are 8.5 thick: 2r - out < 7.5)
-  // (x, z on the slab face, `dir` which way is into the cabinet)
+  // soft, broad billows: scattered at random (no grid), few and large, sunk deep into the slab (their
+  // backs come out through the walls: trimmed below) (x, z on the slab face, `dir` into the cabinet)
   const billow = (x: number, y: number, z: number, axis: 0 | 2, dir: number): void => {
-    const r = rand(3, 4.1);
-    const sink = r - rand(0.8, 1.6);
+    const r = rand(4.5, 7);
+    const sink = r - rand(1, 2.2);
     add(terrain, sphere(axis === 0 ? x - dir * sink : x, y, axis === 2 ? z - dir * sink : z, r), FOAM, 2.2);
   };
-  const billows = (along: number, height: number): number => Math.round((along * height) / 40);
+  const billows = (along: number, height: number): number => Math.round((along * height) / 90);
   for (let n = billows(iz1 - iz0, liningTop - FLOOR); n > 0; n--) {
     billow(ix0, rand(FLOOR + 4, liningTop - 4), rand(iz0 + 5, iz1 - 5), 0, 1);
     billow(ix1, rand(FLOOR + 4, liningTop - 4), rand(iz0 + 5, iz1 - 5), 0, -1);
@@ -158,6 +154,27 @@ export const speaker: TerrainGenerator = (terrain, seed, layout) => {
   paint(terrain, boxMinMax(cx0 + WALL - 0.2, FLOOR + 0.7, cz0 + WALL - 0.2, cx1 - WALL + 0.2, liningTop + 1.5, iz0 + band), FOAM);
   paint(terrain, boxMinMax(cx0 + WALL - 0.2, FLOOR + 0.7, iz1 - band, cx1 - WALL + 0.2, liningTop + 1.5, cz1 - WALL + 0.2), FOAM);
 
+  // trim the billows' backs that came out through the walls, give the outside its vinyl back, and the
+  // cut top edge its raw fibreboard
+  const top = rim + 4;
+  cut(terrain, boxMinMax(cx0 - 8, DESK_TOP + 0.5, cz0 - 8, cx0, top, cz1 + 8));
+  cut(terrain, boxMinMax(cx1, DESK_TOP + 0.5, cz0 - 8, cx1 + 8, top, cz1 + 8));
+  cut(terrain, boxMinMax(cx0 - 8, DESK_TOP + 0.5, cz0 - 8, cx1 + 8, top, cz0));
+  cut(terrain, boxMinMax(cx0 - 8, DESK_TOP + 0.5, cz1, cx1 + 8, top, cz1 + 8));
+  paint(terrain, boxMinMax(cx0 - 0.5, DESK_TOP - 1, cz0, cx0 + 1.4, rim, cz1), VINYL);
+  paint(terrain, boxMinMax(cx1 - 1.4, DESK_TOP - 1, cz0, cx1 + 0.5, rim, cz1), VINYL);
+  paint(terrain, boxMinMax(cx0, DESK_TOP - 1, cz0 - 0.5, cx1, rim, cz0 + 1.4), VINYL);
+  paint(terrain, boxMinMax(cx0, DESK_TOP - 1, cz1 - 1.4, cx1, rim, cz1 + 0.5), VINYL);
+  paint(terrain, boxMinMax(cx0 + 1.2, rim - 0.6, cz0 + 1.2, cx1 - 1.2, rim + 2, cz1 - 1.2), MDF);
+
+  // ---- the desk
+  add(terrain, boxMinMax(2.5, 2.5, 2.5, W - 2.5, DESK_TOP, deskZ1, 1), WOOD);
+  // a pale edge band along the desk's sides: where the desk ends (and the drop begins) reads from afar
+  deco(2.35, 2.8, deskZ1 - 0.6, W - 2.35, DESK_TOP - 0.4, deskZ1 + 0.15, 'box', 0xc08a52, 0, 0.45);
+  deco(W - 2.6, 2.8, 2.35, W - 2.35 + 0.2, DESK_TOP - 0.4, deskZ1 + 0.15, 'box', 0xc08a52, 0, 0.45);
+  deco(2.15, 2.8, 2.35, 2.6, DESK_TOP - 0.4, deskZ1 + 0.15, 'box', 0xc08a52, 0, 0.45);
+  deco(2.35, 2.8, 2.15, W - 2.35, DESK_TOP - 0.4, 2.6, 'box', 0xc08a52, 0, 0.45);
+
   // ---- the woofer, from behind: basket ring with screw ears, the basket frame, the cone, the spider,
   // the magnet tower. (The smooth stand-ins are drawn at these sizes; the terrain under the round parts
   // is a little smaller, so its steps stay hidden inside them.)
@@ -173,8 +190,9 @@ export const speaker: TerrainGenerator = (terrain, seed, layout) => {
   }
   // the basket frame: a conical stamped shell from the ring up to the magnet, with four wide windows
   // (on the diagonals) between four flat ribs (on the axes); the cone shows through the windows
-  add(terrain, cone(wx, ringTop - 0.5, wz, BASKET_LOW * k, plateY, BASKET_HIGH * k), BLACK_PLASTIC);
-  cut(terrain, cone(wx, ringTop, wz, BASKET_LOW * k - BASKET_THICK, plateY + 0.01, BASKET_HIGH * k - BASKET_THICK));
+  // (the terrain shell a little inside the drawn one, both faces; it stops under the drawn collar)
+  add(terrain, cone(wx, ringTop - 0.5, wz, BASKET_LOW * k - 0.3, plateY, BASKET_HIGH * k - 0.3), BLACK_PLASTIC);
+  cut(terrain, cone(wx, ringTop, wz, BASKET_LOW * k - BASKET_THICK + 0.3, plateY + 0.01, BASKET_HIGH * k - BASKET_THICK + 0.3));
   for (const [ex, ez] of [[C45, C45], [-C45, C45], [-C45, -C45], [C45, -C45]]) {
     const y0 = ringTop + WINDOW_SILL;
     const y1 = plateY - WINDOW_HEAD;
@@ -253,10 +271,10 @@ export const speaker: TerrainGenerator = (terrain, seed, layout) => {
   }
 
   // ---- the amp plate on the desk (the cabinet's back): painted black, the boards facing up
-  const ax0 = cx1 + 6;
-  const ax1 = W - 6;
-  const az0 = 10;
-  const az1 = deskZ1 - 12;
+  const ax0 = cx1 + 9;
+  const ax1 = W - 11;
+  const az0 = 16;
+  const az1 = deskZ1 - 13;
   const ka = Math.min(1, (ax1 - ax0) / 48);
   const PT = DESK_TOP + 2;
   add(terrain, boxMinMax(ax0, DESK_TOP - 0.6, az0, ax1, PT, az1, 0.6), VINYL);
@@ -269,8 +287,24 @@ export const speaker: TerrainGenerator = (terrain, seed, layout) => {
   claim(0, az1, W, D);
   const PB = PT + 2;
   // the amplifier board
-  const bz1 = az0 + Math.round(58 * ka);
+  const bz1 = az0 + Math.round(64 * ka);
   add(terrain, boxMinMax(ax0 + 4, PT - 0.4, az0 + 4, ax1 - 4, PB, bz1, 0.5), PCB);
+  // copper traces under everything else (the parts stand on them)
+  for (let n = Math.round(((ax1 - ax0) * (bz1 - az0)) / 160); n > 0; n--) {
+    let x = rand(ax0 + 7, ax1 - 7);
+    let z = rand(az0 + 7, bz1 - 4);
+    for (let leg = 0; leg < 2; leg++) {
+      const alongX = (leg + n) % 2 === 0;
+      const len = rand(5, 16) * (rng() < 0.5 ? -1 : 1);
+      const x2 = alongX ? Math.min(ax1 - 6, Math.max(ax0 + 6, x + len)) : x;
+      const z2 = alongX ? z : Math.min(bz1 - 3, Math.max(az0 + 6, z + len));
+      const tb: [number, number, number, number, number, number] = [Math.min(x, x2) - 1, PB - 0.5, Math.min(z, z2) - 1, Math.max(x, x2) + 1, PB + 1.2, Math.max(z, z2) + 1];
+      add(terrain, boxMinMax(tb[0], tb[1], tb[2], tb[3], tb[4], tb[5], 0.5), COPPER);
+      put(feature('trace', (tb[0] + tb[3]) / 2, PB, (tb[2] + tb[5]) / 2, { box: tb }));
+      x = x2;
+      z = z2;
+    }
+  }
   // heatsink along the board's far edge: a finned aluminium block, the amp chips on its inner face
   const hx0 = ax0 + 7;
   const hx1 = ax1 - 7;
@@ -309,14 +343,14 @@ export const speaker: TerrainGenerator = (terrain, seed, layout) => {
       placed++;
     }
   };
-  scatter(3, 2.6, 5, (x, z) => part(x, PB, z, x + 2.6, PB + 4.5, z + 5, CABLE_YELLOW, 'box', 0xd8b21c, 0, 0.45));
-  scatter(3, 4, 5, (x, z) => part(x, PB, z, x + 4, PB + 1, z + 5, BLACK_PLASTIC, 'box', 0x111113, 0, 0.4));
   scatter(5, 4, 4, (x, z) => {
     const r = rand(1.5, 2);
     const h = rand(4, 6);
     add(terrain, cylinder(x + 2, PB + h / 2, z + 2, r, h / 2, 1, 0.8), BLACK_PLASTIC);
     put(feature('capacitor', x + 2, PB, z + 2, { radius: r, box: [x + 2 - r, PB, z + 2 - r, x + 2 + r, PB + h + 0.3, z + 2 + r] }));
   });
+  scatter(2, 2.6, 5, (x, z) => part(x, PB, z, x + 2.6, PB + 4.5, z + 5, CABLE_YELLOW, 'box', 0xd8b21c, 0, 0.45));
+  scatter(2, 4, 5, (x, z) => part(x, PB, z, x + 4, PB + 1, z + 5, BLACK_PLASTIC, 'box', 0x111113, 0, 0.4));
   scatter(2, 6, 3.5, (x, z) => part(x, PB, z, x + 6, PB + 3.2, z + 3.5, BLACK_PLASTIC, 'box', 0xe8e4da, 0, 0.55));
   const potX = ax1 - 11;
   const potZ = bz1 - 6;
@@ -340,7 +374,12 @@ export const speaker: TerrainGenerator = (terrain, seed, layout) => {
     const th = Math.max(9, 15 * ka);
     // the laminated core (dark steel), its clamp frame, the label on the winding, the mounting feet
     put(feature('part', (tx0 + tx1) / 2, PT, (tz0 + tz1) / 2, { shape: 'box', box: [tx0 + 0.15, PT, tz0 + 0.15, tx1 - 0.15, PT + th - 0.15, tz1 - 0.15], color: 0x2c2e32, metal: 0.55, rough: 0.6 }));
+    // the stacked sheets show as fine lines on the core's top and its two open sides
     for (let x = tx0 + 1.2; x < tx1 - 0.8; x += 1.4) deco(x, PT + th - 0.2, tz0 + 0.4, x + 0.12, PT + th - 0.05, tz1 - 0.4, 'box', 0x15161a, 0.4, 0.7);
+    for (let y = PT + 1; y < PT + th - 1; y += 1.1) {
+      deco(tx0 - 0.02, y, tz0 + 0.5, tx0 + 0.12, y + 0.12, tz1 - 0.5, 'box', 0x15161a, 0.4, 0.7);
+      deco(tx1 - 0.12, y, tz0 + 0.5, tx1 + 0.02, y + 0.12, tz1 - 0.5, 'box', 0x15161a, 0.4, 0.7);
+    }
     deco(tx0 - 0.3, PT + th - 1.6, tz0 + 0.8, tx1 + 0.3, PT + th + 0.15, tz0 + 2.6, 'box', 0x8a8f96, 0.9, 0.4);
     deco(tx0 - 0.3, PT + th - 1.6, tz1 - 2.6, tx1 + 0.3, PT + th + 0.15, tz1 - 0.8, 'box', 0x8a8f96, 0.9, 0.4);
     deco(tx0 + 4.5, PT + 4, tz0 - 2.75, tx1 - 4.5, PT + th - 6, tz0 - 2.6, 'box', 0xe9e6de, 0, 0.7);

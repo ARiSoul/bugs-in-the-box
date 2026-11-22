@@ -13,9 +13,10 @@ export interface Scenario {
   sharpEdges: boolean;
   /**
    * Background: CSS gradient behind the canvas, and the fog colour (0xRRGGBB). WebGPU path: the distance
-   * fog is clear up to `fogClear` and nearly full `fogSpan` further (defaults 40 and 110: a closed case).
+   * fog is clear up to `fogClear` and nearly full `fogSpan` further (defaults 40 and 110: a closed case),
+   * and the map's edges and corners fall dark by `cornerDark` (default 0.75).
    */
-  sky: { css: string; fog: number; fogClear?: number; fogSpan?: number };
+  sky: { css: string; fog: number; fogClear?: number; fogSpan?: number; cornerDark?: number };
   /**
    * Render path: 'webgl' (the classic look) or 'webgpu' (the atmosphere path: height fog, god rays,
    * bloom, glass, dust). A 'webgpu' scenario still runs where WebGPU is missing, on WebGL2, with less.
@@ -25,8 +26,9 @@ export interface Scenario {
   strictBounds: boolean;
   /** WebGPU path: where the key light stands, from the map centre (default: high on the low-x side). */
   sun?: [number, number, number];
-  /** WebGPU path: colour of the key light (default 0xffb878, late sun). */
+  /** WebGPU path: colour and intensity of the key light (defaults 0xffb878 and 3.9: late sun into a dark case). */
   sunColor?: number;
+  sunIntensity?: number;
   /** Lowest angle of the chase view above the active bug (radians; default 0.42): higher over tall walls. */
   chaseElevation?: number;
 }
@@ -56,13 +58,15 @@ export const SCENARIOS: readonly Scenario[] = [
     generate: speaker,
     sharpEdges: true,
     // an open desk: the fog only darkens the far end of the room
-    sky: { css: 'radial-gradient(ellipse at 50% 40%, #221d19 0%, #070605 72%)', fog: 0x0d0b09, fogClear: 80, fogSpan: 220 },
+    sky: { css: 'radial-gradient(ellipse at 50% 40%, #221d19 0%, #070605 72%)', fog: 0x0d0b09, fogClear: 80, fogSpan: 220, cornerDark: 0.2 },
     render: 'webgpu',
     strictBounds: true,
-    // from the amp side and high: into the open cabinet, over its far wall
-    sun: [40, 170, 30],
-    // a whiter, morning light: black parts must stay black (a deep orange turns them brown)
-    sunColor: 0xffe0c0,
+    // high, a little from the amp side: into the open cabinet, short shadows on the desk around it
+    sun: [18, 180, 48],
+    // a softer, whiter light: black parts must stay black (a strong warm light gives every black surface a
+    // tan sheen where it is seen at a grazing angle, and turns the cabinet's vinyl brown)
+    sunColor: 0xffe2c6,
+    sunIntensity: 3,
     // the cabinet walls stand tall around the play: the chase view looks down over them
     chaseElevation: 0.66,
   },
