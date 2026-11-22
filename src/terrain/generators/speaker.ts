@@ -465,12 +465,19 @@ export const speaker: TerrainGenerator = (terrain, seed, layout) => {
     for (let placed = 0, tries = 0; placed < count && tries < 80; tries++) {
       const x = rand(ax0 + 6, ax1 - 6 - w);
       const z = rand(az0 + 6, bz1 - 2 - d);
-      if (!free(x - 1, z - 1, x + w + 1, z + d + 1)) continue;
-      claim(x - 1, z - 1, x + w + 1, z + d + 1);
+      // (a clear strip of bare board round every part: bodies never touch, seen from any angle)
+      if (!free(x - 1.6, z - 1.6, x + w + 1.6, z + d + 1.6)) continue;
+      claim(x - 1.6, z - 1.6, x + w + 1.6, z + d + 1.6);
       place(x, z);
       placed++;
     }
   };
+  scatter(2, 4, 5, (x, z) => {
+    part(x, PB, z, x + 4, PB + 1, z + 5, BLACK_PLASTIC, 'box', 0x111113, 0, 0.4);
+    anchors.push([x - 0.8, z + 1], [x + 4.8, z + 4]);
+    bodies.push([x, z, x + 4, z + 5]);
+  });
+  let sleeve = 0;
   scatter(5, 4, 4, (x, z) => {
     const r = rand(1.5, 2);
     const h = rand(4, 6);
@@ -478,18 +485,13 @@ export const speaker: TerrainGenerator = (terrain, seed, layout) => {
     anchors.push([x + 2 - r - 0.7, z + 2], [x + 2 + r + 0.7, z + 2]);
     bodies.push([x + 2 - r, z + 2 - r, x + 2 + r, z + 2 + r]);
     // (sleeves of a few makes: black, blue, brown)
-    const sleeves = [0x16181c, 0x1d3f8a, 0x5a3a22];
-    put(feature('capacitor', x + 2, PB, z + 2, { radius: r, box: [x + 2 - r, PB, z + 2 - r, x + 2 + r, PB + h + 0.3, z + 2 + r], color: sleeves[Math.floor(rng() * 3)] }));
+    const sleeves = [0x1d3f8a, 0x16181c, 0x5a3a22];
+    put(feature('capacitor', x + 2, PB, z + 2, { radius: r, box: [x + 2 - r, PB, z + 2 - r, x + 2 + r, PB + h + 0.3, z + 2 + r], color: sleeves[sleeve++ % 3] }));
   });
   scatter(2, 2.6, 5, (x, z) => {
     part(x, PB, z, x + 2.6, PB + 4.5, z + 5, CABLE_YELLOW, 'box', 0xd8b21c, 0, 0.45);
     anchors.push([x + 1.3, z - 0.8], [x + 1.3, z + 5.8]);
     bodies.push([x, z, x + 2.6, z + 5]);
-  });
-  scatter(2, 4, 5, (x, z) => {
-    part(x, PB, z, x + 4, PB + 1, z + 5, BLACK_PLASTIC, 'box', 0x111113, 0, 0.4);
-    anchors.push([x - 0.8, z + 1], [x + 4.8, z + 4]);
-    bodies.push([x, z, x + 4, z + 5]);
   });
   scatter(2, 6, 3.5, (x, z) => {
     part(x, PB, z, x + 6, PB + 3.2, z + 3.5, BLACK_PLASTIC, 'box', 0xe8e4da, 0, 0.55);
