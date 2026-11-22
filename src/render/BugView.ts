@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { TICK_RATE, type Bug } from '../game/bug';
+import { TICK_RATE, WALKABLE_NY, type Bug } from '../game/bug';
 import type { BugSpecies } from '../game/species';
 
 const sphere = new THREE.SphereGeometry(1, 16, 12);
@@ -28,6 +28,7 @@ export class BugView {
   private readonly materials: THREE.Material[] = [];
   private readonly up = new THREE.Vector3(0, 1, 0);
   private readonly fwd = new THREE.Vector3();
+  private readonly ascent = new THREE.Vector3();
   private readonly side = new THREE.Vector3();
   private readonly basis = new THREE.Matrix4();
   private readonly target = new THREE.Vector3();
@@ -123,13 +124,21 @@ export class BugView {
     if (bug.grounded) this.target.set(bug.nx, bug.ny, bug.nz);
     else this.target.copy(UP);
     this.up.lerp(this.target, 1 - Math.exp(-dt * 12)).normalize();
+    // forward along the surface; on a steep one (climbing), facing into it means heading up it
     this.fwd.set(bug.fx, 0, bug.fz);
-    this.fwd.addScaledVector(this.up, -this.fwd.dot(this.up)).normalize();
+    const into = this.fwd.dot(this.up);
+    this.fwd.addScaledVector(this.up, -into);
+    if (into < 0) this.fwd.addScaledVector(this.ascent.copy(UP).addScaledVector(this.up, -this.up.y), -into / Math.max(1e-6, Math.sqrt(1 - this.up.y * this.up.y)));
+    if (this.fwd.lengthSq() < 1e-8) this.fwd.set(bug.fx, 0, bug.fz).addScaledVector(this.up, -this.up.dot(this.fwd));
+    this.fwd.normalize();
     this.side.crossVectors(this.up, this.fwd);
     this.basis.makeBasis(this.side, this.up, this.fwd);
     this.root.quaternion.setFromRotationMatrix(this.basis);
-    // the team ring stays flat on the floor whatever the bug leans into
-    if (this.ring) this.ring.quaternion.copy(this.root.quaternion).invert().multiply(FLAT);
+    // the team ring stays flat on the floor whatever the bug leans into; on a steep surface it lies on it
+    if (this.ring) {
+      if (bug.grounded && bug.ny < WALKABLE_NY) this.ring.quaternion.copy(FLAT);
+      else this.ring.quaternion.copy(this.root.quaternion).invert().multiply(FLAT);
+    }
 
     // Walk cycle driven by actual ground speed; legs tuck in while airborne.
     const dx = bug.x - bug.px;
