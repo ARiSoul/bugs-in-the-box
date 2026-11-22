@@ -46,6 +46,9 @@ export const WINDOW_HALF = 14.5;
 export const FOAM_SLEEVE_COLOR = 0x3a3b3e;
 /** Colour of the mains earth wire (the renderer draws it green with a yellow stripe). */
 export const EARTH_COLOR = 0x9fb52a;
+/** The solder mask's green, and the slightly lighter green of the traces under it. */
+const BOARD_GREEN = 0x1d4f34;
+const TRACE_GREEN = 0x3f8a58;
 
 /**
  * Studio Monitor: an active studio speaker opened up for repair on a desk. The cabinet lies face down
@@ -315,7 +318,7 @@ export const speaker: TerrainGenerator = (terrain, seed, layout) => {
     termX - 7, FLOOR + 3, termZ - 2,
     termX - 3, FLOOR + 5.2, termZ,
     termX - 1.6, FLOOR + 5.4, termZ,
-    termX - 0.35, FLOOR + 5.4, termZ,
+    termX - 0.08, FLOOR + 5.4, termZ,
   ], 1, 1.7, false);
 
   // ---- the bass port: a slot duct with flared lips, open through the baffle (over the desk's edge)
@@ -356,6 +359,10 @@ export const speaker: TerrainGenerator = (terrain, seed, layout) => {
   const ka = Math.min(1, (ax1 - ax0) / 48);
   const PT = DESK_TOP + 2;
   add(terrain, boxMinMax(ax0, DESK_TOP - 0.6, az0, ax1, PT, az1, 0.6), VINYL);
+  // (drawn as a clean sheet a hair above the terrain: every part placed on the plate recolours the samples
+  // round its foot, and that border would show as a broken line on the plate)
+  const SURF = 0.08;
+  deco(ax0 - 0.1, DESK_TOP - 0.5, az0 - 0.1, ax1 + 0.1, PT + SURF, az1 + 0.1, 'plate', 0x0f0f11, 0.2, 0.7);
   for (let i = 0; i <= 4; i++) {
     const z = az0 + 3 + ((az1 - az0 - 6) * i) / 4;
     for (const x of [ax0 + 2.6, ax1 - 2.6]) deco(x - 0.8, PT - 0.05, z - 0.8, x + 0.8, PT + 0.1, z + 0.8, 'cylY', 0x020202, 0, 0.9);
@@ -366,9 +373,12 @@ export const speaker: TerrainGenerator = (terrain, seed, layout) => {
   const PB = PT + 2;
   /** Where a part's leg meets the board (a trace may end there, on a pad). */
   const anchors: [number, number][] = [];
+  /** The outlines of the board's parts (x0, z0, x1, z1): traces keep clear of them. */
+  const bodies: [number, number, number, number][] = [];
   // the amplifier board
   const bz1 = az0 + Math.round(64 * ka);
   add(terrain, boxMinMax(ax0 + 4, PT - 0.4, az0 + 4, ax1 - 4, PB, bz1, 0.5), PCB);
+  deco(ax0 + 3.9, PT + SURF, az0 + 3.9, ax1 - 3.9, PB + SURF, bz1 + 0.1, 'plate', BOARD_GREEN, 0, 0.5);
   // heatsink along the board's far edge: a finned aluminium block, the amp chips on its inner face
   const hx0 = ax0 + 7;
   const hx1 = ax1 - 7;
@@ -388,6 +398,7 @@ export const speaker: TerrainGenerator = (terrain, seed, layout) => {
   deco(hx0 - 0.15, PB + 2, hz1 - wall - 0.15, hx1 + 0.15, wallTop + 0.15, hz1 + 0.15, 'plate', alu, 0.85, 0.4);
   for (let x = hx0; x + 2 <= hx1 + 0.01; x += 4) deco(x - 0.15, PB + 2, hz0 - 0.15, Math.min(hx1, x + 2) + 0.15, hTop + 0.15, hz1 + 0.15, 'plate', alu, 0.85, 0.4);
   claim(hx0 - 1, hz0 - 1, hx1 + 1, hz1 + 2.5);
+  bodies.push([hx0, hz0, hx1, hz1 + 1.4]);
   for (let i = 0; i < 3; i++) {
     const x = hx0 + ((hx1 - hx0) * (i + 1)) / 4;
     // TO-220: the body flat on the wall, its metal tab above with the screw, three legs into the board
@@ -412,6 +423,7 @@ export const speaker: TerrainGenerator = (terrain, seed, layout) => {
     add(terrain, cylinder(x, PB + hh / 2, capRow, rr, hh / 2, 1, 1), BLACK_PLASTIC);
     add(terrain, cylinder(x, PB + hh + 0.1, capRow, rr - 0.7, 0.6, 1, 0.5), STEEL);
     put(feature('capacitor', x, PB, capRow, { radius: rr, box: [x - rr, PB, capRow - rr, x + rr, PB + hh + 0.7, capRow + rr] }));
+    bodies.push([x - rr, capRow - rr, x + rr, capRow + rr]);
     anchors.push([x - rr - 0.7, capRow + 1.5], [x + rr + 0.7, capRow + 1.5]);
   }
   // small parts: film capacitors (yellow), op-amps, small electrolytics, cable sockets, the volume pot
@@ -421,6 +433,8 @@ export const speaker: TerrainGenerator = (terrain, seed, layout) => {
   const plugX = ax0 + 11;
   if (free(plugX - 1, plugZ - 3, plugX + 5, plugZ + 3)) claim(plugX - 1, plugZ - 3, plugX + 5, plugZ + 3);
   part(plugX, PB, plugZ - 2.2, plugX + 4, PB + 3.2, plugZ + 2.2, BLACK_PLASTIC, 'box', 0xe8e4da, 0, 0.55);
+  bodies.push([plugX - 6, plugZ - 2.2, plugX + 4, plugZ + 2.2]); // (and the leads to it)
+  anchors.push([plugX + 4.8, plugZ - 1], [plugX + 4.8, plugZ + 1]);
   const scatter = (count: number, w: number, d: number, place: (x: number, z: number) => void): void => {
     for (let placed = 0, tries = 0; placed < count && tries < 80; tries++) {
       const x = rand(ax0 + 6, ax1 - 6 - w);
@@ -436,6 +450,7 @@ export const speaker: TerrainGenerator = (terrain, seed, layout) => {
     const h = rand(4, 6);
     add(terrain, cylinder(x + 2, PB + h / 2, z + 2, r, h / 2, 1, 0.8), BLACK_PLASTIC);
     anchors.push([x + 2 - r - 0.7, z + 2], [x + 2 + r + 0.7, z + 2]);
+    bodies.push([x + 2 - r, z + 2 - r, x + 2 + r, z + 2 + r]);
     // (sleeves of a few makes: black, blue, brown)
     const sleeves = [0x16181c, 0x1d3f8a, 0x5a3a22];
     put(feature('capacitor', x + 2, PB, z + 2, { radius: r, box: [x + 2 - r, PB, z + 2 - r, x + 2 + r, PB + h + 0.3, z + 2 + r], color: sleeves[Math.floor(rng() * 3)] }));
@@ -443,24 +458,36 @@ export const speaker: TerrainGenerator = (terrain, seed, layout) => {
   scatter(2, 2.6, 5, (x, z) => {
     part(x, PB, z, x + 2.6, PB + 4.5, z + 5, CABLE_YELLOW, 'box', 0xd8b21c, 0, 0.45);
     anchors.push([x + 1.3, z - 0.8], [x + 1.3, z + 5.8]);
+    bodies.push([x, z, x + 2.6, z + 5]);
   });
   scatter(2, 4, 5, (x, z) => {
     part(x, PB, z, x + 4, PB + 1, z + 5, BLACK_PLASTIC, 'box', 0x111113, 0, 0.4);
     anchors.push([x - 0.8, z + 1], [x + 4.8, z + 4]);
+    bodies.push([x, z, x + 4, z + 5]);
   });
-  scatter(2, 6, 3.5, (x, z) => part(x, PB, z, x + 6, PB + 3.2, z + 3.5, BLACK_PLASTIC, 'box', 0xe8e4da, 0, 0.55));
+  scatter(2, 6, 3.5, (x, z) => {
+    part(x, PB, z, x + 6, PB + 3.2, z + 3.5, BLACK_PLASTIC, 'box', 0xe8e4da, 0, 0.55);
+    bodies.push([x, z, x + 6, z + 3.5]);
+    anchors.push([x + 3, z + 4.3], [x + 1, z + 4.3]);
+  });
   const potX = ax1 - 11;
   const potZ = bz1 - 6;
   if (free(potX - 4, potZ - 4, potX + 4, potZ + 4)) {
     claim(potX - 4, potZ - 4, potX + 4, potZ + 4);
     part(potX - 3, PB, potZ - 3, potX + 3, PB + 4.5, potZ + 3, STEEL, 'cylY', 0x9aa0a8, 0.9, 0.35);
+    bodies.push([potX - 3, potZ - 3, potX + 3, potZ + 3]);
+    anchors.push([potX - 3.8, potZ], [potX, potZ - 3.8]);
     deco(potX - 1.2, PB + 4.5, potZ - 1.2, potX + 1.2, PB + 7.5, potZ + 1.2, 'cylY', 0xc9cdd2, 1, 0.3);
   }
   claim(ax1 - 7.5, az0 + 6.5 + 30 * ka, ax1 - 4.5, az0 + 9.5 + 30 * ka);
   // (the LED's legs on their own pads, each joined to the board's traces)
-  for (const dz of [-0.5, 0.5]) deco(ax1 - 6.45, PB - 0.02, az0 + 8 + 30 * ka + dz - 0.35, ax1 - 5.55, PB + 0.13, az0 + 8 + 30 * ka + dz + 0.35, 'cylY', 0x9d9a90, 0.9, 0.4);
-  deco(ax1 - 6.22, PB - 0.02, az0 + 8.5 + 30 * ka - 0.22, ax1 - 5.78, PB + 0.1, az0 + 13 + 30 * ka, 'plate', 0x2b6a40, 0, 0.45);
-  deco(ax1 - 9, PB - 0.02, az0 + 7.5 + 30 * ka - 0.22, ax1 - 6, PB + 0.1, az0 + 7.5 + 30 * ka + 0.22, 'plate', 0x2b6a40, 0, 0.45);
+  const lz = az0 + 8 + 30 * ka;
+  for (const dz of [-0.5, 0.5]) deco(ax1 - 6.45, PB + 0.06, lz + dz - 0.35, ax1 - 5.55, PB + 0.18, lz + dz + 0.35, 'cylY', 0x9d9a90, 0.9, 0.4);
+  // (one leg's trace runs on to a resistor's pad, the other's to the ground pad)
+  deco(ax1 - 6.22, PB + 0.06, lz + 0.5, ax1 - 5.78, PB + 0.15, lz + 4.5, 'plate', TRACE_GREEN, 0, 0.45);
+  deco(ax1 - 6.5, PB + 0.06, lz + 4.5, ax1 - 5.5, PB + 0.18, lz + 5.5, 'cylY', 0x9d9a90, 0.9, 0.4);
+  deco(ax1 - 9.5, PB + 0.06, lz - 0.72, ax1 - 6, PB + 0.15, lz - 0.28, 'plate', TRACE_GREEN, 0, 0.45);
+  deco(ax1 - 10, PB + 0.06, lz - 1, ax1 - 9, PB + 0.18, lz, 'cylY', 0x9d9a90, 0.9, 0.4);
   put(feature('led', ax1 - 6, PB + 1.6, az0 + 8 + 30 * ka, { color: 0x3dff6a }));
   for (const dz of [-0.5, 0.5]) deco(ax1 - 6.12, PB, az0 + 8 + 30 * ka + dz - 0.12, ax1 - 5.88, PB + 0.9, az0 + 8 + 30 * ka + dz + 0.12, 'plate', 0xc9cdd2, 0.9, 0.35);
 
@@ -469,12 +496,13 @@ export const speaker: TerrainGenerator = (terrain, seed, layout) => {
   const used = new Map<number, number>();
   const full = (i: number): boolean => (used.get(i) ?? 0) >= 2;
   const pairs = new Set<string>();
+  bodies.push([ax1 - 7, az0 + 7 + 30 * ka, ax1 - 5, az0 + 9 + 30 * ka]); // (the LED)
   const clearLeg = (x0: number, z0: number, x1: number, z1: number): boolean => {
-    // (the leg's middle only: its ends meet the parts' own pads)
-    const ax = Math.min(x0, x1), bx = Math.max(x0, x1), az = Math.min(z0, z1), bz = Math.max(z0, z1);
-    const sx = bx - ax > 3 ? 1.5 : 0;
-    const sz = bz - az > 3 ? 1.5 : 0;
-    return free(ax + sx - 0.4, az + sz - 0.4, bx - sx + 0.4, bz - sz + 0.4);
+    // (clear of every part's outline, and on the board; its ends are the parts' own pads)
+    const ax = Math.min(x0, x1) - 0.3, bx = Math.max(x0, x1) + 0.3, az = Math.min(z0, z1) - 0.3, bz = Math.max(z0, z1) + 0.3;
+    if (ax < ax0 + 4.5 || bx > ax1 - 4.5 || az < az0 + 4.5 || bz > bz1 - 0.5) return false;
+    for (const [qx0, qz0, qx1, qz1] of bodies) if (ax < qx1 && bx > qx0 && az < qz1 && bz > qz0) return false;
+    return true;
   };
   for (let i = 0; i < anchors.length; i++) {
     if (full(i)) continue;
@@ -494,12 +522,12 @@ export const speaker: TerrainGenerator = (terrain, seed, layout) => {
     used.set(i, (used.get(i) ?? 0) + 1);
     used.set(best, (used.get(best) ?? 0) + 1);
     pairs.add(`${Math.min(i, best)}|${Math.max(i, best)}`);
-    i--; // (this pad may take a second trace)
     const [x0, z0] = anchors[i];
     const [x1, z1] = anchors[best];
-    deco(Math.min(x0, x1) - 0.22, PB - 0.02, z0 - 0.22, Math.max(x0, x1) + 0.22, PB + 0.1, z0 + 0.22, 'plate', 0x2b6a40, 0, 0.45);
-    deco(x1 - 0.22, PB - 0.02, Math.min(z0, z1) - 0.22, x1 + 0.22, PB + 0.1, Math.max(z0, z1) + 0.22, 'plate', 0x2b6a40, 0, 0.45);
-    for (const [px, pz] of [[x0, z0], [x1, z1]]) deco(px - 0.5, PB - 0.02, pz - 0.5, px + 0.5, PB + 0.13, pz + 0.5, 'cylY', 0x9d9a90, 0.9, 0.4);
+    i--; // (this pad may take a second trace: look at it again)
+    deco(Math.min(x0, x1) - 0.22, PB + 0.06, z0 - 0.22, Math.max(x0, x1) + 0.22, PB + 0.15, z0 + 0.22, 'plate', TRACE_GREEN, 0, 0.45);
+    deco(x1 - 0.22, PB + 0.06, Math.min(z0, z1) - 0.22, x1 + 0.22, PB + 0.15, Math.max(z0, z1) + 0.22, 'plate', TRACE_GREEN, 0, 0.45);
+    for (const [px, pz] of [[x0, z0], [x1, z1]]) deco(px - 0.5, PB + 0.06, pz - 0.5, px + 0.5, PB + 0.18, pz + 0.5, 'cylY', 0x9d9a90, 0.9, 0.4);
   }
   // the power section: the transformer, the power board, the mains inlet and switch
   const pz0 = bz1 + 6;
@@ -527,13 +555,14 @@ export const speaker: TerrainGenerator = (terrain, seed, layout) => {
     // where the leads leave the winding: a patch of yellow tape over each exit
     // (thin, flush on the flat middle of the winding's face: the leads go in under it)
     const tm = (tx0 + tx1) / 2;
-    for (const zf of [tz1 + 2.47, tz0 - 2.59]) deco(tm - 2.1, PT + 4.8, zf, tm + 2.1, PT + 7.2, zf + 0.12, 'plate', 0xe0bd38, 0, 0.5);
+    for (const zf of [tz1 + 2.47, tz0 - 2.59]) deco(tm - 2.4, PT + 4.4, zf, tm + 2.4, PT + 7.8, zf + 0.12, 'plate', 0xe0bd38, 0, 0.5);
     claim(tx0 - 1, tz0 - 3.5, tx1 + 1, tz1 + 3.5);
   }
   const sx0 = tx1 + 4;
   if (sx0 + 12 < ax1 - 4 && pz0 + 22 * ka + 4 < az1) {
     const sz1 = pz0 + Math.max(14, 22 * ka);
     add(terrain, boxMinMax(sx0, PT - 0.4, pz0, ax1 - 5, PB, sz1, 0.5), PCB);
+    deco(sx0 - 0.1, PT + SURF, pz0 - 0.1, ax1 - 4.9, PB + SURF, sz1 + 0.1, 'plate', BOARD_GREEN, 0, 0.5);
     claim(sx0, pz0, ax1 - 5, sz1);
     part(sx0 + 3, PB, pz0 + 3, sx0 + 10, PB + 6.5, pz0 + 10, CABLE_YELLOW, 'box', 0xd8b21c, 0, 0.5);
     for (const [dx, dz] of [[14, 5], [14, 13]]) {
@@ -635,7 +664,7 @@ export const speaker: TerrainGenerator = (terrain, seed, layout) => {
     sx - cdx * 2.2, sy - cdy * 2.2, sz0 - cdz * 2.2,
     termX + 2.6, FLOOR + 5.6, termZ - 2.2,
     termX + 1.3, FLOOR + 6.4, termZ - 0.3,
-    termX + 0.35, FLOOR + 6.4, termZ,
+    termX + 0.08, FLOOR + 6.4, termZ,
   ], 0.4, 1.7, true);
   pairAlong([plugX - 5.3, PB + 3.2, plugZ, plugX - 3, PB + 2.4, plugZ, plugX + 0.3, PB + 1.8, plugZ], 0.4, 0.8, true);
   // the plug: wire entries on its back, a small latch ramp on one side
