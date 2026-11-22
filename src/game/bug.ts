@@ -52,7 +52,10 @@ export interface BugInput {
   jump: boolean;
   /** Run instead of walk (forward and back). */
   run?: boolean;
-  /** Face this horizontal direction (any length) before moving; (0, 0) or absent: keep the facing. */
+  /**
+   * Face this horizontal direction (any length) before moving; (0, 0) or absent: keep the facing. When
+   * given, `turn` is ignored (the facing already includes it).
+   */
   faceX?: number;
   faceZ?: number;
 }
@@ -142,7 +145,8 @@ export class Bug {
       this.fx = faceX / faceL;
       this.fz = faceZ / faceL;
     }
-    if (input.turn !== 0) this.rotate(-input.turn * sp.turnRate * DT);
+    // (a facing from the view wins over the turn keys: the view already turned with them)
+    if (input.turn !== 0 && faceL <= 1e-6) this.rotate(-input.turn * sp.turnRate * DT);
 
     let stick = false;
     let fallSpeed = 0;

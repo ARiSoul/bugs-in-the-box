@@ -1,36 +1,67 @@
 import type { MatchInput } from '../game/match';
 
+/** What a key or an on-screen button does. */
+export type Action = 'forward' | 'back' | 'left' | 'right' | 'aimUp' | 'aimDown' | 'run' | 'jump' | 'fire';
+
+/** The player's actions in menu order, with their names. */
+export const ACTIONS: readonly { action: Action; label: string }[] = [
+  { action: 'forward', label: 'walk forward' },
+  { action: 'back', label: 'walk back' },
+  { action: 'left', label: 'turn left' },
+  { action: 'right', label: 'turn right' },
+  { action: 'run', label: 'run (hold)' },
+  { action: 'jump', label: 'jump' },
+  { action: 'aimUp', label: 'aim higher' },
+  { action: 'aimDown', label: 'aim lower' },
+  { action: 'fire', label: 'fire (hold to charge)' },
+];
+
+/**
+ * Default keys (physical positions, so they work on any keyboard layout). The first key of each action
+ * is the one the player can change in the menu; the others (arrows, the right shift) always work too.
+ */
+export const DEFAULT_KEYS: Readonly<Record<Action, readonly string[]>> = {
+  forward: ['KeyW'],
+  back: ['KeyS'],
+  left: ['KeyA', 'ArrowLeft'],
+  right: ['KeyD', 'ArrowRight'],
+  aimUp: ['ArrowUp'],
+  aimDown: ['ArrowDown'],
+  run: ['ShiftLeft', 'ShiftRight'],
+  jump: ['Space'],
+  fire: ['KeyQ'],
+};
+
+/** Keys the game keeps for itself: weapons and a new match. */
+const RESERVED = new Set(['Digit1', 'Digit2', 'Digit3', 'Digit4', 'KeyN', 'Escape']);
+const WEAPON_KEYS = ['Digit1', 'Digit2', 'Digit3', 'Digit4'];
+const STORAGE = 'bugs-in-the-box.keys';
+
 /**
  * Turns held keys and on-screen buttons into one MatchInput per simulation tick.
  *
  *   W / S        walk forward / back        A / D, ← / →   turn (a tap turns a little)
  *   shift        run (held with W / S)      space          jump
- *   ↑ / ↓        aim higher / lower         F (hold)       charge, release to fire
+ *   ↑ / ↓        aim higher / lower         Q (hold)       charge, release to fire
  *   1–4          pick a weapon              right drag     turn the view; the bug turns with it
  *
- * Key codes are physical positions, so this works on any keyboard layout. On-screen buttons
- * (elements with `data-code`) press the same codes, so mouse and touch play the same game.
+ * The keys can be changed (`rebind`, saved in the browser). On-screen buttons (elements with
+ * `data-action`) press the same actions, so mouse and touch play the same game.
  */
-const FORWARD = ['KeyW'];
-const BACK = ['KeyS'];
-const LEFT = ['KeyA', 'ArrowLeft'];
-const RIGHT = ['KeyD', 'ArrowRight'];
-const AIM_UP = ['ArrowUp'];
-const AIM_DOWN = ['ArrowDown'];
-const RUN = ['ShiftLeft', 'ShiftRight'];
-const FIRE = ['KeyF'];
-const JUMP = ['Space'];
-const WEAPON_KEYS = ['Digit1', 'Digit2', 'Digit3', 'Digit4'];
-const HANDLED = new Set([...FORWARD, ...BACK, ...LEFT, ...RIGHT, ...AIM_UP, ...AIM_DOWN, ...RUN, ...FIRE, ...JUMP, ...WEAPON_KEYS]);
-
 export class Controls {
   private readonly held = new Set<string>();
+  /** Actions held on the on-screen pad. */
+  private readonly padHeld = new Set<Action>();
+  private keys: Record<Action, string[]>;
+  private handled = new Set<string>();
   private jumpQueued = false;
   private weaponQueued = -1;
   private faceX = 0;
   private faceZ = 0;
   /** True if the last `next()` carried a facing (from `face`). */
   faced = false;
+  /** Set while the menu waits for a key to bind: the next key press goes there instead of the game. */
+  private capture: ((code: string) => void) | null = null;
   private readonly out: MatchInput = { move: 0, turn: 0, faceX: 0, faceZ: 0, jump: false, run: false, aim: 0, fire: false, weapon: -1 };
 
   constructor(
@@ -38,9 +69,18 @@ export class Controls {
     /** Keys the game does not use (e.g. N for a new match). */
     private readonly onOtherKey: (code: string) => void = () => {},
   ) {
+    this.keys = loadKeys();
+    this.refresh();
     target.addEventListener('keydown', (e) => {
+      if (this.capture) {
+        e.preventDefault();
+        const done = this.capture;
+        this.capture = null;
+        done(e.code);
+        return;
+      }
       if (isTyping(e.target)) return;
-      if (!HANDLED.has(e.code)) {
+      if (!this.handled.has(e.code)) {
         if (!e.repeat) this.onOtherKey(e.code);
         return;
       }
@@ -48,22 +88,64 @@ export class Controls {
       if (!e.repeat) this.press(e.code);
     });
     target.addEventListener('keyup', (e) => this.release(e.code));
-    target.addEventListener('blur', () => this.held.clear());
+    target.addEventListener('blur', () => {
+      this.held.clear();
+      this.padHeld.clear();
+    });
   }
 
-  /** Wire every `[data-code]` element under `root` as a hold-down button (mouse and touch). */
+  /** The keys of an action (the first one is the player's choice). */
+  keysOf(action: Action): readonly string[] {
+    return this.keys[action];
+  }
+
+  /**
+   * Make `code` the main key of `action` (it leaves any other action it was on). Returns false for a key
+   * the game keeps for itself (weapons, new match).
+   */
+  rebind(action: Action, code: string): boolean {
+    if (RESERVED.has(code)) return false;
+    for (const a of Object.keys(this.keys) as Action[]) {
+      if (a !== action) this.keys[a] = this.keys[a].filter((k) => k !== code);
+    }
+    const rest = DEFAULT_KEYS[action].slice(1).filter((k) => k !== code);
+    this.keys[action] = [code, ...rest];
+    this.refresh();
+    saveKeys(this.keys);
+    return true;
+  }
+
+  /** Back to the default keys. */
+  resetKeys(): void {
+    this.keys = copyKeys(DEFAULT_KEYS);
+    this.refresh();
+    saveKeys(this.keys);
+  }
+
+  /** Send the next key press to `done` (the menu is binding a key) instead of the game. */
+  captureNextKey(done: (code: string) => void): void {
+    this.capture = done;
+  }
+
+  /** -1, 0 or +1: the turn keys held right now (without taking the tick's input). */
+  get turnHeld(): -1 | 0 | 1 {
+    return this.any('right') ? 1 : this.any('left') ? -1 : 0;
+  }
+
+  /** Wire every `[data-action]` element under `root` as a hold-down button (mouse and touch). */
   bindButtons(root: HTMLElement): void {
-    for (const el of root.querySelectorAll<HTMLElement>('[data-code]')) {
-      const code = el.dataset.code ?? '';
+    for (const el of root.querySelectorAll<HTMLElement>('[data-action]')) {
+      const action = el.dataset.action as Action;
       const up = (e: PointerEvent): void => {
         e.preventDefault();
-        this.release(code);
+        this.padHeld.delete(action);
         el.classList.remove('down');
       };
       el.addEventListener('pointerdown', (e) => {
         e.preventDefault();
         el.setPointerCapture(e.pointerId);
-        this.press(code);
+        this.padHeld.add(action);
+        if (action === 'jump') this.jumpQueued = true;
         el.classList.add('down');
       });
       el.addEventListener('pointerup', up);
@@ -89,7 +171,7 @@ export class Controls {
 
   press(code: string): void {
     this.held.add(code);
-    if (JUMP.includes(code)) this.jumpQueued = true;
+    if (this.keys.jump.includes(code)) this.jumpQueued = true;
     const w = WEAPON_KEYS.indexOf(code);
     if (w >= 0) this.weaponQueued = w;
   }
@@ -100,12 +182,11 @@ export class Controls {
 
   /** Input for the next tick. The returned object is reused: read it, do not keep it. */
   next(): Readonly<MatchInput> {
-    const any = (keys: string[]): boolean => keys.some((k) => this.held.has(k));
-    this.out.move = any(FORWARD) ? 1 : any(BACK) ? -1 : 0;
-    this.out.turn = any(RIGHT) ? 1 : any(LEFT) ? -1 : 0;
-    this.out.run = any(RUN);
-    this.out.aim = any(AIM_UP) ? 1 : any(AIM_DOWN) ? -1 : 0;
-    this.out.fire = any(FIRE);
+    this.out.move = this.any('forward') ? 1 : this.any('back') ? -1 : 0;
+    this.out.turn = this.turnHeld;
+    this.out.run = this.any('run');
+    this.out.aim = this.any('aimUp') ? 1 : this.any('aimDown') ? -1 : 0;
+    this.out.fire = this.any('fire');
     this.out.jump = this.jumpQueued;
     this.out.weapon = this.weaponQueued;
     this.out.faceX = this.faceX;
@@ -117,6 +198,66 @@ export class Controls {
     this.faceZ = 0;
     return this.out;
   }
+
+  private any(action: Action): boolean {
+    if (this.padHeld.has(action)) return true;
+    for (const k of this.keys[action]) if (this.held.has(k)) return true;
+    return false;
+  }
+
+  private refresh(): void {
+    this.handled = new Set([...WEAPON_KEYS, ...Object.values(this.keys).flat()]);
+  }
+}
+
+function copyKeys(k: Readonly<Record<Action, readonly string[]>>): Record<Action, string[]> {
+  const out = {} as Record<Action, string[]>;
+  for (const a of Object.keys(k) as Action[]) out[a] = [...k[a]];
+  return out;
+}
+
+/** The saved keys, over the defaults (an unknown or broken entry falls back to them). */
+function loadKeys(): Record<Action, string[]> {
+  const keys = copyKeys(DEFAULT_KEYS);
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORAGE) ?? '{}') as Partial<Record<Action, unknown>>;
+    for (const a of Object.keys(keys) as Action[]) {
+      const v = saved[a];
+      if (Array.isArray(v) && v.length > 0 && v.every((x) => typeof x === 'string')) keys[a] = v as string[];
+    }
+  } catch {
+    // (no storage, or a broken entry: the defaults)
+  }
+  return keys;
+}
+
+function saveKeys(keys: Record<Action, string[]>): void {
+  try {
+    localStorage.setItem(STORAGE, JSON.stringify(keys));
+  } catch {
+    // (storage unavailable: the keys last for this visit)
+  }
+}
+
+/** A key's name for the menu ("KeyQ" -> "Q", "ArrowUp" -> "↑", "ShiftLeft" -> "shift"). */
+export function keyName(code: string): string {
+  if (code.startsWith('Key')) return code.slice(3);
+  if (code.startsWith('Digit')) return code.slice(5);
+  const names: Record<string, string> = {
+    ArrowUp: '↑',
+    ArrowDown: '↓',
+    ArrowLeft: '←',
+    ArrowRight: '→',
+    ShiftLeft: 'shift',
+    ShiftRight: 'right shift',
+    ControlLeft: 'ctrl',
+    ControlRight: 'right ctrl',
+    AltLeft: 'alt',
+    Space: 'space',
+    Enter: 'enter',
+    Tab: 'tab',
+  };
+  return names[code] ?? code;
 }
 
 const NON_TEXT_INPUTS = new Set(['range', 'checkbox', 'radio', 'button']);

@@ -24,6 +24,7 @@ import { createLayout } from './terrain/generators/types';
 import { SCENARIOS, scenarioById, type Scenario } from './terrain/scenarios';
 import { Terrain } from './terrain/Terrain';
 import { Hud, type HudState } from './ui/hud';
+import { setupKeysMenu } from './ui/keys';
 
 const TEAMS: TeamSpec[] = [
   { name: 'Red Ants', species: ANT, color: 0xff6b5e, size: 3 },
@@ -192,6 +193,7 @@ const controls = new Controls(window, (code) => {
   if (code === 'KeyN') newMatch(seed);
 });
 controls.bindButtons(hud.pad);
+setupKeysMenu(controls);
 
 // The menu (seed, benchmark, key help) starts open where there is room for it.
 (document.getElementById('panel') as HTMLDetailsElement).open = window.innerWidth > 1000;
@@ -267,6 +269,9 @@ let orbiting = false;
 /** Seconds the bug keeps facing the view after the button is released (the orbit damping still turns it). */
 const ORBIT_TAIL = 0.6;
 let orbitTail = 0;
+/** How long the turn keys have been held while the view is held (seconds), and which way. */
+let turnHold = 0;
+let turnDir = 0;
 canvas.addEventListener('pointerdown', (e) => {
   if (e.button === 2) orbiting = true;
 });
@@ -405,6 +410,12 @@ function loop(now: number): void {
   const viewTurns = orbiting || orbitTail > 0;
   orbitTail = Math.max(0, orbitTail - dt);
   if (viewTurns && !debugCamera && !intro && !follow.gliding && steering && match.activeUnit.bug.alive) {
+    // the turn keys still turn the bug while the view is held: they turn the view (at the bug's turn
+    // rate, with the same slow start for fine steps), and the bug faces where it looks
+    const turn = controls.turnHeld;
+    turnHold = turn !== 0 && turn === turnDir ? turnHold + dt : 0;
+    turnDir = turn;
+    if (turn !== 0) follow.turnWith(-turn * match.activeUnit.bug.species.turnRate * Math.min(1, 0.15 + (0.85 * turnHold) / 0.6) * dt);
     const c = stage.camera.position;
     const t = stage.controls.target;
     controls.face(t.x - c.x, t.z - c.z);

@@ -21,6 +21,10 @@
       #panel:not([open]) { padding: 4px 10px; }
       #stats { white-space: pre-wrap; color: #a9c1ff; font-size: 11px; }
       .hint { opacity: 0.7; margin-top: 6px; font-size: 11px; }
+      #keys summary { cursor: pointer; opacity: 0.8; margin-top: 6px; font-size: 12px; }
+      #keyList { display: grid; grid-template-columns: auto auto; gap: 3px 10px; align-items: center; margin-top: 4px; font-size: 12px; }
+      #keyList button { min-width: 70px; }
+      #keyList button.waiting { outline: 1px solid #ffe066; }
       #fps { position: fixed; right: 12px; top: 12px; font-size: 12px; opacity: 0.7; }
 
       #turn { left: 50%; top: 12px; transform: translateX(-50%); text-align: center; min-width: 220px; }
@@ -72,9 +76,12 @@
         <button id="rand">random</button>
         <button id="bench">benchmark</button>
       </div>
-      <div class="hint">
-        W/S walk · shift run · A/D or ←/→ turn · space jump · ↑/↓ aim (tap for fine steps) · hold F to charge, release to fire · 1–4 weapon · N new match · right drag to turn the view (the bug turns with it) · scroll to zoom
-      </div>
+      <div class="hint" id="hint"></div>
+      <details id="keys">
+        <summary>keys</summary>
+        <div id="keyList"></div>
+        <div class="row"><button id="keyReset">default keys</button></div>
+      </details>
     </details>
 
     <div id="turn" class="box">
@@ -92,16 +99,16 @@
     <div id="teams" class="box"></div>
 
     <div id="pad" class="box">
-      <button data-code="ArrowUp" title="aim higher">⤴</button>
-      <button data-code="KeyW" title="walk forward">▲</button>
-      <button data-code="Space" title="jump">⇪</button>
-      <button data-code="KeyA" title="turn left">◀</button>
-      <button data-code="KeyS" title="walk back">▼</button>
-      <button data-code="KeyD" title="turn right">▶</button>
-      <button data-code="ArrowDown" title="aim lower">⤵</button>
-      <button data-code="ShiftLeft" title="run (hold with walk)">⇧</button>
+      <button data-action="aimUp" title="aim higher">⤴</button>
+      <button data-action="forward" title="walk forward">▲</button>
+      <button data-action="jump" title="jump">⇪</button>
+      <button data-action="left" title="turn left">◀</button>
+      <button data-action="back" title="walk back">▼</button>
+      <button data-action="right" title="turn right">▶</button>
+      <button data-action="aimDown" title="aim lower">⤵</button>
+      <button data-action="run" title="run (hold with walk)">⇧</button>
       <span></span>
-      <button class="fire" data-code="KeyF" title="hold to charge, release to fire">FIRE</button>
+      <button class="fire" data-action="fire" title="hold to charge, release to fire">FIRE</button>
     </div>
 
     <div id="banner" class="box"></div>

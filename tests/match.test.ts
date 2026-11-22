@@ -315,6 +315,16 @@ describe('fine control', () => {
     expect([other.fx, other.fz]).toEqual([ofx, ofz]);
   });
 
+  it('a facing from the view wins over the turn keys (the view already turned with them)', () => {
+    const m = setup(flat(10), [
+      [16, 32],
+      [48, 32],
+    ]);
+    press(m, { faceX: 0, faceZ: 1, turn: 1 });
+    expect(m.units[0].bug.fx).toBeCloseTo(0, 12);
+    expect(m.units[0].bug.fz).toBeCloseTo(1, 12);
+  });
+
   it('a tap aims and turns a fraction of what a held key does per tick', () => {
     const m = setup(flat(10), [
       [16, 32],
