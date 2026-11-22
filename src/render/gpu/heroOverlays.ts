@@ -197,6 +197,8 @@ export class HeroOverlays {
     const shape = f.shape ?? 'box';
     if (shape === 'box') {
       g = new RoundedBoxGeometry(w, h, d, 2, Math.min(0.35, Math.min(w, h, d) * 0.3));
+    } else if (shape === 'plate') {
+      g = new THREE.BoxGeometry(w, h, d);
     } else {
       const along = shape === 'cylX' ? w : shape === 'cylY' ? h : d;
       const r = (shape === 'cylX' ? Math.min(h, d) : shape === 'cylY' ? Math.min(w, d) : Math.min(w, h)) / 2;
@@ -356,7 +358,7 @@ export class HeroOverlays {
   private addCapacitor(f: Feature): void {
     const r = f.radius + 0.25;
     const h = f.box[4] - f.y + 0.2;
-    const sleeve = new THREE.Mesh(new THREE.CylinderGeometry(r, r, h - 0.6, 32), this.sleeve);
+    const sleeve = new THREE.Mesh(new THREE.CylinderGeometry(r, r, h - 0.6, 32), f.color !== 0xffffff ? this.sleeveFor(f.color) : this.sleeve);
     sleeve.position.set(f.x, f.y + (h - 0.6) / 2, f.z);
     const top = new THREE.Mesh(new THREE.CylinderGeometry(r - 0.35, r, 0.6, 32), this.capTop);
     top.position.set(f.x, f.y + h - 0.3, f.z);

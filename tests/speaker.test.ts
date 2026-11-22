@@ -65,7 +65,7 @@ describe('Studio Monitor (speaker)', () => {
         for (const m of [WOOD, VINYL, MDF, FOAM, CONE, DAMPER, FERRITE]) expect(used.has(m)).toBe(true);
         const [woofer, tweeter] = all(layout, 'driver');
         expect(all(layout, 'driver')).toHaveLength(2);
-        expect(woofer.path).toHaveLength(4);
+        expect(woofer.path.length).toBeGreaterThanOrEqual(4);
         const [coneTop, spiderTop, plateY, magnetTop] = woofer.path;
         // the magnet tower stands on the cone; under its bottom plate, above the spider, a bug fits
         expect(t.sample(woofer.x, magnetTop - 1, woofer.z)).toBeLessThan(0);
@@ -105,7 +105,7 @@ describe('Studio Monitor (speaker)', () => {
 
       it('has a screwdriver from the desk up to the rim, solid along its length', () => {
         const { t, layout } = make(7, cx, cy, cz);
-        const rods = all(layout, 'rod');
+        const rods = all(layout, 'rod').filter((r) => r.color !== 0x111113); // (not the sleeve's collars)
         expect(rods).toHaveLength(3);
         for (const r of rods) {
           const [x0, y0, z0, x1, y1, z1] = r.path;
@@ -131,9 +131,25 @@ describe('Studio Monitor (speaker)', () => {
     });
   }
 
+  it('no cable ends in the air: both ends of every wire touch something solid', () => {
+    const { t, layout } = make(1234);
+    const wires = all(layout, 'wire');
+    expect(wires.length).toBeGreaterThan(8);
+    for (const w of wires) {
+      const p = w.path;
+      const m = p.length - 3;
+      for (const [x, y, z] of [[p[1], p[2], p[3]], [p[m], p[m + 1], p[m + 2]]]) {
+        // within a cell or two of the surface of what it plugs into (a board, a winding, a terminal), or
+        // inside one of the drawn small parts (a spade tab, a solder tab)
+        const onPart = layout.features.some((f) => f.kind === 'part' && x > f.box[0] - 0.6 && x < f.box[3] + 0.6 && y > f.box[1] - 0.6 && y < f.box[4] + 0.6 && z > f.box[2] - 0.6 && z < f.box[5] + 0.6);
+        if (!onPart) expect(t.sample(x, y, z), `wire end at ${x.toFixed(1)}, ${y.toFixed(1)}, ${z.toFixed(1)}`).toBeLessThan(2);
+      }
+    }
+  });
+
   it('a bug walks up the screwdriver from the desk onto the rim', () => {
     const { t, layout } = make(7);
-    const [shaft, , handle] = all(layout, 'rod');
+    const [shaft, , handle] = all(layout, 'rod').filter((r) => r.color !== 0x111113);
     const bug = new Bug(ANT);
     // on the desk just behind the tip, facing up the screwdriver (towards -x)
     expect(bug.drop(t, shaft.path[0] + 4, shaft.path[2])).toBe(true);

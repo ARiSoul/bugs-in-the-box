@@ -128,7 +128,7 @@ export class SpeakerParts {
     this.pieces.length = 0;
     for (const f of layout.features) {
       if (f.kind === 'driver') {
-        if (f.path.length === 4) this.addWoofer(f);
+        if (f.path.length >= 4) this.addWoofer(f);
         else this.addTweeter(f);
       } else if (f.kind === 'rod') this.addRod(f);
       else if (f.kind === 'port') this.addPort(f);
@@ -138,7 +138,7 @@ export class SpeakerParts {
 
   /** The woofer's back, built from the same numbers as the terrain (see the generator). */
   private addWoofer(f: Feature): void {
-    const [coneTop, spiderTop, plateY, magnetTop] = f.path;
+    const [coneTop, spiderTop, plateY, magnetTop, landingR] = f.path;
     const R = f.radius;
     const k = R / 33;
     const y0 = f.y;
@@ -190,16 +190,17 @@ export class SpeakerParts {
     const sp: THREE.Vector2[] = [];
     const rIn = 7 * k + 0.2;
     const rOut = 19 * k + 0.25;
-    // seven crisp pleats (the terrain disc under it is flat)
+    // seven soft corrugations of stiffened cloth (the terrain disc under it is flat)
     const pitch = (rOut - 0.5 - rIn) / 7;
     for (let i = 0; i <= 140; i++) {
       const r = rIn + ((rOut - 0.5 - rIn) * i) / 140;
-      const t = (((r - rIn) / pitch) % 1 + 1) % 1;
-      sp.push(new THREE.Vector2(r, spiderTop + 0.15 + 0.75 * Math.abs(1 - 2 * t)));
+      sp.push(new THREE.Vector2(r, spiderTop + 0.15 + 0.38 * (1 - Math.cos((2 * Math.PI * (r - rIn)) / pitch))));
     }
     // the rim: a thin turned-down edge, tapering in under the disc (the terrain stops at 17k)
     sp.push(new THREE.Vector2(rOut, spiderTop - 0.1), new THREE.Vector2(rOut - 0.3, spiderTop - 0.55), new THREE.Vector2(17 * k + 0.25, spiderTop - 2.4), new THREE.Vector2(rIn + 2, spiderTop - 2.45));
     lathe(sp.reverse(), this.damper, 96);
+    // the spider landing: the ledge inside the frame the spider's rim is glued to
+    if (landingR) lathe(roundedDisc(landingR + 0.2, spiderTop - 2.4, spiderTop - 0.05, 0.25, 18.5 * k - 0.3, true), this.basket);
     // the voice coil former (amber) between the spider and the magnet
     lathe(roundedDisc(7 * k + 0.15, spiderTop - 0.5, plateY + 0.1, 0.1), this.former, 40);
     // the magnet: zinc bottom plate (closed underneath: it overhangs the gap), ferrite ring with a paper
@@ -292,11 +293,12 @@ export class SpeakerParts {
       // a flat wedge blade from the generator's tip (3 before the rod's start) to the rod: as wide as the
       // shaft, thin at its straight edge, thick enough over the thin terrain tip inside it
       const len = 3.2;
-      const geo = new THREE.BoxGeometry(f.radius * 2, len, 1.6, 1, 8, 1);
+      // (forged from the shaft: as thick as the shaft where they meet, thinning to the edge)
+      const geo = new THREE.BoxGeometry(f.radius * 2 + 0.1, len, f.radius * 2 + 0.1, 1, 10, 1);
       const p = geo.getAttribute('position');
       for (let i = 0; i < p.count; i++) {
         const u = (p.getY(i) + len / 2) / len; // 0 at the edge, 1 at the rod
-        p.setZ(i, p.getZ(i) * Math.min(1, 0.3 + (0.7 * u) / 0.55));
+        p.setZ(i, p.getZ(i) * (0.16 + 0.84 * Math.min(1, u * u * 1.6)));
       }
       geo.computeVertexNormals();
       const blade = new THREE.Mesh(geo, m);

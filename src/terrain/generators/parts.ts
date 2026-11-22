@@ -1,7 +1,7 @@
 import { FAN } from '../materials';
 import { add, box, boxMinMax, capsule, cut, cylinder, rotatedBox, type Axis } from '../sdf';
 import type { Terrain } from '../Terrain';
-import { feature, type Feature } from './types';
+import { feature, type Feature, type PartShape } from './types';
 
 /**
  * Parts shared by the scenario generators (fans, cables, ribbons, placement), built from SDF stamps.
@@ -174,7 +174,7 @@ export function detail(
   t: Terrain,
   features: Feature[] | null,
   x0: number, y0: number, z0: number, x1: number, y1: number, z1: number,
-  material: number, shape: 'box' | 'cylX' | 'cylY' | 'cylZ', color: number, metal: number, rough: number,
+  material: number, shape: PartShape, color: number, metal: number, rough: number,
 ): void {
   const ex = Math.max(-0.3, 1 - (x1 - x0) / 2);
   const ey = Math.max(-0.3, 1 - (y1 - y0) / 2);

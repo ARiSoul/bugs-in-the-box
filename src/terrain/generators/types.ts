@@ -45,6 +45,9 @@ export type Box3 = [number, number, number, number, number, number];
  *   `facing` -1: a flat blade at its start (a screwdriver tip); `axis` 0: a fluted grip.
  * - `room`: the floor of the room far below the map, at height y, `color` (a drop off the map reads as one).
  */
+/** Render shape of a `part`: a rounded box, a sharp-edged box ('plate'), or a cylinder along an axis. */
+export type PartShape = 'box' | 'plate' | 'cylX' | 'cylY' | 'cylZ';
+
 export interface Feature {
   kind:
     | 'fan' | 'pump' | 'lightBar' | 'led' | 'heat' | 'tube' | 'capacitor' | 'grommet' | 'pad' | 'connector'
@@ -59,7 +62,7 @@ export interface Feature {
   color: number;
   box: Box3;
   path: number[];
-  shape?: 'box' | 'cylX' | 'cylY' | 'cylZ';
+  shape?: PartShape;
   metal?: number;
   rough?: number;
   glow?: number;
