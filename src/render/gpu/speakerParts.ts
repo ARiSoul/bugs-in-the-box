@@ -170,7 +170,8 @@ export class SpeakerParts {
     const full = (): number => Math.PI;
     g.add(new THREE.Mesh(shellPatch(rLow, lowY, rHigh, plateY, BASKET_THICK, 0, sSill, 0, full), this.basket));
     g.add(new THREE.Mesh(shellPatch(rLow, lowY, rHigh, plateY, BASKET_THICK, sHead, 1, 0, full), this.basket));
-    const w = WINDOW_HALF * k;
+    // (the drawn ribs a little wider than the terrain's, so its cut edges stay inside them)
+    const w = WINDOW_HALF * k - 0.5;
     const rib = (r: number): number => Math.PI / 4 - Math.asin(Math.min(1, w / r));
     for (let i = 0; i < 4; i++) g.add(new THREE.Mesh(shellPatch(rLow, lowY, rHigh, plateY, BASKET_THICK, sSill - 0.02, sHead + 0.02, (i * Math.PI) / 2, rib), this.basket));
     // a solid collar where the frame meets the magnet's bottom plate (closed underneath: seen from the gap)
@@ -288,12 +289,12 @@ export class SpeakerParts {
     const dir = new THREE.Vector3().subVectors(b, a).normalize();
     const g = new THREE.Group();
     if (f.facing === -1) {
-      // a flat blade at the start: the shaft starts a little in, the blade runs out to the tip
-      const blade = new THREE.Mesh(new THREE.BoxGeometry(0.75, 3.4, f.radius * 1.9), m);
-      blade.position.copy(a).addScaledVector(dir, 1.5);
+      // a flat blade before the start, down to the desk: crisp, wider than the rod, flat sides up
+      const len = 3.4;
+      const blade = new THREE.Mesh(roundedBar(f.radius * 2.1, len, 2.15, 0.25), m);
+      blade.position.copy(a).addScaledVector(dir, -len / 2 + 0.4);
       blade.quaternion.setFromUnitVectors(UP, dir);
       g.add(blade);
-      a.addScaledVector(dir, 2.2);
     }
     const rod = this.capsule(a, b, f.radius + 0.05, m, f.axis === 0 ? 80 : 32);
     if (f.axis === 0) flute(rod.geometry, f.radius + 0.05);

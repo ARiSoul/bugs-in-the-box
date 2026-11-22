@@ -138,7 +138,7 @@ export const speaker: TerrainGenerator = (terrain, seed, layout) => {
   const billow = (x: number, y: number, z: number, axis: 0 | 2, dir: number): void => {
     const r = rand(4.5, 7);
     const sink = r - rand(1, 2.2);
-    add(terrain, sphere(axis === 0 ? x - dir * sink : x, y, axis === 2 ? z - dir * sink : z, r), FOAM, 2.2);
+    add(terrain, sphere(axis === 0 ? x - dir * sink : x, y, axis === 2 ? z - dir * sink : z, r), FOAM, 3.5);
   };
   const billows = (along: number, height: number): number => Math.round((along * height) / 90);
   for (let n = billows(iz1 - iz0, liningTop - FLOOR); n > 0; n--) {
@@ -208,7 +208,7 @@ export const speaker: TerrainGenerator = (terrain, seed, layout) => {
   for (const [ex, ez] of [[C45, C45], [-C45, C45], [-C45, -C45], [C45, -C45]]) {
     const y0 = ringTop + WINDOW_SILL;
     const y1 = plateY - WINDOW_HEAD;
-    cut(terrain, rotatedBox(wx + ex * 27 * k, (y0 + y1) / 2, wz + ez * 27 * k, 9 * k, (y1 - y0) / 2, WINDOW_HALF * k, 1, ex, ez, 2));
+    cut(terrain, rotatedBox(wx + ex * 27 * k, (y0 + y1) / 2, wz + ez * 27 * k, 9 * k, (y1 - y0) / 2, WINDOW_HALF * k, 1, ex, ez, 0.8));
   }
   add(terrain, cone(wx, FLOOR, wz, 29 * k, coneTop, 9 * k), CONE);
   cut(terrain, cone(wx, FLOOR - 2.6, wz, 29 * k, coneTop - 2.6, 9 * k));
@@ -327,7 +327,8 @@ export const speaker: TerrainGenerator = (terrain, seed, layout) => {
   const hTop = PB + Math.max(10, 20 * ka);
   add(terrain, boxMinMax(hx0, PB - 0.5, hz0, hx1, hTop, hz1, 0.5), ALUMINIUM);
   // deep fins over most of the height, on a thin base
-  for (let x = hx0 + 2; x + 2 <= hx1 - 2; x += 4) cut(terrain, boxMinMax(x, PB + 2, hz0 - 1, x + 2, hTop + 1, hz1 - 3, 0.3));
+  // (open at both ends, so the fins show from the board side too)
+  for (let x = hx0 + 2; x + 2 <= hx1 - 2; x += 4) cut(terrain, boxMinMax(x, PB + 2, hz0 - 1, x + 2, hTop + 1, hz1 + 1, 0.3));
   claim(hx0 - 1, hz0 - 1, hx1 + 1, hz1 + 2.5);
   for (let i = 0; i < 3; i++) {
     const x = hx0 + ((hx1 - hx0) * (i + 1)) / 4;
@@ -462,7 +463,10 @@ export const speaker: TerrainGenerator = (terrain, seed, layout) => {
     put(feature('rod', x0, y0, sz, { radius: r, path: [x0, y0, sz, x1, y1, sz], color, metal, rough, ...more }));
   };
   const handle = len - Math.min(24, len * 0.34);
-  seg(0, handle - 3, 1.5, STEEL, 0xc4c8ce, 1, 0.25, { facing: -1 }); // (a blade at its start)
+  // the tip: a thinner rod under the drawn flat blade (the blade covers it), then the shaft
+  const tipLen = 3;
+  add(terrain, capsule(p0x + ux * 0.6, p0y - 0.4 + uy * 0.6, sz, p0x + ux * tipLen, p0y + uy * tipLen, sz, 0.95), STEEL);
+  seg(tipLen, handle - 3, 1.5, STEEL, 0xc4c8ce, 1, 0.25, { facing: -1 }); // (a blade before its start)
   seg(handle - 3, handle, 2.2, STEEL, 0xb4b9c0, 1, 0.3);
   seg(handle, len, 3.2, CABLE_YELLOW, 0xd98e1a, 0, 0.25, { axis: 0 }); // (a fluted grip)
 

@@ -64,7 +64,7 @@ export const SCENARIOS: readonly Scenario[] = [
     render: 'webgpu',
     strictBounds: true,
     // high, a little from the amp side: into the open cabinet, short shadows on the desk around it
-    sun: [18, 180, 48],
+    sun: [0, 180, 48],
     // a softer, whiter light: black parts must stay black (a strong warm light gives every black surface a
     // tan sheen where it is seen at a grazing angle, and turns the cabinet's vinyl brown)
     sunColor: 0xffe2c6,

@@ -62,7 +62,9 @@ export function createTerrainMaterial(glow: Glow): { material: THREE.MeshStandar
     // (the special shadings are codes in the glow channel; the mesher blends them across borders)
     const fuzz = clamp(float(1).sub(abs(pbr.z.sub(GLOW_FUZZ)).div(0.15)), 0, 1);
     const grain = clamp(float(1).sub(abs(pbr.z.sub(GLOW_GRAIN)).div(0.15)), 0, 1);
-    const peel = clamp(float(1).sub(abs(pbr.z.sub(GLOW_PEEL)).div(0.1)), 0, 1);
+    // (only on near-black surfaces: where two other materials meet, the blended code passes through
+    // this one, and a mottle on a light surface would draw dashed lines along the border)
+    const peel = clamp(float(1).sub(abs(pbr.z.sub(GLOW_PEEL)).div(0.1)), 0, 1).mul(smoothstep(0.07, 0.035, base.r.add(base.g).add(base.b)));
     If(peel.greaterThan(0.01), () => {
       // orange-peel mottle (breaks up the light bands on the black wrap) and a cool sheen at the edges
       // (so a black wall in front of the camera still reads as a surface, not as the void)
@@ -97,9 +99,7 @@ export function createTerrainMaterial(glow: Glow): { material: THREE.MeshStandar
     const face = normalize(cross(dFdx(positionView), dFdy(positionView))).toVar();
     face.assign(select(dot(face, positionView).greaterThan(0), face.negate(), face));
     const n = normalView.toVar();
-    // (soft wadding keeps the smooth normal: hard creases between its billows read as crumpled plastic)
-    const soft = clamp(float(1).sub(abs(pbr.z.sub(GLOW_FUZZ)).div(0.15)), 0, 1);
-    return normalize(mix(n, face, sharp.mul(smoothstep(0.62, 0.45, dot(face, n))).mul(float(1).sub(soft))));
+    return normalize(mix(n, face, sharp.mul(smoothstep(0.62, 0.45, dot(face, n)))));
   })();
 
   m.emissiveNode = Fn(() => {
