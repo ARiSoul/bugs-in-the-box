@@ -229,7 +229,8 @@ export class HeroOverlays {
     for (let i = 1; i + 2 < f.path.length; i += 3) pts.push(new THREE.Vector3(f.path[i], f.path[i + 1], f.path[i + 2]));
     const curve = new THREE.CatmullRomCurve3(pts);
     const mesh = new THREE.Mesh(new THREE.TubeGeometry(curve, pts.length * 2, radius, 12, false), this.sleeveFor(f.color));
-    mesh.castShadow = true;
+    // (a thin wire's shadow is finer than the shadow map: it would print as a dotted line)
+    mesh.castShadow = radius >= 0.8;
     mesh.receiveShadow = true;
     this.push(mesh);
   }

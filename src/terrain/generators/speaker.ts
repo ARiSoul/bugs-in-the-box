@@ -397,6 +397,7 @@ export const speaker: TerrainGenerator = (terrain, seed, layout) => {
     for (const lx of [-1.3, 0, 1.3]) {
       deco(x + lx - 0.2, PB, hz1 + 0.6, x + lx + 0.2, PB + 1.45, hz1 + 0.95, 'plate', 0xc9cdd2, 0.9, 0.35);
       solder(x + lx, PB, hz1 + 0.8);
+      if (lx !== 0) anchors.push([x + lx, hz1 + 2.2]);
     }
   }
   put(feature('heat', (hx0 + hx1) / 2, hTop, (hz0 + hz1) / 2, { box: [hx0, hTop + 1, hz0, hx1, hTop + 16, hz1] }));
@@ -411,6 +412,7 @@ export const speaker: TerrainGenerator = (terrain, seed, layout) => {
     add(terrain, cylinder(x, PB + hh / 2, capRow, rr, hh / 2, 1, 1), BLACK_PLASTIC);
     add(terrain, cylinder(x, PB + hh + 0.1, capRow, rr - 0.7, 0.6, 1, 0.5), STEEL);
     put(feature('capacitor', x, PB, capRow, { radius: rr, box: [x - rr, PB, capRow - rr, x + rr, PB + hh + 0.7, capRow + rr] }));
+    anchors.push([x - rr - 0.7, capRow + 1.5], [x + rr + 0.7, capRow + 1.5]);
   }
   // small parts: film capacitors (yellow), op-amps, small electrolytics, cable sockets, the volume pot
   // the speaker cable's plug on the amp board: a white housing the red and black leads go into
@@ -454,9 +456,19 @@ export const speaker: TerrainGenerator = (terrain, seed, layout) => {
     part(potX - 3, PB, potZ - 3, potX + 3, PB + 4.5, potZ + 3, STEEL, 'cylY', 0x9aa0a8, 0.9, 0.35);
     deco(potX - 1.2, PB + 4.5, potZ - 1.2, potX + 1.2, PB + 7.5, potZ + 1.2, 'cylY', 0xc9cdd2, 1, 0.3);
   }
+  claim(ax1 - 7.5, az0 + 6.5 + 30 * ka, ax1 - 4.5, az0 + 9.5 + 30 * ka);
+  // (the LED's legs on their own pads, each joined to the board's traces)
+  for (const dz of [-0.5, 0.5]) deco(ax1 - 6.45, PB - 0.02, az0 + 8 + 30 * ka + dz - 0.35, ax1 - 5.55, PB + 0.13, az0 + 8 + 30 * ka + dz + 0.35, 'cylY', 0x9d9a90, 0.9, 0.4);
+  deco(ax1 - 6.22, PB - 0.02, az0 + 8.5 + 30 * ka - 0.22, ax1 - 5.78, PB + 0.1, az0 + 13 + 30 * ka, 'plate', 0x2b6a40, 0, 0.45);
+  deco(ax1 - 9, PB - 0.02, az0 + 7.5 + 30 * ka - 0.22, ax1 - 6, PB + 0.1, az0 + 7.5 + 30 * ka + 0.22, 'plate', 0x2b6a40, 0, 0.45);
+  put(feature('led', ax1 - 6, PB + 1.6, az0 + 8 + 30 * ka, { color: 0x3dff6a }));
+  for (const dz of [-0.5, 0.5]) deco(ax1 - 6.12, PB, az0 + 8 + 30 * ka + dz - 0.12, ax1 - 5.88, PB + 0.9, az0 + 8 + 30 * ka + dz + 0.12, 'plate', 0xc9cdd2, 0.9, 0.35);
+
   // traces: thin flat lines under the solder mask (a lighter green), each from one part's pad to a
   // neighbour's, in two straight legs that keep clear of other parts (render only, flush with the board)
-  const used = new Set<number>();
+  const used = new Map<number, number>();
+  const full = (i: number): boolean => (used.get(i) ?? 0) >= 2;
+  const pairs = new Set<string>();
   const clearLeg = (x0: number, z0: number, x1: number, z1: number): boolean => {
     // (the leg's middle only: its ends meet the parts' own pads)
     const ax = Math.min(x0, x1), bx = Math.max(x0, x1), az = Math.min(z0, z1), bz = Math.max(z0, z1);
@@ -465,11 +477,11 @@ export const speaker: TerrainGenerator = (terrain, seed, layout) => {
     return free(ax + sx - 0.4, az + sz - 0.4, bx - sx + 0.4, bz - sz + 0.4);
   };
   for (let i = 0; i < anchors.length; i++) {
-    if (used.has(i)) continue;
+    if (full(i)) continue;
     let best = -1;
-    let bestD = 14 * 14;
+    let bestD = 18 * 18;
     for (let j = 0; j < anchors.length; j++) {
-      if (j === i || used.has(j) || Math.floor(j / 2) === Math.floor(i / 2)) continue;
+      if (j === i || full(j) || Math.floor(j / 2) === Math.floor(i / 2) || pairs.has(`${Math.min(i, j)}|${Math.max(i, j)}`)) continue;
       const dx = anchors[j][0] - anchors[i][0];
       const dz = anchors[j][1] - anchors[i][1];
       const d2 = dx * dx + dz * dz;
@@ -479,18 +491,16 @@ export const speaker: TerrainGenerator = (terrain, seed, layout) => {
       }
     }
     if (best < 0) continue;
-    used.add(i);
-    used.add(best);
+    used.set(i, (used.get(i) ?? 0) + 1);
+    used.set(best, (used.get(best) ?? 0) + 1);
+    pairs.add(`${Math.min(i, best)}|${Math.max(i, best)}`);
+    i--; // (this pad may take a second trace)
     const [x0, z0] = anchors[i];
     const [x1, z1] = anchors[best];
     deco(Math.min(x0, x1) - 0.22, PB - 0.02, z0 - 0.22, Math.max(x0, x1) + 0.22, PB + 0.1, z0 + 0.22, 'plate', 0x2b6a40, 0, 0.45);
     deco(x1 - 0.22, PB - 0.02, Math.min(z0, z1) - 0.22, x1 + 0.22, PB + 0.1, Math.max(z0, z1) + 0.22, 'plate', 0x2b6a40, 0, 0.45);
     for (const [px, pz] of [[x0, z0], [x1, z1]]) deco(px - 0.5, PB - 0.02, pz - 0.5, px + 0.5, PB + 0.13, pz + 0.5, 'cylY', 0x9d9a90, 0.9, 0.4);
   }
-  claim(ax1 - 7.5, az0 + 6.5 + 30 * ka, ax1 - 4.5, az0 + 9.5 + 30 * ka);
-  put(feature('led', ax1 - 6, PB + 1.6, az0 + 8 + 30 * ka, { color: 0x3dff6a }));
-  for (const dz of [-0.5, 0.5]) deco(ax1 - 6.12, PB, az0 + 8 + 30 * ka + dz - 0.12, ax1 - 5.88, PB + 0.9, az0 + 8 + 30 * ka + dz + 0.12, 'plate', 0xc9cdd2, 0.9, 0.35);
-
   // the power section: the transformer, the power board, the mains inlet and switch
   const pz0 = bz1 + 6;
   const tx0 = ax0 + 6;
@@ -562,8 +572,8 @@ export const speaker: TerrainGenerator = (terrain, seed, layout) => {
     boot(live[0], live[1], live[2], 0x8a4a26);
     boot(swIn[0], swIn[1], swIn[2], 0x8a4a26);
     if (tz1 + 3 < az1) {
-      cableAlong([...swOut, swOut[0], swOut[1] + 3, swOut[2] - 1.5, ax0 + 24, PT + 11, az1 - 16, (tx0 + tx1) / 2 + 1.1, PT + 7, tz1 + 5, (tx0 + tx1) / 2 + 1.1, PT + 6, tz1 + 1.6], 0.3, 0x6b3a1e);
-      cableAlong([...neutral, neutral[0], neutral[1] + 2, neutral[2] - 1.5, ax0 + 14, PT + 9, tz1 + 7, (tx0 + tx1) / 2 - 1.1, PT + 7, tz1 + 4.5, (tx0 + tx1) / 2 - 1.1, PT + 6, tz1 + 1.6], 0.3, 0x2a4d8f);
+      cableAlong([...swOut, swOut[0], swOut[1] + 3, swOut[2] - 1.5, ax0 + 24, PT + 11, az1 - 16, (tx0 + tx1) / 2 + 1.1, PT + 6.2, tz1 + 5, (tx0 + tx1) / 2 + 1.1, PT + 6, tz1 + 1.6], 0.3, 0x6b3a1e);
+      cableAlong([...neutral, neutral[0], neutral[1] + 2, neutral[2] - 1.5, ax0 + 14, PT + 9, tz1 + 7, (tx0 + tx1) / 2 - 1.1, PT + 6.2, tz1 + 4.5, (tx0 + tx1) / 2 - 1.1, PT + 6, tz1 + 1.6], 0.3, 0x2a4d8f);
       boot(swOut[0], swOut[1], swOut[2], 0x8a4a26);
       boot(neutral[0], neutral[1], neutral[2], 0x3a62a8);
     }
@@ -572,7 +582,7 @@ export const speaker: TerrainGenerator = (terrain, seed, layout) => {
     deco(ax0 + 1.8, PT + 0.4, az1 - 11.3, ax0 + 3.4, PT + 1, az1 - 9.7, 'cylY', 0xb4b9c0, 0.9, 0.35);
     deco(ax0 + 1.95, PT + 1, az1 - 10.6, ax0 + 3.25, PT + 1.05, az1 - 10.4, 'plate', 0x202022, 0, 0.8);
     deco(ax0 + 2.5, PT + 1, az1 - 11.15, ax0 + 2.7, PT + 1.05, az1 - 9.85, 'plate', 0x202022, 0, 0.8);
-    cableAlong([...earth, earth[0], earth[1] + 1.5, earth[2] - 1, ax0 + 7, PT + 3.5, az1 - 11, ax0 + 5.4, PT + 0.6, az1 - 10.5], 0.3, EARTH_COLOR);
+    cableAlong([...earth, earth[0], earth[1] + 1.8, earth[2] - 0.6, ax0 + 9, PT + 10, az1 - 11, ax0 + 5.6, PT + 6.5, az1 - 10.8, ax0 + 5.6, PT + 2.5, az1 - 10.6, ax0 + 5.4, PT + 0.6, az1 - 10.5], 0.3, EARTH_COLOR);
     deco(ax0 + 3.6, PT + 0.25, az1 - 10.85, ax0 + 5.4, PT + 0.95, az1 - 10.15, 'cylX', 0xc9b98a, 1, 0.3);
     boot(earth[0], earth[1], earth[2], 0xa9bd3a);
   }
@@ -589,7 +599,7 @@ export const speaker: TerrainGenerator = (terrain, seed, layout) => {
   // into the plug)
   // (its woofer end lies on the floor beside the terminal strip, the collar's mouth facing the strip; it
   // runs off along the floor, climbs the wall in front of the wadding and goes over the rim)
-  const sx = termX + 1.5;
+  const sx = termX + 3;
   const sy = FLOOR + 4.5;
   const sz0 = termZ - 7.5;
   const s1 = [termX + 2.5, FLOOR + 6.5, termZ - 12];
@@ -623,8 +633,8 @@ export const speaker: TerrainGenerator = (terrain, seed, layout) => {
   pairAlong([
     sx + cdx * 0.6, sy + cdy * 0.6, sz0 + cdz * 0.6,
     sx - cdx * 2.2, sy - cdy * 2.2, sz0 - cdz * 2.2,
-    termX + 3.2, FLOOR + 5.6, termZ - 2.5,
-    termX + 1.7, FLOOR + 6.4, termZ,
+    termX + 2.6, FLOOR + 5.6, termZ - 2.2,
+    termX + 1.3, FLOOR + 6.4, termZ - 0.3,
     termX + 0.35, FLOOR + 6.4, termZ,
   ], 0.4, 1.7, true);
   pairAlong([plugX - 5.3, PB + 3.2, plugZ, plugX - 3, PB + 2.4, plugZ, plugX + 0.3, PB + 1.8, plugZ], 0.4, 0.8, true);
@@ -635,7 +645,7 @@ export const speaker: TerrainGenerator = (terrain, seed, layout) => {
   // ---- the screwdriver, its tip on the desk and its handle on the rim: the ramp into the cabinet
   // (a bug climbs onto the thin tip from the desk, walks up the shaft and over the handle)
   const sz = deskZ1 - 6;
-  const p0x = W - 8;
+  const p0x = W - 5.5; // (clear of the amp plate's corner)
   const p0y = DESK_TOP + 0.15; // the blade's edge rests on the desk: a low step up from it
   const p1x = cx1 - 1.5;
   const p1y = rim + 3.2;

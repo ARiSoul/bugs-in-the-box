@@ -1,4 +1,5 @@
 import * as THREE from 'three/webgpu';
+import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { BASKET_HIGH, BASKET_LOW, BASKET_THICK, WINDOW_HALF, WINDOW_HEAD, WINDOW_SILL } from '../../terrain/generators/speaker';
 import type { Feature, SceneLayout } from '../../terrain/generators/types';
 import type { Craters } from './craters';
@@ -302,7 +303,12 @@ export class SpeakerParts {
         p.setZ(i, p.getZ(i) * (0.16 + 0.84 * Math.min(1, u * u * 1.6)));
         p.setX(i, p.getX(i) * (1 + 0.12 * (1 - u)));
       }
-      geo.computeVertexNormals();
+      // (one smooth surface: the cylinder's seam welded before the normals are computed)
+      geo.deleteAttribute('uv');
+      geo.deleteAttribute('normal');
+      const welded = mergeVertices(geo);
+      welded.computeVertexNormals();
+      geo.copy(welded);
       const blade = new THREE.Mesh(geo, m);
       blade.position.copy(a).addScaledVector(dir, -len / 2 + 0.2);
       blade.quaternion.setFromUnitVectors(UP, dir);
@@ -328,6 +334,23 @@ export class SpeakerParts {
       tube.quaternion.setFromUnitVectors(UP, dir);
       tube.castShadow = true;
       this.push(tube);
+      return;
+    }
+    if (f.facing === -1) {
+      // the shaft from the blade's root: a plain tube (no round end to poke through the blade), a round end at the top
+      const len = a.distanceTo(b);
+      const tube = new THREE.Mesh(new THREE.CylinderGeometry(f.radius + 0.05, f.radius + 0.05, len + 0.3, 32, 1, true), m);
+      tube.position.copy(a).add(b).multiplyScalar(0.5).addScaledVector(dir, -0.15);
+      tube.quaternion.setFromUnitVectors(UP, dir);
+      const end = new THREE.Mesh(new THREE.SphereGeometry(f.radius + 0.05, 32, 12, 0, Math.PI * 2, 0, Math.PI / 2), m);
+      end.position.copy(b);
+      end.quaternion.setFromUnitVectors(UP, dir);
+      g.add(tube, end);
+      g.traverse((o) => {
+        o.castShadow = true;
+        o.receiveShadow = true;
+      });
+      this.push(g);
       return;
     }
     const rod = this.capsule(a, b, f.radius + 0.05, m, f.axis === 0 ? 80 : 32);
