@@ -37,7 +37,7 @@ const hooks = readHooks(params);
 // Map size in chunks of 32, e.g. `?map=3x2x3` for the small map (default 5x3x5), until there is a setup screen.
 const size = (params.get('map') ?? '').match(/^(\d)x(\d)x(\d)$/);
 const terrain = size ? new Terrain(Number(size[1]), Number(size[2]), Number(size[3])) : new Terrain(5, 3, 5);
-let seed = 1234;
+let seed = Number(params.get('seed') ?? 1234) | 0;
 let scenario: Scenario = scenarioById(params.get('scenario'));
 const layout = createLayout();
 const stageOptions: StageOptions = { fixedSize: hooks.fixedSize, timestamps: hooks.perf, seed };
@@ -119,7 +119,7 @@ function newMatch(s: number): void {
   state.lastExplosionChunks = 0;
   state.bench = '';
 
-  match = new Match(terrain, TEAMS, s, { strictBounds: scenario.strictBounds });
+  match = new Match(terrain, TEAMS, s, { strictBounds: scenario.strictBounds, spawnLevels: scenario.spawnLevels === true });
   for (const v of bugViews) {
     v.view.dispose();
     v.label.dispose();
@@ -194,9 +194,15 @@ const controls = new Controls(window, (code) => {
 });
 controls.bindButtons(hud.pad);
 setupKeysMenu(controls);
+if (hooks.fly) {
+  // the free camera's keys, in the menu (opened below, so they show)
+  (document.getElementById('hint') as HTMLElement).textContent =
+    'Free camera: click the view to look round with the mouse (Esc frees the mouse) · W/S/A/D move · Q/E down / up · ' +
+    'Shift faster, Ctrl slower · scroll: speed · R: back to the start · "back to the game" leaves';
+}
 
 // The menu (seed, benchmark, key help) starts open where there is room for it.
-(document.getElementById('panel') as HTMLDetailsElement).open = window.innerWidth > 1000;
+(document.getElementById('panel') as HTMLDetailsElement).open = hooks.fly || window.innerWidth > 1000;
 hud.seed.value = String(seed);
 hud.scenario.replaceChildren(
   ...SCENARIOS.map((sc) => {
@@ -220,16 +226,32 @@ hud.scenario.addEventListener('change', () => {
   newMatch(seed);
   hud.scenario.blur();
 });
+/** Keep the seed in the address, so a reload (the free camera's switch) shows the same map. */
+const keepSeed = (): void => {
+  params.set('seed', String(seed));
+  history.replaceState(null, '', `?${params.toString()}`);
+};
 hud.regen.addEventListener('click', () => {
   seed = Number(hud.seed.value) | 0;
+  keepSeed();
   newMatch(seed);
   hud.regen.blur();
 });
 hud.random.addEventListener('click', () => {
   seed = Math.floor(Math.random() * 99999); // UI only: never in generation/gameplay code
   hud.seed.value = String(seed);
+  keepSeed();
   newMatch(seed);
   hud.random.blur();
+});
+// the free camera, to look round a map: the same map and seed, reloaded with (or without) `?fly=1`
+const flyButton = document.getElementById('fly') as HTMLButtonElement;
+flyButton.textContent = hooks.fly ? 'back to the game' : 'free camera';
+flyButton.addEventListener('click', () => {
+  params.set('seed', String(seed));
+  if (hooks.fly) params.delete('fly');
+  else params.set('fly', '1');
+  location.search = params.toString();
 });
 hud.bench.addEventListener('click', () => {
   scenario.generate(terrain, seed, layout);
