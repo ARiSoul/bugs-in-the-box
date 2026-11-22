@@ -26,6 +26,12 @@ const SETTLE_DELAY = 0.8;
 const MIN_PHI = 0.12;
 /** The camera keeps at least this much distance field around it (inside walls the field is negative). */
 const CLEARANCE = 1.2;
+/** Chase view at the start of a turn: this far behind the bug, this high above it (radians). */
+export const CHASE_DISTANCE = 15;
+const CHASE_ELEVATION = 0.42;
+/** Highest the chase view climbs (radians) to see past terrain behind the bug before it comes closer. */
+const CHASE_MAX_ELEVATION = 1.2;
+const UP = new THREE.Vector3(0, 1, 0);
 
 /**
  * Keeps the orbit camera centred on a moving point. The player can still orbit and zoom:
@@ -47,6 +53,12 @@ export class FollowCamera {
   /** What this class last set, to tell the player's zoom and orbit apart from our own moves. */
   private placed = -1;
   private placedPhi = -1;
+  /** A glide to the chase view in progress: seconds done and total, start pose, offset from the target. */
+  private glideT = -1;
+  private glideTime = 1;
+  private readonly fromPos = new THREE.Vector3();
+  private readonly fromTarget = new THREE.Vector3();
+  private readonly chaseOffset = new THREE.Vector3();
 
   constructor(
     private readonly camera: THREE.Camera,
@@ -67,8 +79,69 @@ export class FollowCamera {
     this.lift = 0;
   }
 
+  /** True while gliding to a chase view (`avoid` waits for it). */
+  get gliding(): boolean {
+    return this.glideT >= 0;
+  }
+
+  /**
+   * Where the chase view of a bug at `point` facing (fx, fz) puts the camera: behind it and a little above,
+   * looking where it walks. Pulled in front of any terrain behind the bug.
+   */
+  chasePose(obstacles: CameraObstacles, point: THREE.Vector3, fx: number, fz: number, outPos: THREE.Vector3): THREE.Vector3 {
+    const l = Math.sqrt(fx * fx + fz * fz) || 1;
+    // the lowest clear angle at the full distance; with a wall right behind, the angle that sees farthest
+    let bestElev = CHASE_ELEVATION;
+    let bestDist = -1;
+    for (let e = CHASE_ELEVATION; e <= CHASE_MAX_ELEVATION + 1e-6; e += LIFT_STEP) {
+      const c = Math.cos(e);
+      const d = this.dir.set((-fx / l) * c, Math.sin(e), (-fz / l) * c);
+      const hit = obstacles.raycast(point.x + d.x * RAY_START, point.y + d.y * RAY_START, point.z + d.z * RAY_START, d.x, d.y, d.z, CHASE_DISTANCE);
+      const dist = hit >= 0 ? Math.max(MIN_DISTANCE, RAY_START + hit - MARGIN) : CHASE_DISTANCE;
+      if (dist > bestDist + 0.5) {
+        bestDist = dist;
+        bestElev = e;
+      }
+      if (hit < 0) break;
+    }
+    const c = Math.cos(bestElev);
+    const d = this.dir.set((-fx / l) * c, Math.sin(bestElev), (-fz / l) * c);
+    return outPos.copy(point).addScaledVector(d, bestDist);
+  }
+
+  /** Glide (over `seconds`) to the chase view of a bug at `point` facing (fx, fz); `update` carries it on. */
+  chase(obstacles: CameraObstacles, point: THREE.Vector3, fx: number, fz: number, seconds: number): void {
+    this.fromPos.copy(this.camera.position);
+    this.fromTarget.copy(this.controls.target);
+    this.chaseOffset.copy(this.chasePose(obstacles, point, fx, fz, this.delta)).sub(point);
+    this.glideT = 0;
+    this.glideTime = seconds;
+  }
+
+  /** Turn the view about the target by `radians` (with the bug, so it stays behind it). */
+  turnWith(radians: number): void {
+    this.offset.copy(this.camera.position).sub(this.controls.target).applyAxisAngle(UP, radians);
+    this.camera.position.copy(this.controls.target).add(this.offset);
+  }
+
   /** Ease the view towards `point`. `dt` in seconds. */
   update(point: THREE.Vector3, dt: number): void {
+    if (this.glideT >= 0) {
+      this.glideT += dt;
+      const u = Math.min(1, this.glideT / this.glideTime);
+      const e = u * u * (3 - 2 * u);
+      this.controls.target.lerpVectors(this.fromTarget, point, e);
+      this.camera.position.lerpVectors(this.fromPos, this.delta.copy(point).add(this.chaseOffset), e);
+      if (u >= 1) {
+        // the chase view becomes the player's chosen angle and distance
+        this.glideT = -1;
+        this.wanted = -1;
+        this.placed = -1;
+        this.placedPhi = -1;
+        this.lift = 0;
+      }
+      return;
+    }
     const k = 1 - Math.exp(-dt * 6);
     this.delta.copy(point).sub(this.controls.target).multiplyScalar(k);
     this.controls.target.add(this.delta);
@@ -82,6 +155,7 @@ export class FollowCamera {
    * Call after `controls.update()`, once per frame.
    */
   avoid(obstacles: CameraObstacles, dt: number): void {
+    if (this.glideT >= 0) return;
     const target = this.controls.target;
     this.sph.setFromVector3(this.dir.copy(this.camera.position).sub(target));
     const dist = this.sph.radius;

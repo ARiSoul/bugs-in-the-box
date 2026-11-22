@@ -148,6 +148,9 @@ function handleEvents(events: readonly MatchEvent[]): void {
       case 'dig':
         lines.beam(at.set(e.x1, e.y1, e.z1), at2.set(e.x2, e.y2, e.z2));
         break;
+      case 'turn':
+        chasePending = true;
+        break;
       case 'damage': {
         const u = match.units[e.unit];
         texts.spawn(`-${e.amount}`, match.teams[u.team].color, at.set(u.bug.x, u.bug.y + bugViews[e.unit].height + 1, u.bug.z));
@@ -243,6 +246,11 @@ if (import.meta.env.DEV) {
 const INTRO_HOLD = 2.2;
 const INTRO_GLIDE = 1.6;
 let introT = -1;
+/** A turn started: glide to the chase view of the new active bug. */
+let chasePending = false;
+/** Whose facing the camera turns with, and that facing last frame (radians, render only). */
+let chaseUnit = -1;
+let chaseYaw = 0;
 let introReady = false;
 const introFrom = new THREE.Vector3();
 const introFromTarget = new THREE.Vector3();
@@ -285,9 +293,9 @@ function updateIntro(dt: number): boolean {
     introReady = true;
     introFrom.copy(stage.camera.position);
     introFromTarget.copy(stage.controls.target);
-    follow.focus(bugViews[match.active].view.root.position, 34);
-    introTo.copy(stage.camera.position);
-    introToTarget.copy(stage.controls.target);
+    const first = match.activeUnit.bug;
+    introToTarget.copy(bugViews[match.active].view.root.position);
+    follow.chasePose(terrain, introToTarget, first.fx, first.fz, introTo);
   }
   const u = Math.min(1, (introT - INTRO_HOLD) / INTRO_GLIDE);
   const e = u * u * (3 - 2 * u);
@@ -296,7 +304,10 @@ function updateIntro(dt: number): boolean {
   stage.camera.lookAt(stage.controls.target);
   if (u < 1) return true;
   introT = -1;
-  follow.focus(stage.controls.target, 34);
+  follow.focus(stage.controls.target, stage.camera.position.distanceTo(stage.controls.target));
+  chasePending = false;
+  chaseUnit = match.active;
+  chaseYaw = Math.atan2(match.activeUnit.bug.fx, match.activeUnit.bug.fz);
   return false;
 }
 
@@ -350,7 +361,9 @@ function loop(now: number): void {
     lastFrame = now;
     return;
   }
-  const dt = Math.min(0.25, (now - lastFrame) / 1000); // after a stall, drop time instead of spiralling
+  // after a stall, drop time instead of spiralling; never negative (the first frame's timestamp can be
+  // older than `lastFrame`, which would end the intro before it starts)
+  const dt = Math.min(0.25, Math.max(0, (now - lastFrame) / 1000));
   const interval = now - lastFrame;
   frameMs[frameCount++ % frameMs.length] = interval;
   lastFrame = now;
@@ -373,6 +386,23 @@ function loop(now: number): void {
   projectiles.sync(match.projectiles, alpha);
   const active = bugViews[match.active];
   aim.update(match, active.view.root.position, active.height, now);
+
+  // each turn starts behind the active bug, looking where it walks; while it aims, the view turns with it
+  if (!debugCamera && !intro && match.activeUnit.bug.alive) {
+    const b = match.activeUnit.bug;
+    const yaw = Math.atan2(b.fx, b.fz);
+    if (chasePending && match.phase === 'aim') {
+      chasePending = false;
+      follow.chase(terrain, active.view.root.position, b.fx, b.fz, 0.9);
+    } else if (chaseUnit === match.active && match.phase === 'aim' && !follow.gliding) {
+      let d = yaw - chaseYaw;
+      if (d > Math.PI) d -= Math.PI * 2;
+      else if (d < -Math.PI) d += Math.PI * 2;
+      if (d !== 0) follow.turnWith(d);
+    }
+    chaseUnit = match.active;
+    chaseYaw = yaw;
+  }
 
   // follow the shot while it flies, otherwise the bug whose turn it is
   if (!debugCamera && !intro && (projectiles.first(target) || match.activeUnit.bug.alive)) {
