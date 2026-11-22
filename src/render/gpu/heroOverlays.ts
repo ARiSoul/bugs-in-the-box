@@ -1,7 +1,8 @@
 import * as THREE from 'three/webgpu';
-import { abs, atan, cameraPosition, color, cos, dot, float, mix, normalize, normalWorld, positionLocal, positionWorld, pow, smoothstep, uniform } from 'three/tsl';
+import { abs, atan, cameraPosition, color, cos, dot, float, mix, mx_noise_float, normalize, normalWorld, positionLocal, positionWorld, pow, smoothstep, uniform } from 'three/tsl';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { arcPoint, type Vec3 } from '../../terrain/generators/parts';
+import { FOAM_SLEEVE_COLOR } from '../../terrain/generators/speaker';
 import type { Feature, SceneLayout } from '../../terrain/generators/types';
 import { Glow, hueColor } from './glow';
 import type { Craters } from './craters';
@@ -163,6 +164,13 @@ export class HeroOverlays {
     let m = this.sleeves.get(c);
     if (!m) {
       m = this.craters.cut(new THREE.MeshStandardNodeMaterial({ color: c, roughness: 0.82, metalness: 0 })); // matte: no thin crawling highlight
+      if (c === FOAM_SLEEVE_COLOR) {
+        // open-cell foam: dark pores in a fine mottle, a soft sheen towards the silhouette
+        m.roughness = 1;
+        const pores = smoothstep(0.25, 0.6, mx_noise_float(positionWorld.mul(2.6)).add(mx_noise_float(positionWorld.mul(7.1)).mul(0.5)));
+        const rim = pow(float(1).sub(abs(dot(normalWorld, normalize(cameraPosition.sub(positionWorld))))), 2);
+        m.colorNode = mix(color(c), color(0x161618), pores.mul(0.7)).add(rim.mul(0.06));
+      }
       this.sleeves.set(c, m);
     }
     return m;

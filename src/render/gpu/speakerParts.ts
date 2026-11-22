@@ -132,6 +132,7 @@ export class SpeakerParts {
         else this.addTweeter(f);
       } else if (f.kind === 'rod') this.addRod(f);
       else if (f.kind === 'port') this.addPort(f);
+      else if (f.kind === 'room') this.addRoom(f);
     }
   }
 
@@ -153,9 +154,9 @@ export class SpeakerParts {
     const C45 = Math.SQRT1_2;
     for (const [ex, ez] of [[C45, C45], [-C45, C45], [-C45, -C45], [C45, -C45]]) {
       const half = 3.4 * k + 0.4 + 0.15;
-      const ear = new THREE.Mesh(new THREE.BoxGeometry(2 * half, 0.4, 2 * half), this.basket);
+      // (square to the axes, like the terrain's ears under them)
+      const ear = new THREE.Mesh(roundedBar(2 * half + 0.2, 0.5, 2 * half + 0.2, 1), this.basket);
       ear.position.set(ex * (R - 1), ringTop - 0.05, ez * (R - 1));
-      ear.rotation.y = Math.PI / 4;
       g.add(ear);
     }
     // the basket frame: a band at the ring, four tapered ribs between the windows, a band under the magnet
@@ -174,7 +175,7 @@ export class SpeakerParts {
     // a solid collar where the frame meets the magnet's bottom plate (closed underneath: seen from the gap)
     const headY = plateY - WINDOW_HEAD;
     const collarOut = rHigh + ((rLow - rHigh) * WINDOW_HEAD) / (plateY - lowY) + OUT + 0.2;
-    lathe(roundedDisc(collarOut, headY - 0.4, plateY + 0.1, 0.5, rHigh - BASKET_THICK - OUT - 0.3, true), this.basket);
+    lathe(roundedDisc(collarOut, headY - 0.4, plateY + 0.1, 0.15, rHigh - BASKET_THICK - OUT - 0.3, true), this.basket);
     // the cone: straight paper from the ring up to the neck, just outside the terrain's shell
     const coneAt = (y: number): number => 29 * k - (20 * k * (y - y0)) / (coneTop - y0);
     const cone: THREE.Vector2[] = [];
@@ -187,11 +188,12 @@ export class SpeakerParts {
     const sp: THREE.Vector2[] = [];
     const rIn = 7 * k + 0.2;
     const rOut = 19 * k + 0.25;
-    const pitch = 3.5 * k;
-    for (let i = 0; i <= 64; i++) {
-      const r = rIn + ((rOut - 0.5 - rIn) * i) / 64;
-      const t = (((r - 11 * k) / pitch) % 1 + 1) % 1; // 0 at a crest
-      sp.push(new THREE.Vector2(r, spiderTop + 0.2 + 0.85 * Math.abs(1 - 2 * t)));
+    // seven crisp pleats (the terrain disc under it is flat)
+    const pitch = (rOut - 0.5 - rIn) / 7;
+    for (let i = 0; i <= 140; i++) {
+      const r = rIn + ((rOut - 0.5 - rIn) * i) / 140;
+      const t = (((r - rIn) / pitch) % 1 + 1) % 1;
+      sp.push(new THREE.Vector2(r, spiderTop + 0.15 + 0.75 * Math.abs(1 - 2 * t)));
     }
     sp.push(new THREE.Vector2(rOut, spiderTop - 0.3), new THREE.Vector2(rOut, spiderTop - 2.45), new THREE.Vector2(rIn + 2, spiderTop - 2.45));
     lathe(sp.reverse(), this.damper, 96);
@@ -264,6 +266,16 @@ export class SpeakerParts {
     this.push(g);
   }
 
+  /** The room's floor far below: a wide plane of dark floorboards, lit only by the key light. */
+  private addRoom(f: Feature): void {
+    const m = this.craters.cut(new THREE.MeshStandardNodeMaterial({ color: f.color, roughness: 0.8, metalness: 0 }));
+    const plane = new THREE.Mesh(new THREE.PlaneGeometry(900, 900), m);
+    plane.rotation.x = -Math.PI / 2;
+    plane.position.set(f.x, f.y, f.z);
+    plane.receiveShadow = false;
+    this.push(plane);
+  }
+
   /** A straight round rod (the screwdriver's shaft, ferrule and handle), maybe with a blade or a fluted grip. */
   private addRod(f: Feature): void {
     const [x0, y0, z0, x1, y1, z1] = f.path;
@@ -286,7 +298,7 @@ export class SpeakerParts {
       g.add(blade);
       a.addScaledVector(dir, 2.2);
     }
-    const rod = this.capsule(a, b, f.radius + 0.05, m);
+    const rod = this.capsule(a, b, f.radius + 0.05, m, f.axis === 0 ? 80 : 32);
     if (f.axis === 0) flute(rod.geometry, f.radius + 0.05);
     g.add(rod);
     g.traverse((o) => {
@@ -296,10 +308,10 @@ export class SpeakerParts {
     this.push(g);
   }
 
-  private capsule(a: THREE.Vector3, b: THREE.Vector3, radius: number, material: THREE.Material): THREE.Mesh {
+  private capsule(a: THREE.Vector3, b: THREE.Vector3, radius: number, material: THREE.Material, radial = 32): THREE.Mesh {
     const dir = new THREE.Vector3().subVectors(b, a);
     const len = dir.length();
-    const mesh = new THREE.Mesh(new THREE.CapsuleGeometry(radius, len, 6, 32), material);
+    const mesh = new THREE.Mesh(new THREE.CapsuleGeometry(radius, len, 6, radial), material);
     mesh.position.copy(a).add(b).multiplyScalar(0.5);
     mesh.quaternion.setFromUnitVectors(UP, dir.normalize());
     return mesh;
@@ -311,7 +323,7 @@ export class SpeakerParts {
   }
 }
 
-/** Eight shallow flutes along a capsule's straight part (a screwdriver grip). */
+/** Ten flutes along a capsule's straight part (a screwdriver grip). */
 function flute(g: THREE.BufferGeometry, radius: number): void {
   const p = g.getAttribute('position');
   for (let i = 0; i < p.count; i++) {
@@ -319,7 +331,7 @@ function flute(g: THREE.BufferGeometry, radius: number): void {
     const z = p.getZ(i);
     const r = Math.sqrt(x * x + z * z);
     if (r < radius * 0.98) continue; // (the round ends stay round)
-    const s = 1 - 0.07 * (0.5 + 0.5 * Math.cos(8 * Math.atan2(z, x)));
+    const s = 1 - 0.13 * Math.pow(0.5 + 0.5 * Math.cos(10 * Math.atan2(z, x)), 3);
     p.setX(i, x * s);
     p.setZ(i, z * s);
   }

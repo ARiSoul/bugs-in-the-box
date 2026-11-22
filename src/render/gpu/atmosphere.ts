@@ -57,6 +57,8 @@ export class Atmosphere {
   readonly roomHalf = uniform(new THREE.Vector2(75, 75));
   readonly cornerDark = uniform(0.75);
   readonly sunDir = uniform(new THREE.Vector3(0.4, 0.85, 0.3));
+  /** Colour of the dark room in the middle of the backdrop (it falls to black at the edges). */
+  readonly backdropColor = uniform(new THREE.Color(0x1a1d24).multiplyScalar(0.55));
   glass: THREE.Mesh | null = null;
 
   constructor(
@@ -128,7 +130,7 @@ export class Atmosphere {
       const aspect = screenSize.x.div(screenSize.y);
       const uv = screenUV.sub(vec2(0.5, 0.45)).mul(vec2(aspect, 1));
       const t = smoothstep(0, 0.95, length(uv));
-      return mix(color(0x1a1d24).mul(0.55), color(0x020203), t);
+      return mix(this.backdropColor, color(0x020203), t);
     })();
   }
 

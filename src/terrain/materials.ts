@@ -85,7 +85,7 @@ export const MATERIAL_RGB: readonly (readonly [number, number, number])[] = [
   [0.05, 0.2, 0.62], // CABLE_BLUE
   [0.46, 0.38, 0.27], // MDF: pale tan fibreboard
   [0.86, 0.85, 0.82], // FOAM
-  [0.016, 0.017, 0.02], // VINYL: black (the key light is strong: anything lighter reads tan)
+  [0.026, 0.028, 0.032], // VINYL: black, a shade off the void (the backdrop is darker still)
   [0.07, 0.065, 0.06], // CONE
   [0.72, 0.5, 0.12], // DAMPER
   [0.13, 0.13, 0.14], // FERRITE

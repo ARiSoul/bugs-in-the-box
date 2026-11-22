@@ -14,9 +14,10 @@ export interface Scenario {
   /**
    * Background: CSS gradient behind the canvas, and the fog colour (0xRRGGBB). WebGPU path: the distance
    * fog is clear up to `fogClear` and nearly full `fogSpan` further (defaults 40 and 110: a closed case),
-   * and the map's edges and corners fall dark by `cornerDark` (default 0.75).
+   * and the map's edges and corners fall dark by `cornerDark` (default 0.75). `backdrop`: the colour of the
+   * room behind the map at the middle of the view (default a very dark blue-grey).
    */
-  sky: { css: string; fog: number; fogClear?: number; fogSpan?: number; cornerDark?: number };
+  sky: { css: string; fog: number; fogClear?: number; fogSpan?: number; cornerDark?: number; backdrop?: number };
   /**
    * Render path: 'webgl' (the classic look) or 'webgpu' (the atmosphere path: height fog, god rays,
    * bloom, glass, dust). A 'webgpu' scenario still runs where WebGPU is missing, on WebGL2, with less.
@@ -57,8 +58,9 @@ export const SCENARIOS: readonly Scenario[] = [
     name: 'Studio Monitor',
     generate: speaker,
     sharpEdges: true,
-    // an open desk: the fog only darkens the far end of the room
-    sky: { css: 'radial-gradient(ellipse at 50% 40%, #221d19 0%, #070605 72%)', fog: 0x0d0b09, fogClear: 80, fogSpan: 220, cornerDark: 0.2 },
+    // an open desk: the fog only darkens the far end of the room, and a dim warm room shows behind (the
+    // black cabinet must not melt into the background)
+    sky: { css: 'radial-gradient(ellipse at 50% 40%, #221d19 0%, #070605 72%)', fog: 0x0d0b09, fogClear: 80, fogSpan: 220, cornerDark: 0.2, backdrop: 0x3a2e25 },
     render: 'webgpu',
     strictBounds: true,
     // high, a little from the amp side: into the open cabinet, short shadows on the desk around it

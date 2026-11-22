@@ -4,7 +4,6 @@ import {
   BLACK_PLASTIC,
   CABLE_YELLOW,
   CONE,
-  COPPER,
   DAMPER,
   FERRITE,
   FOAM,
@@ -15,7 +14,7 @@ import {
   VINYL,
   WOOD,
 } from '../materials';
-import { add, box, boxMinMax, capsule, cone, cut, cylinder, paint, rotatedBox, sphere, torus } from '../sdf';
+import { add, box, boxMinMax, capsule, cone, cut, cylinder, paint, rotatedBox, sphere } from '../sdf';
 import { createPlacement, detail, wire, wirePath } from './parts';
 import { feature, resetLayout, type Feature, type TerrainGenerator } from './types';
 
@@ -43,6 +42,8 @@ export const BASKET_THICK = 3;
 export const WINDOW_SILL = 2;
 export const WINDOW_HEAD = 2.5;
 export const WINDOW_HALF = 14.5;
+/** Colour of the speaker cable's foam sleeve (the renderer gives this colour a porous look). */
+export const FOAM_SLEEVE_COLOR = 0x3a3b3e;
 
 /**
  * Studio Monitor: an active studio speaker opened up for repair on a desk. The cabinet lies face down
@@ -107,6 +108,8 @@ export const speaker: TerrainGenerator = (terrain, seed, layout) => {
   // the desk stops short of the port: the slot drops into the void
   const deskZ1 = Math.min(Math.round(D * 0.79), Math.floor(pz - 9));
 
+  // the room's floor, far below the desk: a fall off the desk reads as a long drop (render only)
+  put(feature('room', W / 2, -45, D / 2, { color: 0x6b4e35 }));
   if (layout) {
     layout.floorY = DESK_TOP;
     layout.inner = [2, DESK_TOP, 2, W - 2, rim, D - 2];
@@ -145,6 +148,15 @@ export const speaker: TerrainGenerator = (terrain, seed, layout) => {
   for (let n = billows(ix1 - ix0, liningTop - FLOOR); n > 0; n--) {
     billow(rand(ix0 + 5, ix1 - 5), rand(FLOOR + 4, liningTop - 4), iz0, 2, 1);
     billow(rand(ix0 + 5, ix1 - 5), rand(FLOOR + 4, liningTop - 4), iz1, 2, -1);
+  }
+  // an uneven top edge: the wadding sags and bunches along the walls' tops (no straight piped bead)
+  for (let z = iz0 + 4; z < iz1 - 4; z += rand(5, 9)) {
+    add(terrain, sphere(ix0 - 1.5, liningTop - rand(0.5, 2.5), z, rand(2.2, 3.2)), FOAM, 1.8);
+    add(terrain, sphere(ix1 + 1.5, liningTop - rand(0.5, 2.5), z + rand(-2, 2), rand(2.2, 3.2)), FOAM, 1.8);
+  }
+  for (let x = ix0 + 4; x < ix1 - 4; x += rand(5, 9)) {
+    add(terrain, sphere(x, liningTop - rand(0.5, 2.5), iz0 - 1.5, rand(2.2, 3.2)), FOAM, 1.8);
+    add(terrain, sphere(x + rand(-2, 2), liningTop - rand(0.5, 2.5), iz1 + 1.5, rand(2.2, 3.2)), FOAM, 1.8);
   }
   // the billows' soft fillets reach samples that kept the cabinet's material: all of it is wadding
   // (a band along the walls, above the floor, before anything else stands there)
@@ -204,7 +216,6 @@ export const speaker: TerrainGenerator = (terrain, seed, layout) => {
   // (and a wedge of air between it and the cone, open all round)
   const spiderTop = FLOOR + 14 * k;
   add(terrain, cylinder(wx, spiderTop - 1.1, wz, 19 * k, 1.1, 1, 0.8), DAMPER);
-  for (const rr of [11, 14.5, 17.5]) add(terrain, torus(wx, spiderTop - 0.3, wz, rr * k, 0.8), DAMPER);
   add(terrain, cylinder(wx, (spiderTop + plateY) / 2, wz, 7 * k - 0.4, (plateY - spiderTop) / 2 + 0.5, 1, 0.5), BLACK_PLASTIC);
   add(terrain, cylinder(wx, plateY + 1.25 * k, wz, 22.5 * k - 0.6, 1.25 * k, 1, 0.8), STEEL);
   add(terrain, cylinder(wx, plateY + 6.5 * k, wz, 21 * k - 0.6, 4 * k, 1, 1), FERRITE);
@@ -228,6 +239,8 @@ export const speaker: TerrainGenerator = (terrain, seed, layout) => {
   for (const [ex, ez] of [[1, 1], [-1, 1], [-1, -1], [1, -1]]) {
     deco(wx + ex * 9.5 * tk - 0.9, FLOOR + 2.15, tz + ez * 9.5 * tk - 0.9, wx + ex * 9.5 * tk + 0.9, FLOOR + 2.8, tz + ez * 9.5 * tk + 0.9, 'cylY', 0x1d1e21, 0.8, 0.4);
   }
+  // the tweeter's two solder tabs, where its wires end
+  for (const off of [-0.6, 0.6]) deco(wx + 9 * tk - 0.2, FLOOR + 2.4, tz + 3 + off - 0.35, wx + 9 * tk + 1.2, FLOOR + 4.2, tz + 3 + off + 0.35, 'box', 0xc9cdd2, 1, 0.3);
   // crossover wires from the tweeter along the lining to the woofer's terminals (render only, thin)
   for (const [off, color] of [[-0.6, 0xb8221c], [0.6, 0x18181a]] as const) {
     cableAlong([
@@ -289,8 +302,9 @@ export const speaker: TerrainGenerator = (terrain, seed, layout) => {
   // the amplifier board
   const bz1 = az0 + Math.round(64 * ka);
   add(terrain, boxMinMax(ax0 + 4, PT - 0.4, az0 + 4, ax1 - 4, PB, bz1, 0.5), PCB);
-  // copper traces under everything else (the parts stand on them)
-  for (let n = Math.round(((ax1 - ax0) * (bz1 - az0)) / 160); n > 0; n--) {
+  // traces: thin flat lines under the solder mask (a lighter green), tinned pads at their ends
+  // (render only: flush with the board, nothing to walk over)
+  for (let n = Math.round(((ax1 - ax0) * (bz1 - az0)) / 110); n > 0; n--) {
     let x = rand(ax0 + 7, ax1 - 7);
     let z = rand(az0 + 7, bz1 - 4);
     for (let leg = 0; leg < 2; leg++) {
@@ -298,19 +312,18 @@ export const speaker: TerrainGenerator = (terrain, seed, layout) => {
       const len = rand(5, 16) * (rng() < 0.5 ? -1 : 1);
       const x2 = alongX ? Math.min(ax1 - 6, Math.max(ax0 + 6, x + len)) : x;
       const z2 = alongX ? z : Math.min(bz1 - 3, Math.max(az0 + 6, z + len));
-      const tb: [number, number, number, number, number, number] = [Math.min(x, x2) - 1, PB - 0.5, Math.min(z, z2) - 1, Math.max(x, x2) + 1, PB + 1.2, Math.max(z, z2) + 1];
-      add(terrain, boxMinMax(tb[0], tb[1], tb[2], tb[3], tb[4], tb[5], 0.5), COPPER);
-      put(feature('trace', (tb[0] + tb[3]) / 2, PB, (tb[2] + tb[5]) / 2, { box: tb }));
+      deco(Math.min(x, x2) - 0.35, PB - 0.02, Math.min(z, z2) - 0.35, Math.max(x, x2) + 0.35, PB + 0.12, Math.max(z, z2) + 0.35, 'box', 0x2f7a45, 0, 0.45);
       x = x2;
       z = z2;
     }
+    deco(x - 0.8, PB - 0.02, z - 0.8, x + 0.8, PB + 0.2, z + 0.8, 'cylY', 0xc9c6bc, 0.9, 0.35);
   }
   // heatsink along the board's far edge: a finned aluminium block, the amp chips on its inner face
   const hx0 = ax0 + 7;
   const hx1 = ax1 - 7;
   const hz0 = az0 + 6;
   const hz1 = az0 + 6 + Math.max(6, 9 * ka);
-  const hTop = PB + Math.max(9, 15 * ka);
+  const hTop = PB + Math.max(10, 20 * ka);
   add(terrain, boxMinMax(hx0, PB - 0.5, hz0, hx1, hTop, hz1, 0.5), ALUMINIUM);
   for (let x = hx0 + 2; x + 2 <= hx1 - 2; x += 4) cut(terrain, boxMinMax(x, PB + 4, hz0 - 1, x + 2, hTop + 1, hz1 - 3, 0.3));
   claim(hx0 - 1, hz0 - 1, hx1 + 1, hz1 + 2.5);
@@ -426,7 +439,7 @@ export const speaker: TerrainGenerator = (terrain, seed, layout) => {
     cx1 + 2.2, rim - 6, overZ - 2,
     cx1 + 3.5, PT + 10, overZ - 6,
     ax0 + 10, PB + 2.5, Math.min(bz1 - 4, overZ - 14),
-  ], 1.9, 0x3a3b3e, SLEEVE, 2);
+  ], 1.9, FOAM_SLEEVE_COLOR, SLEEVE, 2);
 
   // ---- the screwdriver, its tip on the desk and its handle on the rim: the ramp into the cabinet
   // (a bug climbs onto the thin tip from the desk, walks up the shaft and over the handle)

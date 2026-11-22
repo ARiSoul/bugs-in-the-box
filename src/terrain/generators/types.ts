@@ -43,11 +43,12 @@ export type Box3 = [number, number, number, number, number, number];
  *   (the slot is open from the top of the duct down to `bottom y` and beyond).
  * - `rod`: a straight round rod from `path` [x0, y0, z0] to [x1, y1, z1], `radius`, `color`, `metal`, `rough`;
  *   `facing` -1: a flat blade at its start (a screwdriver tip); `axis` 0: a fluted grip.
+ * - `room`: the floor of the room far below the map, at height y, `color` (a drop off the map reads as one).
  */
 export interface Feature {
   kind:
     | 'fan' | 'pump' | 'lightBar' | 'led' | 'heat' | 'tube' | 'capacitor' | 'grommet' | 'pad' | 'connector'
-    | 'dust' | 'trace' | 'ramBody' | 'part' | 'screw' | 'wire' | 'driver' | 'port' | 'rod';
+    | 'dust' | 'trace' | 'ramBody' | 'part' | 'screw' | 'wire' | 'driver' | 'port' | 'rod' | 'room';
   x: number;
   y: number;
   z: number;

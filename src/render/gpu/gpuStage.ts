@@ -218,6 +218,8 @@ export async function createGpuStage(canvas: HTMLCanvasElement, terrain: Terrain
       atmosphere.clear.value = sc.sky.fogClear ?? 40;
       atmosphere.span.value = sc.sky.fogSpan ?? 110;
       atmosphere.cornerDark.value = sc.sky.cornerDark ?? 0.75;
+      if (sc.sky.backdrop !== undefined) atmosphere.backdropColor.value.setHex(sc.sky.backdrop);
+      else atmosphere.backdropColor.value.setHex(0x1a1d24).multiplyScalar(0.55);
       atmosphere.sunDir.value.copy(sunDir);
       glow.setLayout(layout);
       atmosphere.setLayout(layout, sc.sky.fog);
