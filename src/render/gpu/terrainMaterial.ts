@@ -31,7 +31,7 @@ import {
   mx_noise_float,
   positionViewDirection,
 } from 'three/tsl';
-import { GLOW_FAN, GLOW_FUZZ, GLOW_GRAIN, GLOW_RGB } from '../../terrain/materials';
+import { GLOW_FAN, GLOW_FUZZ, GLOW_GRAIN, GLOW_PEEL, GLOW_RGB } from '../../terrain/materials';
 import { Glow, MAX_FANS, hueColor } from './glow';
 
 /** How bright the RGB diffusers glow (HDR, before bloom and tone mapping). */
@@ -62,13 +62,23 @@ export function createTerrainMaterial(glow: Glow): { material: THREE.MeshStandar
     // (the special shadings are codes in the glow channel; the mesher blends them across borders)
     const fuzz = clamp(float(1).sub(abs(pbr.z.sub(GLOW_FUZZ)).div(0.15)), 0, 1);
     const grain = clamp(float(1).sub(abs(pbr.z.sub(GLOW_GRAIN)).div(0.15)), 0, 1);
+    const peel = clamp(float(1).sub(abs(pbr.z.sub(GLOW_PEEL)).div(0.1)), 0, 1);
+    If(peel.greaterThan(0.01), () => {
+      // orange-peel mottle (breaks up the light bands on the black wrap) and a cool sheen at the edges
+      // (so a black wall in front of the camera still reads as a surface, not as the void)
+      const mottle = mx_noise_float(positionWorld.mul(2.3)).mul(0.6).add(mx_noise_float(positionWorld.mul(6.1)).mul(0.4));
+      const edge = pow(float(1).sub(abs(dot(normalView, positionViewDirection))), 3);
+      base.assign(mix(base, base.mul(float(1).add(mottle.mul(0.35))).add(vec3(0.016, 0.018, 0.022).mul(edge)), peel));
+    });
     If(grain.greaterThan(0.01), () => {
       // long grain along x: wavy lines from a stretched noise, darker late wood, a few wider bands
       const p = positionWorld;
       const warp = mx_noise_float(p.mul(vec3(0.02, 0.2, 0.12))).mul(3);
       const lines = sin(p.z.mul(1.9).add(warp.mul(2.4))).mul(0.5).add(0.5);
       const bands = mx_noise_float(p.mul(vec3(0.008, 0.1, 0.05))).mul(0.5).add(0.5);
-      const tone = float(0.82).add(lines.mul(lines).mul(0.22)).add(bands.mul(0.16));
+      // fine pores and streaks along the grain, crisp at bug scale
+      const streaks = mx_noise_float(p.mul(vec3(0.35, 3, 7))).mul(0.5).add(0.5);
+      const tone = float(0.8).add(lines.mul(lines).mul(0.22)).add(bands.mul(0.16)).add(streaks.mul(0.1));
       base.assign(mix(base, base.mul(tone), grain));
     });
     If(fuzz.greaterThan(0.01), () => {
@@ -87,7 +97,9 @@ export function createTerrainMaterial(glow: Glow): { material: THREE.MeshStandar
     const face = normalize(cross(dFdx(positionView), dFdy(positionView))).toVar();
     face.assign(select(dot(face, positionView).greaterThan(0), face.negate(), face));
     const n = normalView.toVar();
-    return normalize(mix(n, face, sharp.mul(smoothstep(0.62, 0.45, dot(face, n)))));
+    // (soft wadding keeps the smooth normal: hard creases between its billows read as crumpled plastic)
+    const soft = clamp(float(1).sub(abs(pbr.z.sub(GLOW_FUZZ)).div(0.15)), 0, 1);
+    return normalize(mix(n, face, sharp.mul(smoothstep(0.62, 0.45, dot(face, n))).mul(float(1).sub(soft))));
   })();
 
   m.emissiveNode = Fn(() => {

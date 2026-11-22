@@ -30,6 +30,7 @@ export class HeroOverlays {
   private readonly sleeve = new THREE.MeshStandardNodeMaterial({ color: 0x14161a, roughness: 0.45, metalness: 0 });
   private readonly capTop = new THREE.MeshStandardNodeMaterial({ color: 0x7d838c, roughness: 0.45, metalness: 0.8 });
   private readonly capScore = new THREE.MeshStandardNodeMaterial({ color: 0x2a2c30, roughness: 0.6, metalness: 0.3 });
+  private readonly capStripe = new THREE.MeshStandardNodeMaterial({ color: 0x8d939b, roughness: 0.5, metalness: 0 });
   private readonly hole = new THREE.MeshBasicNodeMaterial({ color: 0x020203 });
   private readonly fitting = new THREE.MeshStandardNodeMaterial({ color: 0x2a2c31, roughness: 0.3, metalness: 0.7 });
   private readonly gold = new THREE.MeshStandardNodeMaterial({ color: 0xd9a441, roughness: 0.38, metalness: 1 });
@@ -65,7 +66,7 @@ export class HeroOverlays {
     cr.colorNode = color(0x050505);
     cr.emissiveNode = hueColor(glow.hue).mul(float(1.4));
     this.capRing = cr;
-    for (const mat of [this.rubber, this.grommetRubber, this.screwHead, this.rotor, this.capRing, this.cap, this.sleeve, this.capTop, this.capScore, this.hole, this.fitting, this.gold, this.connector, this.fluff, this.copper, this.ramBody]) craters.cut(mat);
+    for (const mat of [this.rubber, this.grommetRubber, this.screwHead, this.rotor, this.capRing, this.cap, this.sleeve, this.capTop, this.capScore, this.capStripe, this.hole, this.fitting, this.gold, this.connector, this.fluff, this.copper, this.ramBody]) craters.cut(mat);
     scene.add(this.group);
   }
 
@@ -167,9 +168,10 @@ export class HeroOverlays {
       if (c === FOAM_SLEEVE_COLOR) {
         // open-cell foam: dark pores in a fine mottle, a soft sheen towards the silhouette
         m.roughness = 1;
-        const pores = smoothstep(0.25, 0.6, mx_noise_float(positionWorld.mul(2.6)).add(mx_noise_float(positionWorld.mul(7.1)).mul(0.5)));
+        // (dark charcoal, a fine even pore pattern, a faint fuzz at the silhouette)
+        const pores = smoothstep(-0.1, 0.5, mx_noise_float(positionWorld.mul(9)).add(mx_noise_float(positionWorld.mul(21)).mul(0.6)));
         const rim = pow(float(1).sub(abs(dot(normalWorld, normalize(cameraPosition.sub(positionWorld))))), 2);
-        m.colorNode = mix(color(c), color(0x161618), pores.mul(0.7)).add(rim.mul(0.06));
+        m.colorNode = mix(color(0x2c2d30), color(0x121214), pores.mul(0.6)).add(rim.mul(0.025));
       }
       this.sleeves.set(c, m);
     }
@@ -360,9 +362,13 @@ export class HeroOverlays {
     top.position.set(f.x, f.y + h - 0.3, f.z);
     const g = new THREE.Group();
     g.add(sleeve, top);
+    // the polarity stripe down the sleeve (the minus side)
+    const stripe = new THREE.Mesh(new THREE.CylinderGeometry(r + 0.03, r + 0.03, h - 1, 16, 1, true, 0, 0.55), this.capStripe);
+    stripe.position.set(f.x, f.y + (h - 0.6) / 2, f.z);
+    g.add(stripe);
     // the vent score on top: a thin cross
     for (const rot of [0, Math.PI / 2]) {
-      const s = new THREE.Mesh(new THREE.BoxGeometry(2 * (r - 0.6), 0.12, 0.28), this.capScore);
+      const s = new THREE.Mesh(new THREE.BoxGeometry(2 * (r - 0.6), 0.05, 0.12), this.capScore);
       s.position.set(f.x, f.y + h + 0.02, f.z);
       s.rotation.y = rot;
       g.add(s);

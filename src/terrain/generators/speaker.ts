@@ -40,7 +40,7 @@ export const BASKET_LOW = 31.5;
 export const BASKET_HIGH = 22;
 export const BASKET_THICK = 3;
 export const WINDOW_SILL = 2;
-export const WINDOW_HEAD = 2.5;
+export const WINDOW_HEAD = 1.6;
 export const WINDOW_HALF = 14.5;
 /** Colour of the speaker cable's foam sleeve (the renderer gives this colour a porous look). */
 export const FOAM_SLEEVE_COLOR = 0x3a3b3e;
@@ -215,7 +215,8 @@ export const speaker: TerrainGenerator = (terrain, seed, layout) => {
   // the spider: a corrugated golden disc on the cone's neck, a low gap under the magnet's bottom plate
   // (and a wedge of air between it and the cone, open all round)
   const spiderTop = FLOOR + 14 * k;
-  add(terrain, cylinder(wx, spiderTop - 1.1, wz, 19 * k, 1.1, 1, 0.8), DAMPER);
+  // (the terrain disc stops short of the drawn rim, which tapers over it: thin cloth from the side)
+  add(terrain, cylinder(wx, spiderTop - 1.1, wz, 17 * k, 1.1, 1, 0.8), DAMPER);
   add(terrain, cylinder(wx, (spiderTop + plateY) / 2, wz, 7 * k - 0.4, (plateY - spiderTop) / 2 + 0.5, 1, 0.5), BLACK_PLASTIC);
   add(terrain, cylinder(wx, plateY + 1.25 * k, wz, 22.5 * k - 0.6, 1.25 * k, 1, 0.8), STEEL);
   add(terrain, cylinder(wx, plateY + 6.5 * k, wz, 21 * k - 0.6, 4 * k, 1, 1), FERRITE);
@@ -325,7 +326,8 @@ export const speaker: TerrainGenerator = (terrain, seed, layout) => {
   const hz1 = az0 + 6 + Math.max(6, 9 * ka);
   const hTop = PB + Math.max(10, 20 * ka);
   add(terrain, boxMinMax(hx0, PB - 0.5, hz0, hx1, hTop, hz1, 0.5), ALUMINIUM);
-  for (let x = hx0 + 2; x + 2 <= hx1 - 2; x += 4) cut(terrain, boxMinMax(x, PB + 4, hz0 - 1, x + 2, hTop + 1, hz1 - 3, 0.3));
+  // deep fins over most of the height, on a thin base
+  for (let x = hx0 + 2; x + 2 <= hx1 - 2; x += 4) cut(terrain, boxMinMax(x, PB + 2, hz0 - 1, x + 2, hTop + 1, hz1 - 3, 0.3));
   claim(hx0 - 1, hz0 - 1, hx1 + 1, hz1 + 2.5);
   for (let i = 0; i < 3; i++) {
     const x = hx0 + ((hx1 - hx0) * (i + 1)) / 4;
@@ -445,7 +447,7 @@ export const speaker: TerrainGenerator = (terrain, seed, layout) => {
   // (a bug climbs onto the thin tip from the desk, walks up the shaft and over the handle)
   const sz = deskZ1 - 6;
   const p0x = W - 8;
-  const p0y = DESK_TOP + 0.4; // the tip just touches the desk: a low step up from it
+  const p0y = DESK_TOP + 1.1; // the tip rests on the desk: a low step up from it
   const p1x = cx1 - 1.5;
   const p1y = rim + 3.2;
   const len = Math.sqrt((p1x - p0x) * (p1x - p0x) + (p1y - p0y) * (p1y - p0y));

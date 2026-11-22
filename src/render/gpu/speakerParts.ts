@@ -155,8 +155,9 @@ export class SpeakerParts {
     for (const [ex, ez] of [[C45, C45], [-C45, C45], [-C45, -C45], [C45, -C45]]) {
       const half = 3.4 * k + 0.4 + 0.15;
       // (square to the axes, like the terrain's ears under them)
-      const ear = new THREE.Mesh(roundedBar(2 * half + 0.2, 0.5, 2 * half + 0.2, 1), this.basket);
-      ear.position.set(ex * (R - 1), ringTop - 0.05, ez * (R - 1));
+      // (the full height of the terrain's ear, so none of its side shows)
+      const ear = new THREE.Mesh(roundedBar(2 * half + 0.2, ringTop + 0.2 - y0, 2 * half + 0.2, 1), this.basket);
+      ear.position.set(ex * (R - 1), (y0 + ringTop + 0.2) / 2, ez * (R - 1));
       g.add(ear);
     }
     // the basket frame: a band at the ring, four tapered ribs between the windows, a band under the magnet
@@ -195,7 +196,8 @@ export class SpeakerParts {
       const t = (((r - rIn) / pitch) % 1 + 1) % 1;
       sp.push(new THREE.Vector2(r, spiderTop + 0.15 + 0.75 * Math.abs(1 - 2 * t)));
     }
-    sp.push(new THREE.Vector2(rOut, spiderTop - 0.3), new THREE.Vector2(rOut, spiderTop - 2.45), new THREE.Vector2(rIn + 2, spiderTop - 2.45));
+    // the rim: a thin turned-down edge, tapering in under the disc (the terrain stops at 17k)
+    sp.push(new THREE.Vector2(rOut, spiderTop - 0.1), new THREE.Vector2(rOut - 0.3, spiderTop - 0.55), new THREE.Vector2(17 * k + 0.25, spiderTop - 2.4), new THREE.Vector2(rIn + 2, spiderTop - 2.45));
     lathe(sp.reverse(), this.damper, 96);
     // the voice coil former (amber) between the spider and the magnet
     lathe(roundedDisc(7 * k + 0.15, spiderTop - 0.5, plateY + 0.1, 0.1), this.former, 40);
@@ -247,15 +249,10 @@ export class SpeakerParts {
     const [bx0, , bz0, bx1, , bz1] = f.box;
     const top = f.y;
     const g = new THREE.Group();
-    const bar = (x0: number, z0: number, x1: number, z1: number): void => {
-      const b = new THREE.Mesh(roundedBar(x1 - x0, 0.9, z1 - z0, 0.4), this.lip);
-      b.position.set((x0 + x1) / 2, top - 0.15, (z0 + z1) / 2);
-      g.add(b);
-    };
-    bar(bx0 - 0.1, bz0 - 0.1, bx1 + 0.1, sz0 + 0.1);
-    bar(bx0 - 0.1, sz1 - 0.1, bx1 + 0.1, bz1 + 0.1);
-    bar(bx0 - 0.1, sz0, sx0 + 0.1, sz1);
-    bar(sx1 - 0.1, sz0, bx1 + 0.1, sz1);
+    // the flared lip: a rounded ring around the slot (its edges rolled over into the hole)
+    const lip = new THREE.Mesh(roundedRing(bx1 - bx0 + 0.3, bz1 - bz0 + 0.3, sx1 - sx0 - 0.2, sz1 - sz0 - 0.2, 1.4, 0.7), this.lip);
+    lip.position.set((bx0 + bx1) / 2, top - 0.6, (bz0 + bz1) / 2);
+    g.add(lip);
     const throat = new THREE.Mesh(new THREE.BoxGeometry(sx1 - sx0 - 0.2, top - 0.6 - bottom, sz1 - sz0 - 0.2), this.throat);
     throat.position.set((sx0 + sx1) / 2, (top - 0.6 + bottom) / 2, (sz0 + sz1) / 2);
     g.add(throat);
@@ -336,6 +333,35 @@ function flute(g: THREE.BufferGeometry, radius: number): void {
     p.setZ(i, z * s);
   }
   g.computeVertexNormals();
+}
+
+/**
+ * A flat rectangular ring (outer w × d, a hole of hw × hd in the middle) with rounded corners and edges
+ * rolled over by `roll`: a flared port lip. Lying flat, its base at y = 0.
+ */
+function roundedRing(w: number, d: number, hw: number, hd: number, h: number, roll: number): THREE.BufferGeometry {
+  const rect = (path: THREE.Path, rw: number, rd: number, c: number): void => {
+    const x = rw / 2;
+    const z = rd / 2;
+    path.moveTo(-x + c, -z);
+    path.lineTo(x - c, -z);
+    path.quadraticCurveTo(x, -z, x, -z + c);
+    path.lineTo(x, z - c);
+    path.quadraticCurveTo(x, z, x - c, z);
+    path.lineTo(-x + c, z);
+    path.quadraticCurveTo(-x, z, -x, z - c);
+    path.lineTo(-x, -z + c);
+    path.quadraticCurveTo(-x, -z, -x + c, -z);
+  };
+  const s = new THREE.Shape();
+  rect(s, w - 2 * roll, d - 2 * roll, 1);
+  const hole = new THREE.Path();
+  rect(hole, hw + 2 * roll, hd + 2 * roll, Math.min(1, hd / 2));
+  s.holes.push(hole);
+  const g = new THREE.ExtrudeGeometry(s, { depth: Math.max(0.05, h - 2 * roll), bevelEnabled: true, bevelThickness: roll, bevelSize: roll, bevelSegments: 5, curveSegments: 8 });
+  g.rotateX(-Math.PI / 2);
+  g.translate(0, roll, 0);
+  return g;
 }
 
 /** A flat square plate with rounded corners and edges, lying flat, centred on its middle. */
