@@ -2,6 +2,8 @@ import { createRng } from '../noise';
 import {
   ALUMINIUM,
   BLACK_PLASTIC,
+  CABLE_BLUE,
+  CABLE_RED,
   COPPER,
   GOLD,
   PCB,
@@ -12,7 +14,7 @@ import {
 } from '../materials';
 import { add, box, boxMinMax, cut, cylinder, torus } from '../sdf';
 import type { Terrain } from '../Terrain';
-import { cable, createPlacement, fan, ribbon, type Vec3 } from './parts';
+import { cable, createPlacement, fan, ribbon, wire, wirePath, type Vec3 } from './parts';
 import { feature, resetLayout, type TerrainGenerator } from './types';
 
 /** Height of the top of the motherboard (as in Inside a PC). */
@@ -63,6 +65,28 @@ export const pcCase: TerrainGenerator = (terrain, seed, layout) => {
     const ez = Math.max(-0.3, 1 - (z1 - z0) / 2);
     add(terrain, boxMinMax(x0 - ex, y0 - ey, z0 - ez, x1 + ex, y1 + ey, z1 + ez, 0.4), material);
     put(feature('part', (x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2, { shape, box: [x0, y0, z0, x1, y1, z1], color, metal, rough }));
+  };
+  /**
+   * A soft cable from `a` (rising off it) to `b` (coming in level along `axis`, from its `facing` side),
+   * through the `via` points (x, y, z triples), or sagging by `sag` without them. With a `material` (>= 0)
+   * the terrain gets the cable too, `radius - 0.3` thick, so bugs can walk on it; the renderer draws the
+   * same polyline as a smooth tube of `radius`.
+   */
+  const softCable = (a: Vec3, b: Vec3, sag: number, axis: 0 | 2, facing: number, via: number[], radius: number, color: number, material: number): void => {
+    const ctrl = [a[0], a[1], a[2], a[0], a[1] + 2.2, a[2]];
+    if (via.length > 0) {
+      ctrl.push(...via);
+    } else {
+      const dx = b[0] - a[0];
+      const dz = b[2] - a[2];
+      const top = Math.max(a[1], b[1]);
+      ctrl.push(a[0] + dx * 0.3, top + 3 - sag * 0.4, a[2] + dz * 0.28, a[0] + dx * 0.62, top + 2 - sag, a[2] + dz * 0.66);
+    }
+    ctrl.push(b[0] + (axis === 0 ? facing * 3 : 0), b[1] + 0.6, b[2] + (axis === 2 ? facing * 3 : 0), b[0], b[1], b[2]);
+    const pts = wirePath(ctrl, 8);
+    // (the solid cable stops one span short of each end: the bends into the plugs would poke out of the tube)
+    if (material >= 0) wire(terrain, pts.slice(24, -24), radius - 0.3, material);
+    put(feature('wire', a[0], a[1], a[2], { path: [radius, ...pts], color }));
   };
   if (layout) {
     layout.glassY = glassY;
@@ -121,10 +145,10 @@ export const pcCase: TerrainGenerator = (terrain, seed, layout) => {
       [D * 0.56, D * 0.88],
     ]) {
       const xa = sx > 0 ? wx - 0.2 : wx - 0.6;
-      put(feature('part', wx, (y0 + y1) / 2, (za + zb) / 2, { shape: 'box', box: [xa, y0 + 1, za, xa + 0.8, y1 - 1, zb], color: 0x50545b, metal: 0.8, rough: 0.5, probe: [wx - sx * 0.5, (y0 + y1) / 2, (za + zb) / 2] }));
+      put(feature('part', wx, (y0 + y1) / 2, (za + zb) / 2, { shape: 'box', box: [xa, y0 + 1, za, xa + 0.8, y1 - 1, zb], color: 0x50545b, metal: 0.8, rough: 0.5 }));
       for (let z = za + 3; z + 2 <= zb - 3; z += 6) {
         const xs = sx > 0 ? wx + 0.55 : wx - 0.75;
-        put(feature('part', wx, y1 - 3, z + 1, { shape: 'box', box: [xs, y1 - 3.6, z, xs + 0.2, y1 - 2.4, z + 2.4], color: 0x0b0c0e, metal: 0, rough: 0.8, probe: [wx - sx * 0.5, y1 - 3, z + 1.2] }));
+        put(feature('part', wx, y1 - 3, z + 1, { shape: 'box', box: [xs, y1 - 3.6, z, xs + 0.2, y1 - 2.4, z + 2.4], color: 0x0b0c0e, metal: 0, rough: 0.8 }));
       }
     }
   }
@@ -348,7 +372,7 @@ export const pcCase: TerrainGenerator = (terrain, seed, layout) => {
   // a brushed aluminium top plate: light neutral grey, with fine grooves along it
   put(feature('part', (ioX0 + coverX1) / 2, P + 18.1, ioZ - 11, { shape: 'box', box: [ioX0 + 0.6, P + 17.9, ioZ - 19.4, coverX1 - 0.6, P + 18.3, ioZ - 2.1], color: 0x9aa0a8, metal: 0.9, rough: 0.3 }));
   for (let gx2 = ioX0 + 4.5; gx2 < coverX1 - 1.2; gx2 += 1.4) {
-    put(feature('part', gx2, P + 18.3, ioZ - 11, { shape: 'box', box: [gx2 - 0.12, P + 18.25, ioZ - 18.8, gx2 + 0.12, P + 18.34, ioZ - 2.7], color: 0x6c727b, metal: 0.9, rough: 0.45, probe: [gx2, P + 17, ioZ - 11] }));
+    put(feature('part', gx2, P + 18.3, ioZ - 11, { shape: 'box', box: [gx2 - 0.12, P + 18.25, ioZ - 18.8, gx2 + 0.12, P + 18.34, ioZ - 2.7], color: 0x6c727b, metal: 0.9, rough: 0.45 }));
   }
   for (let k = 0; k < 5; k++) {
     const vy = P + 4 + k * 2.4;
@@ -402,7 +426,7 @@ export const pcCase: TerrainGenerator = (terrain, seed, layout) => {
       [1, P + 10],
     ];
     for (const [k, y] of leads) {
-      put(feature('wire', antennaX + k * 1.2, P + 2.6, wifiZ, { path: [antennaX + k * 1.2, P + 2.9, wifiZ + 1.6, antennaX, y, ioZ - 4, 4, 0.42], color: 0x9aa0a8, axis: 2, facing: -1 }));
+      softCable([antennaX + k * 1.2, P + 2.9, wifiZ + 1.6], [antennaX, y, ioZ - 4], 4, 2, -1, [], 0.42, 0x9aa0a8, -1); // too thin to walk on
       put(feature('part', antennaX + k * 1.2, P + 2.9, wifiZ + 1.6, { shape: 'cylY', box: [antennaX + k * 1.2 - 0.6, P + 2.5, wifiZ + 1, antennaX + k * 1.2 + 0.6, P + 3.2, wifiZ + 2.2], color: 0xd9a441, metal: 1, rough: 0.3 }));
     }
   }
@@ -495,7 +519,7 @@ export const pcCase: TerrainGenerator = (terrain, seed, layout) => {
       const from: Vec3 = [bx0 + 3.5, P + 4, sataZ - 1 + k * 6];
       const to: Vec3 = [dx1 - 1, shelfTop + 2.5, z0 + 4];
       const over: Vec3 = [psuX1 + 1, shelfTop + 2.8, to[2] + (from[2] - to[2]) * 0.35];
-      put(feature('wire', from[0], from[1], from[2], { path: [...from, ...to, 2 + k, 0.5, ...over], color: 0xb3201c, axis: 0, facing: 1 }));
+      softCable(from, to, 0, 0, 1, over, 1.25, 0xb3201c, CABLE_RED);
     });
   }
   const cageZ1 = D - WALL1 - 4;
@@ -522,10 +546,10 @@ export const pcCase: TerrainGenerator = (terrain, seed, layout) => {
     part(bx0 + 1, P, bz - 2, bx0 + 6, P + 4, bz + 2, BLACK_PLASTIC, 'box', 0x15161a, 0, 0.55);
     const from: Vec3 = [bx0 + 3.5, P + 4, bz];
     const to: Vec3 = [dx0 + 3, shelfTop + 2 + bay * 1.5, cageZ0 - 0.6];
-    const via = [psuX1 + 1.2, shelfTop + 1.3, bz - 2, psuX1 - 3, shelfTop + 0.55, cageZ0 - 5, dx0 + 3.5, shelfTop + 0.6, cageZ0 - 3.2];
-    put(feature('wire', from[0], from[1], from[2], { path: [...from, ...to, 0, 0.5, ...via], color: 0x2d7fd8, axis: 2, facing: -1 }));
+    const via = [psuX1 + 1.2, shelfTop + 1.8, bz - 2, psuX1 - 3, shelfTop + 1.15, cageZ0 - 5, dx0 + 3.5, shelfTop + 1.15, cageZ0 - 3.2];
+    softCable(from, to, 0, 2, -1, via, 1.25, 0x2d7fd8, CABLE_BLUE);
     // its plug on the cage side, at the rear of the drive
-    put(feature('part', dx0 + 3, to[1], cageZ0 - 0.3, { shape: 'box', box: [dx0 + 1.5, to[1] - 0.9, cageZ0 - 0.7, dx0 + 4.5, to[1] + 0.9, cageZ0 + 0.1], color: 0x15161a, metal: 0, rough: 0.55, probe: [dx0 + 3, to[1], cageZ0 + 1.2] }));
+    put(feature('part', dx0 + 3, to[1], cageZ0 - 0.3, { shape: 'box', box: [dx0 + 1.5, to[1] - 0.9, cageZ0 - 0.7, dx0 + 4.5, to[1] + 0.9, cageZ0 + 0.1], color: 0x15161a, metal: 0, rough: 0.55 }));
     break;
   }
 

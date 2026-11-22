@@ -11,12 +11,13 @@ import type { Scenario } from '../../terrain/scenarios';
 import type { Terrain } from '../../terrain/Terrain';
 import { keyLight, sizeOf, startPose, type GpuTimer, type Stage, type StageOptions } from '../stage';
 import { Atmosphere, POST_LAYER } from './atmosphere';
+import { Craters } from './craters';
 import { DustMotes } from './dust';
 import { Glow } from './glow';
 import { HeatShimmer } from './heat';
 import { ActivityLeds } from './leds';
 import { HeroOverlays } from './heroOverlays';
-import { LightOverlays, type SolidField } from './lightOverlays';
+import { LightOverlays } from './lightOverlays';
 import { LightSheets } from './lightSheets';
 import { createTerrainMaterial } from './terrainMaterial';
 
@@ -84,8 +85,9 @@ export async function createGpuStage(canvas: HTMLCanvasElement, terrain: Terrain
   const look = createTerrainMaterial(glow);
   const heat = new HeatShimmer();
   const leds = new ActivityLeds(scene);
-  const overlays = new LightOverlays(scene, glow);
-  const heroes = new HeroOverlays(scene, glow);
+  const craters = new Craters();
+  const overlays = new LightOverlays(scene, glow, craters);
+  const heroes = new HeroOverlays(scene, glow, craters);
   const sheets = new LightSheets(scene, new THREE.Color(0xffb36b), glow.time);
   const dust = isGPU ? new DustMotes(renderer, glow, uniform(sunDir), options.seed) : null;
   if (dust) scene.add(dust.sprite);
@@ -198,14 +200,16 @@ export async function createGpuStage(canvas: HTMLCanvasElement, terrain: Terrain
     look: { material: look.material, setSharp: (on) => (look.sharp.value = on ? 1 : 0) },
     gpuTimer: timer,
     resize,
-    setScenario(sc: Scenario, layout: SceneLayout, field?: SolidField) {
+    craters,
+    setScenario(sc: Scenario, layout: SceneLayout) {
       document.body.style.background = sc.sky.css;
       glow.setLayout(layout);
       atmosphere.setLayout(layout, sc.sky.fog);
       heat.setLayout(layout);
       leds.setLayout(layout);
-      overlays.setLayout(layout, field ?? null);
-      heroes.setLayout(layout, field ?? null);
+      craters.clear();
+      overlays.setLayout(layout);
+      heroes.setLayout(layout);
       dust?.setLayout(layout, layout.floorY);
       setBlinds(layout);
       fitShadow(sun, layout, blindsY);
@@ -222,7 +226,6 @@ export async function createGpuStage(canvas: HTMLCanvasElement, terrain: Terrain
       glow.update(seconds);
       heat.update(camera, seconds);
       leds.update(seconds);
-      overlays.update();
       heroes.update(seconds);
       dust?.update(dt);
       if (pipeline) pipeline.render();

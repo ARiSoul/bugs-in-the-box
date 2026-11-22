@@ -69,6 +69,11 @@ describe('Tower Case (pc-case)', () => {
         // dust bunnies, thin cables and screw heads are render-only details
         expect(count(layout, 'dust')).toBeGreaterThan(0);
         if (cx === 5) expect(count(layout, 'wire')).toBe(5); // two SATA, one blue SATA, two antenna leads
+        // the SATA cables are solid along their whole run (bugs walk on them); the antenna leads are too thin
+        for (const w of layout.features.filter((f) => f.kind === 'wire' && f.path[0] > 1)) {
+          // (all but the last span at each end, where the cable bends into its plug)
+          for (let i = 1 + 24; i + 2 < w.path.length - 24; i += 3) expect(t.sample(w.path[i], w.path[i + 1], w.path[i + 2])).toBeLessThan(0);
+        }
         expect(count(layout, 'screw')).toBe(5);
         // walls: solid steel 3 cells thick near the top on all four sides, air in the two outer layers
         const y = t.H - 9; // above the rear vent grid, below the glass

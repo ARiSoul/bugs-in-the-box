@@ -42,8 +42,13 @@ export interface Stage {
   look: TerrainLook;
   gpuTimer: GpuTimer | null;
   resize(): void;
-  /** A new map: the scenario's look, the generator's render-only layout, and the terrain (read-only). */
-  setScenario(sc: Scenario, layout: SceneLayout, field?: { sample(x: number, y: number, z: number): number }): void;
+  /** A new map: the scenario's look and the generator's render-only layout. */
+  setScenario(sc: Scenario, layout: SceneLayout): void;
+  /** Where gameplay carved the terrain, on paths whose render-only parts must be cut the same way. */
+  craters?: {
+    add(x: number, y: number, z: number, radius: number): void;
+    addTunnel(x1: number, y1: number, z1: number, x2: number, y2: number, z2: number, radius: number): void;
+  };
   /** Draw one frame. `seconds` is render time (render-only animation), `dt` the frame step. */
   render(seconds: number, dt: number): void;
   /** The renderer's frame counter (matches the GPU timer's frame numbers). */

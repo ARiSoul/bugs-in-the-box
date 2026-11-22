@@ -32,6 +32,13 @@ const CONTACT_EPS = 0.03;
 const MAX_SUBSTEP = 0.35;
 const MAX_SUBSTEPS = 8;
 const RESOLVE_ITERS = 4;
+/**
+ * Climbing: a bug walking forward into an obstacle that is low or thin (nothing solid ahead at this many
+ * radii above its centre: a cable, a ledge, a small part) climbs up it at CLIMB_SPEED; tall walls still
+ * block it. It only climbs while it keeps walking forward.
+ */
+export const CLIMB_HEIGHT = 2.6;
+const CLIMB_SPEED = 6;
 
 export interface BugInput {
   /** +1 forward, -1 backward. */
@@ -122,6 +129,7 @@ export class Bug {
 
     let stick = false;
     let fallSpeed = 0;
+    const wasGrounded = this.grounded;
     if (this.grounded && input.jump) {
       this.vx = this.fx * sp.jumpForward;
       this.vy = sp.jumpSpeed;
@@ -172,8 +180,20 @@ export class Bug {
       }
     }
 
-    // Stay glued to the ground while walking; if there is no ground within SNAP, start falling.
-    if (stick) {
+    // Blocked while walking forward: climb if the obstacle ahead is low or thin enough.
+    let climbing = false;
+    if (wasGrounded && stick && input.move > 0) {
+      const want = Math.sqrt(dx * dx + dz * dz);
+      const ox = this.x - this.px;
+      const oz = this.z - this.pz;
+      // held back (hardly any progress), or only touching a surface too steep to stand on that faces the bug
+      const held = want > 0 && Math.sqrt(ox * ox + oz * oz) < want * 0.5;
+      const steep = groundNy > -2 && groundNy < WALKABLE_NY && this.nx * this.fx + this.nz * this.fz < -0.1;
+      if (held || steep) climbing = this.climb(field);
+    }
+
+    // Stay glued to the ground while walking (not while climbing); if there is no ground within SNAP, start falling.
+    if (stick && !climbing) {
       this.y -= SNAP;
       const g = this.resolve(field);
       if (g >= WALKABLE_NY) {
@@ -187,7 +207,10 @@ export class Bug {
       }
     }
 
-    if (groundNy >= WALKABLE_NY && (stick || this.vy <= 0)) {
+    if (climbing) {
+      this.grounded = true;
+      this.airTicks = 0;
+    } else if (groundNy >= WALKABLE_NY && (stick || this.vy <= 0)) {
       if (!this.grounded) {
         this.lastImpact = fallSpeed;
         this.justLanded = true;
@@ -201,6 +224,26 @@ export class Bug {
     }
 
     if (this.y < KILL_Y) this.alive = false;
+  }
+
+  /**
+   * One tick of climbing: if nothing solid is ahead at CLIMB_HEIGHT radii above the centre, and there is
+   * room above, rise by CLIMB_SPEED * DT (the next forward step then carries the bug over the edge).
+   */
+  private climb(field: TerrainField): boolean {
+    const r = this.species.radius;
+    const ax = this.x + this.fx * (r + 0.6);
+    const az = this.z + this.fz * (r + 0.6);
+    if (field.sample(ax, this.y + CLIMB_HEIGHT * r, az) <= 0) return false; // a tall wall
+    const rise = CLIMB_SPEED * DT;
+    if (field.sample(this.x, this.y + r + rise, this.z) <= 0) return false; // no room above
+    this.y += rise;
+    this.resolve(field);
+    this.vx = this.vy = this.vz = 0;
+    this.nx = 0;
+    this.ny = 1;
+    this.nz = 0;
+    return true;
   }
 
   /** Throw the bug (explosion knockback): adds to its velocity and makes it airborne. */

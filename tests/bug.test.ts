@@ -108,6 +108,28 @@ describe('bug against walls and slopes', () => {
     expect(bug.grounded).toBe(true);
   });
 
+  it('climbs over a cable lying on the ground and walks on', () => {
+    // ground at y=10, a cable of radius 1 along z at x=40 (its top 2 above the ground)
+    const t = world(2, 1, 2, (i, j) => Math.min(j - 10, Math.sqrt((i - 40) * (i - 40) + (j - 11) * (j - 11)) - 1));
+    const bug = settled(t, 30, 32);
+    face(bug, 1, 0);
+    for (let n = 0; n < TICK_RATE * 5; n++) bug.step(t, FORWARD);
+    expect(bug.x).toBeGreaterThan(45);
+    expect(bug.alive).toBe(true);
+    expect(bug.grounded).toBe(true);
+  });
+
+  it('climbs onto a low ledge and stays on top of it', () => {
+    // ground at y=10, a ledge 2 high for x >= 40
+    const t = world(2, 1, 2, (i, j) => Math.min(j - 10, Math.max(40 - i, j - 12)));
+    const bug = settled(t, 30, 32);
+    face(bug, 1, 0);
+    for (let n = 0; n < TICK_RATE * 5; n++) bug.step(t, FORWARD);
+    expect(bug.x).toBeGreaterThan(45);
+    expect(bug.y).toBeCloseTo(12 + ANT.radius, 0);
+    expect(bug.grounded).toBe(true);
+  });
+
   it('cannot stand on a slope that is too steep and slides down to the floor', () => {
     // ~63° slope falling towards +x, meeting a floor at y=8 at x=20
     const t = world(2, 1, 2, (i, j) => Math.min((j - 48 + 2 * i) / Math.sqrt(5), j - 8));

@@ -107,6 +107,42 @@ export function cable(t: Terrain, a: Vec3, b: Vec3, lift: number, material: numb
 }
 
 /**
+ * A soft cable through control points `ctrl` (x, y, z triples): a uniform Catmull-Rom curve, `perSegment`
+ * samples per span, returned as a polyline (x, y, z triples, first and last control points included).
+ * Arithmetic only (deterministic); the renderer draws the same polyline.
+ */
+export function wirePath(ctrl: readonly number[], perSegment: number): number[] {
+  const n = ctrl.length / 3;
+  const out: number[] = [ctrl[0], ctrl[1], ctrl[2]];
+  for (let s = 0; s < n - 1; s++) {
+    const i0 = Math.max(0, s - 1) * 3;
+    const i1 = s * 3;
+    const i2 = (s + 1) * 3;
+    const i3 = Math.min(n - 1, s + 2) * 3;
+    for (let k = 1; k <= perSegment; k++) {
+      const t = k / perSegment;
+      const t2 = t * t;
+      const t3 = t2 * t;
+      for (let c = 0; c < 3; c++) {
+        const p0 = ctrl[i0 + c];
+        const p1 = ctrl[i1 + c];
+        const p2 = ctrl[i2 + c];
+        const p3 = ctrl[i3 + c];
+        out.push(0.5 * (2 * p1 + (p2 - p0) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2 + (3 * p1 - p0 - 3 * p2 + p3) * t3));
+      }
+    }
+  }
+  return out;
+}
+
+/** Solid cable along a polyline (x, y, z triples): capsules of `radius` between its points. */
+export function wire(t: Terrain, points: readonly number[], radius: number, material: number): void {
+  for (let i = 3; i + 2 < points.length; i += 3) {
+    add(t, capsule(points[i - 3], points[i - 2], points[i - 1], points[i], points[i + 1], points[i + 2], radius), material);
+  }
+}
+
+/**
  * A flat ribbon cable from `a` to `b` (same arc as `cable`), running along z, `halfWidth` wide in x and
  * `halfThick` thick: boxes along the arc, each turned about x to follow the slope.
  */

@@ -4,28 +4,22 @@ import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeom
 import { arcPoint, type Vec3 } from '../../terrain/generators/parts';
 import type { Feature, SceneLayout } from '../../terrain/generators/types';
 import { Glow, hueColor } from './glow';
-import type { SolidField } from './lightOverlays';
+import type { Craters } from './craters';
 
-/** Pieces each tube is split into: a blown-away stretch hides only its own piece. */
+/** Pieces each tube is built from (shorter geometry, finer frustum culling). */
 const TUBE_PIECES = 10;
 /** Radians per second of the light stripe on the fan blades. */
 const FAN_SPIN = 2.4;
 
-interface Piece {
-  object: THREE.Object3D;
-  /** Points inside the terrain part under the piece (x, y, z triples). */
-  probes: number[];
-}
-
 /**
  * Smooth stand-ins for the hero parts (render-only): the cooler tubes, the fan rotors and the pump cap.
  * At one sample per unit these parts come out of the mesher lumpy; the stand-ins sit a little outside
- * the terrain surface and hide it. The terrain stays the real, destructible part: each piece checks the
- * terrain under it every few frames and hides when that is gone, so craters still show.
+ * the terrain surface and hide it. The terrain stays the real, destructible part: every stand-in material
+ * is cut by the craters (`Craters`), so an explosion opens the same round hole in it as in the terrain.
  * The rotors carry the turning light stripe that suggests the spin (the blades never move).
  */
 export class HeroOverlays {
-  private readonly pieces: Piece[] = [];
+  private readonly pieces: THREE.Object3D[] = [];
   private readonly rubber = new THREE.MeshStandardNodeMaterial({ color: 0x0c0c0e, roughness: 0.62, metalness: 0 });
   private readonly grommetRubber = new THREE.MeshStandardNodeMaterial({ color: 0x08080a, roughness: 0.85, metalness: 0 });
   private readonly screwHead = new THREE.MeshStandardNodeMaterial({ color: 0xb4b9c0, roughness: 0.32, metalness: 1 });
@@ -51,11 +45,13 @@ export class HeroOverlays {
   private readonly copper = new THREE.MeshStandardNodeMaterial({ color: 0xc47a3e, roughness: 0.34, metalness: 1 });
   private readonly ramBody = new THREE.MeshStandardNodeMaterial({ color: 0x24262c, roughness: 0.4, metalness: 0.6 });
   private readonly group = new THREE.Group();
-  private field: SolidField | null = null;
-  private frame = 0;
   private readonly spin = uniform(0);
 
-  constructor(scene: THREE.Scene, glow: Glow) {
+  constructor(
+    scene: THREE.Scene,
+    glow: Glow,
+    private readonly craters: Craters,
+  ) {
     const m = new THREE.MeshStandardNodeMaterial({ roughness: 0.5, metalness: 0.1 });
     m.colorNode = color(0x5c626e);
     // a narrow bright arc that turns around the rotor's local z axis, brighter towards the tips
@@ -68,14 +64,14 @@ export class HeroOverlays {
     cr.colorNode = color(0x050505);
     cr.emissiveNode = hueColor(glow.hue).mul(float(1.4));
     this.capRing = cr;
+    for (const mat of [this.rubber, this.grommetRubber, this.screwHead, this.rotor, this.capRing, this.cap, this.sleeve, this.capTop, this.capScore, this.hole, this.fitting, this.gold, this.connector, this.fluff, this.copper, this.ramBody]) craters.cut(mat);
     scene.add(this.group);
   }
 
-  setLayout(layout: SceneLayout, field: SolidField | null): void {
-    this.field = field;
+  setLayout(layout: SceneLayout): void {
     for (const p of this.pieces) {
-      this.group.remove(p.object);
-      p.object.traverse((o) => {
+      this.group.remove(p);
+      p.traverse((o) => {
         if (o instanceof THREE.Mesh && o.geometry !== this.beadGeometry && o.geometry !== this.tuftGeometry) o.geometry.dispose();
       });
     }
@@ -114,15 +110,14 @@ export class HeroOverlays {
       const mesh = new THREE.Mesh(new THREE.TubeGeometry(curve, 10, radius + 0.3, 20, false), this.sleeveFor(f.color));
       mesh.castShadow = true;
       mesh.receiveShadow = true;
-      const mid = points[Math.round((k + 0.5) * per)];
-      this.push(mesh, [mid.x, mid.y, mid.z]);
+      this.push(mesh);
     }
     if (f.color !== 0xffffff) return; // a cable: no fitting
     // a barbed fitting where the tube meets the radiator tank
     const fit = new THREE.Mesh(new THREE.CylinderGeometry(radius + 0.7, radius + 1.1, 2.6, 28), this.fitting);
     fit.position.set(bx, by + 0.9, bz);
     fit.castShadow = true;
-    this.push(fit, [bx, by - 1, bz]);
+    this.push(fit);
   }
 
   private addRotor(f: Feature): void {
@@ -145,7 +140,7 @@ export class HeroOverlays {
     if (f.axis === 0) g.rotation.y = Math.PI / 2;
     else if (f.axis === 1) g.rotation.x = Math.PI / 2;
     g.traverse((o) => (o.castShadow = true));
-    this.push(g, [f.x, f.y, f.z]);
+    this.push(g);
   }
 
   private addCap(f: Feature): void {
@@ -159,7 +154,7 @@ export class HeroOverlays {
     ring.position.set(f.x, f.y + 1.42, f.z);
     const g = new THREE.Group();
     g.add(mesh, ring);
-    this.push(g, [f.x, f.y, f.z]);
+    this.push(g);
   }
 
   private readonly sleeves = new Map<number, THREE.MeshStandardNodeMaterial>();
@@ -167,7 +162,7 @@ export class HeroOverlays {
     if (c === 0xffffff) return this.rubber;
     let m = this.sleeves.get(c);
     if (!m) {
-      m = new THREE.MeshStandardNodeMaterial({ color: c, roughness: 0.82, metalness: 0 }); // matte: no thin crawling highlight
+      m = this.craters.cut(new THREE.MeshStandardNodeMaterial({ color: c, roughness: 0.82, metalness: 0 })); // matte: no thin crawling highlight
       this.sleeves.set(c, m);
     }
     return m;
@@ -181,7 +176,7 @@ export class HeroOverlays {
     const key = `${f.color}|${f.metal ?? 0}|${f.rough ?? 0.5}|${f.glow ?? 0}`;
     let m = this.partMaterials.get(key);
     if (!m) {
-      m = new THREE.MeshStandardNodeMaterial({ color: f.color, metalness: f.metal ?? 0, roughness: f.rough ?? 0.5 });
+      m = this.craters.cut(new THREE.MeshStandardNodeMaterial({ color: f.color, metalness: f.metal ?? 0, roughness: f.rough ?? 0.5 }));
       if (f.glow) m.emissive = new THREE.Color(f.color).multiplyScalar(f.glow);
       this.partMaterials.set(key, m);
     }
@@ -203,34 +198,19 @@ export class HeroOverlays {
     mesh.position.set((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2);
     mesh.castShadow = true;
     mesh.receiveShadow = true;
-    this.push(mesh, f.probe ?? [(x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2]);
+    this.push(mesh);
   }
 
-  /**
-   * A thin cable with no terrain under it (SATA, antenna leads): it rises off the first point, sags a
-   * little on the way and comes level into the second. Hides with the terrain under its first end.
-   */
+  /** A soft cable along the generator's polyline (`path` = [radius, x, y, z, ...]). */
   private addWire(f: Feature): void {
-    const [ax, ay, az, bx, by, bz, sag, radius] = f.path;
-    const via = f.path.slice(8);
-    const top = Math.max(ay, by);
-    const dx = bx - ax;
-    const dz = bz - az;
-    // come in level into the socket, along `axis` from its `facing` side
-    const inX = f.axis === 0 ? f.facing * 3 : 0;
-    const inZ = f.axis === 2 ? f.facing * 3 : 0;
-    const pts = [new THREE.Vector3(ax, ay, az), new THREE.Vector3(ax, ay + 2.2, az)];
-    if (via.length >= 3) {
-      for (let i = 0; i + 2 < via.length; i += 3) pts.push(new THREE.Vector3(via[i], via[i + 1], via[i + 2]));
-    } else {
-      pts.push(new THREE.Vector3(ax + dx * 0.3, top + 3 - sag * 0.4, az + dz * 0.28), new THREE.Vector3(ax + dx * 0.62, top + 2 - sag, az + dz * 0.66));
-    }
-    pts.push(new THREE.Vector3(bx + inX, by + 0.6, bz + inZ), new THREE.Vector3(bx, by, bz));
-    const curve = new THREE.CatmullRomCurve3(pts, false, 'centripetal');
-    const mesh = new THREE.Mesh(new THREE.TubeGeometry(curve, 48, radius, 10, false), this.sleeveFor(f.color));
+    const radius = f.path[0];
+    const pts: THREE.Vector3[] = [];
+    for (let i = 1; i + 2 < f.path.length; i += 3) pts.push(new THREE.Vector3(f.path[i], f.path[i + 1], f.path[i + 2]));
+    const curve = new THREE.CatmullRomCurve3(pts);
+    const mesh = new THREE.Mesh(new THREE.TubeGeometry(curve, pts.length * 2, radius, 12, false), this.sleeveFor(f.color));
     mesh.castShadow = true;
     mesh.receiveShadow = true;
-    this.push(mesh, [ax, ay - 1, az]);
+    this.push(mesh);
   }
 
   /** A board mounting hole: a flat copper ring and a domed screw head with a cross recess. */
@@ -260,7 +240,7 @@ export class HeroOverlays {
       o.castShadow = true;
       o.receiveShadow = true;
     });
-    this.push(g, [f.x, f.y - 0.5, f.z]);
+    this.push(g);
   }
 
   /** A copper trace, cut into short pieces (each hides on its own when blown away). */
@@ -291,7 +271,7 @@ export class HeroOverlays {
     m.position.set((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2);
     m.castShadow = true;
     m.receiveShadow = true;
-    this.push(m, [(x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2]);
+    this.push(m);
   }
 
   /** A dust bunny: a few soft, flattened tufts with a velvet sheen at their rims (reads as fluff). */
@@ -316,7 +296,7 @@ export class HeroOverlays {
       t.position.set(f.x + dx * f.radius, f.y + dy * f.radius, f.z + dz * f.radius);
       g.add(t);
     }
-    this.push(g, [f.x, f.y - 0.6, f.z]);
+    this.push(g);
   }
 
   /** A clean connector block with a darker plug face. */
@@ -325,7 +305,7 @@ export class HeroOverlays {
     const m = new THREE.Mesh(new RoundedBoxGeometry(x1 - x0 + 0.4, y1 - y0 + 0.2, z1 - z0 + 0.4, 3, 0.5), this.connector);
     m.position.set((x0 + x1) / 2, (y0 + y1) / 2 + 0.1, (z0 + z1) / 2);
     m.castShadow = true;
-    this.push(m, [(x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2]);
+    this.push(m);
   }
 
   /** A smooth domed solder bead. */
@@ -334,7 +314,7 @@ export class HeroOverlays {
     bead.scale.set(f.radius + 0.3, 1.9, f.radius + 0.3);
     bead.position.set(f.x, f.y, f.z);
     bead.castShadow = true;
-    this.push(bead, [f.x, f.y + 0.6, f.z]);
+    this.push(bead);
   }
 
   /** A rubber grommet: a thin flat flange flush on the panel over the hole's edge, a lip down into it, a dark opening. */
@@ -359,7 +339,7 @@ export class HeroOverlays {
     hole.position.set(f.x, f.y - 1.6, f.z);
     const g = new THREE.Group();
     g.add(ring, hole);
-    this.push(g, [f.x + r + 1, f.y - 0.6, f.z]);
+    this.push(g);
   }
 
   /** A clean capacitor: sleeve with a rounded shoulder and a scored aluminium top. */
@@ -384,22 +364,15 @@ export class HeroOverlays {
       o.castShadow = true;
       o.receiveShadow = false;
     });
-    this.push(g, [f.x, f.y + h * 0.5, f.z]);
+    this.push(g);
   }
 
-  private push(object: THREE.Object3D, probes: number[]): void {
+  private push(object: THREE.Object3D): void {
     this.group.add(object);
-    this.pieces.push({ object, probes });
+    this.pieces.push(object);
   }
 
   update(seconds: number): void {
     this.spin.value = seconds * FAN_SPIN;
-    const field = this.field;
-    if (!field || this.pieces.length === 0) return;
-    // a few pieces per frame
-    for (let n = 0; n < 4; n++) {
-      const p = this.pieces[this.frame++ % this.pieces.length];
-      p.object.visible = field.sample(p.probes[0], p.probes[1], p.probes[2]) < 0.6;
-    }
   }
 }

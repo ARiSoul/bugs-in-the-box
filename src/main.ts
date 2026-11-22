@@ -99,7 +99,7 @@ let bugViews: { view: BugView; label: UnitLabel; height: number }[] = [];
 function newMatch(s: number): void {
   const t0 = performance.now();
   scenario.generate(terrain, s, layout);
-  stage.setScenario(scenario, layout, terrain);
+  stage.setScenario(scenario, layout);
   chunks.setSharp(scenario.sharpEdges);
   views = viewsFor(scenario.id, terrain, layout);
   state.generateMs = performance.now() - t0;
@@ -141,12 +141,14 @@ function handleEvents(events: readonly MatchEvent[]): void {
     switch (e.type) {
       case 'explosion':
         flashes.spawn(at.set(e.x, e.y, e.z), e.radius);
+        stage.craters?.add(e.x, e.y, e.z, e.radius);
         break;
       case 'arc':
         lines.arc(at.set(e.x1, e.y1, e.z1), at2.set(e.x2, e.y2, e.z2));
         break;
       case 'dig':
         lines.beam(at.set(e.x1, e.y1, e.z1), at2.set(e.x2, e.y2, e.z2));
+        stage.craters?.addTunnel(e.x1, e.y1, e.z1, e.x2, e.y2, e.z2, e.radius);
         break;
       case 'turn':
         chasePending = true;

@@ -17,6 +17,7 @@ export const GOLD = 11;
 export const SILICON = 12; // chip packages
 export const DUST = 13; // fluffy grey dust bunnies
 export const RGB_LIGHT = 14; // diffuser of an RGB light (fan rings, RAM light bars, pump ring): glows
+export const CABLE_BLUE = 15;
 
 /**
  * Glow of each material (`MATERIAL_PBR[id][2]`): what the renderer may light up. Signed so that the
@@ -43,6 +44,7 @@ export const MATERIAL_PBR: readonly (readonly [number, number, number])[] = [
   [0.4, 0, 0], // SILICON
   [1, 0, 0], // DUST
   [0.3, 0, GLOW_RGB], // RGB_LIGHT
+  [0.55, 0, 0], // CABLE_BLUE
 ];
 
 /** Base colour of each material (linear RGB, 0..1), indexed by id. */
@@ -62,4 +64,5 @@ export const MATERIAL_RGB: readonly (readonly [number, number, number])[] = [
   [0.12, 0.12, 0.14], // SILICON
   [0.27, 0.26, 0.24], // DUST
   [0.12, 0.12, 0.13], // RGB_LIGHT (dark diffuser; the colour comes from the glow)
+  [0.05, 0.2, 0.62], // CABLE_BLUE
 ];

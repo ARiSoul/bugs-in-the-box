@@ -33,10 +33,8 @@ export type Box3 = [number, number, number, number, number, number];
  * - `capacitor`: an electrolytic capacitor standing on the board at (x, y, z), `radius`, top at `box[4]`.
  * - `tube`: a thick tube or cable along the arc of `parts.cable`: `path` = [ax, ay, az, bx, by, bz, lift, radius],
  *   `color` its sleeve (0xffffff: plain black rubber).
- * - `wire`: a thin render-only cable (no terrain) from (ax, ay, az) to (bx, by, bz) that rises off the first
- *   point and comes level into the second (along `axis`, from its `facing` side), sagging by `lift`:
- *   `path` = [ax, ay, az, bx, by, bz, lift, radius, ...via], where optional `via` points (x, y, z triples) replace
- *   the sag and steer the run in between.
+ * - `wire`: a soft cable along a polyline: `path` = [radius, x0, y0, z0, x1, y1, z1, ...] (the terrain may hold
+ *   the same cable, thinner, so bugs can walk on it).
  * - `screw`: a board mounting hole at (x, y, z): copper ring of `radius` and a screw head.
  */
 export interface Feature {
@@ -55,8 +53,6 @@ export interface Feature {
   metal?: number;
   rough?: number;
   glow?: number;
-  /** Where the render checks that the terrain under a `part` is still there (default: the box centre). */
-  probe?: [number, number, number];
 }
 
 export interface SceneLayout {
