@@ -28,7 +28,7 @@ const MIN_PHI = 0.12;
 const CLEARANCE = 1.2;
 /** Chase view at the start of a turn: this far behind the bug, this high above it (radians). */
 export const CHASE_DISTANCE = 15;
-const CHASE_ELEVATION = 0.42;
+export const CHASE_ELEVATION = 0.42;
 /** Highest the chase view climbs (radians) to see past terrain behind the bug before it comes closer. */
 const CHASE_MAX_ELEVATION = 1.2;
 const UP = new THREE.Vector3(0, 1, 0);
@@ -59,6 +59,8 @@ export class FollowCamera {
   private readonly fromPos = new THREE.Vector3();
   private readonly fromTarget = new THREE.Vector3();
   private readonly chaseOffset = new THREE.Vector3();
+  /** Lowest angle of the chase view above the bug (radians); a scenario with tall walls sets it higher. */
+  chaseElevation = CHASE_ELEVATION;
 
   constructor(
     private readonly camera: THREE.Camera,
@@ -91,9 +93,9 @@ export class FollowCamera {
   chasePose(obstacles: CameraObstacles, point: THREE.Vector3, fx: number, fz: number, outPos: THREE.Vector3): THREE.Vector3 {
     const l = Math.sqrt(fx * fx + fz * fz) || 1;
     // the lowest clear angle at the full distance; with a wall right behind, the angle that sees farthest
-    let bestElev = CHASE_ELEVATION;
+    let bestElev = this.chaseElevation;
     let bestDist = -1;
-    for (let e = CHASE_ELEVATION; e <= CHASE_MAX_ELEVATION + 1e-6; e += LIFT_STEP) {
+    for (let e = this.chaseElevation; e <= CHASE_MAX_ELEVATION + 1e-6; e += LIFT_STEP) {
       const c = Math.cos(e);
       const d = this.dir.set((-fx / l) * c, Math.sin(e), (-fz / l) * c);
       const hit = obstacles.raycast(point.x + d.x * RAY_START, point.y + d.y * RAY_START, point.z + d.z * RAY_START, d.x, d.y, d.z, CHASE_DISTANCE);

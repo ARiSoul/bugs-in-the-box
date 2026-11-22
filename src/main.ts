@@ -15,7 +15,7 @@ import { AimView } from './render/aim';
 import { BugView } from './render/BugView';
 import { ChunkRenderer } from './render/ChunkRenderer';
 import { ExplosionFlashes, LineFlashes } from './render/effects';
-import { FollowCamera } from './render/followCamera';
+import { CHASE_ELEVATION, FollowCamera } from './render/followCamera';
 import { MeshWorkers, type MeshBatch } from './render/MeshWorkers';
 import { FloatingTexts, UnitLabel } from './render/labels';
 import { ProjectileViews } from './render/projectiles';
@@ -103,6 +103,7 @@ function newMatch(s: number): void {
   scenario.generate(terrain, s, layout);
   stage.setScenario(scenario, layout);
   chunks.setSharp(scenario.sharpEdges);
+  follow.chaseElevation = scenario.chaseElevation ?? CHASE_ELEVATION;
   views = viewsFor(scenario.id, terrain, layout);
   state.generateMs = performance.now() - t0;
   if (workers) {

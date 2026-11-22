@@ -14,7 +14,7 @@ import {
   VINYL,
   WOOD,
 } from '../materials';
-import { add, box, boxMinMax, capsule, cone, cut, cylinder, paint, sphere, torus } from '../sdf';
+import { add, box, boxMinMax, capsule, cone, cut, cylinder, paint, rotatedBox, sphere, torus } from '../sdf';
 import { createPlacement, detail, wire, wirePath } from './parts';
 import { feature, resetLayout, type Feature, type TerrainGenerator } from './types';
 
@@ -28,6 +28,17 @@ const LINING = 3.5;
 const C45 = 0.7071067811865476;
 const C22 = 0.9238795325112867;
 const S22 = 0.3826834323650898;
+/**
+ * The woofer's basket frame (in units of the driver scale `k`, except the thickness): radius at the
+ * ring and at the magnet, and the four windows (sill above the ring, head below the magnet, half width).
+ * The renderer draws the ribs from the same numbers.
+ */
+export const BASKET_LOW = 31.5;
+export const BASKET_HIGH = 22;
+export const BASKET_THICK = 2.6;
+export const WINDOW_SILL = 2;
+export const WINDOW_HEAD = 2.5;
+export const WINDOW_HALF = 14.5;
 
 /**
  * Studio Monitor: an active studio speaker opened up for repair on a desk. The cabinet lies face down
@@ -99,6 +110,9 @@ export const speaker: TerrainGenerator = (terrain, seed, layout) => {
 
   // ---- the desk
   add(terrain, boxMinMax(2.5, 2.5, 2.5, W - 2.5, DESK_TOP, deskZ1, 1), WOOD);
+  // a pale edge band along the desk's sides: where the desk ends (and the drop begins) reads from afar
+  deco(2.35, 2.8, deskZ1 - 0.6, W - 2.35, DESK_TOP - 0.4, deskZ1 + 0.15, 'box', 0xc08a52, 0, 0.45);
+  deco(W - 2.6, 2.8, 2.35, W - 2.35 + 0.2, DESK_TOP - 0.4, deskZ1 + 0.15, 'box', 0xc08a52, 0, 0.45);
 
   // ---- the cabinet: black vinyl outside, raw MDF inside and on the cut edge, a rebate where the back sat
   add(terrain, boxMinMax(cx0, DESK_TOP - 0.5, cz0, cx1, rim, cz1, 2), VINYL);
@@ -144,14 +158,27 @@ export const speaker: TerrainGenerator = (terrain, seed, layout) => {
   paint(terrain, boxMinMax(cx0 + WALL - 0.2, FLOOR + 0.7, cz0 + WALL - 0.2, cx1 - WALL + 0.2, liningTop + 1.5, iz0 + band), FOAM);
   paint(terrain, boxMinMax(cx0 + WALL - 0.2, FLOOR + 0.7, iz1 - band, cx1 - WALL + 0.2, liningTop + 1.5, cz1 - WALL + 0.2), FOAM);
 
-  // ---- the woofer, from behind: basket ring with screw ears, the cone, the spider, the magnet tower
+  // ---- the woofer, from behind: basket ring with screw ears, the basket frame, the cone, the spider,
+  // the magnet tower. (The smooth stand-ins are drawn at these sizes; the terrain under the round parts
+  // is a little smaller, so its steps stay hidden inside them.)
   const coneTop = FLOOR + 12 * k;
-  add(terrain, cylinder(wx, FLOOR + 1.3, wz, R, 1.3, 1, 0.6), BLACK_PLASTIC);
+  const plateY = FLOOR + 20 * k;
+  const ringTop = FLOOR + 2.4;
+  add(terrain, cylinder(wx, FLOOR + 1.2, wz, R - 0.4, 1.2, 1, 0.6), BLACK_PLASTIC);
   for (const [ex, ez] of [[C45, C45], [-C45, C45], [-C45, -C45], [C45, -C45]]) {
     const x = wx + ex * (R - 1);
     const z = wz + ez * (R - 1);
-    add(terrain, box(x, FLOOR + 1.3, z, 3.4 * k + 0.6, 1.3, 3.4 * k + 0.6, 1), BLACK_PLASTIC);
-    deco(x - 1.3, FLOOR + 2.55, z - 1.3, x + 1.3, FLOOR + 3.3, z + 1.3, 'cylY', 0x1d1e21, 0.8, 0.4);
+    add(terrain, box(x, FLOOR + 1.2, z, 3.4 * k + 0.4, 1.2, 3.4 * k + 0.4, 1), BLACK_PLASTIC);
+    deco(x - 1.3, ringTop + 0.3, z - 1.3, x + 1.3, ringTop + 1, z + 1.3, 'cylY', 0x1d1e21, 0.8, 0.4);
+  }
+  // the basket frame: a conical stamped shell from the ring up to the magnet, with four wide windows
+  // (on the diagonals) between four flat ribs (on the axes); the cone shows through the windows
+  add(terrain, cone(wx, ringTop - 0.5, wz, BASKET_LOW * k, plateY, BASKET_HIGH * k), BLACK_PLASTIC);
+  cut(terrain, cone(wx, ringTop, wz, BASKET_LOW * k - BASKET_THICK, plateY + 0.01, BASKET_HIGH * k - BASKET_THICK));
+  for (const [ex, ez] of [[C45, C45], [-C45, C45], [-C45, -C45], [C45, -C45]]) {
+    const y0 = ringTop + WINDOW_SILL;
+    const y1 = plateY - WINDOW_HEAD;
+    cut(terrain, rotatedBox(wx + ex * 27 * k, (y0 + y1) / 2, wz + ez * 27 * k, 9 * k, (y1 - y0) / 2, WINDOW_HALF * k, 1, ex, ez, 2));
   }
   add(terrain, cone(wx, FLOOR, wz, 29 * k, coneTop, 9 * k), CONE);
   cut(terrain, cone(wx, FLOOR - 2.6, wz, 29 * k, coneTop - 2.6, 9 * k));
@@ -160,30 +187,25 @@ export const speaker: TerrainGenerator = (terrain, seed, layout) => {
   const spiderTop = FLOOR + 14 * k;
   add(terrain, cylinder(wx, spiderTop - 1.1, wz, 19 * k, 1.1, 1, 0.8), DAMPER);
   for (const rr of [11, 14.5, 17.5]) add(terrain, torus(wx, spiderTop - 0.3, wz, rr * k, 0.8), DAMPER);
-  const plateY = FLOOR + 20 * k;
-  add(terrain, cylinder(wx, (spiderTop + plateY) / 2, wz, 7 * k, (plateY - spiderTop) / 2 + 0.5, 1, 0.5), BLACK_PLASTIC);
-  add(terrain, cylinder(wx, plateY + 1.25 * k, wz, 22.5 * k, 1.25 * k, 1, 0.6), STEEL);
-  add(terrain, cylinder(wx, plateY + 6.5 * k, wz, 21 * k, 4 * k, 1, 0.8), FERRITE);
+  add(terrain, cylinder(wx, (spiderTop + plateY) / 2, wz, 7 * k - 0.4, (plateY - spiderTop) / 2 + 0.5, 1, 0.5), BLACK_PLASTIC);
+  add(terrain, cylinder(wx, plateY + 1.25 * k, wz, 22.5 * k - 0.6, 1.25 * k, 1, 0.8), STEEL);
+  add(terrain, cylinder(wx, plateY + 6.5 * k, wz, 21 * k - 0.6, 4 * k, 1, 1), FERRITE);
   const magnetTop = plateY + 13 * k;
-  add(terrain, cylinder(wx, magnetTop - 1.25 * k, wz, 19.5 * k, 1.25 * k, 1, 1), STEEL);
-  add(terrain, cylinder(wx, magnetTop + 0.5, wz, 4.5 * k, 0.5, 1, 0.4), STEEL);
-  // four basket arms from the ring up to the bottom plate
-  for (const [ex, ez] of [[1, 0], [0, 1], [-1, 0], [0, -1]]) {
-    add(terrain, capsule(wx + ex * (R - 3 * k), FLOOR + 2.4, wz + ez * (R - 3 * k), wx + ex * 22.5 * k, plateY, wz + ez * 22.5 * k, Math.max(1.4, 1.8 * k)), BLACK_PLASTIC);
-  }
+  add(terrain, cylinder(wx, magnetTop - 1.25 * k, wz, 19.5 * k - 0.6, 1.25 * k, 1, 1.2), STEEL);
+  add(terrain, cylinder(wx, magnetTop + 0.4, wz, 4.5 * k - 0.4, 0.4, 1, 0.4), STEEL);
   put(feature('driver', wx, FLOOR, wz, { radius: R, box: [wx - R, FLOOR, wz - R, wx + R, magnetTop + 1, wz + R], path: [coneTop, spiderTop, plateY, magnetTop] }));
-  // the terminals on the basket ring, and the wires into them
-  const termX = wx + C22 * (R - 4 * k);
-  const termZ = wz - S22 * (R - 4 * k);
+  // the terminals on the basket ring (by the +x rib), and the wires into them
+  const termX = wx + C22 * (R + 0.5);
+  const termZ = wz - S22 * (R + 0.5);
   part(termX - 2.2, FLOOR + 2.4, termZ - 3, termX + 2.2, FLOOR + 5.2, termZ + 3, BLACK_PLASTIC, 'box', 0x141416, 0, 0.6);
   deco(termX - 0.6, FLOOR + 5.2, termZ - 2.4, termX + 0.6, FLOOR + 6.8, termZ - 1, 'box', 0xb8221c, 0.2, 0.5);
   deco(termX - 0.6, FLOOR + 5.2, termZ + 1, termX + 0.6, FLOOR + 6.8, termZ + 2.4, 'box', 0x18181a, 0.2, 0.5);
 
   // ---- the tweeter: face plate, housing and the steel cup of its magnet
   const tk = Math.max(0.45, k);
-  add(terrain, box(wx, FLOOR + 1.1, tz, 12 * tk, 1.1, 12 * tk, 1.5), BLACK_PLASTIC);
-  add(terrain, cylinder(wx, FLOOR + 2.2 + 3.5 * tk, tz, 9.5 * tk, 3.5 * tk, 1, 1), BLACK_PLASTIC);
-  add(terrain, cylinder(wx, FLOOR + 2.2 + 7 * tk + 2 * tk, tz, 7 * tk, 2 * tk, 1, 1.2), STEEL);
+  add(terrain, box(wx, FLOOR + 1.1, tz, 12 * tk - 0.3, 1.1, 12 * tk - 0.3, 1.5), BLACK_PLASTIC);
+  add(terrain, cylinder(wx, FLOOR + 2.2 + 3.5 * tk, tz, 9.5 * tk - 0.5, 3.5 * tk, 1, 1.2), BLACK_PLASTIC);
+  add(terrain, cylinder(wx, FLOOR + 2.2 + 7 * tk + 2 * tk, tz, 7 * tk - 0.5, 2 * tk, 1, 1.4), STEEL);
   put(feature('driver', wx, FLOOR, tz, { radius: 12 * tk, axis: 1, facing: -1, box: [wx - 12 * tk, FLOOR, tz - 12 * tk, wx + 12 * tk, FLOOR + 2.2 + 11 * tk, tz + 12 * tk] }));
   for (const [ex, ez] of [[1, 1], [-1, 1], [-1, -1], [1, -1]]) {
     deco(wx + ex * 9.5 * tk - 0.9, FLOOR + 2.15, tz + ez * 9.5 * tk - 0.9, wx + ex * 9.5 * tk + 0.9, FLOOR + 2.8, tz + ez * 9.5 * tk + 0.9, 'cylY', 0x1d1e21, 0.8, 0.4);
@@ -204,7 +226,7 @@ export const speaker: TerrainGenerator = (terrain, seed, layout) => {
   add(terrain, boxMinMax(wx - pw, FLOOR - 1, pz - 5, wx + pw, FLOOR + portH, pz + 5, 1.2), BLACK_PLASTIC);
   add(terrain, boxMinMax(wx - pw - 1.4, FLOOR + portH - 2.2, pz - 6.4, wx + pw + 1.4, FLOOR + portH, pz + 6.4, 1), BLACK_PLASTIC);
   cut(terrain, boxMinMax(wx - pw + 2.6, 0, pz - 2.5, wx + pw - 2.6, FLOOR + portH + 5, pz + 2.5, 0.8));
-  put(feature('port', wx, FLOOR + portH, pz, { radius: pw, box: [wx - pw - 1.4, FLOOR - 1, pz - 6.4, wx + pw + 1.4, FLOOR + portH, pz + 6.4] }));
+  put(feature('port', wx, FLOOR + portH, pz, { radius: pw, box: [wx - pw - 1.4, FLOOR - 1, pz - 6.4, wx + pw + 1.4, FLOOR + portH, pz + 6.4], path: [wx - pw + 2.6, pz - 2.5, wx + pw - 2.6, pz + 2.5, DESK_TOP - 1] }));
 
   // ---- wadding clumps on the floor, where nothing stands
   const clear = (x: number, z: number, r: number): boolean => {
@@ -225,8 +247,8 @@ export const speaker: TerrainGenerator = (terrain, seed, layout) => {
   for (let n = 0, i = Math.floor(rng() * spots.length); n < spots.length; n++, i = (i + 1) % spots.length) {
     const [x, z] = spots[i];
     if (!clear(x, z, 6)) continue;
-    add(terrain, sphere(x, FLOOR + 1.5, z, rand(4.2, 5.2)), FOAM, 1.5);
-    for (let j = 0; j < 4; j++) add(terrain, sphere(x + rand(-3, 3), FLOOR + rand(1.5, 4), z + rand(-3, 3), rand(2.4, 3.4)), FOAM, 1.5);
+    // a loose, low clump torn off the lining: several soft billows, none round enough to read as a stone
+    for (let j = 0; j < 7; j++) add(terrain, sphere(x + rand(-4.5, 4.5), FLOOR + rand(-0.5, 1.5), z + rand(-4.5, 4.5), rand(2.2, 3.4)), FOAM, 2);
     if (rng() < 0.4) break;
   }
 
@@ -377,18 +399,18 @@ export const speaker: TerrainGenerator = (terrain, seed, layout) => {
   const len = Math.sqrt((p1x - p0x) * (p1x - p0x) + (p1y - p0y) * (p1y - p0y));
   const ux = (p1x - p0x) / len;
   const uy = (p1y - p0y) / len;
-  const seg = (t0: number, t1: number, r: number, material: number, color: number, metal: number, rough: number): void => {
+  const seg = (t0: number, t1: number, r: number, material: number, color: number, metal: number, rough: number, more: Partial<Feature> = {}): void => {
     const x0 = p0x + ux * t0;
     const y0 = p0y + uy * t0;
     const x1 = p0x + ux * t1;
     const y1 = p0y + uy * t1;
     add(terrain, capsule(x0, y0, sz, x1, y1, sz, r - 0.2), material);
-    put(feature('rod', x0, y0, sz, { radius: r, path: [x0, y0, sz, x1, y1, sz], color, metal, rough }));
+    put(feature('rod', x0, y0, sz, { radius: r, path: [x0, y0, sz, x1, y1, sz], color, metal, rough, ...more }));
   };
   const handle = len - Math.min(24, len * 0.34);
-  seg(0, handle - 3, 1.5, STEEL, 0xc4c8ce, 1, 0.25);
+  seg(0, handle - 3, 1.5, STEEL, 0xc4c8ce, 1, 0.25, { facing: -1 }); // (a blade at its start)
   seg(handle - 3, handle, 2.2, STEEL, 0xb4b9c0, 1, 0.3);
-  seg(handle, len, 3.2, CABLE_YELLOW, 0xd99a1e, 0, 0.3);
+  seg(handle, len, 3.2, CABLE_YELLOW, 0xd98e1a, 0, 0.25, { axis: 0 }); // (a fluted grip)
 
   terrain.commitGeneration();
 };

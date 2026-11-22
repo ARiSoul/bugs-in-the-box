@@ -73,8 +73,9 @@ export function createTerrainMaterial(glow: Glow): { material: THREE.MeshStandar
     });
     If(fuzz.greaterThan(0.01), () => {
       const rim = pow(float(1).sub(abs(dot(normalView, positionViewDirection))), 2);
-      const fibre = mx_noise_float(positionWorld.mul(1.7)).mul(0.5).add(mx_noise_float(positionWorld.mul(5.3)).mul(0.25));
-      base.assign(mix(base, base.mul(float(0.92).add(fibre.mul(0.3))).add(rim.mul(0.22)), fuzz));
+      // (fine fibres only: no broad blotches)
+      const fibre = mx_noise_float(positionWorld.mul(4.1)).mul(0.6).add(mx_noise_float(positionWorld.mul(9.7)).mul(0.4));
+      base.assign(mix(base, base.mul(float(0.97).add(fibre.mul(0.07))).add(rim.mul(0.28)), fuzz));
     });
     return base;
   })();

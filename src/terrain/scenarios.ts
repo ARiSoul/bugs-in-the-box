@@ -25,6 +25,10 @@ export interface Scenario {
   strictBounds: boolean;
   /** WebGPU path: where the key light stands, from the map centre (default: high on the low-x side). */
   sun?: [number, number, number];
+  /** WebGPU path: colour of the key light (default 0xffb878, late sun). */
+  sunColor?: number;
+  /** Lowest angle of the chase view above the active bug (radians; default 0.42): higher over tall walls. */
+  chaseElevation?: number;
 }
 
 export const SCENARIOS: readonly Scenario[] = [
@@ -57,6 +61,10 @@ export const SCENARIOS: readonly Scenario[] = [
     strictBounds: true,
     // from the amp side and high: into the open cabinet, over its far wall
     sun: [40, 170, 30],
+    // a whiter, morning light: black parts must stay black (a deep orange turns them brown)
+    sunColor: 0xffe0c0,
+    // the cabinet walls stand tall around the play: the chase view looks down over them
+    chaseElevation: 0.66,
   },
   {
     id: 'islands',

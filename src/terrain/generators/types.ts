@@ -39,8 +39,10 @@ export type Box3 = [number, number, number, number, number, number];
  * - `driver`: a loudspeaker seen from behind, standing on the floor at (x, y, z) with its basket `radius`
  *   (`box`: its bounds). A woofer has `path` = [cone top, spider top, magnet bottom, magnet top] (heights);
  *   a tweeter has none.
- * - `port`: a bass port duct (`box`) with its slot `radius` half wide; the top of the duct at y.
- * - `rod`: a straight round rod from `path` [x0, y0, z0] to [x1, y1, z1], `radius`, `color`, `metal`, `rough`.
+ * - `port`: a bass port duct (`box`), the top of the duct at y; `path` = [slot x0, z0, x1, z1, bottom y]
+ *   (the slot is open from the top of the duct down to `bottom y` and beyond).
+ * - `rod`: a straight round rod from `path` [x0, y0, z0] to [x1, y1, z1], `radius`, `color`, `metal`, `rough`;
+ *   `facing` -1: a flat blade at its start (a screwdriver tip); `axis` 0: a fluted grip.
  */
 export interface Feature {
   kind:

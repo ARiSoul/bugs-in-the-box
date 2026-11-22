@@ -211,6 +211,7 @@ export async function createGpuStage(canvas: HTMLCanvasElement, terrain: Terrain
       document.body.style.background = sc.sky.css;
       sunOffset.copy(SUN_OFFSET);
       if (sc.sun) sunOffset.set(...sc.sun);
+      sun.color.setHex(sc.sunColor ?? 0xffb878);
       sun.position.copy(sun.target.position).add(sunOffset);
       sunDir.copy(sunOffset).normalize();
       atmosphere.clear.value = sc.sky.fogClear ?? 40;

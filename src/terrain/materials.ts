@@ -57,7 +57,7 @@ export const MATERIAL_PBR: readonly (readonly [number, number, number])[] = [
   [0.55, 0, 0], // CABLE_BLUE
   [0.92, 0, 0], // MDF
   [1, 0, GLOW_FUZZ], // FOAM
-  [0.78, 0, 0], // VINYL
+  [0.88, 0, 0], // VINYL: matte
   [0.85, 0, 0], // CONE
   [0.7, 0, 0], // DAMPER
   [0.8, 0.1, 0], // FERRITE
@@ -83,12 +83,12 @@ export const MATERIAL_RGB: readonly (readonly [number, number, number])[] = [
   [0.27, 0.26, 0.24], // DUST
   [0.12, 0.12, 0.13], // RGB_LIGHT (dark diffuser; the colour comes from the glow)
   [0.05, 0.2, 0.62], // CABLE_BLUE
-  [0.42, 0.27, 0.15], // MDF
-  [0.78, 0.77, 0.74], // FOAM
-  [0.035, 0.035, 0.04], // VINYL
+  [0.36, 0.29, 0.2], // MDF: pale tan fibreboard
+  [0.86, 0.85, 0.82], // FOAM
+  [0.02, 0.021, 0.024], // VINYL: neutral black (warm light must not turn it brown)
   [0.07, 0.065, 0.06], // CONE
   [0.72, 0.5, 0.12], // DAMPER
   [0.13, 0.13, 0.14], // FERRITE
-  [0.32, 0.17, 0.08], // WOOD
+  [0.42, 0.25, 0.12], // WOOD
   [0.11, 0.11, 0.12], // SLEEVE
 ];
