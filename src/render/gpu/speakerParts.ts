@@ -134,6 +134,7 @@ export class SpeakerParts {
       } else if (f.kind === 'rod') this.addRod(f);
       else if (f.kind === 'port') this.addPort(f);
       else if (f.kind === 'room') this.addRoom(f);
+      else if (f.kind === 'lamp') this.addLamp(f);
     }
   }
 
@@ -267,6 +268,13 @@ export class SpeakerParts {
   }
 
   /** The room's floor far below: a wide plane of dark floorboards, lit only by the key light. */
+  /** A small light (a fridge's bulb): no shadows, it only lights what is around it. */
+  private addLamp(f: Feature): void {
+    const light = new THREE.PointLight(f.color, f.glow ?? 1, f.radius, 1.2);
+    light.position.set(f.x, f.y, f.z);
+    this.push(light);
+  }
+
   private addRoom(f: Feature): void {
     const m = this.craters.cut(new THREE.MeshStandardNodeMaterial({ color: f.color, roughness: 0.8, metalness: 0 }));
     const plane = new THREE.Mesh(new THREE.PlaneGeometry(900, 900), m);

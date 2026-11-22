@@ -100,13 +100,18 @@ export class Bug {
   constructor(readonly species: BugSpecies) {}
 
   /**
-   * Drop the bug from the top of the world onto the first surface below (x, z), facing the map centre.
-   * Returns false if there is no ground under that column.
+   * Drop the bug from the top of the world (or from `fromY`) onto the first surface below (x, z), facing
+   * the map centre. Returns false if there is no ground under that column, if `fromY` is not in open air
+   * (room for the bug), or if, dropped from `fromY`, it would land right under the top of the world.
    */
-  drop(field: TerrainField, x: number, z: number): boolean {
-    const top = field.H - 1;
+  drop(field: TerrainField, x: number, z: number, fromY = field.H - 1): boolean {
+    const top = fromY;
+    const r = this.species.radius;
+    if (top < field.H - 1 && field.sample(x, top, z) <= r * 1.5) return false;
     const t = field.raycast(x, top, z, 0, -1, 0);
     if (t < 0) return false;
+    // (the bug lands below its starting point, and not on a ledge right under the top of the world)
+    if (top < field.H - 1 && (t < r * 1.5 || top - t > field.H - 5)) return false;
     this.x = this.px = x;
     this.y = this.py = top - t + this.species.radius * 1.5;
     this.z = this.pz = z;

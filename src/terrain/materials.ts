@@ -35,6 +35,11 @@ export const SLEEVE = 23; // the grey foam sleeve around a speaker cable bundle
 export const COLLIDER = 24;
 /** Roughness that marks a hidden surface (real materials stay within 0..1). */
 export const HIDDEN_ROUGHNESS = 3;
+export const ENAMEL = 25; // a fridge's white painted steel body and door
+export const LINER = 26; // a fridge's white moulded plastic inside
+export const TILE = 27; // glazed floor tiles (the grout lines are drawn on top)
+export const FROST = 28; // frost on a freezer's walls
+export const PAINT = 29; // a painted kitchen wall
 
 /**
  * Glow of each material (`MATERIAL_PBR[id][2]`): what the renderer may light up. Signed so that the
@@ -74,7 +79,26 @@ export const MATERIAL_PBR: readonly (readonly [number, number, number])[] = [
   [0.55, 0, GLOW_GRAIN], // WOOD: lacquered
   [0.95, 0, 0], // SLEEVE
   [HIDDEN_ROUGHNESS, 0, 0], // COLLIDER: never drawn
+  [0.3, 0, 0], // ENAMEL: glossy paint
+  [0.4, 0, 0], // LINER: smooth plastic
+  [0.28, 0, 0], // TILE: glazed
+  [0.9, 0, GLOW_FUZZ], // FROST: soft, lets light in like the wadding
+  [0.85, 0, 0], // PAINT: matte
 ];
+
+/**
+ * How much the base colour varies over a surface (a slow value noise, the full swing), indexed by id.
+ * Clean painted and moulded surfaces barely vary; a white one shows any variation as dirt.
+ */
+export const MATERIAL_NOISE: readonly number[] = (() => {
+  const n = new Array<number>(PAINT + 1).fill(0.24);
+  n[ENAMEL] = 0.025;
+  n[LINER] = 0.025;
+  n[TILE] = 0.1;
+  n[FROST] = 0.12;
+  n[PAINT] = 0.05;
+  return n;
+})();
 
 /** Base colour of each material (linear RGB, 0..1), indexed by id. */
 export const MATERIAL_RGB: readonly (readonly [number, number, number])[] = [
@@ -103,4 +127,9 @@ export const MATERIAL_RGB: readonly (readonly [number, number, number])[] = [
   [0.5, 0.31, 0.16], // WOOD
   [0.11, 0.11, 0.12], // SLEEVE
   [0.02, 0.02, 0.02], // COLLIDER (never drawn; dark where a border blends into it)
+  [0.8, 0.8, 0.78], // ENAMEL
+  [0.76, 0.78, 0.78], // LINER: a cool white
+  [0.5, 0.47, 0.43], // TILE: warm grey stone
+  [0.82, 0.88, 0.94], // FROST: blue-white
+  [0.36, 0.4, 0.37], // PAINT: pale sage
 ];

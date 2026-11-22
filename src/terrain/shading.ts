@@ -1,9 +1,9 @@
-import { GROUND, MATERIAL_RGB } from './materials';
+import { GROUND, MATERIAL_NOISE, MATERIAL_RGB } from './materials';
 import { vnoise3 } from './noise';
 
 /**
  * Per-vertex colour from the material of the nearest sample: GROUND is grass on up-facing surfaces and
- * rock elsewhere; every other material is its base colour with a little noise. Explosion scorch darkens
+ * rock elsewhere; every other material is its base colour with a little noise (`MATERIAL_NOISE`). Explosion scorch darkens
  * everything. Writes r,g,b into `out[o..o+2]`.
  */
 export function shadeVertex(
@@ -36,7 +36,8 @@ export function shadeWithNoise(out: Float32Array, o: number, n: number, ny: numb
     return;
   }
   const c = MATERIAL_RGB[material];
-  const v = (0.88 + 0.24 * n) * keep;
+  const amp = MATERIAL_NOISE[material] ?? 0.24;
+  const v = (1 - amp / 2 + amp * n) * keep;
   out[o] = c[0] * v;
   out[o + 1] = c[1] * v;
   out[o + 2] = c[2] * v;

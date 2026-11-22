@@ -44,14 +44,18 @@ export type Box3 = [number, number, number, number, number, number];
  * - `rod`: a straight round rod from `path` [x0, y0, z0] to [x1, y1, z1], `radius`, `color`, `metal`, `rough`;
  *   `facing` -1: a flat blade at its start (a screwdriver tip); `axis` 0: a fluted grip.
  * - `room`: the floor of the room far below the map, at height y, `color` (a drop off the map reads as one).
+ * - `lamp`: a small light at (x, y, z) (a fridge's bulb): `color`, `glow` its intensity, `radius` its reach.
+ *
+ * A `part` with `opacity` below 1 is see-through (glass shelves, clear plastic drawers and bins). A `part`
+ * with `path` = [cos, sin] is turned about x by that angle round its box's centre (a board leaning on a shelf).
  */
-/** Render shape of a `part`: a rounded box, a sharp-edged box ('plate'), a dome on its base, or a cylinder along an axis. */
-export type PartShape = 'box' | 'plate' | 'dome' | 'cylX' | 'cylY' | 'cylZ';
+/** Render shape of a `part`: a rounded box, a sharp-edged box ('plate'), a box with very round edges ('soft', a melting ice cube), a dome on its base, a ball filling the box, or a cylinder along an axis. */
+export type PartShape = 'box' | 'plate' | 'soft' | 'dome' | 'ball' | 'cylX' | 'cylY' | 'cylZ';
 
 export interface Feature {
   kind:
     | 'fan' | 'pump' | 'lightBar' | 'led' | 'heat' | 'tube' | 'capacitor' | 'grommet' | 'pad' | 'connector'
-    | 'dust' | 'trace' | 'ramBody' | 'part' | 'screw' | 'wire' | 'driver' | 'port' | 'rod' | 'room';
+    | 'dust' | 'trace' | 'ramBody' | 'part' | 'screw' | 'wire' | 'driver' | 'port' | 'rod' | 'room' | 'lamp';
   x: number;
   y: number;
   z: number;
@@ -66,6 +70,8 @@ export interface Feature {
   metal?: number;
   rough?: number;
   glow?: number;
+  /** See-through parts: 0..1 (default 1, opaque). */
+  opacity?: number;
 }
 
 export interface SceneLayout {

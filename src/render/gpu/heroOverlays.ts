@@ -189,10 +189,17 @@ export class HeroOverlays {
   /** A small detail (ports, slots, shields, drives...): a clean box or cylinder over its terrain block. */
   private addPart(f: Feature): void {
     const [x0, y0, z0, x1, y1, z1] = f.box;
-    const key = `${f.color}|${f.metal ?? 0}|${f.rough ?? 0.5}|${f.glow ?? 0}`;
+    const opacity = f.opacity ?? 1;
+    const key = `${f.color}|${f.metal ?? 0}|${f.rough ?? 0.5}|${f.glow ?? 0}|${opacity}`;
     let m = this.partMaterials.get(key);
     if (!m) {
       m = this.craters.cut(new THREE.MeshStandardNodeMaterial({ color: f.color, metalness: f.metal ?? 0, roughness: f.rough ?? 0.5 }));
+      if (opacity < 1) {
+        // glass and clear plastic: see-through, no depth write (what is behind still shows)
+        m.transparent = true;
+        m.opacity = opacity;
+        m.depthWrite = false;
+      }
       if (f.glow) m.emissive = new THREE.Color(f.color).multiplyScalar(f.glow);
       this.partMaterials.set(key, m);
     }
@@ -205,19 +212,26 @@ export class HeroOverlays {
       g = new RoundedBoxGeometry(w, h, d, 2, Math.min(0.35, Math.min(w, h, d) * 0.3));
     } else if (shape === 'plate') {
       g = new THREE.BoxGeometry(w, h, d);
+    } else if (shape === 'soft') {
+      g = new RoundedBoxGeometry(w, h, d, 4, Math.min(w, h, d) * 0.3);
+    } else if (shape === 'ball') {
+      g = new THREE.SphereGeometry(0.5, 48, 24).scale(w, h, d);
     } else if (shape === 'dome') {
       // a half sphere on its base, filling the box (a solder joint)
       g = new THREE.SphereGeometry(0.5, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2).scale(w, h * 2, d).translate(0, -h / 2, 0);
     } else {
       const along = shape === 'cylX' ? w : shape === 'cylY' ? h : d;
       const r = (shape === 'cylX' ? Math.min(h, d) : shape === 'cylY' ? Math.min(w, d) : Math.min(w, h)) / 2;
-      g = new THREE.CylinderGeometry(r, r, along, 24);
+      g = new THREE.CylinderGeometry(r, r, along, 40);
       if (shape === 'cylX') g.rotateZ(Math.PI / 2);
       else if (shape === 'cylZ') g.rotateX(Math.PI / 2);
     }
     const mesh = new THREE.Mesh(g, m);
     mesh.position.set((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2);
-    mesh.castShadow = true;
+    // a tilted part: `path` = [cos, sin] of its turn about x (its length along z tips down towards +z)
+    if (f.path.length === 2) mesh.rotation.x = Math.atan2(f.path[1], f.path[0]);
+    // (see-through parts let the light through)
+    mesh.castShadow = opacity >= 1;
     mesh.receiveShadow = true;
     this.push(mesh);
   }

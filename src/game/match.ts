@@ -122,6 +122,11 @@ export interface MatchOptions {
   placeBugs?: boolean;
   /** Discard projectiles as soon as they leave the map box (sides and top). Default: a 20-unit margin, no top. */
   strictBounds?: boolean;
+  /**
+   * Spawn on any level, not only on the topmost surface: each try drops from a random height (a map with
+   * floors under floors, such as shelves). Default false.
+   */
+  spawnLevels?: boolean;
 }
 
 export class Match {
@@ -514,14 +519,15 @@ export class Match {
 
   /** Spread the bugs over the map (deterministic from the match seed) and let them land. */
   private placeBugs(): void {
-    const { W, D } = this.field;
+    const { W, H, D } = this.field;
     const margin = 8;
     const placed: Bug[] = [];
     for (const u of this.units) {
       for (let attempt = 0; attempt < 40; attempt++) {
         const x = margin + this.rng() * (W - 2 * margin);
         const z = margin + this.rng() * (D - 2 * margin);
-        if (!dropNear(u.bug, this.field, x, z)) continue;
+        const fromY = this.options.spawnLevels ? 4 + this.rng() * (H - 5) : H - 1;
+        if (!dropNear(u.bug, this.field, x, z, fromY)) continue;
         let ok = true;
         for (const o of placed) {
           const dx = o.x - u.bug.x;

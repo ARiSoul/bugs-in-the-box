@@ -231,6 +231,8 @@ function shapeBounds(s: Shape): void {
 
 /** A surface sample takes the material of the shape that owns the surface within this distance. */
 const MATERIAL_BAND = 1.5;
+/** A hidden solid only marks samples at least this far from any surface (see `addHidden`). */
+const HIDDEN_CLEAR = 1.2;
 /** Smallest |density| a stamp writes (see `stamp`). */
 const ZERO_GAP = 0.01;
 
@@ -243,9 +245,11 @@ export function add(t: Terrain, s: Shape, material: number, smooth = 0): void {
 }
 
 /**
- * Add a hidden solid (a COLLIDER): a union like `add`, but it only takes over samples that were air, so
- * the surfaces already there keep their material where it touches them (no hidden patch in a floor
- * under a wire lying on it).
+ * Add a hidden solid (a COLLIDER): a union like `add`, but it only takes over samples that were clear
+ * air (more than `HIDDEN_CLEAR` from any surface), so the surfaces already there keep their material
+ * where it touches them. (A sample next to a floor is part of the floor's surface: marked hidden, it
+ * would cut a hole round the foot of everything standing there. Near the contact the collider keeps
+ * the floor's material instead, inside the part drawn over it.)
  */
 export function addHidden(t: Terrain, s: Shape, material: number): void {
   stamp(t, s, material, 0, false, true);
@@ -305,7 +309,7 @@ function stamp(t: Terrain, s: Shape, material: number, smooth: number, subtract:
           } else {
             nd = d < old ? d : old;
           }
-          if (d < old && d < MATERIAL_BAND && (!airOnly || old > 0)) mat[id] = material;
+          if (d < old && d < MATERIAL_BAND && (!airOnly || old > HIDDEN_CLEAR)) mat[id] = material;
         }
         // A surface exactly on a sample (a box face at a whole coordinate) would put several mesh
         // vertices on the same point and make degenerate triangles: keep samples off zero.
