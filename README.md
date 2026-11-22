@@ -16,8 +16,9 @@ npm run dev
 Open the address that Vite prints.
 
 - **W / S**: walk (hold **shift** to run) · **A / D** or **← / →**: turn · **↑ / ↓**: aim higher / lower
-- **Space**: jump · **hold F** to charge, release to fire · **1–4**: weapon · **N**: new match
-- **Right drag** to turn the view (the active bug turns with it, for fine aiming) · **scroll** to zoom
+- **Space**: jump · **hold Q** to charge, release to fire · **1–4**: weapon · **N**: new match
+- **Right drag** to turn the view (the active bug turns with it, for fine aiming); **A / D** keep turning it while the button is held · **scroll** to zoom
+- The **keys** section of the menu changes the keys (saved in the browser); **default keys** brings them back.
 - On a touch screen (or with the mouse), use the pad in the bottom-right corner and tap a weapon.
 - The menu lets you pick the scenario (Inside a PC, Tower Case, Studio Monitor, Floating islands) and the seed (the same seed gives the same map and match) and run a benchmark. It also shows the meshing cost; the frame time is at the top. Add `?mesh=main` to the URL to mesh on the main thread instead of the workers, to compare, and `?map=3x2x3` for the small map (size in chunks of 32; the default is 5x3x5).
 
