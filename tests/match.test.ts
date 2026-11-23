@@ -46,6 +46,139 @@ const press = (m: Match, input: Partial<MatchInput>, ticks = 1): MatchEvent[] =>
   return events;
 };
 
+describe('bugs against each other', () => {
+  const apart = (m: Match, i: number, j: number): number => {
+    const a = m.units[i].bug;
+    const b = m.units[j].bug;
+    return Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
+  };
+
+  it('a bug does not walk through another: it stops against it, and the other stays where it is', () => {
+    const m = setup(flat(10), [
+      [20, 32],
+      [28, 32],
+    ]);
+    m.units[0].bug.fx = 1;
+    m.units[0].bug.fz = 0;
+    const [x, z] = [m.units[1].bug.x, m.units[1].bug.z];
+    for (let n = 0; n < TICK_RATE * 4; n++) {
+      m.step({ ...NO_INPUT, move: 1 });
+      expect(apart(m, 0, 1)).toBeGreaterThan((ANT.radius + SPIDER.radius) * 0.85);
+    }
+    expect(m.units[0].bug.x).toBeLessThan(x);
+    expect(m.units[1].bug.x).toBeCloseTo(x, 6);
+    expect(m.units[1].bug.z).toBeCloseTo(z, 6);
+    expect(m.units[0].bug.grounded).toBe(true);
+  });
+
+  it('it can slide past one it does not meet head-on, and neither crawls through one on a wall', () => {
+    const t = world(2, 1, 2, (i, j) => Math.min(j - 6, Math.max(40 - i, j - 30)));
+    const m = setup(t, [
+      [34, 32],
+      [34, 40],
+    ]);
+    const [a, b] = [m.units[0].bug, m.units[1].bug];
+    for (const u of [a, b]) {
+      u.fx = 1;
+      u.fz = 0;
+    }
+    // the second one up on the wall, straight over the first
+    b.z = b.pz = 32.3;
+    b.x = b.px = 38.85;
+    b.y = b.py = 18;
+    b.nx = -1;
+    b.ny = b.nz = 0;
+    for (let n = 0; n < TICK_RATE * 5; n++) {
+      m.step({ ...NO_INPUT, move: 1 });
+      if (n > 5) expect(apart(m, 0, 1)).toBeGreaterThan((ANT.radius + SPIDER.radius) * 0.8);
+      expect(a.grounded).toBe(true);
+      expect(b.grounded).toBe(true);
+    }
+    expect(a.y).toBeGreaterThan(12);
+  });
+
+  it('one that falls on another slides off and lands beside it', () => {
+    const m = setup(flat(10), [
+      [32, 32],
+      [44, 32],
+    ]);
+    const b = m.units[1].bug;
+    b.x = b.px = 32;
+    b.y = b.py = 18;
+    b.grounded = false;
+    for (let n = 0; n < TICK_RATE * 3; n++) m.step(NO_INPUT);
+    expect(b.grounded).toBe(true);
+    expect(b.y).toBeCloseTo(10 + SPIDER.radius, 0);
+    expect(apart(m, 0, 1)).toBeGreaterThan(1.8);
+  });
+});
+
+describe('aiming and shooting from any surface', () => {
+  it('from a wall the shot follows the front of the bug, off the wall, and does not hit the shooter', () => {
+    const t = world(2, 2, 2, (i, j) => Math.min(j - 6, Math.max(40 - i, j - 50)));
+    const m = setup(t, [
+      [34, 32],
+      [20, 50],
+    ]);
+    const a = m.units[0].bug;
+    const dir = new Float64Array(3);
+    a.fx = 1;
+    a.fz = 0;
+    while (a.y < 24) m.step({ ...NO_INPUT, move: 1 });
+    // up the wall: the front is up, and the aim (45 degrees) leans off the wall
+    m.aimDirection(m.units[0], dir);
+    expect(dir[0]).toBeCloseTo(-Math.SQRT1_2, 1);
+    expect(dir[1]).toBeCloseTo(Math.SQRT1_2, 1);
+    // head down: the front is down
+    a.fx = -1;
+    press(m, {}, 2);
+    m.aimDirection(m.units[0], dir);
+    expect(dir[0]).toBeCloseTo(-Math.SQRT1_2, 1);
+    expect(dir[1]).toBeCloseTo(-Math.SQRT1_2, 1);
+    a.fx = 1;
+    press(m, {}, 2);
+    press(m, { fire: true }, 20);
+    press(m, {}, 1);
+    expect(m.projectiles.length).toBe(1);
+    press(m, {}, 12);
+    expect(a.health).toBe(100);
+    expect(m.projectiles[0].x).toBeLessThan(a.x);
+  });
+
+  it('on level and gently sloping ground the aim stays level', () => {
+    const m = setup(world(2, 1, 2, (i, j) => (j - 8 - 0.15 * i) / Math.sqrt(1 + 0.0225)), [
+      [30, 32],
+      [50, 50],
+    ]);
+    const dir = new Float64Array(3);
+    m.aimDirection(m.units[0], dir);
+    expect(dir[1]).toBeCloseTo(m.units[0].aimV, 6);
+  });
+
+  it('a shot straight up stops at the top of a bounded map, falls back and can hit the shooter', () => {
+    const t = flat(10);
+    const m = new Match(t, teams(1), 1, { placeBugs: false, strictBounds: true });
+    m.units.forEach((u, i) => expect(u.bug.drop(t, 20 + i * 24, 32)).toBe(true));
+    for (let n = 0; n < TICK_RATE * 2; n++) m.step(NO_INPUT);
+    press(m, { aim: 1 }, TICK_RATE * 3);
+    expect(m.units[0].aimV).toBe(1);
+    expect(m.units[0].aimH).toBe(0);
+    m.weapon = WEAPONS.indexOf(SOLDER_BLOB);
+    press(m, { fire: true }, 200);
+    let top = 0;
+    let hit = false;
+    for (let n = 0; n < TICK_RATE * 6 && !hit; n++) {
+      m.windX = m.windZ = 0;
+      m.step(NO_INPUT);
+      for (const p of m.projectiles) top = Math.max(top, p.y);
+      hit = m.events.some((e) => e.type === 'explosion');
+    }
+    expect(hit).toBe(true);
+    expect(top).toBeLessThanOrEqual(t.H);
+    expect(m.units[0].bug.health).toBeLessThan(100);
+  });
+});
+
 describe('explosions', () => {
   it('hurt by distance, throw bugs away from the centre and carve a crater', () => {
     const t = flat(10);
@@ -197,7 +330,7 @@ describe('shooting', () => {
     const u = m.units[0];
     press(m, { aim: 1 }, TICK_RATE * 3);
     expect(u.aimV).toBeGreaterThan(0.99);
-    expect(u.aimV).toBeLessThanOrEqual(0.995);
+    expect(u.aimV).toBeLessThanOrEqual(1);
     press(m, { aim: -1 }, TICK_RATE * 4);
     expect(u.aimV).toBeGreaterThanOrEqual(-0.8);
     expect(u.aimV).toBeLessThan(-0.75);

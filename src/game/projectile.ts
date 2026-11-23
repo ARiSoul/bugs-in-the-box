@@ -87,7 +87,11 @@ export class Projectile {
 
     const m = strictBounds ? 0 : 20;
     if (this.y < KILL_Y || this.x < -m || this.z < -m || this.x > field.W + m || this.z > field.D + m) return 'lost';
-    if (strictBounds && this.y > field.H) return 'lost';
+    if (strictBounds && this.y > field.H) {
+      // (the top of the map: it goes no higher, and gravity brings it back down)
+      this.y = field.H;
+      if (this.vy > 0) this.vy = 0;
+    }
     return 'fly';
   }
 

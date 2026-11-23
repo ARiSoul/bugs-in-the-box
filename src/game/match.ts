@@ -39,7 +39,6 @@ const AIM_RATE = 1.2;
 const RAMP_START = 0.15;
 const RAMP_TICKS = Math.round(0.6 * TICK_RATE);
 /** Aim pitch limits, as the vertical component of the aim vector. */
-const AIM_MAX_UP = 0.995;
 const AIM_MAX_DOWN = -0.8;
 /** Strongest wind, as a horizontal acceleration per axis (world units / s²). */
 export const WIND_MAX = 5;
@@ -132,6 +131,11 @@ export type MatchEvent =
   | { type: 'over'; winner: number };
 
 const COS45 = 0.7071067811865476;
+const aimed = new Float64Array(3);
+/** How near two bugs' centres come, as a fraction of their radii together (nose to tail their bodies are longer than their spheres). */
+const BODY = 1.15;
+/** A bug that comes down on another slides off it at this speed. */
+const SLIDE_OFF = 3;
 const bugInput: BugInput = { move: 0, turn: 0, jump: false, run: false, faceX: 0, faceZ: 0 };
 
 /** Fraction of the full rate after holding a key for `held` ticks (see RAMP_START). */
@@ -142,7 +146,7 @@ function ramp(held: number): number {
 export interface MatchOptions {
   /** false: skip random placement (tests place the bugs themselves). Default true. */
   placeBugs?: boolean;
-  /** Discard projectiles as soon as they leave the map box (sides and top). Default: a 20-unit margin, no top. */
+  /** Discard projectiles as soon as they leave the map box by its sides; at its top they stop and fall back. Default: a 20-unit margin, no top. */
   strictBounds?: boolean;
   /**
    * Spawn on any level, not only on the topmost surface: each try drops from a random height (a map with
@@ -277,6 +281,7 @@ export class Match {
       if (b.justLanded && b.lastImpact > FALL_SAFE_SPEED) this.damage(u, Math.round((b.lastImpact - FALL_SAFE_SPEED) * FALL_DAMAGE));
       if (!b.alive && !u.dead) this.announceDeath(u);
     }
+    if (this.phase !== 'spin') this.keepApart();
     if (this.phase === 'aim' && !unit.bug.alive) this.endAim();
 
     for (let i = 0; i < this.projectiles.length; i++) {
@@ -288,12 +293,64 @@ export class Match {
     }
   }
 
-  /** Aim direction of a unit (unit vector), written into `out`. */
+  /**
+   * Aim direction of a unit (unit vector), written into `out`: from its front, raised by its aim away from what it
+   * stands on. On a wall or a ceiling it follows the bug's own front, not the level.
+   */
   aimDirection(u: Unit, out: Float64Array): Float64Array {
-    out[0] = u.bug.fx * u.aimH;
-    out[1] = u.aimV;
-    out[2] = u.bug.fz * u.aimH;
-    return out;
+    return u.bug.direction(u.aimH, u.aimV, out);
+  }
+
+  /** Bugs are solid to each other: whoever moved into another is put back beside it (both, if both moved). */
+  private keepApart(): void {
+    const { bugs } = this;
+    for (let i = 0; i < bugs.length; i++) {
+      const a = bugs[i];
+      if (!a.alive) continue;
+      for (let j = i + 1; j < bugs.length; j++) {
+        const b = bugs[j];
+        if (!b.alive) continue;
+        let dx = a.x - b.x;
+        let dy = a.y - b.y;
+        let dz = a.z - b.z;
+        const reach = (a.species.radius + b.species.radius) * BODY;
+        const d2 = dx * dx + dy * dy + dz * dz;
+        if (d2 >= reach * reach) continue;
+        let d = Math.sqrt(d2);
+        // (right on top of each other: one way aside, the same on every device)
+        if (d < 1e-4 || dx * dx + dz * dz < 1e-4 * d2) {
+          dx = (i + j) % 2 ? 0.3 : -0.3;
+          dz = 0.2;
+          d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        }
+        dx /= d;
+        dy /= d;
+        dz /= d;
+        const over = reach - Math.sqrt(d2);
+        const ma = (a.x - a.px) * (a.x - a.px) + (a.y - a.py) * (a.y - a.py) + (a.z - a.pz) * (a.z - a.pz);
+        const mb = (b.x - b.px) * (b.x - b.px) + (b.y - b.py) * (b.y - b.py) + (b.z - b.pz) * (b.z - b.pz);
+        const wa = ma > 1e-8 === mb > 1e-8 ? 0.5 : ma > 1e-8 ? 1 : 0;
+        if (wa > 0) this.aside(a, dx, dy, dz, over * wa);
+        if (wa < 1) this.aside(b, -dx, -dy, -dz, over * (1 - wa));
+      }
+    }
+  }
+
+  /** Put a bug `over` further along (dx, dy, dz); in the air it also loses its speed against that, and slides off. */
+  private aside(b: Bug, dx: number, dy: number, dz: number, over: number): void {
+    b.shove(this.field, dx * over, dy * over, dz * over);
+    if (b.grounded) return;
+    const vn = b.vx * dx + b.vy * dy + b.vz * dz;
+    if (vn < 0) {
+      b.vx -= dx * vn;
+      b.vy -= dy * vn;
+      b.vz -= dz * vn;
+    }
+    if (dy > 0.5) {
+      const l = Math.sqrt(dx * dx + dz * dz);
+      b.vx = (dx / l) * SLIDE_OFF;
+      b.vz = (dz / l) * SLIDE_OFF;
+    }
   }
 
   // ---------------------------------------------------------------- turn flow
@@ -302,7 +359,11 @@ export class Match {
     if (!this.charging && input.weapon >= 0 && input.weapon < WEAPONS.length) this.weapon = input.weapon;
     if (input.aim !== 0) {
       rotate2(unit.aimH, unit.aimV, input.aim * AIM_RATE * ramp(this.aimHeld) * DT);
-      if (rot[1] <= AIM_MAX_UP && rot[1] >= AIM_MAX_DOWN) {
+      if (rot[0] <= 0 && rot[1] > 0) {
+        // straight up, and no further
+        unit.aimH = 0;
+        unit.aimV = 1;
+      } else if (rot[1] >= AIM_MAX_DOWN) {
         unit.aimH = rot[0];
         unit.aimV = rot[1];
       }
@@ -498,9 +559,7 @@ export class Match {
 
   private makeProjectile(u: Unit, w: Weapon, power: number): Projectile {
     const b = u.bug;
-    const dx = b.fx * u.aimH;
-    const dy = u.aimV;
-    const dz = b.fz * u.aimH;
+    const [dx, dy, dz] = this.aimDirection(u, aimed);
     const speed = (power < MIN_POWER ? MIN_POWER : power) * w.maxSpeed;
     const off = b.species.radius + 0.5;
     return new Projectile(this.nextProjectileId++, w, b).launch(
@@ -515,9 +574,7 @@ export class Match {
 
   private dig(u: Unit, w: Weapon): void {
     const b = u.bug;
-    const dx = b.fx * u.aimH;
-    const dy = u.aimV;
-    const dz = b.fz * u.aimH;
+    const [dx, dy, dz] = this.aimDirection(u, aimed);
     const stepLen = w.tunnelRadius * 0.7;
     const start = b.species.radius * 0.5;
     for (let s = start; s <= w.tunnelLength; s += stepLen) this.field.carve(b.x + dx * s, b.y + dy * s, b.z + dz * s, w.tunnelRadius);

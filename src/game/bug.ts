@@ -45,6 +45,9 @@ const CLIMB_FACTOR = 0.75;
 const TAKE_OVER = -0.45;
 /** Surfaces that hang over more than this (normal Y below it) carry the heading along instead of taking it from the facing. */
 const CEILING_NY = -0.8;
+/** Aiming: level ground up to this steep (normal Y) aims by the world; from the second on, wholly by the surface. */
+const AIM_LEVEL_NY = 0.94;
+const AIM_SURFACE_NY = 0.64;
 /** How near the world's sides (and, under things, its bottom) a crawling bug goes. */
 const EDGE = 2.4;
 /** Falling, a bug that is walking forward into a wall catches hold of it, unless it falls faster than this. */
@@ -408,6 +411,63 @@ export class Bug {
     this.vy += vy;
     this.vz += vz;
     this.grounded = false;
+  }
+
+  /**
+   * A direction in the bug's own frame: `along` its front, `out` away from what it stands on (a unit vector in the
+   * plane of the two). On level and gently sloping ground, and in the air, that is the world's level and up; on
+   * a steep surface (a wall, a ceiling) it is the surface's, easing from one to the other in between.
+   */
+  direction(along: number, out: number, dir: Float64Array): Float64Array {
+    let ux = 0;
+    let uy = 1;
+    let uz = 0;
+    let hx = this.fx;
+    let hy = 0;
+    let hz = this.fz;
+    if (this.grounded && this.ny < AIM_LEVEL_NY) {
+      const t = this.ny <= AIM_SURFACE_NY ? 1 : (AIM_LEVEL_NY - this.ny) / (AIM_LEVEL_NY - AIM_SURFACE_NY);
+      ux = this.nx * t;
+      uy = 1 - t + this.ny * t;
+      uz = this.nz * t;
+      const l = Math.sqrt(ux * ux + uy * uy + uz * uz);
+      ux /= l;
+      uy /= l;
+      uz /= l;
+      if (uy > CEILING_NY) {
+        const k = (this.fx * ux + this.fz * uz) / (1 + uy);
+        hx = this.fx - k * ux;
+        hy = -k * (1 + uy);
+        hz = this.fz - k * uz;
+      } else {
+        const on = this.hx * ux + this.hy * uy + this.hz * uz;
+        hx = this.hx - ux * on;
+        hy = this.hy - uy * on;
+        hz = this.hz - uz * on;
+      }
+      const hl = Math.sqrt(hx * hx + hy * hy + hz * hz);
+      hx /= hl;
+      hy /= hl;
+      hz /= hl;
+    }
+    dir[0] = hx * along + ux * out;
+    dir[1] = hy * along + uy * out;
+    dir[2] = hz * along + uz * out;
+    return dir;
+  }
+
+  /** Move it (out of another bug's way): along the surface if it is on one, and never into the terrain. */
+  shove(field: TerrainField, dx: number, dy: number, dz: number): void {
+    const on = this.grounded ? dx * this.nx + dy * this.ny + dz * this.nz : 0;
+    this.x += dx - this.nx * on;
+    this.y += dy - this.ny * on;
+    this.z += dz - this.nz * on;
+    prefer[0] = this.grounded ? this.nx : 0;
+    prefer[1] = this.grounded ? this.ny : 1;
+    prefer[2] = this.grounded ? this.nz : 0;
+    going[0] = going[1] = going[2] = 0;
+    pushUp = !this.grounded || this.ny >= WALKABLE_NY;
+    this.resolve(field);
   }
 
   /** True when standing still on the ground (or dead): nothing left to simulate for this bug. */

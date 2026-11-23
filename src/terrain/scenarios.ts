@@ -27,7 +27,7 @@ export interface Scenario {
    * bloom, glass, dust). A 'webgpu' scenario still runs where WebGPU is missing, on WebGL2, with less.
    */
   render: 'webgl' | 'webgpu';
-  /** Projectiles that leave the map box (sides and top) are discarded. */
+  /** Projectiles that leave the map box by its sides are discarded; at its top they stop and fall back. */
   strictBounds: boolean;
   /** WebGPU path: where the key light stands, from the map centre (default: high on the low-x side). */
   sun?: [number, number, number];
