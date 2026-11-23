@@ -1,6 +1,6 @@
 import { createRng } from '../noise';
 import { COLLIDER, DESK_BLACK, DESK_WHITE, SLEEVE } from '../materials';
-import { add, addHidden, boxMinMax, capsule, cylinder, rotatedBox, type Shape } from '../sdf';
+import { add, addHidden, boxMinMax, capsule, cone, cylinder, paint, rotatedBox, sphere, type Shape } from '../sdf';
 import { wirePath } from './parts';
 import { feature, resetLayout, type Feature, type PartShape, type TerrainGenerator } from './types';
 
@@ -82,6 +82,32 @@ export const desk: TerrainGenerator = (terrain, seed, layout) => {
   const T = plan.top;
   const F = plan.floor;
   const hide = (sh: Shape): void => addHidden(terrain, sh, COLLIDER);
+  /**
+   * A hidden body right on a top: unlike `hide`, it also takes over the samples of the surface it lies on. That
+   * cuts a hole in the terrain's drawn surface round it, so only where a drawn sheet covers the top (`covered`).
+   * `skirt`: a wider shape round it, hidden too (or the edges of the hole would show as slivers).
+   */
+  const hideOnSheet = (sh: () => Shape, skirt: () => Shape): void => {
+    add(terrain, sh(), COLLIDER);
+    paint(terrain, skirt(), COLLIDER);
+  };
+  /** Is (x, z) over one of the desk's tops (or the shelf), at least `margin` inside the sheet drawn on it? */
+  const covered = (x: number, z: number, margin: number): boolean => {
+    const [x0, z0, x1, z1] = plan.main;
+    if (x > x0 + margin && x < x1 - margin && z > z0 + margin && z < z1 - margin) return true;
+    const [sx0, sz0, sx1, sz1] = plan.shelf;
+    if (x > sx0 + margin && x < sx1 - margin && z > sz0 + margin && z < sz1 - margin) return true;
+    const [wx, wz, ha, hb] = plan.wing;
+    const a = (wz - wx - (z - x)) * -C45;
+    const b = (x - wx + z - wz) * C45;
+    return Math.abs(a) < ha - margin && Math.abs(b) < hb - margin;
+  };
+  /** Is a box's footprint (half sizes, turned by (c, sn)) over a drawn sheet, its hidden skirt too? */
+  const footCovered = (x: number, z: number, hw: number, hd: number, c: number, sn: number): boolean => {
+    for (const u of [-1, 1])
+      for (const v of [-1, 1]) if (!covered(x + u * hw * c - v * hd * sn, z + u * hw * sn + v * hd * c, 1.9)) return false;
+    return true;
+  };
   /** A drawn box-like part centred at (x, z), from y0 up h, w × d, turned about the vertical by (c, sn). */
   const part = (
     x: number, y0: number, z: number, w: number, h: number, d: number, c: number, sn: number,
@@ -97,7 +123,9 @@ export const desk: TerrainGenerator = (terrain, seed, layout) => {
     const r = shape === 'soft' || shape === 'ball' ? Math.min(w, h, d) * 0.3 : 0.2;
     const k = 0.1 + r * 0.62;
     const ball = shape === 'ball';
-    const top = ball ? y0 + h / 2 + (h / 2) * 0.62 : y0 + h - k;
+    // (a part at least two high: its body's top is its drawn top, so feet stand on it, not in it; a lower one's
+    // top would show the desk's colour there, so it stays just inside)
+    const top = ball ? y0 + h / 2 + (h / 2) * 0.62 : y0 + h - (h >= 2 ? 0 : 0.1);
     const bottom = opts.lift === undefined ? y0 - 1.5 : y0 + opts.lift + k;
     const hy = (top - bottom) / 2;
     // (a body thinner than two cells meshes with folded faces: a part thin in two ways has none, a bug steps
@@ -108,30 +136,52 @@ export const desk: TerrainGenerator = (terrain, seed, layout) => {
     hx = Math.max(1, hx);
     hz = Math.max(1, hz);
     const cy = (top + bottom) / 2;
-    if (shape === 'cylY') hide(cylinder(x, cy, z, Math.max(1, Math.min(w, d) / 2 - 0.15), hy, 1));
-    else if (c === 1 && sn === 0) hide(boxMinMax(x - hx, cy - hy, z - hz, x + hx, cy + hy, z + hz));
-    else hide(rotatedBox(x, cy, z, hx, hy, hz, 1, c, sn));
+    // (standing on a top, away from its edges: the body takes over the top's surface, hidden under its sheet, so
+    // no sliver of it shows round the part's foot)
+    if (opts.lift === undefined && Math.abs(y0 - T) < 0.5 && !ball && footCovered(x, z, w / 2, d / 2, c, sn)) {
+      const fx = w / 2 - 0.02;
+      const fz = d / 2 - 0.02;
+      hideOnSheet(
+        () => (shape === 'cylY' ? cylinder(x, cy, z, Math.max(1, Math.min(fx, fz)), hy, 1) : rotatedBox(x, cy, z, Math.max(1, shape === 'soft' ? hx + r * 0.3 : fx), hy, Math.max(1, shape === 'soft' ? hz + r * 0.3 : fz), 1, c, sn)),
+        () => rotatedBox(x, T + 0.4, z, w / 2 + 1.1, 1.2, d / 2 + 1.1, 1, c, sn),
+      );
+    } else if (shape === 'cylY') hide(cylinder(x, cy, z, Math.max(1, Math.min(w, d) / 2 - 0.15), hy, 1));
+    else {
+      hide(rotatedBox(x, cy, z, hx, hy, hz, 1, c, sn));
+      // (clear of the surface it stands on, a boxy part's body is as wide as the part)
+      if ((shape === 'box' || shape === 'plate') && h > 3) {
+        const ty = y0 + 1.4;
+        hide(rotatedBox(x, (ty + top) / 2, z, Math.max(1, w / 2), (top - ty) / 2, Math.max(1, d / 2), 1, c, sn));
+      }
+    }
   };
   /**
-   * A cable along `ctrl`, drawn, with a hidden body so a bug walks over it, never through it. In the air: a
-   * chain of capsules two cells thick, their tops at the cable's top (hanging under it). Lying on a top: a low wide
-   * swell under it instead (0.45 high, about 2.5 wide: a narrow ridge would mesh as a row of lumps), its crest
-   * under the drawn cable.
+   * A cable along `ctrl`, drawn, with a hidden body so a bug walks over it, never through it: a chain of capsules
+   * two cells thick whose tops are the cable's top (sunk in the top it lies on, hanging under it in the air).
+   * Over a sheet it takes the top's own surface, so nothing of it shows. Below the tops (hanging down behind the
+   * desk) a cable has none: whoever is there is falling.
    */
   const cable = (ctrl: number[], radius: number, color: number): void => {
     const pts = wirePath(ctrl, 8);
     put(feature('wire', ctrl[0], ctrl[1], ctrl[2], { path: [radius, ...pts], color }));
+    const drop = 1.05 - radius;
     for (let i = 0; i + 5 < pts.length; i += 3) {
       const [ax, ay, az, bx, by, bz] = [pts[i], pts[i + 1], pts[i + 2], pts[i + 3], pts[i + 4], pts[i + 5]];
-      const lying = terrain.sample((ax + bx) / 2, (ay + by) / 2 - radius - 0.6, (az + bz) / 2) < 0;
-      if (lying) hide(capsule(ax, ay - radius + 0.45 - 2, az, bx, by - radius + 0.45 - 2, bz, 2));
-      else hide(capsule(ax, ay - (1.05 - radius), az, bx, by - (1.05 - radius), bz, 1.05));
+      if (Math.min(ay, by) < T) continue;
+      const body = (): Shape => capsule(ax, ay - drop, az, bx, by - drop, bz, 1.05);
+      if (covered(ax, az, 3) && covered(bx, bz, 3)) hideOnSheet(body, () => capsule(ax, ay + 0.7, az, bx, by + 0.7, bz, 2.1));
+      else if (Math.min(ay, by) > T + 3) hide(body());
     }
   };
 
   /** A plug where a cable ends on a part: a small dark body (x, y, z), along x or z. */
-  const plug = (x: number, y: number, z: number, alongX: boolean): void =>
+  const plug = (x: number, y: number, z: number, alongX: boolean): void => {
     part(x, y - L(0.45), z, alongX ? L(1.6) : L(0.9), L(0.9), alongX ? L(0.9) : L(1.6), 1, 0, 'box', 0x161617, 0.2, 0.5, { body: false });
+    const top = y + L(0.45);
+    const hx = Math.max(1, alongX ? L(0.8) : L(0.45));
+    const hz = Math.max(1, alongX ? L(0.45) : L(0.8));
+    if (covered(x, z, 4)) hideOnSheet(() => boxMinMax(x - hx, top - 2.4, z - hz, x + hx, top, z + hz), () => boxMinMax(x - hx - 1.4, top - 2.4, z - hz - 1.4, x + hx + 1.4, top + 1, z + hz + 1.4));
+  };
   /**
    * A studio speaker standing on `bottom` at (x, z), its front turned by (c, sn) (local +z to (-sn, c)): a black
    * box with a rounded front baffle; its drivers, port and badge plate drawn by the render (`speakerFront`).
@@ -143,6 +193,9 @@ export const desk: TerrainGenerator = (terrain, seed, layout) => {
     // (the baffle set back by the front skin's depth: the skin (drawn with the front) is the speaker's face)
     const [fx, fz] = at(L(3.85));
     part(fx, bottom, fz, L(9.4), L(14), L(2), c, sn, 'soft', 0x151515, 0.1, 0.5, { body: false });
+    // (the body behind the drawn front, up to the front skin's face)
+    const [bfx, bfz] = at(L(4.35));
+    hide(rotatedBox(bfx, bottom + L(7) - 0.75, bfz, L(4.5), L(7) + 0.75, L(1.35), 1, c, sn));
     // (the front, drawn by the render from the owner's photo: the woofer 55% of the width at 38% of the height,
     // its concave woven cone, rubber roll, dust cap; the tweeter's horn 33% at 80%; both set in grooves; a deep
     // rounded slot port with its lip; a plain badge plate; `radius` carries the map's scale)
@@ -201,12 +254,23 @@ export const desk: TerrainGenerator = (terrain, seed, layout) => {
 
   // ---- the monitors: the wing's (white, on its stand, showing this game), and two on a dual arm (one arm each, from one base with two posts)
   const monitor = (x: number, z: number, bottom: number, w: number, h: number, c: number, sn: number, bezel: number, look: 'game' | 'editor' | 'desert' | 'movie' | 'desktop' | 'off', chin = 0, trim = 0): void => {
-    // (curved: the render draws the panel bent round a radius of 1.7 widths, concave towards the user;
-    // its hidden body is a slab two cells thick just behind the panel's middle)
+    // (curved: the render draws the panel bent round a radius of 1.7 widths, concave towards the user; its hidden
+    // body: slabs two cells thick along the same curve, right behind the panel, and the housing on its back)
     const yaw: [number, number] | undefined = c === 1 && sn === 0 ? undefined : [c, sn];
     put(feature('screen', x, bottom + h / 2, z, { box: [x - w / 2 + 0.7, bottom + 0.7, z - 0.02, x + w / 2 - 0.7, bottom + h - 0.7, z + 0.02], radius: w * 1.7, color: bezel, yaw, look, chin, trim }));
-    if (!yaw) hide(boxMinMax(x - w / 2 + 0.6, bottom + 0.6, z - 2.2, x + w / 2 - 0.6, bottom + h - 0.6, z - 0.2));
-    else hide(rotatedBox(x + sn * 1.2, bottom + h / 2, z - c * 1.2, w / 2 - 0.6, h / 2 - 0.6, 1, 1, c, sn));
+    const R = w * 1.7;
+    const SLABS = 9;
+    const half = w / 2 / R;
+    for (let k = 0; k < SLABS; k++) {
+      // (the slab's angle on the arc; its sine and cosine from their series: at most 0.3)
+      const a = half * ((2 * k + 1) / SLABS - 1);
+      const sa = a - (a * a * a) / 6 + (a * a * a * a * a) / 120;
+      const ca = 1 - (a * a) / 2 + (a * a * a * a) / 24;
+      const lx = R * sa + sa * 1.05;
+      const lz = R - R * ca - ca * 1.05;
+      hide(rotatedBox(x + lx * c - lz * sn, bottom + h / 2, z + lx * sn + lz * c, w / SLABS / 2 + 0.4, h / 2, 1, 1, c * ca - sn * sa, sn * ca + c * sa));
+    }
+    hide(rotatedBox(x + sn * L(1.2), bottom + h * 0.5, z - c * L(1.2), w * 0.275, h * 0.28, Math.max(1, L(1.2)), 1, c, sn));
     part(x + sn * L(1.8), bottom + h * 0.22, z - c * L(1.8), w * 0.55, h * 0.56, L(1.2), c, sn, 'box', 0x1b1b1d, 0.1, 0.5, { body: false });
   };
   const [am, mm, rm] = plan.monitors;
@@ -249,7 +313,15 @@ export const desk: TerrainGenerator = (terrain, seed, layout) => {
     const cy = (qy + ay) / 2;
     const cz = (pz + tz) / 2;
     put(feature('part', cx, cy, cz, { shape: 'soft', box: [cx - L(0.8), cy - L(1.5), cz - len / 2, cx + L(0.8), cy + L(1.5), cz + len / 2], yaw: [dz / hl, -dx / hl], path: [hl / len, -dy / len], color: 0x0e0e10, metal: 0.35, rough: 0.15 }));
-    hide(capsule(qx, qy, pz, ax, ay, tz, Math.max(1.05, L(0.7))));
+    // (its body: three capsules over the beam's height, and the hub up to the monitor's housing)
+    for (const o of [-0.8, 0, 0.8]) {
+      const ox = L(o) * ((-dx * dy) / (hl * len));
+      const oy = L(o) * (hl / len);
+      const oz = L(o) * ((-dz * dy) / (hl * len));
+      hide(capsule(qx + ox, qy + oy, pz + oz, ax + ox, ay + oy, tz + oz, Math.max(1.05, L(0.75))));
+    }
+    hide(boxMinMax(ax - L(1.4), ay - L(1.4), tz - L(1.2), ax + L(1.4), ay + L(1.4), m[1] - L(1.8)));
+    hide(boxMinMax(ax - L(3), m[2] + m[4] * 0.5 - L(3), m[1] - L(3.2), ax + L(3), m[2] + m[4] * 0.5 + L(3), m[1] - L(1.8)));
     part(ax, ay - L(1.5), tz, L(3), L(3), L(2.4), 1, 0, 'cylZ', 0x141416, 0.4, 0.3, { body: false });
     part(ax, m[2] + m[4] * 0.5 - L(3), m[1] - L(2.8), L(6), L(6), L(0.8), 1, 0, 'plate', 0x3a3a3e, 0.6, 0.4, { body: false });
     // (its cable from the monitor's back, slack beside the arm, onto the desk behind the base, over the edge)
@@ -264,8 +336,9 @@ export const desk: TerrainGenerator = (terrain, seed, layout) => {
   part(kx, T, kz, L(27.6), L(1.6), L(8.4), WC, WS, 'box', 0x141416, 0.1, 0.55);
   plug(kx + L(13.2) * C45, T + L(0.9), kz - L(13.2) * C45 + L(0.2), true);
   put(feature('keyboard', kx, T + L(1.6), kz, { box: [kx - L(13.5), T, kz - L(3.9), kx + L(13.5), T + L(1.6), kz + L(3.9)], color: 0x1b1c20, yaw: [WC, WS], radius: L(0.8), glow: 0.6, look: 'full' }));
-  // (the caps' body: over the key area, up to the caps' tops)
-  hide(rotatedBox(kx, (T - 1.5 + T + L(1.6) + L(0.8) * 0.65 - 0.15) / 2, kz, L(13.5) - 0.3, (L(1.6) + L(0.8) * 0.65 - 0.15 + 1.5) / 2, L(3.9) - 0.3, 1, WC, WS));
+  // (the caps' body: the whole key area, up to the caps' tops)
+  const capTop = T + L(1.6) + L(0.8) * 0.65;
+  hide(rotatedBox(kx, capTop - 1.2, kz, L(13.5), 1.2, L(3.9), 1, WC, WS));
   const [rx, rz] = wing(L(-1), L(10));
   part(rx, T, rz, L(27.6), L(1.4), L(4.6), WC, WS, 'soft', 0x0f0f10, 0, 0.7);
   cable([kx + L(8) * C45, T + L(0.8), kz - L(8) * C45, kx + L(14) * C45, T + 0.3, kz - L(14) * C45, mx0 + L(4), T + 0.3, mz0 + L(10), mx0 + L(10), T + 0.3, mz0 + L(4)], 0.3, 0x131313);
@@ -274,7 +347,12 @@ export const desk: TerrainGenerator = (terrain, seed, layout) => {
   part(bx, T, bz, L(6), L(0.3), L(6), WC, WS, 'soft', 0x4f6478, 0, 0.8, { body: false });
   const by = T + L(0.3);
   put(feature('bottle', bx, by, bz, { box: [bx - L(1.95), by, bz - L(1.95), bx + L(1.95), by + L(12.55), bz + L(1.95)], color: 0x4a2608 }));
-  hide(cylinder(bx, by + L(3.6), bz, Math.max(1, L(1.8)), L(3.3), 1));
+  // (its body: the lathed profile in three: body, shoulder, neck)
+  const bh = L(12.55);
+  hideOnSheet(() => rotatedBox(bx, T - 0.6, bz, L(3), 0.6 + L(0.3), L(3), 1, WC, WS), () => rotatedBox(bx, T, bz, L(3) + 1.4, 1, L(3) + 1.4, 1, WC, WS));
+  hide(cylinder(bx, by + bh * 0.26 - 0.75, bz, Math.max(1, L(1.9)), bh * 0.26 + 0.75, 1));
+  hide(cone(bx, by + bh * 0.5, bz, Math.max(1, L(1.9)), by + bh * 0.73, Math.max(1, L(0.84))));
+  hide(cylinder(bx, by + bh * 0.83, bz, Math.max(1, L(0.84)), bh * 0.17, 1));
 
   // the left speaker on its riser at the wing's back left: a whitewashed wooden stand, open in front, a dark
   // speckled felt pad on it, the speaker turned towards the seat (a little to the right of it)
@@ -294,7 +372,9 @@ export const desk: TerrainGenerator = (terrain, seed, layout) => {
       // (the sides along the wing's depth, at the stand's two ends along its length)
       const [sx, sz] = wing(ra + side * (rw / 2 - L(0.8)), rb);
       wood(sx, T, sz, L(1.6), rh, rd, 0xd2d0ca);
-      hide(rotatedBox(sx, T + 1.25 + (rh - 1.25) / 2, sz, Math.max(1, L(0.8) - 0.2), (rh - 1.25) / 2, rd / 2 - 0.3, 1, WC, WS));
+      const side0 = (): Shape => rotatedBox(sx, T + (rh - 1.5) / 2, sz, Math.max(1, L(0.8) - 0.02), (rh + 1.5) / 2, rd / 2 - 0.02, 1, WC, WS);
+      if (footCovered(sx, sz, L(0.8), rd / 2, WC, WS)) hideOnSheet(side0, () => rotatedBox(sx, T + 0.4, sz, L(0.8) + 1.1, 1.2, rd / 2 + 1.1, 1, WC, WS));
+      else hide(side0());
     }
     put(feature('dusty', rx, T + rh + L(1.4), rz, { box: [rx - rw / 2 + L(0.2), T + rh + L(1.4) - 0.05, rz - rd / 2 + L(0.2), rx + rw / 2 - L(0.2), T + rh + L(1.4) + L(0.7), rz + rd / 2 - L(0.2)], yaw: [WC, WS], color: 0x3b3b3c, look: 'felt' }));
     const [kx2, kz2] = wing(ra + L(2), rb);
@@ -361,7 +441,7 @@ export const desk: TerrainGenerator = (terrain, seed, layout) => {
   const cz = mz0 + L(22);
   part(cx, T, cz, L(4.4), L(0.8), L(4), 1, 0, 'box', 0x1a1a1c, 0.1, 0.5);
   put(feature('part', cx, T + L(3.8), cz - L(0.9), { shape: 'box', box: [cx - L(2.1), T + L(0.6), cz - L(1.3), cx + L(2.1), T + L(7), cz - L(0.5)], path: [0.9659, -0.2588], color: 0x1d1d20, metal: 0.1, rough: 0.5 }));
-  hide(rotatedBox(cx, T + L(3.8), cz - L(1.3), L(1.9), L(3), 1, 0, 0.9659, -0.2588));
+  hideOnSheet(() => rotatedBox(cx, T + L(3.8), cz - L(1.2), L(2), L(3.1), 1, 0, 0.9659, -0.2588), () => boxMinMax(cx - L(2.1) - 1.2, T - 0.8, cz - L(6), cx + L(2.1) + 1.2, T + 1.6, cz + 1));
   put(feature('part', cx, T + L(4.4), cz - L(0.64), { shape: 'cylZ', box: [cx - L(1.3), T + L(3.1), cz - L(0.67), cx + L(1.3), T + L(5.7), cz - L(0.61)], path: [0.9659, -0.2588], color: 0x2c2c2c, metal: 0.2, rough: 0.6 }));
   cable([cx, T + L(1), cz - L(2), cx + L(2), T + 0.3, mz0 + L(6), cx + L(6), T + 0.3, mz0 + L(1)], 0.28, 0xe6e4dc);
   // two docks behind the laptops
@@ -373,6 +453,7 @@ export const desk: TerrainGenerator = (terrain, seed, layout) => {
     const d = L(11.6);
     part(x, y0, z, w, L(1.1), d, 1, 0, 'box', color, color === 0xb5b9bd ? 0.78 : 0.3, 0.36);
     put(feature('keyboard', x, y0 + L(1.1), z - L(1.4), { box: [x - L(7.4), y0, z - L(4.6), x + L(7.4), y0 + L(1.1), z + L(1.6)], color: keys, radius: L(0.15), look: 'laptop' }));
+    hide(boxMinMax(x - L(7.4), y0 + 0.3, z - L(4.6), x + L(7.4), y0 + L(1.1) + L(0.15) * 0.65, z + L(1.6)));
     part(x, y0 + L(1.08), z + L(3.8), L(6), L(0.06), L(3), 1, 0, 'plate', color === 0x1a1b1d ? 0x202124 : 0xb9bcc0, 0.4, 0.4, { body: false });
     if (trackpoint) {
       part(x - L(0.74), y0 + L(1.05), z - L(0.58), L(0.45), L(0.18), L(0.45), 1, 0, 'cylY', 0xb81d17, 0, 0.95, { body: false });
@@ -390,7 +471,7 @@ export const desk: TerrainGenerator = (terrain, seed, layout) => {
     const lzc = hz + (len / 2) * ls;
     put(feature('part', x, lyc, lzc, { shape: 'box', box: [x - w / 2, lyc - len / 2, lzc - L(0.35), x + w / 2, lyc + len / 2, lzc + L(0.35)], path: [lc, ls], color, metal: color === 0xb5b9bd ? 0.78 : 0.3, rough: 0.36 }));
     // (the lid's body is two cells thick, set back behind its screen)
-    hide(rotatedBox(x, lyc + 0.4 * ls, lzc - 0.4 * lc, w / 2 - 0.2, len / 2 - 0.2, 1, 0, lc, ls));
+    hide(rotatedBox(x, lyc + 0.28 * ls, lzc - 0.28 * lc, w / 2 - 0.2, len / 2 - 0.2, 1, 0, lc, ls));
     const fy = lyc - L(0.37) * ls;
     const fz = lzc + L(0.37) * lc;
     const by0 = lyc - (L(0.35) + 0.05) * ls;
@@ -414,7 +495,7 @@ export const desk: TerrainGenerator = (terrain, seed, layout) => {
   const sk = mz0 + L(37);
   part(mm[0], T, sk, L(29.4), L(1), L(6.8), 1, 0, 'box', 0x3c3d40, 0.2, 0.5);
   put(feature('keyboard', mm[0], T + L(1), sk, { box: [mm[0] - L(14.2), T, sk - L(3.1), mm[0] + L(14.2), T + L(1), sk + L(3.1)], color: 0x26272a, radius: L(0.45), look: 'full' }));
-  hide(boxMinMax(mm[0] - L(14.2) + 0.3, T - 1.5, sk - L(3.1) + 0.3, mm[0] + L(14.2) - 0.3, T + L(1) + L(0.45) * 0.65 - 0.1, sk + L(3.1) - 0.3));
+  hide(boxMinMax(mm[0] - L(14.2), T + 0.4, sk - L(3.1), mm[0] + L(14.2), T + L(1) + L(0.45) * 0.65, sk + L(3.1)));
   // the desk mat, the vertical mice (one with its RGB ring), and the small things
   const matX0 = rm[0] - L(16);
   part((matX0 + mx1 - L(2)) / 2, T, mz0 + L(34), mx1 - L(2) - matX0, L(0.15), L(18), 1, 0, 'plate', 0x0f0f10, 0, 0.95, { body: false });
@@ -424,7 +505,23 @@ export const desk: TerrainGenerator = (terrain, seed, layout) => {
     const wide = L((ring ? 4.2 : 4.6) * k);
     const tall = L(4.6 * k);
     put(feature('mouse', x, T, z, { box: [x - wide / 2, T, z - len / 2, x + wide / 2, T + tall, z + len / 2], color: ring ? 0x161618 : 0x1c1c1e, glow: ring ? 1.4 : 0 }));
-    hide(boxMinMax(x - L(1.1 * k), T + 1.25, z - L(2.4 * k), x + L(1.4 * k), T + L(3.9 * k), z + L(2.6 * k)));
+    // (its body: balls along the hull, slice by slice, three high: the render's hull, narrowing to its ridge and
+    // leaning right)
+    for (const vz of [-0.75, -0.5, -0.25, 0, 0.25, 0.5, 0.75]) {
+      const u = (1 - vz) / 2;
+      const slice = Math.sqrt(1 - vz * vz);
+      const ridge = tall * Math.min(1, 0.55 + 0.75 * u) * Math.min(1, slice * 1.2);
+      for (const t of [0.12, 0.42, 0.72]) {
+        const half = (wide / 2) * (1 - (ring ? 0.62 : 0.5) * t) * (1 - (ring ? 0.3 : 0.18) * u) * slice;
+        const r = Math.max(1, Math.min(half, ridge * 0.42));
+        for (const o of [-1, 1]) {
+          const ball = (): Shape => sphere(x + ridge * t * 0.32 + o * Math.max(0, half - r), T + Math.min(ridge * t, ridge - r), z + vz * (len / 2), r);
+          if (footCovered(x, z, wide / 2, len / 2, 1, 0)) add(terrain, ball(), COLLIDER);
+          else hide(ball());
+        }
+      }
+    }
+    if (footCovered(x, z, wide / 2, len / 2, 1, 0)) paint(terrain, boxMinMax(x - wide / 2 - 1.2, T - 0.8, z - len / 2 - 1.2, x + wide / 2 + 1.2, T + 1.6, z + len / 2 + 1.2), COLLIDER);
     if (ring) {
       // (its braided cable: a strain relief out of the front top, then over the mat to the back edge)
       const cx0 = x + L(1.3 * k);
@@ -439,7 +536,13 @@ export const desk: TerrainGenerator = (terrain, seed, layout) => {
   mouse(rm[0] + L(2 + rand(-0.6, 0.6)), mz0 + L(31 + rand(-0.6, 0.6)), 0.85, false);
   // (a thick clamshell, about 0.7 as tall as wide: its widest at mid-height, where the seam runs, rounded down to
   // the desk)
-  part(mx1 - L(6.4), T - L(0.9), mz0 + L(21.5), L(10.5), L(3.6), L(3.5), 1, 0, 'ball', 0x1a1a1c, 0.05, 0.85);
+  part(mx1 - L(6.4), T - L(0.9), mz0 + L(21.5), L(10.5), L(3.6), L(3.5), 1, 0, 'ball', 0x1a1a1c, 0.05, 0.85, { body: false });
+  for (let k = -5; k <= 5; k++) {
+    const u = k * 0.16;
+    add(terrain, sphere(mx1 - L(6.4) + u * L(5.25), T + L(0.9), mz0 + L(21.5), Math.max(1, L(1.72) * Math.sqrt(1 - u * u))), COLLIDER);
+  }
+  // (it lies near the top's right end: its skirt stops short of the edge)
+  paint(terrain, boxMinMax(mx1 - L(6.4) - L(5.25), T - 0.8, mz0 + L(21.5) - L(1.75) - 1, Math.min(mx1 - 1.2, mx1 - L(6.4) + L(5.25)), T + 1.6, mz0 + L(21.5) + L(1.75) + 1), COLLIDER);
   part(mx1 - L(6.4), T + L(0.86), mz0 + L(21.5), L(10.54), L(0.08), L(3.54), 1, 0, 'ball', 0x3a3a3c, 0, 0.7, { body: false });
   part(rm[0] + L(16), T, mz0 + L(10), L(5.8), L(1.2), L(4.7), 1, 0, 'box', 0x1c1c1e, 0.1, 0.75);
   part(rm[0] + L(16), T + L(0.6), mz0 + L(10), L(5.85), L(0.08), L(4.75), 1, 0, 'plate', 0x2b2b2d, 0.1, 0.8, { body: false });
@@ -463,7 +566,8 @@ export const desk: TerrainGenerator = (terrain, seed, layout) => {
   const pcz = bzz + L(0.2);
   const ptop = T + L(2.2);
   put(feature('foil', pcx, ptop + L(0.35), pcz, { box: [pcx - L(2.4), ptop, pcz - L(1.65), pcx + L(2.4), ptop + L(0.7), pcz + L(1.65)], color: 0xb9a46c, radius: L(1) }));
-  hide(boxMinMax(pcx - L(2.1), ptop - 1.5, pcz - L(1.35), pcx + L(2.1), ptop + L(0.5), pcz + L(1.35)));
+  hide(boxMinMax(pcx - L(2.2), ptop - 1.5, pcz - L(1.45), pcx + L(2.2), ptop + L(0.3), pcz + L(1.45)));
+  hide(boxMinMax(pcx - L(1.5), ptop - 1.5, pcz - L(0.8), pcx + L(1.5), ptop + L(0.62), pcz + L(0.8)));
 
   // a loose cable lying across the middle, and the mat's front
   plug(mm[0] + L(13.2), T + 0.75, mz0 + L(30.3), true);
@@ -477,7 +581,7 @@ export const desk: TerrainGenerator = (terrain, seed, layout) => {
   // (as in the owner's photo: whitewashed wood under a dark grey foam pad)
   put(feature('dusty', (sx0 + sx1) / 2, sTop - 1.9, (sz0 + sz1) / 2, { box: [sx0 - 0.1, sTop - 3.1, sz0 - 0.1, sx1 + 0.1, sTop - 0.7, sz1 + 0.1], color: 0xd8d6d0, look: 'wood' }));
   put(feature('dusty', (sx0 + sx1) / 2, sTop, (sz0 + sz1) / 2, { box: [sx0 - 0.1, sTop - 0.75, sz0 - 0.1, sx1 + 0.1, sTop + 0.05, sz1 + 0.1], color: 0x4a4a4b, look: 'felt' }));
-  for (const [lx, lz] of [[sx1 - L(1.5), sz0 + L(2)], [sx1 - L(1.5), sz1 - L(2)]]) part(lx, F, lz, L(1.4), sTop - 3.1 - F, L(1.4), 1, 0, 'box', 0x8e9195, 0.6, 0.45, { body: false });
+  for (const [lx, lz] of [[sx1 - L(1.5), sz0 + L(2)], [sx1 - L(1.5), sz1 - L(2)]]) part(lx, F, lz, L(1.4), sTop - 3.1 - F, L(1.4), 1, 0, 'box', 0x8e9195, 0.6, 0.45);
   const spx = (sx0 + sx1) / 2;
   const spz = (sz0 + sz1) / 2;
   const [rc, rs] = towardSeat(spx, spz);

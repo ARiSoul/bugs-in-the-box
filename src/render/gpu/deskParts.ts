@@ -1018,7 +1018,12 @@ export class DeskParts {
     this.push(g);
   }
 
+  /** Add a piece to the scene; whatever it is made of, the explosions' craters cut it. */
   private push(object: THREE.Object3D): void {
+    object.traverse((o) => {
+      if (!(o instanceof THREE.Mesh)) return;
+      for (const m of (Array.isArray(o.material) ? o.material : [o.material]) as THREE.NodeMaterial[]) if (!m.maskNode) this.craters.cut(m);
+    });
     this.group.add(object);
     this.pieces.push(object);
   }

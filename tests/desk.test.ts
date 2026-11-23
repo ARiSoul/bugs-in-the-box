@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { Bug, IDLE } from '../src/game/bug';
 import { Match, type TeamSpec } from '../src/game/match';
 import { ANT, SPIDER } from '../src/game/species';
 import { desk, deskPlan } from '../src/terrain/generators/desk';
@@ -80,33 +81,72 @@ describe('Desk (desk)', () => {
     });
   }
 
-  it('is solid where things stand: keyboards, laptops, the monitor arm base, a cable lying on the desk', () => {
+  describe('is solid where things are drawn', () => {
     const { t, layout } = make(9);
     const p = deskPlan(t.W, t.H, t.D);
-    const mid = (b: number[]): [number, number, number, number] => [(b[0] + b[3]) / 2, (b[2] + b[5]) / 2, b[1], b[4]];
-    // (a ray from above stops on each thing, near its top, not on the desk under it)
-    for (const f of layout.features.filter((g) => g.kind === 'keyboard')) {
-      const [x, z, , y1] = mid(f.box);
-      expect(surfaceUnder(t, x, y1 + 4, z)).toBeGreaterThan(y1 - 1);
-    }
-    const base = layout.features.find((g) => g.kind === 'part' && g.color === 0x0e0e10 && g.shape === 'soft');
-    expect(base).toBeDefined();
-    if (base) {
-      const [x, z, , y1] = mid(base.box);
-      expect(surfaceUnder(t, x, y1 + 4, z)).toBeGreaterThan(p.top + 1.5);
-    }
-    // (a cable lying on the main top, away from everything else: the hit is the cable's top, over the desk)
-    const [mx0, mz0, mx1, mz1] = p.main;
-    const on: [number, number][] = [];
-    for (const g of layout.features.filter((f) => f.kind === 'wire')) {
-      for (let i = 1; i + 2 < g.path.length; i += 3) {
-        const [x, y, z] = [g.path[i], g.path[i + 1], g.path[i + 2]];
-        if (Math.abs(y - (p.top + 0.3)) < 0.05 && x > mx0 + 4 && x < mx1 - 4 && z > mz0 + 4 && z < mz1 - 4) on.push([x, z]);
+
+    it('the inside of every boxy or round part big enough for a bug to be in', () => {
+      const open: string[] = [];
+      for (const f of layout.features) {
+        if (f.kind !== 'part' && f.kind !== 'keyboard') continue;
+        const c = [0, 1, 2].map((a) => (f.box[a] + f.box[a + 3]) / 2);
+        const h = [0, 1, 2].map((a) => (f.box[a + 3] - f.box[a]) / 2);
+        if (Math.min(h[0], h[2]) < 1.5 || h[1] < 1 || f.box[1] < p.top - 2 || (f.opacity ?? 1) < 1) continue;
+        const [cy, sy] = f.yaw ?? [1, 0];
+        const [ct, st] = f.kind === 'part' && f.path.length === 2 ? f.path : [1, 0];
+        const round = f.shape === 'cylY' || f.shape === 'ball';
+        let n = 0;
+        let air = 0;
+        for (let x = 0.5 - h[0]; x <= h[0] - 0.5; x += 0.5)
+          for (let y = 0.5 - h[1]; y <= h[1] - 0.5; y += 0.5)
+            for (let z = 0.5 - h[2]; z <= h[2] - 0.5; z += 0.5) {
+              if (round && (x / h[0]) ** 2 + (z / h[2]) ** 2 + (f.shape === 'ball' ? (y / h[1]) ** 2 : 0) > 0.75) continue;
+              const ty = y * ct - z * st;
+              const tz = y * st + z * ct;
+              n++;
+              if (t.sample(c[0] + x * cy - tz * sy, c[1] + ty, c[2] + x * sy + tz * cy) > 0.25) air++;
+            }
+        if (n > 0 && air / n > 0.15) open.push(`${f.shape} #${f.color.toString(16)} at ${c.map(Math.round).join(',')}: ${Math.round((100 * air) / n)}% air`);
       }
-    }
-    expect(on.length).toBeGreaterThan(0);
-    const [cx, cz] = on[Math.floor(on.length / 2)];
-    expect(surfaceUnder(t, cx, p.top + 4, cz)).toBeGreaterThan(p.top + 0.3);
+      expect(open).toEqual([]);
+    });
+
+    it("the monitors' curved panels, from edge to edge", () => {
+      for (const f of layout.features.filter((g) => g.kind === 'screen' && g.radius > 0)) {
+        const [cy, sy] = f.yaw ?? [1, 0];
+        const half = (f.box[3] - f.box[0]) / 2;
+        const [mx, my, mz] = [(f.box[0] + f.box[3]) / 2, (f.box[1] + f.box[4]) / 2, (f.box[2] + f.box[5]) / 2];
+        for (let u = -0.95; u <= 0.96; u += 0.19) {
+          // (a point of the arc, just behind the panel)
+          const a = (u * half) / f.radius;
+          const lx = (f.radius + 0.6) * Math.sin(a);
+          const lz = f.radius - (f.radius + 0.6) * Math.cos(a);
+          expect(t.sample(mx + lx * cy - lz * sy, my, mz + lx * sy + lz * cy)).toBeLessThan(0.1);
+        }
+      }
+    });
+
+    it("a bug's feet stand on the keys, not in them, and a lying cable is solid up to its top", () => {
+      for (const f of layout.features.filter((g) => g.kind === 'keyboard')) {
+        // (the caps stand 0.65 of their height out of the deck)
+        const caps = f.box[4] + f.radius * 0.65;
+        const bug = new Bug(ANT);
+        expect(bug.drop(t, (f.box[0] + f.box[3]) / 2, (f.box[2] + f.box[5]) / 2, caps + 5)).toBe(true);
+        for (let n = 0; n < 90; n++) bug.step(t, IDLE);
+        expect(bug.y - ANT.radius).toBeGreaterThan(caps - 0.1);
+        expect(bug.y - ANT.radius).toBeLessThan(caps + 0.1);
+      }
+      const [mx0, mz0, mx1, mz1] = p.main;
+      const lying: number[] = [];
+      for (const g of layout.features.filter((f) => f.kind === 'wire')) {
+        for (let i = 1; i + 2 < g.path.length; i += 3) {
+          const [x, y, z] = [g.path[i], g.path[i + 1], g.path[i + 2]];
+          if (Math.abs(y - (p.top + 0.3)) < 0.05 && x > mx0 + 4 && x < mx1 - 4 && z > mz0 + 4 && z < mz1 - 4) lying.push(surfaceUnder(t, x, p.top + 4, z));
+        }
+      }
+      expect(lying.length).toBeGreaterThan(20);
+      for (const y of lying) expect(y).toBeGreaterThan(p.top + 0.3);
+    });
   });
 
   it('spawns every bug alive on some level', () => {
