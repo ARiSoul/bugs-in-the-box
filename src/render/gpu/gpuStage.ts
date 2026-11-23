@@ -84,7 +84,7 @@ export async function createGpuStage(canvas: HTMLCanvasElement, terrain: Terrain
   const craters = new Craters();
   const look = createTerrainMaterial(glow, craters);
   const heat = new HeatShimmer();
-  const leds = new ActivityLeds(scene);
+  const leds = new ActivityLeds(scene, craters);
   const overlays = new LightOverlays(scene, glow, craters);
   const heroes = new HeroOverlays(scene, glow, craters);
   const speakerParts = new SpeakerParts(scene, craters);

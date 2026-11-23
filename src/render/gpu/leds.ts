@@ -1,5 +1,6 @@
 import * as THREE from 'three/webgpu';
 import { color, uniform } from 'three/tsl';
+import type { Craters } from './craters';
 import type { SceneLayout } from '../../terrain/generators/types';
 
 /** Most activity LEDs shown. */
@@ -8,7 +9,7 @@ const MAX_LEDS = 12;
 /**
  * Small activity LEDs (amber or green) that blink like disk and network activity: render-only lights on
  * the bases the generator placed. Each LED's on/off pattern is a fixed function of time, so it is the
- * same on every run. An LED whose base was blown away goes dark.
+ * same on every run. An LED whose base was blown away goes (see `DrawnGround.dropLoose`).
  */
 export class ActivityLeds {
   private readonly meshes: THREE.Mesh[] = [];
@@ -18,12 +19,12 @@ export class ActivityLeds {
   private readonly steady: boolean[] = [];
   private active = 0;
 
-  constructor(scene: THREE.Scene) {
+  constructor(scene: THREE.Scene, craters: Craters) {
     const g = new THREE.SphereGeometry(0.75, 12, 8);
     for (let i = 0; i < MAX_LEDS; i++) {
       const level = uniform(0);
       const tint = uniform(new THREE.Color(0xffa21a));
-      const m = new THREE.MeshStandardNodeMaterial({ roughness: 0.3, metalness: 0 });
+      const m = craters.cut(new THREE.MeshStandardNodeMaterial({ roughness: 0.3, metalness: 0 }));
       m.colorNode = color(0x111111);
       m.emissiveNode = tint.mul(level).mul(9);
       const mesh = new THREE.Mesh(g, m);

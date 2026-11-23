@@ -157,6 +157,7 @@ function handleEvents(events: readonly MatchEvent[]): void {
         flashes.spawn(at.set(e.x, e.y, e.z), e.radius);
         stage.craters.add(e.x, e.y, e.z, e.radius);
         ground.addCrater(e.x, e.y, e.z, e.radius);
+        ground.dropLoose(e.x, e.y, e.z, e.radius);
         break;
       case 'arc':
         lines.arc(at.set(e.x1, e.y1, e.z1), at2.set(e.x2, e.y2, e.z2));
@@ -165,6 +166,7 @@ function handleEvents(events: readonly MatchEvent[]): void {
         lines.beam(at.set(e.x1, e.y1, e.z1), at2.set(e.x2, e.y2, e.z2));
         stage.craters.addTunnel(e.x1, e.y1, e.z1, e.x2, e.y2, e.z2, e.radius);
         ground.addTunnel(e.x1, e.y1, e.z1, e.x2, e.y2, e.z2, e.radius);
+        for (let k = 0; k <= 4; k++) ground.dropLoose(e.x1 + ((e.x2 - e.x1) * k) / 4, e.y1 + ((e.y2 - e.y1) * k) / 4, e.z1 + ((e.z2 - e.z1) * k) / 4, e.radius + 2);
         break;
       case 'turn':
         chasePending = true;

@@ -9,6 +9,9 @@ const ABOVE = 1.3;
 const BELOW = 0.75;
 /** A drawn surface may lie this far behind the start of the ray (it is drawn thicker than its body). */
 const BEHIND = 0.4;
+/** A part no larger than this falls away when nothing solid is left within HELD of it. */
+const SMALL = 9;
+const HELD = 0.3;
 /** Triangles between two looks at the clock while indexing. */
 const SLICE = 400;
 const NONE = -1e9;
@@ -35,7 +38,7 @@ export class DrawnGround {
   private owner = new Uint16Array(0);
   private count = 0;
   /** The indexed parts, and where each one was: one that moved since no longer counts. */
-  private parts: { mesh: THREE.Mesh; at: THREE.Matrix4 }[] = [];
+  private parts: { mesh: THREE.Mesh; at: THREE.Matrix4; held: THREE.Box3 | null }[] = [];
   private job: Generator<void> | null = null;
   /** What gameplay carved (x, y, z, radius): the drawn parts are cut there. */
   private craters: number[] = [];
@@ -83,6 +86,40 @@ export class DrawnGround {
     const dz = z2 - z1;
     const steps = Math.max(1, Math.ceil(Math.sqrt(dx * dx + dy * dy + dz * dz) / (radius * 0.7)));
     for (let i = 0; i <= steps; i++) this.addCrater(x1 + (dx * i) / steps, y1 + (dy * i) / steps, z1 + (dz * i) / steps, radius);
+  }
+
+  /** After a blast of `radius` at (x, y, z): the small parts that lost what they stood on are gone. */
+  dropLoose(x: number, y: number, z: number, radius: number): void {
+    const at = new THREE.Vector3(x, y, z);
+    for (let i = 0; i < this.parts.length; i++) {
+      const p = this.parts[i];
+      if (!p.held || p.held.distanceToPoint(at) > radius + 1.5 || !this.still(i) || this.touches(p.held)) continue;
+      p.mesh.visible = false;
+      p.held = null;
+    }
+  }
+
+  /** The bounds of a small part that something solid holds; null for any other. */
+  private heldBox(mesh: THREE.Mesh): THREE.Box3 | null {
+    if ((mesh as THREE.InstancedMesh).isInstancedMesh) return null;
+    const g = mesh.geometry;
+    if (!g.boundingBox) g.computeBoundingBox();
+    if (!g.boundingBox) return null;
+    const b = g.boundingBox.clone().applyMatrix4(mesh.matrixWorld);
+    const s = b.getSize(new THREE.Vector3());
+    return Math.max(s.x, s.y, s.z) <= SMALL && this.touches(b) ? b : null;
+  }
+
+  /** Is there anything solid in the box, or right at it? */
+  private touches(b: THREE.Box3): boolean {
+    // (not at its corners: the wall of the crater beside it holds nothing)
+    for (let n = 0; n < 27; n++) {
+      const x = b.min.x + (b.max.x - b.min.x) * (0.25 + (n % 3) / 4);
+      const y = b.min.y + (b.max.y - b.min.y) * ((Math.floor(n / 3) % 3) / 2);
+      const z = b.min.z + (b.max.z - b.min.z) * (0.25 + Math.floor(n / 9) / 4);
+      if (this.terrain.sample(x, y, z) < HELD) return true;
+    }
+    return false;
   }
 
   /** The density field's own ray (what the simulation stands on). */
@@ -223,7 +260,7 @@ export class DrawnGround {
       this.owner = new Uint16Array(total);
     }
     if (this.entries.length < total * 4) this.entries = new Int32Array(total * 4);
-    this.parts = meshes.map((mesh) => ({ mesh, at: mesh.matrixWorld.clone() }));
+    this.parts = meshes.map((mesh) => ({ mesh, at: mesh.matrixWorld.clone(), held: this.heldBox(mesh) }));
     const m = new THREE.Matrix4();
     const p = new THREE.Vector3();
     let since = 0;
