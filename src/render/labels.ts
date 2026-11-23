@@ -101,6 +101,8 @@ interface Floating {
   sprite: THREE.Sprite;
   texture: THREE.CanvasTexture;
   t0: number;
+  /** How long it lasts, times the usual. */
+  life: number;
   y0: number;
 }
 
@@ -110,7 +112,7 @@ export class FloatingTexts {
 
   constructor(private readonly scene: THREE.Scene) {}
 
-  spawn(text: string, color: number, at: THREE.Vector3): void {
+  spawn(text: string, color: number, at: THREE.Vector3, life = 1): void {
     const { sprite, ctx, texture } = textSprite(128, 64);
     ctx.font = '800 44px ui-monospace, Consolas, monospace';
     ctx.textAlign = 'center';
@@ -122,13 +124,13 @@ export class FloatingTexts {
     sprite.scale.set(3, 1.5, 1);
     sprite.position.copy(at);
     this.scene.add(sprite);
-    this.items.push({ sprite, texture, t0: performance.now(), y0: at.y });
+    this.items.push({ sprite, texture, t0: performance.now(), life, y0: at.y });
   }
 
   update(now: number): void {
     for (let i = this.items.length - 1; i >= 0; i--) {
       const f = this.items[i];
-      const k = (now - f.t0) / 1400;
+      const k = (now - f.t0) / (1400 * f.life);
       if (k >= 1) {
         f.texture.dispose();
         f.sprite.material.dispose();

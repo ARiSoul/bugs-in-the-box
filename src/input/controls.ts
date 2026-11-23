@@ -58,6 +58,7 @@ export class Controls {
   private weaponQueued = -1;
   private faceX = 0;
   private faceZ = 0;
+  private pitch = 0;
   /** True if the last `next()` carried a facing (from `face`). */
   faced = false;
   /** Set while the menu waits for a key to bind: the next key press goes there instead of the game. */
@@ -165,6 +166,11 @@ export class Controls {
     this.faceZ = Math.round((z / l) * 4096) / 4096;
   }
 
+  /** Raise the aim by `a` radians on the next tick (in a stance), rounded like `face`. */
+  tilt(a: number): void {
+    this.pitch = Math.round((this.pitch + a) * 4096) / 4096;
+  }
+
   selectWeapon(index: number): void {
     this.weaponQueued = index;
   }
@@ -196,6 +202,8 @@ export class Controls {
     this.weaponQueued = -1;
     this.faceX = 0;
     this.faceZ = 0;
+    this.out.pitch = this.pitch;
+    this.pitch = 0;
     return this.out;
   }
 

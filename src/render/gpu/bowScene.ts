@@ -33,7 +33,17 @@ const DRAW = 1.5;
 const DART = 3.6;
 const BESIDE = 0.17;
 /** Seconds the trail lives after the dart ends, and the burst. */
-const AFTER = 2.5;
+const AFTER = 4.5;
+/** The scene's own time when the bow and the dart are there: it stands and aims from then on. */
+const READY = 2.15;
+/** Tying the scarf on ends here (the scene's own time), and takes this share of the whole scene. */
+const TIED = 0.6;
+const TIE_SHARE = 0.46;
+const HAND_A = [2.3, -2.2, 2.6];
+const HAND_B = [2.0, 0.7, 2.0];
+const HAND_C = [2.0, 0.65, 0.1];
+const HAND_D = [0.55, 0.5, -1.75];
+const HAND_E = [2.6, 0.35, -2.5];
 
 const ss = (a: number, b: number, x: number): number => {
   const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
@@ -105,6 +115,9 @@ export class BowScene {
   private glow: THREE.Mesh | null = null;
   private readonly glowMaterial: THREE.Material;
   private focus = 0;
+  /** How far the string is drawn (0..1, eased), and how low its light is while it aims. */
+  private drawn = 0;
+  private calm = 0;
   private readonly threads: THREE.Mesh;
   private sign: THREE.Mesh | null = null;
   private readonly signMaterial: THREE.Material;
@@ -128,6 +141,7 @@ export class BowScene {
   private readonly scarf = new THREE.Group();
   private readonly band: THREE.Mesh;
   private readonly tails: THREE.Mesh[] = [];
+  private readonly held: THREE.Mesh[] = [];
   private scarfOn: BugView | null = null;
 
   private frames = 0;
@@ -350,6 +364,12 @@ export class BowScene {
       this.tails.push(t);
       this.scarf.add(t);
     }
+    for (let k = 0; k < 2; k++) {
+      const m = new THREE.Mesh(stripGeometry(10), cloth);
+      m.castShadow = true;
+      this.keep(m);
+      this.held.push(m);
+    }
     this.scarf.visible = false;
   }
 
@@ -409,20 +429,22 @@ export class BowScene {
     const u = match.activeUnit;
     const bow = match.currentWeapon.sceneTicks > 0;
     const special = match.phase === 'special';
-    const charging = match.phase === 'aim' && match.charging && bow && u.bug.alive;
-    if ((special || charging) && this.shooter !== u.id) this.begin(u.id, view);
+    const stance = match.stance && bow && u.bug.alive;
+    const charging = stance && match.charging;
+    if ((special || stance) && this.shooter !== u.id) this.begin(u.id, view);
     const mine = this.shooter === u.id;
     if (!mine && this.shooter >= 0) this.end();
     if (this.shooter < 0) return;
 
     const total = match.currentWeapon.sceneTicks / 60;
     // (the scene's own clock is the match's, so every frame of it is a frame of the match)
-    const t = special ? Math.min(total, total - (match.specialTicks - alpha) / 60) : this.wasSpecial || this.shotT >= 0 ? total : 0;
+    const run = special ? Math.max(0, Math.min(1, 1 - (match.specialTicks - alpha) / 60 / total)) : 1;
+    const t = run < TIE_SHARE ? (run / TIE_SHARE) * TIED : TIED + ((run - TIE_SHARE) / (1 - TIE_SHARE)) * (READY - TIED);
     if (special && !this.wasSpecial) {
       this.erupted = false;
       this.camera.start(x.camera, match.units[this.shooter].bug, view, x.ground);
     }
-    if (!special && !charging && this.shotT < 0 && !this.wasSpecial) {
+    if (!special && !stance && this.shotT < 0) {
       // (called off)
       this.end();
       return;
@@ -435,8 +457,8 @@ export class BowScene {
 
     const b = u.bug;
     const r = b.species.radius;
-    const k = special || this.shotT >= 0 ? 1 : 0;
-    const up = (charging || special || (this.shotT >= 0 && this.shotT < 1.1)) && b.alive && b.grounded;
+    const k = 1;
+    const up = (stance || special || (this.shotT >= 0 && this.shotT < 1.1)) && b.alive && b.grounded;
     this.rise += ((up ? 1 : 0) - this.rise) * (1 - Math.exp(-dt * (up ? 6 : 5)));
     const gone = this.shotT >= 0 ? Math.min(1, this.shotT / 0.9) : 0;
 
@@ -445,13 +467,15 @@ export class BowScene {
     const grow = ss(1.02, 1.62, t);
     const dartIn = ss(1.42, 1.98, t);
     // (the string goes with the dart's tail, until it is where it rests)
-    const draw = this.shotT >= 0 ? Math.max(0, 1 - this.travel / DRAW) : ss(1.7, 2.3, t);
+    if (this.shotT < 0) this.drawn += ((charging ? 0.12 + 0.88 * match.power : 0) - this.drawn) * (1 - Math.exp(-dt * 22));
+    const draw = this.shotT >= 0 ? Math.max(0, this.drawn - this.travel / DRAW) : this.drawn;
     // (it lets go over a quarter of a second, not in one frame)
-    this.focus = this.shotT < 0 ? ss(2.1, 2.7, t) : Math.exp(-this.shotT * 9);
+    this.focus = this.shotT < 0 ? this.drawn : this.drawn * Math.exp(-this.shotT * 9);
     const focus = this.focus;
     const released = this.shotT >= 0 ? Math.exp(-this.shotT * 24) : 1;
-    const charge = charging ? match.power : 1;
-    const power = k ? 0.3 + 0.7 * erupt : 0.3 * charge;
+    // (standing and aiming, its light is low, so the view is clear)
+    this.calm += ((stance ? 1 - 0.45 * this.drawn : 0) - this.calm) * (1 - Math.exp(-dt * 5));
+    const power = (0.3 + 0.7 * erupt) * (1 - 0.5 * this.calm);
 
     // ---- where it stands and aims
     const pos = view.root.position;
@@ -485,21 +509,26 @@ export class BowScene {
     const w = 1 - call;
     pose.nock.copy(q1).multiplyScalar(call * call).addScaledVector(q2, 2 * w * call).addScaledVector(this.nock, w * w);
     if (this.shotT >= 0) pose.nock.copy(this.letGo).lerp(this.a.set(-1.75, 2.15, -1.15), back(this.shotT / 0.3));
+    // before all that, they tie its scarf on
+    const q = Math.min(1, Math.max(0, (t - 0.05) / (TIED - 0.05)));
+    pose.tie = ss(0, 0.1, q) * (1 - ss(0.9, 1, q)) * (special ? 1 : 0);
+    if (pose.tie > 0) this.tieHands(view, r, q, pose.tie);
     pose.sway = Math.sin(this.clock * 2.4);
     pose.spread = power;
-    pose.fold = ss(2.45, 2.56, t) * (this.shotT < 0 ? 1 : 0);
+    pose.fold = stance ? 1 : 0;
 
     // ---- its skin and eyes take light
-    const eye = ss(0.3, 0.6, t) * (1 - ss(0.6, 1, gone));
+    const eye = ss(0.56, 0.68, t) * (1 - ss(0.6, 1, gone));
     view.eyes.emissive.copy(this.eyeGlow).lerp(GOLD, eye).multiplyScalar(1 + eye * 3.2);
     view.skin.emissive.copy(this.skinGlow).lerp(SILK, 0.2 * power * (1 - gone) * (0.8 + 0.2 * Math.sin(this.clock * 17)));
 
     // (so the picture's dimming knows the legs as the fighter's)
     view.legSkin.emissive.copy(view.legSkin.color).multiplyScalar(0.12 * k * (1 - ss(0.5, 1, gone)));
 
-    this.wearScarf(view, k ? ss(0.08, 0.55, t) : 0, this.shotT >= 0 ? 1 - ss(1.2, 1.7, this.shotT) : 1, power, dt);
+    this.wearScarf(view, ss(0.3, 0.62, q), ss(0.78, 0.92, q), this.shotT >= 0 ? 1 - ss(1.2, 1.7, this.shotT) : 1, power, dt);
 
     // ---- the bow and the dart, then the view of them: whatever faces the view comes after it
+    this.placeHeld(view, r, special && q < 0.86 ? ss(0.02, 0.12, q) : 0, ss(0.3, 0.62, q));
     this.placeBow(view, r, k ? grow : 0, draw, gone, focus);
     this.placeDart(match.projectiles.find((p) => p.weapon.sceneTicks > 0), view, r, dartIn, draw, focus, alpha);
     this.camera.update(x.camera, {
@@ -515,14 +544,15 @@ export class BowScene {
       hit: this.hit,
       dt,
       ground: x.ground,
-      charging,
+      stance,
+      power: charging ? match.power : 0,
     });
     x.camera.updateMatrixWorld();
     if (this.shotT > 0.1) this.dartGlow.value *= 1 - 0.68 * Math.max(0, this.a.copy(this.dartAt).sub(x.camera.position).normalize().dot(this.dartDir));
 
     // ---- light round it
     const hold = power * (1 - 0.35 * focus) * (1 - gone);
-    this.auraLevel.value = k * ss(0.3, 0.66, t) * hold * (0.9 + 0.1 * Math.sin(this.clock * 31)) * (1 + 0.5 * erupt * (1 - ss(0.95, 1.5, t)));
+    this.auraLevel.value = k * ss(0.54, 0.72, t) * hold * (0.9 + 0.1 * Math.sin(this.clock * 31)) * (1 + 0.5 * erupt * (1 - ss(0.95, 1.5, t)));
     this.threadLevel.value = k * erupt * (1 - 0.75 * ss(1.3, 1.6, t)) * (1 - focus) * released;
     this.base.copy(pos).addScaledVector(this.a.set(b.nx, b.ny, b.nz), -r);
     this.baseQ.setFromUnitVectors(UP, this.a);
@@ -536,7 +566,7 @@ export class BowScene {
     this.light.visible = true;
     // (above it, on the view's side: it models the face, and the bow keeps its braid)
     this.lightWant.copy(pos).addScaledVector(this.a.set(b.nx, b.ny, b.nz), r * 3.4).addScaledVector(this.b.copy(x.camera.position).sub(pos).normalize(), r * 2.6);
-    let lightGoal = k * (34 + 16 * erupt * (1 - ss(0.9, 1.3, t))) * (1 - gone) + (charging ? 10 * charge : 0);
+    let lightGoal = k * (34 + 16 * erupt * (1 - ss(0.9, 1.3, t))) * (1 - gone);
     if (this.hitT >= 0) {
       this.lightWant.copy(this.hit).addScaledVector(UP, 3.6);
       lightGoal = 6 + 16 * Math.exp(-this.hitT * 4);
@@ -548,8 +578,8 @@ export class BowScene {
     this.light.position.lerp(this.lightWant, t < 0.1 && this.shotT < 0 ? 1 : ease);
     this.light.intensity += (lightGoal - this.light.intensity) * ease;
 
-    this.signLevel.value = k * ss(0.35, 0.7, t) * (1 - gone);
-    this.signGrow.value = k * (0.18 * ss(0.3, 0.6, t) + 0.95 * back(ss(0.62, 1.15, t)));
+    this.signLevel.value = k * ss(0.52, 0.72, t) * (1 - gone);
+    this.signGrow.value = k * (0.18 * ss(0.5, 0.64, t) + 0.95 * back(ss(0.62, 1.15, t)));
     if (this.sign) this.sign.visible = this.signLevel.value > 0.005;
 
     if (special && erupt > 0.35 && !this.erupted) {
@@ -568,7 +598,7 @@ export class BowScene {
     this.eyeLevel.value = eye;
 
     // ---- the picture: the world dims, the edges close in; a flash at the burst of light, the shot and the hit
-    const dim = (special ? 0.62 + 0.38 * ss(0, 0.3, t) : charging ? 0.62 * ss(0, 0.5, charge) : this.hitT >= 0 ? 0.92 * (1 - ss(1.5, 2.4, this.hitT)) : 0.95 * (1 - ss(2.0, 2.4, this.shotT)) * k) * 0.95;
+    const dim = (special ? 0.62 + 0.38 * ss(0, 0.3, t) : stance ? 0.3 + 0.2 * this.drawn : this.hitT >= 0 ? 0.92 * (1 - ss(2.4, 4.2, this.hitT)) : 0.95 * (1 - ss(2.0, 2.4, this.shotT)) * k) * 0.95;
     this.fx.dim.value = dim;
     // (what is farther than the one the picture is about falls dark)
     const about = this.hitT >= 0 ? this.hit : this.shotT > 0.2 && this.camera.active ? this.dartAt : this.centre.value;
@@ -581,7 +611,7 @@ export class BowScene {
     this.fx.focusBlur.value = this.shotT > 0.14 && this.hitT < 0 ? 0.8 : 0;
 
     // ---- the one it aims at keeps a light of its own
-    const onTarget = special ? ss(2.3, 2.56, t) : this.shotT >= 0 ? (this.hitT < 0 ? 1 : 1 - ss(1.6, 2.3, this.hitT)) : 0;
+    const onTarget = special ? 0 : stance ? 0.6 : this.hitT < 0 ? 1 : 1 - ss(3, 4.2, this.hitT);
     this.lightTarget(x, onTarget);
 
     // ---- slow for a moment as the dart leaves, and as it lands
@@ -676,6 +706,7 @@ export class BowScene {
     this.shotT = this.hitT = -1;
     this.wasSpecial = false;
     this.rise = 0;
+    this.drawn = this.calm = 0;
     this.erupted = false;
     this.eyeGlow.copy(view.eyes.emissive);
     this.skinGlow.copy(view.skin.emissive);
@@ -792,9 +823,9 @@ export class BowScene {
 
   // ---------------------------------------------------------------- the pieces
 
-  private wearScarf(view: BugView, on: number, off: number, power: number, dt: number): void {
+  private wearScarf(view: BugView, on: number, tied: number, off: number, power: number, dt: number): void {
     void dt;
-    if (on <= 0 || off <= 0) {
+    if (off <= 0) {
       if (this.scarfOn) this.takeOff();
       return;
     }
@@ -809,9 +840,11 @@ export class BowScene {
     this.scarf.visible = true;
     this.scarf.scale.setScalar(view.headRadius * Math.max(0.01, off));
     const n = (this.band.geometry.index as THREE.BufferAttribute).count;
-    this.band.geometry.setDrawRange(0, Math.floor((n * on) / 6) * 6);
+    // (from the brow round both sides to the back)
+    const seg = n / 64;
+    const half = Math.round(32 * on);
+    this.band.geometry.setDrawRange((32 - half) * seg, 2 * half * seg);
     const knot = this.scarf.getObjectByName('knot');
-    const tied = ss(0.75, 1, on);
     if (knot) knot.scale.setScalar(Math.max(0.001, back(tied)));
     // the tails: they stream back, and up with the light
     for (let k = 0; k < 2; k++) {
@@ -868,6 +901,67 @@ export class BowScene {
       this.flames.setMatrixAt(i, this.m);
     }
     this.flames.instanceMatrix.needsUpdate = true;
+  }
+
+  /** The front two hands: the scarf stretched before its face, up to the brow, round the head, a knot, a pull. */
+  private tieHands(view: BugView, r: number, q: number, weight: number): void {
+    view.torso.updateMatrix();
+    const c = this.c.copy(view.headAt).applyMatrix4(view.torso.matrix).divideScalar(r);
+    const h = view.headRadius / r;
+    const steps: [number, number[]][] = [[0, HAND_A], [0.14, HAND_A], [0.3, HAND_B], [0.45, HAND_C], [0.62, HAND_D], [0.8, HAND_D], [0.9, HAND_E], [1.01, HAND_E]];
+    let i = 0;
+    while (i < steps.length - 2 && q >= steps[i + 1][0]) i++;
+    const f = ss(steps[i][0], steps[i + 1][0], q);
+    const from = steps[i][1];
+    const to = steps[i + 1][1];
+    const px = from[0] + (to[0] - from[0]) * f;
+    const py = from[1] + (to[1] - from[1]) * f;
+    const pz = from[2] + (to[2] - from[2]) * f;
+    // (at the knot the hands go round each other)
+    const knot = ss(0.6, 0.66, q) * (1 - ss(0.78, 0.82, q));
+    const an = q * 70;
+    for (const s of [1, -1]) {
+      const hand = s > 0 ? view.pose.grip : view.pose.nock;
+      this.a.set(c.x + (s * px + knot * Math.cos(an + (s > 0 ? 0 : Math.PI)) * 0.55) * h, c.y + (py + knot * Math.sin(an + (s > 0 ? 0 : Math.PI)) * 0.55) * h, c.z + pz * h);
+      hand.lerp(this.a, weight);
+    }
+  }
+
+  /** The scarf's ends, from the band's ends on the head to the hands that hold them. */
+  private placeHeld(view: BugView, r: number, on: number, round: number): void {
+    for (let k = 0; k < 2; k++) {
+      const m = this.held[k];
+      m.visible = on > 0.01 && this.scarfOn === view;
+      if (!m.visible) continue;
+      const s = k === 0 ? 1 : -1;
+      this.scarf.updateWorldMatrix(true, false);
+      // (the band runs from the brow, the front, to the back on both sides)
+      const an = Math.PI / 2 - s * round * Math.PI * 0.97;
+      const end = this.a.set(Math.cos(an) * 0.98, 0, Math.sin(an) * 0.98);
+      // (before it lies on the brow it is stretched before the face)
+      this.scarf.localToWorld(end);
+      const hand = this.b.copy(s > 0 ? view.pose.grip : view.pose.nock).multiplyScalar(r).applyQuaternion(view.root.quaternion).add(view.root.position);
+      const other = this.c.copy(s > 0 ? view.pose.nock : view.pose.grip).multiplyScalar(r).applyQuaternion(view.root.quaternion).add(view.root.position);
+      const free = 1 - ss(0, 0.06, round);
+      const mid = other.add(hand).multiplyScalar(0.5);
+      end.lerp(mid, free * (hand.distanceTo(end) > view.headRadius * 3 || free > 0.5 ? 1 : 0) * ss(0, 1, free));
+      const up = new THREE.Vector3(0, 1, 0).applyQuaternion(view.root.quaternion);
+      const p = m.geometry.getAttribute('position') as THREE.BufferAttribute;
+      const segs = p.count / 2 - 1;
+      const w = view.headRadius * 0.2 * on;
+      for (let i = 0; i <= segs; i++) {
+        const f = i / segs;
+        const x = end.x + (hand.x - end.x) * f;
+        const y = end.y + (hand.y - end.y) * f;
+        const z = end.z + (hand.z - end.z) * f;
+        const sag = Math.sin(Math.PI * f) * view.headRadius * 0.12 * (1 + Math.sin(this.clock * 7 + f * 5));
+        const ww = w * (1 - 0.25 * f);
+        p.setXYZ(i * 2, x - up.x * (ww + sag), y - up.y * (ww + sag), z - up.z * (ww + sag));
+        p.setXYZ(i * 2 + 1, x + up.x * (ww - sag), y + up.y * (ww - sag), z + up.z * (ww - sag));
+      }
+      p.needsUpdate = true;
+      m.geometry.computeVertexNormals();
+    }
   }
 
   private placeSparks(level: number, pos: THREE.Vector3, b: { nx: number; ny: number; nz: number }, r: number, camera: THREE.Camera): void {
@@ -1209,6 +1303,11 @@ export class BowScene {
     const fade = pow(max(float(1).sub(u.y), 0), 1.5).mul(smoothstep(2.2, 6, positionView.z.negate()));
     const twist = smoothstep(0.16, 0, abs(u.x.sub(0.5).sub(sin(u.y.mul(60).add(this.time.mul(30))).mul(0.3)))).add(smoothstep(0.16, 0, abs(u.x.sub(0.5).add(sin(u.y.mul(60).add(this.time.mul(30))).mul(0.3)))));
     return mix(vec3(SILK.r, SILK.g, SILK.b), vec3(CORE.r, CORE.g, CORE.b), pow(across, 4)).mul(core.add(halo).add(twist.mul(0.55).mul(smoothstep(0, 0.4, across)))).mul(fade).mul(this.trailLevel);
+  }
+
+  /** The dart has hit, this many seconds ago (-1: not yet). */
+  get hitFor(): number {
+    return this.hitT;
   }
 
   /** Called when the scene proper starts (the sign needs the ground as it is now). */

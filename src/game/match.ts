@@ -14,7 +14,8 @@ import { hasWeapon, WEAPONS, type Weapon } from './weapons';
  *
  * Turn flow:
  *   aim     the active bug walks, jumps, aims, picks a weapon and fires (AIM_SECONDS)
- *   special (special attacks) the attack's scene plays before the shot leaves; nothing else moves on
+ *   special (special attacks) the attack's scene plays; then back to aim, the bug in its stance: it turns and aims on
+ *           the spot, charges and fires (the turn's clock stands still meanwhile)
  *   flight  projectiles fly; the shooter may retreat for RETREAT_SECONDS but not fire again
  *   settle  wait until every bug and projectile is at rest; bugs at 0 health die
  *   spin    (maps with a turntable) the turntable turns a quarter, carrying what rests on it
@@ -144,6 +145,8 @@ export interface MatchInput {
   fire: boolean;
   /** Weapon index to select, or -1 to keep the current one. */
   weapon: number;
+  /** In a stance: raise the aim by this much (radians; the view's, while the player turns it). */
+  pitch?: number;
 }
 
 export const NO_INPUT: Readonly<MatchInput> = Object.freeze({ move: 0, turn: 0, faceX: 0, faceZ: 0, jump: false, run: false, aim: 0, fire: false, weapon: -1 });
@@ -163,6 +166,12 @@ export type MatchEvent =
   | { type: 'death'; unit: number }
   | { type: 'over'; winner: number };
 
+/** How long a special attack's hit is looked at before the turn goes on. */
+export const LINGER_TICKS = Math.round(4.5 * TICK_RATE);
+/** In a stance, turning and aiming are this much slower (the view is close, the aim fine)... */
+const STANCE_RATE = 0.4;
+/** ...and the view turns the aim at most this much in a tick. */
+const PITCH_MAX = 0.06;
 const COS45 = 0.7071067811865476;
 const aimed = new Float64Array(3);
 /** How near two bugs' centres come, as a fraction of their radii together (nose to tail their bodies are longer than their spheres). */
@@ -211,6 +220,10 @@ export class Match {
   charging = false;
   /** Ticks left of a special attack's scene. */
   specialTicks = 0;
+  /** The active bug stands ready with its special attack: it aims on the spot. */
+  stance = false;
+  /** Ticks left to look at where a special attack hit. */
+  lingerTicks = 0;
   /** 0..1 while charging. */
   power = 0;
   /** Team index of the winner once over, -1 for a draw. */
@@ -308,10 +321,21 @@ export class Match {
         this.retreatTicks--;
         move = this.movement(input);
       }
-      if (this.projectiles.length === 0 && this.retreatTicks === 0) this.startSettle();
+      if (this.lingerTicks > 0) {
+        // (a special attack's hit is looked at first; then the shooter may walk away)
+        if (--this.lingerTicks === 0) this.retreatTicks = RETREAT_TICKS;
+      } else if (this.projectiles.length === 0 && this.retreatTicks === 0) this.startSettle();
     } else if (this.phase === 'special') {
       if (!unit.bug.alive) this.endAim();
-      else if (--this.specialTicks <= 0) this.fire(unit, this.currentWeapon);
+      else if (!unit.bug.grounded || (input.weapon >= 0 && input.weapon !== this.weapon && input.weapon < WEAPONS.length && this.canUse(unit, input.weapon))) {
+        // (called off: another weapon, or it lost its footing)
+        this.phase = 'aim';
+        this.leaveStance();
+        if (input.weapon >= 0 && this.canUse(unit, input.weapon)) this.weapon = input.weapon;
+      } else if (--this.specialTicks <= 0) {
+        this.phase = 'aim';
+        this.stance = true;
+      }
     } else if (this.phase === 'settle') {
       this.settleTick();
     } else if (this.phase === 'spin') {
@@ -412,32 +436,29 @@ export class Match {
   // ---------------------------------------------------------------- turn flow
 
   private aimTick(unit: Unit, input: Readonly<MatchInput>, fireDown: boolean): Readonly<BugInput> {
-    if (!this.charging && input.weapon >= 0 && input.weapon < WEAPONS.length && this.canUse(unit, input.weapon)) this.weapon = input.weapon;
-    if (input.aim !== 0) {
-      rotate2(unit.aimH, unit.aimV, input.aim * AIM_RATE * ramp(this.aimHeld) * DT);
-      if (rot[0] <= 0 && rot[1] > 0) {
-        // straight up, and no further
-        unit.aimH = 0;
-        unit.aimV = 1;
-      } else if (rot[1] >= AIM_MAX_DOWN) {
-        unit.aimH = rot[0];
-        unit.aimV = rot[1];
-      }
+    if (!this.charging && input.weapon >= 0 && input.weapon < WEAPONS.length && this.canUse(unit, input.weapon)) {
+      this.weapon = input.weapon;
+      if (this.currentWeapon.sceneTicks === 0) this.stance = false;
     }
+    // a special attack begins as soon as it is picked
+    if (this.currentWeapon.sceneTicks > 0 && !this.stance && unit.bug.grounded) {
+      this.phase = 'special';
+      this.specialTicks = this.currentWeapon.sceneTicks;
+      this.events.push({ type: 'special', unit: unit.id, weapon: this.currentWeapon.id });
+      return IDLE;
+    }
+    if (this.stance && !unit.bug.grounded) this.leaveStance();
+    if (this.stance && input.pitch) this.tilt(unit, input.pitch > PITCH_MAX ? PITCH_MAX : input.pitch < -PITCH_MAX ? -PITCH_MAX : input.pitch);
+    if (input.aim !== 0) this.tilt(unit, input.aim * AIM_RATE * ramp(this.aimHeld) * DT * (this.stance ? STANCE_RATE : 1));
     this.turnTicks--;
     const w = this.currentWeapon;
     if (this.charging) {
       if (input.fire) this.power += 1 / CHARGE_TICKS;
       if (!input.fire || this.power >= 1) {
         if (this.power > 1) this.power = 1;
-        if (w.sceneTicks > 0) {
-          this.charging = false;
-          this.phase = 'special';
-          this.specialTicks = w.sceneTicks;
-          this.events.push({ type: 'special', unit: unit.id, weapon: w.id });
-        } else this.fire(unit, w);
+        this.fire(unit, w);
       }
-      return IDLE;
+      return this.stance ? this.onTheSpot(input) : IDLE;
     }
     if (fireDown && unit.bug.grounded) {
       if (w.kind === 'tunnel') this.fire(unit, w);
@@ -448,7 +469,36 @@ export class Match {
       return IDLE;
     }
     if (this.turnTicks <= 0) this.endAim();
-    return this.movement(input);
+    return this.stance ? this.onTheSpot(input) : this.movement(input);
+  }
+
+  /** Raise (or lower) the aim by `a` radians. */
+  private tilt(unit: Unit, a: number): void {
+    rotate2(unit.aimH, unit.aimV, a);
+    if (rot[0] <= 0 && rot[1] > 0) {
+      // straight up, and no further
+      unit.aimH = 0;
+      unit.aimV = 1;
+    } else if (rot[1] >= AIM_MAX_DOWN) {
+      unit.aimH = rot[0];
+      unit.aimV = rot[1];
+    }
+  }
+
+  /** In its stance a bug only turns. */
+  private onTheSpot(input: Readonly<MatchInput>): Readonly<BugInput> {
+    this.movement(input);
+    bugInput.move = 0;
+    bugInput.jump = false;
+    bugInput.run = false;
+    bugInput.turn *= STANCE_RATE;
+    return bugInput;
+  }
+
+  private leaveStance(): void {
+    this.stance = false;
+    this.charging = false;
+    if (this.currentWeapon.sceneTicks > 0) this.weapon = 0;
   }
 
   /** Whether the unit has weapon `index`. */
@@ -500,6 +550,7 @@ export class Match {
     const dy = p.vy / l;
     const dz = p.vz / l;
     const b = p.touched(this.bugs);
+    this.lingerTicks = LINGER_TICKS;
     const u = b ? this.units[this.bugs.indexOf(b)] : null;
     this.events.push({ type: 'arrow', x: p.x, y: p.y, z: p.z, dx, dy, dz, unit: u ? u.id : -1 });
     if (u) {
@@ -563,12 +614,14 @@ export class Match {
     if (w.kind === 'tunnel') this.dig(unit, w);
     else this.projectiles.push(this.makeProjectile(unit, w, this.power));
     this.phase = 'flight';
-    this.retreatTicks = RETREAT_TICKS;
+    this.retreatTicks = w.sceneTicks > 0 ? 0 : RETREAT_TICKS;
+    this.stance = false;
   }
 
   /** Time ran out, or the active bug got hurt or died: no more aiming this turn. */
   private endAim(): void {
     this.charging = false;
+    this.stance = false;
     this.phase = 'flight';
     this.retreatTicks = 0;
   }
@@ -712,7 +765,9 @@ export class Match {
         this.active = this.units.indexOf(u);
         this.phase = 'aim';
         this.turnTicks = AIM_TICKS;
-        if (!this.canUse(u, this.weapon)) this.weapon = 0;
+        this.stance = false;
+        this.lingerTicks = 0;
+        if (!this.canUse(u, this.weapon) || this.currentWeapon.sceneTicks > 0) this.weapon = 0;
         for (let q = this.webs.length - 1; q >= 0; q--) if (--this.webs[q].turns < 0) this.removeWeb(this.webs[q], false);
         this.retreatTicks = 0;
         this.charging = false;

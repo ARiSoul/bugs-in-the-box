@@ -44,6 +44,8 @@ export interface StandPose {
   spread: number;
   /** The free legs folded down and back along the body (0..1). */
   fold: number;
+  /** The front two at its head, tying its scarf on (0..1). */
+  tie: number;
 }
 
 interface Leg {
@@ -85,7 +87,7 @@ export class BugView {
   /** Everything but the legs: it pitches up when the bug stands. */
   readonly torso = new THREE.Group();
   /** Set by a special attack: the stance it is in (weight 0: none). */
-  readonly pose: StandPose = { weight: 0, lean: 0, look: 0, grip: new THREE.Vector3(), nock: new THREE.Vector3(), sway: 0, spread: 0, fold: 0 };
+  readonly pose: StandPose = { weight: 0, lean: 0, look: 0, grip: new THREE.Vector3(), nock: new THREE.Vector3(), sway: 0, spread: 0, fold: 0, tie: 0 };
   private posed = false;
   /** The head (eyes, antennae) and the abdomen turn on their own in a stance. */
   readonly head = new THREE.Group();
@@ -292,11 +294,16 @@ export class BugView {
         goal.copy(s > 0 ? grip : nock).multiplyScalar(r);
         if (s > 0) pole.set(0.8, -0.5, -0.2);
         else pole.set(-1, 0.2, -0.6);
+        // (its elbows out to the sides, the same on both)
+        pole.lerp(this.foot.set(s * 1.2, 0.15, 0.25), this.pose.tie);
       } else if (pair === 1 && s > 0) {
         // (a second hand on the bow, under the first)
         goal.copy(grip).multiplyScalar(r);
         goal.y -= 0.34 * r;
         pole.set(0.9, -0.6, 0.2);
+        // (while that hand ties the scarf, this one is spread like its fellow)
+        goal.lerp(this.foot.set(s * (1.45 + 0.3 * spread) * r, 2.35 * r, (-1.15 - 0.2 * spread) * r), this.pose.tie);
+        pole.lerp(this.foot.set(s * 1.1, 0.5, -0.5), this.pose.tie);
       } else {
         // (a fan behind it, like wings)
         const a = sway * 0.6 + pair * 1.3;

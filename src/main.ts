@@ -153,6 +153,36 @@ function newMatch(s: number): void {
   refresh();
 }
 
+/** Damage a special attack did, to show when its flash is over. */
+const heldDamage: { unit: number; amount: number }[] = [];
+function showDamage(unit: number, amount: number, long: boolean): void {
+  const u = match.units[unit];
+  texts.spawn(`-${amount}`, match.teams[u.team].color, at.set(u.bug.x, u.bug.y + bugViews[unit].height + 1, u.bug.z), long ? 2.6 : 1);
+}
+
+/** The sight of a special attack: where its dart points, and how far the string is drawn. */
+const sight = document.getElementById('sight') as unknown as SVGElement;
+const sightPull = sight.querySelector('.pull') as SVGElement;
+const sightAim = new Float64Array(3);
+function placeSight(): void {
+  const on = match.stance && match.phase === 'aim' && bow.camera.active && !debugCamera;
+  sight.classList.toggle('on', on);
+  if (!on) return;
+  const b = match.activeUnit.bug;
+  match.aimDirection(match.activeUnit, sightAim);
+  const r = b.species.radius;
+  const x = b.x + b.nx * r * 1.6;
+  const y = b.y + b.ny * r * 1.6;
+  const z = b.z + b.nz * r * 1.6;
+  const t = terrain.raycast(x, y, z, sightAim[0], sightAim[1], sightAim[2], 90);
+  const d = t > 0 ? t : 90;
+  stage.camera.updateMatrixWorld();
+  at.set(x + sightAim[0] * d, y + sightAim[1] * d, z + sightAim[2] * d).project(stage.camera);
+  const box = canvas.getBoundingClientRect();
+  sight.style.transform = `translate(${(box.left + ((at.x + 1) / 2) * box.width).toFixed(1)}px, ${(box.top + ((1 - at.y) / 2) * box.height).toFixed(1)}px)`;
+  sightPull.setAttribute('stroke-dasharray', `${match.charging ? (match.power * 100).toFixed(0) : 0} 100`);
+}
+
 const at = new THREE.Vector3();
 const at2 = new THREE.Vector3();
 function handleEvents(events: readonly MatchEvent[]): void {
@@ -199,11 +229,10 @@ function handleEvents(events: readonly MatchEvent[]): void {
         texts.spawn('stuck!', 0xf2f2ee, at.set(u.bug.x, u.bug.y + bugViews[e.unit].height + 1, u.bug.z));
         break;
       }
-      case 'damage': {
-        const u = match.units[e.unit];
-        texts.spawn(`-${e.amount}`, match.teams[u.team].color, at.set(u.bug.x, u.bug.y + bugViews[e.unit].height + 1, u.bug.z));
+      case 'damage':
+        if (bow.camera.active) heldDamage.push({ unit: e.unit, amount: e.amount });
+        else showDamage(e.unit, e.amount, false);
         break;
-      }
       default:
         break;
     }
@@ -349,6 +378,28 @@ window.addEventListener('pointerup', (e) => {
   orbiting = false;
   orbitTail = ORBIT_TAIL;
 });
+/** In a stance the mouse aims (the right button held): turns the bug and raises its aim. */
+const SIGHT_SPEED = 0.0022;
+canvas.addEventListener('pointermove', (e) => {
+  if (!match.stance || match.phase !== 'aim' || (e.buttons & 3) === 0) return;
+  const slow = SIGHT_SPEED * (match.charging ? 0.6 : 1);
+  const b = match.activeUnit.bug;
+  const a = -e.movementX * slow;
+  // (from where the last movement of this frame left it)
+  if (stanceFace.tick !== match.tick) {
+    stanceFace.x = b.fx;
+    stanceFace.z = b.fz;
+    stanceFace.tick = match.tick;
+  }
+  const c = Math.cos(a);
+  const s = Math.sin(a);
+  const x = stanceFace.x * c + stanceFace.z * s;
+  stanceFace.z = stanceFace.z * c - stanceFace.x * s;
+  stanceFace.x = x;
+  controls.face(stanceFace.x, stanceFace.z);
+  controls.tilt(-e.movementY * slow);
+});
+const stanceFace = { x: 0, z: 1, tick: -1 };
 window.addEventListener('blur', () => {
   orbiting = false;
   orbitTail = 0;
@@ -490,7 +541,8 @@ function frame(now: number): void {
   const steering = match.phase === 'aim' || (match.phase === 'flight' && match.retreatTicks > 0);
   const viewTurns = orbiting || orbitTail > 0;
   orbitTail = Math.max(0, orbitTail - dt);
-  if (viewTurns && !debugCamera && !intro && !follow.gliding && steering && match.activeUnit.bug.alive) {
+  stage.controls.enabled = !bow.camera.active && !debugCamera;
+  if (viewTurns && !bow.camera.active && !debugCamera && !intro && !follow.gliding && steering && match.activeUnit.bug.alive) {
     // the turn keys still turn the bug while the view is held: they turn the view (at the bug's turn
     // rate, with the same slow start for fine steps), and the bug faces where it looks
     const turn = controls.turnHeld;
@@ -539,9 +591,16 @@ function frame(now: number): void {
     v.view.update(u.bug, alpha, scaled, ground);
   });
   projectiles.sync(match.projectiles, alpha, ground);
-  document.body.classList.toggle('special', bow.camera.active && !debugCamera);
-  if (bow.camera.active) stage.hud.visible = false;
+  // (the bars of a film, and no names: while it stands and aims, and once the hit is seen, the names are back)
+  document.body.classList.toggle('special', bow.camera.active && !match.stance && !debugCamera);
+  if (bow.camera.active) stage.hud.visible = match.stance || bow.hitFor > 0.5;
   else if (wasSpecial) stage.hud.visible = true;
+  if (bow.hitFor > 0.8 || !bow.camera.active) {
+    // (the damage of a special attack shows when its flash is over)
+    for (const e of heldDamage) showDamage(e.unit, e.amount, true);
+    heldDamage.length = 0;
+  }
+  placeSight();
   webViews.update(match, ground, (i, out) => out.copy(bugViews[i].view.root.position), now);
   const active = bugViews[match.active];
   aim.update(match, active.view.root.position, active.height, now);
@@ -550,10 +609,10 @@ function frame(now: number): void {
   if (!debugCamera && !intro && match.activeUnit.bug.alive) {
     const b = match.activeUnit.bug;
     const yaw = Math.atan2(b.fx, b.fz);
-    if (chasePending && match.phase === 'aim') {
+    if (chasePending && match.phase === 'aim' && !bow.camera.active) {
       chasePending = false;
       follow.chase(terrain, active.view.root.position, b.fx, b.fz, 0.9);
-    } else if (chaseUnit === match.active && match.phase === 'aim' && !follow.gliding && !faced && !viewTurns) {
+    } else if (chaseUnit === match.active && match.phase === 'aim' && !follow.gliding && !faced && !viewTurns && !bow.camera.active) {
       // (when the view turned the bug, the view is already where it should be)
       let d = yaw - chaseYaw;
       if (d > Math.PI) d -= Math.PI * 2;

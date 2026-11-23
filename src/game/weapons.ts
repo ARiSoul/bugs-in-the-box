@@ -43,7 +43,7 @@ export interface Weapon {
   /** Web: its radius, and how many turns it lasts. */
   readonly webRadius: number;
   readonly webTurns: number;
-  /** A special attack: its scene (ticks) plays between the release and the shot. 0: none. */
+  /** A special attack: its scene (ticks) plays when it is picked; then the bug stands, aims and fires. 0: none. */
   readonly sceneTicks: number;
   /** The only species that has it (none: every bug). */
   readonly species?: string;
@@ -154,7 +154,7 @@ export const WEB_BOW: Weapon = {
   damage: 45,
   webRadius: 5.5,
   webTurns: 6,
-  sceneTicks: 174,
+  sceneTicks: 264,
   color: 0xf4f4ee,
 };
 

@@ -18,7 +18,9 @@ export interface BowShot {
   hit: THREE.Vector3;
   dt: number;
   ground: DrawnGround;
-  charging: boolean;
+  /** It stands and aims; how far it has drawn. */
+  stance: boolean;
+  power: number;
 }
 
 /**
@@ -35,16 +37,12 @@ interface Cut {
 }
 
 const CUTS: Cut[] = [
-  // it has risen, the scarf ties itself on: low in front of it, coming closer
-  { t0: 0, t1: 0.68, a: [30, 5, 9.4, 1.05, 42, 0], b: [20, 2, 7.8, 1.15, 40, 0] },
+  // it has risen, and ties its scarf on: from its front round to its side, coming closer
+  { t0: 0, t1: 0.62, a: [22, 4, 8.6, 1.35, 40, 0], b: [86, 9, 6.4, 1.75, 38, 0] },
   // the light breaks out: wide, sweeping round it
-  { t0: 0.68, t1: 1.4, a: [44, 9, 9.6, 1.5, 48, 0], b: [92, 15, 11.2, 1.6, 46, 0.3] },
+  { t0: 0.62, t1: 1.4, a: [44, 9, 9.6, 1.5, 48, 0], b: [92, 15, 11.2, 1.6, 46, 0.3] },
   // the bow and the dart: at its side
-  { t0: 1.4, t1: 2.1, a: [84, 6, 11.4, 1.35, 40, 1.0], b: [66, 4, 10.4, 1.4, 39, 1.0] },
-  // the face behind the drawn bow, the point towards the view
-  { t0: 2.1, t1: 2.56, a: [40, 8, 10.2, 1.4, 36, 0.8], b: [34, 6, 9.2, 1.42, 35, 0.8] },
-  // over its shoulder, along the dart
-  { t0: 2.56, t1: 9, a: [151, 17, 9.4, 1.75, 42, 1.4], b: [153, 14, 8.4, 1.8, 40, 1.5], right: true },
+  { t0: 1.4, t1: 9, a: [84, 6, 11.4, 1.35, 40, 1.0], b: [66, 4, 10.4, 1.4, 39, 1.0] },
 ];
 /** The moment it lets go: from the side, the dart crossing the picture. */
 const RELEASE: Cut = { t0: 0, t1: 1, a: [80, 5, 10.6, 1.45, 44, 2.2], b: [76, 5, 11, 1.45, 44, 2.6] };
@@ -69,6 +67,7 @@ export class BowCamera {
   private hitAngle = 0;
   private hitSet = false;
   private lift = 0;
+  private fovIn = false;
   private reach = 1;
 
   start(camera: THREE.PerspectiveCamera, bug: Bug, view: BugView, ground: DrawnGround): void {
@@ -106,7 +105,10 @@ export class BowCamera {
     if (!this.active) return;
     this.fromT += x.dt;
     let fov = this.baseFov;
-    if (x.shotT < 0) {
+    if (x.shotT < 0 && x.stance) {
+      this.aimPose(x);
+      fov = 52 - 9 * x.power;
+    } else if (x.shotT < 0) {
       const i = CUTS.findIndex((c) => x.t >= c.t0 && x.t < c.t1);
       const c = CUTS[Math.max(0, i)];
       if (i !== this.lastCut) {
@@ -115,7 +117,8 @@ export class BowCamera {
       }
       const span = Math.min(c.t1, c.t0 + 0.75) - c.t0;
       const u = Math.min(1, (x.t - c.t0) / span);
-      const e = 1 - (1 - u) * (1 - u);
+      // (the first one turns slowly, as the scarf goes on)
+      const e = i === 0 ? u * u * (3 - 2 * u) : 1 - (1 - u) * (1 - u);
       const v = c.a.map((q, k) => q + (c.b[k] - q) * e);
       this.pose(v, x, this.place, this.look);
       fov = v[4];
@@ -143,10 +146,10 @@ export class BowCamera {
         this.hitAngle = Math.atan2(this.d.x, this.d.z);
         this.settle(x);
       }
-      const an = this.hitAngle + x.hitT * 0.38;
+      const an = this.hitAngle + x.hitT * 0.24;
       // (out for the web to open, then close to what it caught)
-      const near = Math.min(1, Math.max(0, (x.hitT - 1.0) / 1.1));
-      const dist = (11 - 4.2 * near * near * (3 - 2 * near)) * this.reach;
+      const near = Math.min(1, Math.max(0, (x.hitT - 1.2) / 1.6));
+      const dist = (11 - 2.8 * near * near * (3 - 2 * near)) * this.reach;
       const el = this.lift * (1 - 0.35 * near);
       const c = Math.cos(el);
       this.want.set(Math.sin(an) * c, Math.sin(el), Math.cos(an) * c).multiplyScalar(dist).add(x.hit);
@@ -165,9 +168,31 @@ export class BowCamera {
     camera.up.set(0, 1, 0);
     camera.lookAt(this.look);
     const was = camera.fov;
-    camera.fov = x.hitT >= 0 || x.shotT >= 0 ? camera.fov + (fov - camera.fov) * (1 - Math.exp(-x.dt * 12)) : fov;
+    camera.fov = x.hitT >= 0 || x.shotT >= 0 || (x.stance && this.fovIn) ? camera.fov + (fov - camera.fov) * (1 - Math.exp(-x.dt * 12)) : fov;
+    this.fovIn = x.stance;
     if (Math.abs(camera.fov - was) > 0.001) camera.updateProjectionMatrix();
   }
+
+  /** While it aims: behind its shoulder, looking where it aims; the spider keeps to the left of the picture. */
+  private aimPose(x: BowShot): void {
+    const r = x.radius;
+    this.s.crossVectors(x.aim, x.up);
+    if (this.s.lengthSq() < 0.02) this.s.copy(this.lastSide);
+    this.s.normalize();
+    this.lastSide.copy(this.s);
+    const pivot = this.d2.copy(x.at).addScaledVector(x.up, 1.9 * r);
+    const back = (8.6 - 1.4 * x.power) * r;
+    this.want.copy(pivot).addScaledVector(x.aim, -back).addScaledVector(this.s, 3.1 * r).addScaledVector(x.up, 1.5 * r);
+    this.clear(pivot, this.want, x.ground);
+    const cut = this.lastCut !== 70;
+    this.lastCut = 70;
+    const e = cut ? 1 : 1 - Math.exp(-x.dt * 16);
+    this.place.lerp(this.want, e);
+    this.want.copy(pivot).addScaledVector(x.aim, 70);
+    this.look.lerp(this.want, cut ? 1 : 1 - Math.exp(-x.dt * 22));
+  }
+  private readonly d2 = new THREE.Vector3();
+  private readonly lastSide = new THREE.Vector3(1, 0, 0);
 
   /** The moment it lets go, from the side. */
   private hold(camera: THREE.PerspectiveCamera, x: BowShot): void {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Bug, IDLE, TICK_RATE, type BugInput } from '../src/game/bug';
-import { Match, NO_INPUT, WEB_TEAR_TICKS, type MatchEvent, type MatchInput } from '../src/game/match';
+import { LINGER_TICKS, Match, NO_INPUT, WEB_TEAR_TICKS, type MatchEvent, type MatchInput } from '../src/game/match';
 import { ANT, SPIDER } from '../src/game/species';
 import { SOLDER_BLOB, WEAPONS, WEB_BOW, WEB_SHOT } from '../src/game/weapons';
 import { flat, world } from './helpers/worlds';
@@ -197,15 +197,16 @@ describe('the thread', () => {
 describe('Web Bow', () => {
   const BOW = WEAPONS.indexOf(WEB_BOW);
   const shoot = (m: Match, ticks: number, up: number): MatchEvent[] => {
-    run(m, 1, { weapon: BOW });
+    run(m, WEB_BOW.sceneTicks + 1, { weapon: BOW });
     expect(m.currentWeapon).toBe(WEB_BOW);
+    expect(m.stance).toBe(true);
     const s = m.units[0];
     const a = m.units[1].bug;
     run(m, 1, { faceX: a.x - s.bug.x, faceZ: a.z - s.bug.z });
     s.aimH = Math.sqrt(1 - up * up);
     s.aimV = up;
     const events = run(m, ticks, { fire: true });
-    events.push(...run(m, WEB_BOW.sceneTicks + 90));
+    events.push(...run(m, 90));
     return events;
   };
 
@@ -235,17 +236,54 @@ describe('Web Bow', () => {
     expect(m.units.every((u) => u.bug.health === 100)).toBe(true);
   });
 
-  it('plays its scene before the dart leaves, and takes no input meanwhile', () => {
+  it('plays its scene when it is picked, then stands and aims on the spot, and the clock waits for the scene', () => {
     const m = setup([20, 32], [27, 32]);
-    run(m, 1, { weapon: BOW });
-    const events = [...run(m, 20, { fire: true }), ...run(m, 1)];
-    expect(events.some((e) => e.type === 'special')).toBe(true);
+    const b = m.units[0].bug;
+    const clock = m.turnTicks;
+    expect(run(m, 1, { weapon: BOW }).some((e) => e.type === 'special')).toBe(true);
     expect(m.phase).toBe('special');
-    const x = m.units[0].bug.x;
-    expect(run(m, WEB_BOW.sceneTicks - 1, { move: 1, fire: true }).some((e) => e.type === 'fire')).toBe(false);
-    expect(m.units[0].bug.x).toBe(x);
+    run(m, WEB_BOW.sceneTicks - 1, { move: 1, fire: true });
+    expect(m.phase).toBe('special');
+    run(m, 1);
+    expect(m.phase).toBe('aim');
+    expect(m.stance).toBe(true);
+    expect(m.turnTicks).toBe(clock);
+    const [x, z, fx, up] = [b.x, b.z, b.fx, m.units[0].aimV];
+    run(m, 60, { move: 1, jump: true, turn: 1, pitch: 0.01 });
+    expect(Math.hypot(b.x - x, b.z - z)).toBeLessThan(0.01);
+    expect(b.grounded).toBe(true);
+    expect(b.fx).not.toBe(fx);
+    expect(m.units[0].aimV).toBeGreaterThan(up);
+    run(m, 30, { fire: true });
+    expect(m.charging).toBe(true);
     expect(run(m, 1).some((e) => e.type === 'fire')).toBe(true);
-    expect(m.phase).toBe('flight');
+    expect(m.stance).toBe(false);
+  });
+
+  it('another weapon calls it off, in the scene and in the stance', () => {
+    for (const ticks of [20, WEB_BOW.sceneTicks + 10]) {
+      const m = setup([20, 32], [27, 32]);
+      run(m, 1, { weapon: BOW });
+      run(m, ticks);
+      run(m, 1, { weapon: 1 });
+      expect(m.phase).toBe('aim');
+      expect(m.stance).toBe(false);
+      expect(m.weapon).toBe(1);
+      const x = m.units[0].bug.x;
+      run(m, 30, { move: 1 });
+      expect(m.units[0].bug.x).not.toBe(x);
+    }
+  });
+
+  it('its hit is looked at before the turn goes on, and it is not picked any more on the next turn', () => {
+    const m = setup([20, 32], [27, 32]);
+    shoot(m, 80, 0.05);
+    let n = 0;
+    for (; n < 2000 && m.active === 0; n++) run(m, 1);
+    expect(n).toBeGreaterThan(LINGER_TICKS);
+    for (n = 0; n < 4000 && m.active !== 0; n++) run(m, 1);
+    expect(m.phase).toBe('aim');
+    expect(m.currentWeapon).not.toBe(WEB_BOW);
   });
 
   it('ants do not have it', () => {

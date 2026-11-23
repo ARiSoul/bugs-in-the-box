@@ -71,11 +71,16 @@
       body::before { top: 0; }
       body::after { bottom: 0; }
       body.special::before, body.special::after { height: 9vh; }
+      #sight { position: fixed; left: 0; top: 0; width: 44px; height: 44px; margin: -22px 0 0 -22px; pointer-events: none; display: none; z-index: 4; }
+      #sight.on { display: block; }
+      #sight circle, #sight path { fill: none; stroke: #eafcff; stroke-width: 2; filter: drop-shadow(0 0 3px #1fa8ff); }
+      #sight circle.pull { stroke: #58d8ff; stroke-width: 4; }
       body.special > *:not(canvas):not(script) { opacity: 0; pointer-events: none; transition: opacity 0.25s; }
     </style>
   </head>
   <body>
     <canvas id="c"></canvas>
+    <svg id="sight" viewBox="-22 -22 44 44"><path d="M-20 0H-12M12 0H20M0-20V-12M0 12V20" /><circle r="1.2" /><circle class="pull" r="10" pathLength="100" stroke-dasharray="0 100" transform="rotate(-90)" /></svg>
     <div id="fps"></div>
 
     <div id="cineBar" class="box">

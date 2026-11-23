@@ -35,8 +35,8 @@ export class AimView {
   update(match: Match, bugPosition: THREE.Vector3, labelHeight: number, now: number): void {
     const unit = match.activeUnit;
     const aiming = match.phase === 'aim' && unit.bug.alive;
-    // (a special attack's scene has begun: nothing over the picture)
-    if (aiming && match.charging && match.currentWeapon.sceneTicks > 0) {
+    // (a special attack has a view and a sight of its own)
+    if (aiming && match.currentWeapon.sceneTicks > 0) {
       this.pointer.visible = this.marker.visible = false;
       return;
     }
