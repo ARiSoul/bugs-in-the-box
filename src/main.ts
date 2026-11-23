@@ -255,8 +255,20 @@ flyButton.addEventListener('click', () => {
   params.set('seed', String(seed));
   if (hooks.fly) params.delete('fly');
   else params.set('fly', '1');
+  params.delete('flythrough');
   location.search = params.toString();
 });
+// the cinematic camera: the map's scripted flight, the same way (`?flythrough=1`)
+const cineButton = document.getElementById('cine') as HTMLButtonElement;
+/** Switch between the game and the cinematic camera: the same map and seed, reloaded. */
+const setCinematic = (on: boolean): void => {
+  params.set('seed', String(seed));
+  params.delete('fly');
+  if (on) params.set('flythrough', '1');
+  else params.delete('flythrough');
+  location.search = params.toString();
+};
+cineButton.addEventListener('click', () => setCinematic(true));
 hud.bench.addEventListener('click', () => {
   scenario.generate(terrain, seed, layout);
   chunks.sync(terrain);
@@ -531,6 +543,55 @@ function loop(now: number): void {
 }
 
 newMatch(seed);
+// the cinematic camera's own little bar: it hides while the mouse rests (and for good with `?hud=0`, as in the
+// scripted reviews and measurements)
+if (hooks.flythrough && params.get('hud') !== '0') {
+  const body = document.body;
+  body.classList.add('cinematic');
+  // (just the map and its bugs: no names over them)
+  stage.hud.visible = false;
+  const pauseButton = document.getElementById('cinePause') as HTMLButtonElement;
+  let quiet = 0;
+  const wake = (): void => {
+    body.classList.remove('quiet');
+    clearTimeout(quiet);
+    quiet = window.setTimeout(() => body.classList.add('quiet'), 3000);
+  };
+  const flown = (): number => pathFrozenAt ?? (performance.now() - pathStart) / 1000;
+  /** Carry on from `t` seconds into the flight (or stay frozen there). */
+  const jump = (t: number): void => {
+    const at = ((t % views.duration) + views.duration) % views.duration;
+    if (pathFrozenAt !== null) pathFrozenAt = at;
+    else pathStart = performance.now() - at * 1000;
+  };
+  const togglePause = (): void => {
+    const at = flown();
+    if (pathFrozenAt === null) pathFrozenAt = at;
+    else {
+      pathFrozenAt = null;
+      pathStart = performance.now() - at * 1000;
+    }
+    pauseButton.textContent = pathFrozenAt === null ? 'pause' : 'resume';
+  };
+  pauseButton.addEventListener('click', () => {
+    togglePause();
+    pauseButton.blur();
+  });
+  (document.getElementById('cineLeave') as HTMLButtonElement).addEventListener('click', () => setCinematic(false));
+  window.addEventListener('keydown', (e) => {
+    if (e.code === 'Escape') setCinematic(false);
+    else if (e.code === 'Space') togglePause();
+    else if (e.code === 'ArrowLeft') jump(flown() - 3);
+    else if (e.code === 'ArrowRight') jump(flown() + 3);
+    else if (e.code === 'KeyR') jump(0);
+    else return;
+    e.preventDefault();
+    wake();
+  });
+  window.addEventListener('pointermove', wake);
+  window.addEventListener('pointerdown', wake);
+  wake();
+}
 if (!hooks.hud) document.body.classList.add('no-hud');
 requestAnimationFrame(loop);
 
