@@ -186,4 +186,27 @@ describe('Car Dashboard (car)', () => {
       }
     }
   });
+
+  it('spawns bugs inside the car, and they stay inside it however they walk', () => {
+    const { t } = make(1234);
+    const confine = scenarioById('car').confine?.(t.W, t.H, t.D);
+    if (!confine) throw new Error('no confine');
+    expect(confine(14, 67, 60)).toBe(false); // behind the corner panel
+    expect(confine(28, 34, 158)).toBe(false); // the armrest's cut end
+    expect(confine(160, 16, 28)).toBe(false); // the bulkhead under the dashboard
+    expect(confine(14, 67, 130)).toBe(true); // the door's sill
+    const rnd = createRng(7);
+    for (let seed = 1; seed <= 8; seed++) {
+      const m = new Match(t, [{ name: 'Red', species: ANT, color: 0, size: 4 }, { name: 'Blue', species: SPIDER, color: 0, size: 4 }], seed, { strictBounds: true, spawnLevels: true, confine });
+      for (const { bug: b } of m.units) {
+        expect(confine(b.x, b.y, b.z), `${b.x} ${b.y} ${b.z}`).toBe(true);
+        for (let n = 0; n < 600; n++) {
+          const on = b.grounded;
+          b.step(t, { move: 1, turn: rnd() < 0.9 ? 0 : rnd() < 0.5 ? -1 : 1, jump: false });
+          if (on && b.grounded) expect(confine(b.x, b.y, b.z)).toBe(true);
+          if (!b.grounded) break;
+        }
+      }
+    }
+  });
 });

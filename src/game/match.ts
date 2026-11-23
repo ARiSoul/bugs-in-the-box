@@ -155,6 +155,8 @@ export interface MatchOptions {
   spawnLevels?: boolean;
   /** A turntable that turns between turns (see TurntableSpec). */
   turntable?: TurntableSpec;
+  /** Where a bug may spawn, stand and walk: it turns back at the limit (default: the whole map). Pure. */
+  confine?: (x: number, y: number, z: number) => boolean;
 }
 
 export class Match {
@@ -216,6 +218,7 @@ export class Match {
       for (let t = 0; t < teams.length; t++) {
         if (i >= teams[t].size) continue;
         const bug = new Bug(teams[t].species);
+        bug.confine = options.confine ?? null;
         this.units.push({ id: id++, team: t, name: `${teams[t].species.id} ${i + 1}`, bug, aimH: COS45, aimV: COS45, dead: false });
         this.bugs.push(bug);
       }
@@ -685,7 +688,7 @@ export class Match {
     probe.y = bug.y;
     probe.z = bug.z;
     for (let t = 0; t < SPAWN_SETTLE_TICKS && probe.alive && !probe.settled; t++) probe.step(this.field, IDLE);
-    return probe.alive && probe.settled;
+    return probe.alive && probe.settled && (!this.options.confine || this.options.confine(probe.x, probe.y, probe.z));
   }
 
   /** Spread the bugs over the map (deterministic from the match seed) and let them land. */
@@ -694,7 +697,8 @@ export class Match {
     const margin = 8;
     const placed: Bug[] = [];
     for (const u of this.units) {
-      for (let attempt = 0; attempt < 40; attempt++) {
+      const tries = this.options.confine ? 200 : 40;
+      for (let attempt = 0; attempt < tries; attempt++) {
         const x = margin + this.rng() * (W - 2 * margin);
         const z = margin + this.rng() * (D - 2 * margin);
         const fromY = this.options.spawnLevels ? 4 + this.rng() * (H - 5) : H - 1;
@@ -707,7 +711,7 @@ export class Match {
         }
         // (on a ledge it slips off, with a drop under it: somewhere else)
         if (ok && this.options.spawnLevels && !this.staysUp(u.bug)) ok = false;
-        if (ok || attempt === 39) break;
+        if (ok || attempt === tries - 1) break;
       }
       placed.push(u.bug);
     }

@@ -268,6 +268,24 @@ export function pillarB(t: number): [number, number, number] {
   return [x - 4 - 1.5 * f, y - 4 - 9 * f, z + 17 + 20 * f];
 }
 
+/**
+ * Where a bug may stand or walk: inside the car, where the game camera can see it. Not on the outer side of the
+ * windows and of the corner panels, not on the bulkhead behind the dashboard, not at the doors' cut ends.
+ */
+export function insideCar(x: number, y: number, z: number): boolean {
+  const e = x < BASE_W / 2 ? x : BASE_W - x;
+  if (y < 24 && z < 46) return false;
+  if (e < 34 && z > 154.6) return false;
+  if (y > 60) {
+    // (the door's sill up to the window's seal; before the window's front post, only this side of the corner panel)
+    if (e < (z > 98.5 ? 8 : 21.5)) return false;
+    // (up beside the windscreen: this side of the pillar)
+    if (z < 70 && e < 25) return false;
+    if ((z - glassFoot(x) - 1) * GLASS.s - (y - GLASS.y) * GLASS.c < 0) return false;
+  } else if (e < 21.5) return false;
+  return true;
+}
+
 /** A point of a leaning frame: u right, w up along its face, n out of it. */
 export function leaning(f: Leaning, u: number, w: number, n: number): [number, number, number] {
   return [f.x + u, f.y + w * f.c + n * f.s, f.z - w * f.s + n * f.c];

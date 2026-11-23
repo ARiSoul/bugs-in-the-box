@@ -103,6 +103,8 @@ export class Bug {
   hz = 1;
   /** On a surface (of any slope), not falling. */
   grounded = false;
+  /** Where it may walk (null: anywhere), see `MatchOptions.confine`. */
+  confine: ((x: number, y: number, z: number) => boolean) | null = null;
   /** The surface's normal, valid while grounded. */
   nx = 0;
   ny = 1;
@@ -251,7 +253,9 @@ export class Bug {
       }
       this.grounded = this.holdOn(field, touched, n0x, n0y, n0z);
       // (the outer layers of the world are no ground: a crawling bug turns back at them, it does not fall off)
-      if (input.move !== 0 && (this.x < EDGE || this.z < EDGE || this.x > field.W - EDGE || this.z > field.D - EDGE || (this.y < EDGE && this.ny < 0))) {
+      // (nor is anything outside where it may be; one that was thrown out there may walk back)
+      const out = this.confine !== null && !this.confine(this.x, this.y, this.z) && this.confine(this.px, this.py, this.pz);
+      if (input.move !== 0 && (out || this.x < EDGE || this.z < EDGE || this.x > field.W - EDGE || this.z > field.D - EDGE || (this.y < EDGE && this.ny < 0))) {
         this.x = this.px;
         this.y = this.py;
         this.z = this.pz;

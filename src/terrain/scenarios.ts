@@ -1,4 +1,5 @@
 import { car } from './generators/car';
+import { carScale, insideCar } from './generators/carPlan';
 import { desk } from './generators/desk';
 import { floatingIslands } from './generators/floatingIslands';
 import { fridge } from './generators/fridge';
@@ -48,6 +49,8 @@ export interface Scenario {
    * needs a larger map, so the bugs keep their size against the things around them.
    */
   mapSize?: [number, number, number];
+  /** Where a bug may stand or walk, for a map of this size (default: all of it). */
+  confine?: (W: number, H: number, D: number) => (x: number, y: number, z: number) => boolean;
   turntable?: (W: number, H: number, D: number) => { x: number; z: number; radius: number; j0: number; j1: number; surface: number };
 }
 
@@ -164,6 +167,10 @@ export const SCENARIOS: readonly Scenario[] = [
     rays: 0.16,
     chaseElevation: 0.5,
     spawnLevels: true,
+    confine: (W, H, D) => {
+      const { s, ox, oz } = carScale(W, H, D);
+      return (x, y, z) => insideCar((x - ox) / s, y / s, (z - oz) / s);
+    },
   },
   {
     id: 'islands',

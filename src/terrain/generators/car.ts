@@ -210,9 +210,9 @@ export const car: TerrainGenerator = (terrain, seed, layout) => {
     const mx = (v: number): number => (m ? BASE_X - v : v);
     const span = (a: number, b: number): [number, number] => (m ? [BASE_X - b, BASE_X - a] : [a, b]);
     const [dx0, dx1] = span(3, DASH_X0 + 0.6);
-    add(terrain, box(dx0, 8, 34, dx1, 65.5, 157, 3), DASH_TRIM);
-    const [ax0, ax1] = span(22, 31);
-    add(terrain, box(ax0, 27, 108, ax1, 33.5, 157, 2), DASH_TRIM);
+    add(terrain, box(dx0, 8, 34, dx1, 65.5, 158, 3), DASH_TRIM);
+    const [ax0, ax1] = span(22, 30.8);
+    add(terrain, box(ax0, 27.2, 108, ax1, 33.4, 158, 3), DASH_TRIM);
     // the pillar up along the windscreen's edge, the panel of the door's corner behind it (a triangle, in strips)
     for (let k = 0; k < 9; k++) {
       const [t0, t1] = [k / 24, (k + 1) / 24];

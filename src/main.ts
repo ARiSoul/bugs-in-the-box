@@ -125,7 +125,7 @@ function newMatch(s: number): void {
   state.lastExplosionChunks = 0;
   state.bench = '';
 
-  match = new Match(terrain, TEAMS, s, { strictBounds: scenario.strictBounds, spawnLevels: scenario.spawnLevels === true, turntable: scenario.turntable?.(terrain.W, terrain.H, terrain.D) });
+  match = new Match(terrain, TEAMS, s, { strictBounds: scenario.strictBounds, spawnLevels: scenario.spawnLevels === true, turntable: scenario.turntable?.(terrain.W, terrain.H, terrain.D), confine: scenario.confine?.(terrain.W, terrain.H, terrain.D) });
 
   prevTurns = 0;
   for (const v of bugViews) {
