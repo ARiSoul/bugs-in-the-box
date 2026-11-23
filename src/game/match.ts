@@ -151,6 +151,7 @@ export type MatchEvent =
   | { type: 'explosion'; x: number; y: number; z: number; radius: number }
   | { type: 'arc'; x1: number; y1: number; z1: number; x2: number; y2: number; z2: number }
   | { type: 'dig'; x1: number; y1: number; z1: number; x2: number; y2: number; z2: number; radius: number }
+  | { type: 'arrow'; x: number; y: number; z: number; dx: number; dy: number; dz: number; unit: number }
   | { type: 'web'; id: number }
   | { type: 'stuck'; unit: number }
   | { type: 'webGone'; id: number; torn: boolean }
@@ -329,7 +330,8 @@ export class Match {
       const r = p.step(this.field, this.windX, this.windZ, this.bugs, this.options.strictBounds === true);
       if (r === 'fly') continue;
       if (r === 'explode') {
-        if (p.weapon.kind === 'web') this.castWeb(p.x, p.y, p.z, p.weapon, p.owner);
+        if (p.weapon.kind === 'arrow') this.arrowHit(p);
+        else if (p.weapon.kind === 'web') this.castWeb(p.x, p.y, p.z, p.weapon, p.owner);
         else this.explode(p.x, p.y, p.z, p.weapon);
       }
       this.projectiles.splice(i--, 1);
@@ -383,6 +385,8 @@ export class Match {
   private aside(b: Bug, dx: number, dy: number, dz: number, over: number): void {
     b.shove(this.field, dx * over, dy * over, dz * over);
     if (b.grounded) return;
+    // (a thread does not hold it up on another bug)
+    b.thread = false;
     const vn = b.vx * dx + b.vy * dy + b.vz * dz;
     if (vn < 0) {
       b.vx -= dx * vn;
@@ -472,6 +476,22 @@ export class Match {
   private removeWeb(w: Web, torn: boolean): void {
     this.webs.splice(this.webs.indexOf(w), 1);
     this.events.push({ type: 'webGone', id: w.id, torn });
+  }
+
+  /** A dart hits: a bug is hurt and thrown along its flight, the faster the more; terrain only holds it. */
+  private arrowHit(p: Projectile): void {
+    const speed = Math.sqrt(p.vx * p.vx + p.vy * p.vy + p.vz * p.vz);
+    const l = speed > 1e-6 ? speed : 1;
+    const dx = p.vx / l;
+    const dy = p.vy / l;
+    const dz = p.vz / l;
+    const b = p.touched(this.bugs);
+    const u = b ? this.units[this.bugs.indexOf(b)] : null;
+    this.events.push({ type: 'arrow', x: p.x, y: p.y, z: p.z, dx, dy, dz, unit: u ? u.id : -1 });
+    if (!u) return;
+    const f = Math.min(1, speed / p.weapon.maxSpeed);
+    this.damage(u, Math.max(1, Math.round(p.weapon.damage * f)));
+    u.bug.push(dx * KNOCKBACK * f, (dy + 0.35) * KNOCKBACK * f, dz * KNOCKBACK * f);
   }
 
   /** A ball of silk lands: a web on the surface there; a bug it hits is hurt a little. */

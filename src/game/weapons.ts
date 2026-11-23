@@ -11,7 +11,9 @@ export type WeaponKind =
   /** No projectile: digs a straight tunnel along the aim, right away. */
   | 'tunnel'
   /** Projectile that spreads a sticky web where it lands (no blast, the terrain stays). */
-  | 'web';
+  | 'web'
+  /** Projectile that hurts and throws only the bug it hits, the more the faster it flies; it sticks in terrain. */
+  | 'arrow';
 
 export interface Weapon {
   readonly id: string;
@@ -21,6 +23,8 @@ export interface Weapon {
   readonly maxSpeed: number;
   /** How much of the wind acceleration the projectile feels (0 = none). */
   readonly windFactor: number;
+  /** How much of gravity the projectile feels (1 = all). */
+  readonly gravityFactor: number;
   /** Ticks until a grenade goes off. */
   readonly fuseTicks: number;
   /** Fraction of the speed kept along the normal after a bounce (grenade). */
@@ -48,6 +52,7 @@ export interface Weapon {
 const BASE = {
   maxSpeed: 0,
   windFactor: 0,
+  gravityFactor: 1,
   fuseTicks: 0,
   bounce: 0,
   blastRadius: 0,
@@ -130,7 +135,24 @@ export const WEB_SHOT: Weapon = {
   color: 0xf2f2ee,
 };
 
-export const WEAPONS: readonly Weapon[] = [SOLDER_BLOB, CAPACITOR, SHORT_CIRCUIT, SOLDERING_IRON, WEB_SHOT];
+/**
+ * Spiders only: a web strung between two threads, drawn back like a bow. Its dart of hardened silk flies fast and
+ * flat and hardly feels the wind, but it has to hit: no blast, no crater.
+ */
+export const WEB_BOW: Weapon = {
+  ...BASE,
+  id: 'web-bow',
+  name: 'Web Bow',
+  kind: 'arrow',
+  species: 'spider',
+  maxSpeed: 62,
+  windFactor: 0.15,
+  gravityFactor: 0.5,
+  damage: 45,
+  color: 0xf4f4ee,
+};
+
+export const WEAPONS: readonly Weapon[] = [SOLDER_BLOB, CAPACITOR, SHORT_CIRCUIT, SOLDERING_IRON, WEB_SHOT, WEB_BOW];
 
 /** Whether a bug of this species has the weapon. */
 export function hasWeapon(species: string, w: Weapon): boolean {

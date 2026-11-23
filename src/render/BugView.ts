@@ -54,6 +54,9 @@ export class BugView {
   private readonly target = new THREE.Vector3();
   private readonly foot = new THREE.Vector3();
   private phase = 0;
+  /** How far the front legs are raised (0..1), to hold a bow; eased. */
+  raise = 0;
+  private raised = 0;
   /** How far the body is drawn off its place in the simulation, along its up: what is drawn lies that much above the density (smoothed). */
   private lift = 0;
   /** The same, summed over the feet of the last update. */
@@ -180,12 +183,18 @@ export class BugView {
     this.phase += speed * dt * 2.2;
     const swingAmp = bug.grounded ? Math.min(1, speed / 2) * 0.45 : 0;
     this.feetOffset = 0;
+    this.raised += (this.raise - this.raised) * (1 - Math.exp(-dt * 12));
     for (const leg of this.legs) {
       const a = this.phase + leg.offset;
       leg.pivot.rotation.y = leg.side * Math.sin(a) * swingAmp;
       const bend = bug.grounded && ground ? this.bendToGround(leg, ground) : 0;
       leg.bend += (bend - leg.bend) * (1 - Math.exp(-dt * 25));
       leg.pivot.rotation.z = leg.side * (leg.bend + (bug.grounded ? Math.max(0, Math.cos(a)) * swingAmp * 0.5 : 0.35));
+      // (the front pair lifts forward, to hold the bow)
+      if (this.raised > 0.01 && this.legs.indexOf(leg) < 2) {
+        leg.pivot.rotation.y += -leg.side * 0.45 * this.raised;
+        leg.pivot.rotation.z = leg.pivot.rotation.z * (1 - this.raised) + leg.side * 1.15 * this.raised;
+      }
     }
   }
 

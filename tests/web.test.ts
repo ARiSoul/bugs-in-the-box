@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { Bug, IDLE, TICK_RATE, type BugInput } from '../src/game/bug';
 import { Match, NO_INPUT, WEB_TEAR_TICKS, type MatchEvent, type MatchInput } from '../src/game/match';
 import { ANT, SPIDER } from '../src/game/species';
-import { SOLDER_BLOB, WEAPONS, WEB_SHOT } from '../src/game/weapons';
+import { SOLDER_BLOB, WEAPONS, WEB_BOW, WEB_SHOT } from '../src/game/weapons';
 import { flat, world } from './helpers/worlds';
 
 const WEB = WEAPONS.indexOf(WEB_SHOT);
@@ -169,6 +169,21 @@ describe('the thread', () => {
     expect(a.b.thread).toBe(false);
   });
 
+  it('on it, a spider takes hold of a wall it touches', () => {
+    const t = world(2, 2, 2, (i, j) => Math.min(j - 4, Math.max(i - 30, j - 44), 34 - i));
+    const b = new Bug(SPIDER);
+    b.drop(t, 29, 32);
+    b.fx = 1;
+    b.fz = 0;
+    step(b, t, {}, 60);
+    step(b, t, { jump: true });
+    step(b, t, {}, 15);
+    step(b, t, { jump: true });
+    step(b, t, {}, TICK_RATE * 3);
+    expect(b.grounded).toBe(true);
+    expect(b.thread).toBe(false);
+  });
+
   it('is cut when the place it hangs from is blown away', () => {
     const { b, t } = off(SPIDER);
     step(b, t, { jump: true });
@@ -176,5 +191,50 @@ describe('the thread', () => {
     t.carve(b.tx, b.ty, b.tz, 4);
     step(b, t, {}, 2);
     expect(b.thread).toBe(false);
+  });
+});
+
+describe('Web Bow', () => {
+  const BOW = WEAPONS.indexOf(WEB_BOW);
+  const shoot = (m: Match, ticks: number, up: number): MatchEvent[] => {
+    run(m, 1, { weapon: BOW });
+    expect(m.currentWeapon).toBe(WEB_BOW);
+    const s = m.units[0];
+    const a = m.units[1].bug;
+    run(m, 1, { faceX: a.x - s.bug.x, faceZ: a.z - s.bug.z });
+    s.aimH = Math.sqrt(1 - up * up);
+    s.aimV = up;
+    const events = run(m, ticks, { fire: true });
+    events.push(...run(m, 90));
+    return events;
+  };
+
+  it('hurts and throws the bug it hits along its flight, more at full draw, and leaves no crater', () => {
+    const hurt = (ticks: number): number => {
+      const m = setup([20, 32], [27, 32]);
+      const x = m.units[1].bug.x;
+      const events = shoot(m, ticks, 0.05);
+      expect(events.some((e) => e.type === 'arrow' && e.unit === 1)).toBe(true);
+      expect(events.some((e) => e.type === 'explosion')).toBe(false);
+      expect(m.units[1].bug.x).toBeGreaterThan(x);
+      return 100 - m.units[1].bug.health;
+    };
+    const full = hurt(80);
+    const weak = hurt(30);
+    expect(full).toBeGreaterThan(35);
+    expect(weak).toBeLessThan(full);
+    expect(weak).toBeGreaterThan(0);
+  });
+
+  it('a miss hurts nobody, whatever it comes down next to', () => {
+    const m = setup([20, 32], [27, 32]);
+    const events = shoot(m, 20, -0.3);
+    expect(events.some((e) => e.type === 'arrow' && e.unit === -1)).toBe(true);
+    expect(m.units.every((u) => u.bug.health === 100)).toBe(true);
+  });
+
+  it('ants do not have it', () => {
+    const m = setup([20, 32], [27, 32]);
+    expect(m.canUse(m.units[1], BOW)).toBe(false);
   });
 });

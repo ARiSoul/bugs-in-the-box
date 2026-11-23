@@ -64,7 +64,7 @@ export class Projectile {
     if (w.kind === 'grenade' && this.age >= w.fuseTicks) return 'explode';
 
     this.vx += windX * w.windFactor * DT;
-    this.vy -= GRAVITY * DT;
+    this.vy -= GRAVITY * w.gravityFactor * DT;
     this.vz += windZ * w.windFactor * DT;
 
     const dx = this.vx * DT;
@@ -79,7 +79,7 @@ export class Projectile {
       this.z += dz / steps;
       if (w.kind !== 'grenade') {
         if (field.sample(this.x, this.y, this.z) < PROJECTILE_RADIUS) return 'explode';
-        if (this.hitsBug(bugs)) return 'explode';
+        if (this.touched(bugs) !== null) return 'explode';
       } else if (this.bounceOffTerrain(field)) {
         break; // velocity changed: finish this tick from the bounce point
       }
@@ -95,16 +95,17 @@ export class Projectile {
     return 'fly';
   }
 
-  private hitsBug(bugs: readonly Bug[]): boolean {
+  /** The bug it touches, if any (never its owner right after the shot). */
+  touched(bugs: readonly Bug[]): Bug | null {
     for (const b of bugs) {
       if (!b.alive || (b === this.owner && this.age <= OWNER_GRACE_TICKS)) continue;
       const ex = b.x - this.x;
       const ey = b.y - this.y;
       const ez = b.z - this.z;
       const r = b.species.radius + PROJECTILE_RADIUS;
-      if (ex * ex + ey * ey + ez * ez < r * r) return true;
+      if (ex * ex + ey * ey + ez * ez < r * r) return b;
     }
-    return false;
+    return null;
   }
 
   /** Returns true if it touched the terrain (and bounced or came to rest). */

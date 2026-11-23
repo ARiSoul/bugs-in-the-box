@@ -13,6 +13,7 @@ import { Controls } from './input/controls';
 import { pickTerrain } from './input/picking';
 import { AimView } from './render/aim';
 import { BugView } from './render/BugView';
+import { BowView } from './render/bow';
 import { WebViews } from './render/webs';
 import { DrawnGround } from './render/drawnGround';
 import { ChunkRenderer } from './render/ChunkRenderer';
@@ -55,6 +56,7 @@ const texts = new FloatingTexts(stage.hud);
 const projectiles = new ProjectileViews(stage.scene);
 const aim = new AimView(stage.scene);
 const webViews = new WebViews(stage.scene);
+const bow = new BowView(stage.scene);
 const follow = new FollowCamera(stage.camera, stage.controls);
 // the right button turns the view (and the bug with it), the wheel zooms; the left button stays free
 stage.controls.mouseButtons = { LEFT: null, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.ROTATE };
@@ -139,6 +141,7 @@ function newMatch(s: number): void {
     return { view, label, height: u.bug.species.radius * 2.4 };
   });
   webViews.clear();
+  bow.clear();
   indexedTurns = 0;
   ground.reset(stage.scene, bugViews.map((v) => v.view.root));
   hud.setupMatch(match, WEAPONS, (i) => controls.selectWeapon(i));
@@ -178,6 +181,9 @@ function handleEvents(events: readonly MatchEvent[]): void {
         if (u.bug.y > KILL_Y && deathFocus < 0) deathFocus = e.unit;
         break;
       }
+      case 'arrow':
+        if (e.unit < 0) bow.stick(e.x, e.y, e.z, e.dx, e.dy, e.dz, performance.now());
+        break;
       case 'stuck': {
         const u = match.units[e.unit];
         texts.spawn('stuck!', 0xf2f2ee, at.set(u.bug.x, u.bug.y + bugViews[e.unit].height + 1, u.bug.z));
@@ -505,6 +511,8 @@ function loop(now: number): void {
     v.view.update(u.bug, alpha, dt, ground);
   });
   projectiles.sync(match.projectiles, alpha, ground);
+  match.units.forEach((u, i) => (bugViews[i].view.raise = u.id === match.activeUnit.id && bow.ready(match) ? 1 : 0));
+  bow.update(match, bugViews[match.active].view.root.position, ground, now);
   webViews.update(match, ground, (i, out) => out.copy(bugViews[i].view.root.position), now);
   const active = bugViews[match.active];
   aim.update(match, active.view.root.position, active.height, now);

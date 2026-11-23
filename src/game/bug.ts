@@ -51,6 +51,11 @@ const AIM_SURFACE_NY = 0.64;
 /** A spider on its thread comes down at this speed; sideways it slows by this factor a tick. */
 const THREAD_SPEED = 6;
 const THREAD_DRAG = 0.97;
+/** After this long in the air (ticks) it takes hold of anything it touches. */
+const THREAD_GRIP = 20;
+/** In the air this long (ticks), touching something and moving less than this in a tick: it takes hold. */
+const WEDGED_TICKS = 90;
+const WEDGED_MOVE = 0.02;
 /** How near the world's sides (and, under things, its bottom) a crawling bug goes. */
 const EDGE = 2.4;
 /** Falling, a bug that is walking forward into a wall catches hold of it, unless it falls faster than this. */
@@ -299,6 +304,16 @@ export class Bug {
         this.nx = ahead[0];
         this.ny = ahead[1];
         this.nz = ahead[2];
+        this.grounded = true;
+      }
+      // (down a thread, it takes hold of whatever it touches)
+      // (and wedged between steep surfaces, going nowhere, any bug does)
+      const mx = this.x - this.px;
+      const my = this.y - this.py;
+      const mz = this.z - this.pz;
+      const wedged = this.airTicks > WEDGED_TICKS && mx * mx + my * my + mz * mz < WEDGED_MOVE * WEDGED_MOVE;
+      if (!this.grounded && (wedged || (this.thread && this.airTicks > THREAD_GRIP))) {
+        this.setNormal();
         this.grounded = true;
       }
       if (this.grounded) {
