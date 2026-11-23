@@ -69,8 +69,8 @@ describe('Desk (desk)', () => {
         // the main top, in front of the mat's left edge (clear of the things on it)
         const [mx0, mz0, , mz1] = p.main;
         expect(surfaceUnder(t, mx0 + 3 * p.scale, top + 6, mz1 - 2 * p.scale)).toBeCloseTo(top, 0);
-        // the wing, at its centre's front
-        expect(surfaceUnder(t, p.wing[0] + 2 * p.scale, top + 2.5, p.wing[1] + 12 * p.scale)).toBeCloseTo(top, 0);
+        // the white table (the wing), at a clear spot towards its front left corner
+        expect(surfaceUnder(t, p.wing[0] - 7 * p.scale, top + 2.5, p.wing[1] + 21 * p.scale)).toBeCloseTo(top, 0);
         // the shelf, at its front corner
         expect(surfaceUnder(t, p.shelf[2] - 1.5 * p.scale, t.H - 3, p.shelf[3] - 1 * p.scale)).toBeCloseTo(p.shelf[4], 0);
         // in front of the desk, the void all the way down
@@ -79,6 +79,35 @@ describe('Desk (desk)', () => {
       });
     });
   }
+
+  it('is solid where things stand: keyboards, laptops, the monitor arm base, a cable lying on the desk', () => {
+    const { t, layout } = make(9);
+    const p = deskPlan(t.W, t.H, t.D);
+    const mid = (b: number[]): [number, number, number, number] => [(b[0] + b[3]) / 2, (b[2] + b[5]) / 2, b[1], b[4]];
+    // (a ray from above stops on each thing, near its top, not on the desk under it)
+    for (const f of layout.features.filter((g) => g.kind === 'keyboard')) {
+      const [x, z, , y1] = mid(f.box);
+      expect(surfaceUnder(t, x, y1 + 4, z)).toBeGreaterThan(y1 - 1);
+    }
+    const base = layout.features.find((g) => g.kind === 'part' && g.color === 0x0e0e10 && g.shape === 'soft');
+    expect(base).toBeDefined();
+    if (base) {
+      const [x, z, , y1] = mid(base.box);
+      expect(surfaceUnder(t, x, y1 + 4, z)).toBeGreaterThan(p.top + 1.5);
+    }
+    // (a cable lying on the main top, away from everything else: the hit is the cable's top, over the desk)
+    const [mx0, mz0, mx1, mz1] = p.main;
+    const on: [number, number][] = [];
+    for (const g of layout.features.filter((f) => f.kind === 'wire')) {
+      for (let i = 1; i + 2 < g.path.length; i += 3) {
+        const [x, y, z] = [g.path[i], g.path[i + 1], g.path[i + 2]];
+        if (Math.abs(y - (p.top + 0.3)) < 0.05 && x > mx0 + 4 && x < mx1 - 4 && z > mz0 + 4 && z < mz1 - 4) on.push([x, z]);
+      }
+    }
+    expect(on.length).toBeGreaterThan(0);
+    const [cx, cz] = on[Math.floor(on.length / 2)];
+    expect(surfaceUnder(t, cx, p.top + 4, cz)).toBeGreaterThan(p.top + 0.3);
+  });
 
   it('spawns every bug alive on some level', () => {
     const { t } = make(5);

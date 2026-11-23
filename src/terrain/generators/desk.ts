@@ -90,25 +90,43 @@ export const desk: TerrainGenerator = (terrain, seed, layout) => {
     const yaw: [number, number] | undefined = c === 1 && sn === 0 ? undefined : [c, sn];
     put(feature('part', x, y0 + h / 2, z, { shape, box: [x - w / 2, y0, z - d / 2, x + w / 2, y0 + h, z + d / 2], yaw, color, metal, rough, opacity: opts.opacity ?? 1, glow: opts.glow ?? 0 }));
     if (opts.body === false) return;
-    const lift = opts.lift ?? 1.25;
+    // (its hidden body: inside the drawn shape (inset by its rounding; a ball's an inscribed box), from its top
+    // down; by default rooted 1.5 into the surface it rests on, so even a low part (a keyboard, a laptop, a
+    // monitor's base) has a body thick enough to mesh, its foot hidden in the drawn part; with `lift`, standing
+    // that far off its foot instead)
     const r = shape === 'soft' || shape === 'ball' ? Math.min(w, h, d) * 0.3 : 0.2;
     const k = 0.1 + r * 0.62;
-    const hy = (h - lift) / 2 - k;
+    const ball = shape === 'ball';
+    const top = ball ? y0 + h / 2 + (h / 2) * 0.62 : y0 + h - k;
+    const bottom = opts.lift === undefined ? y0 - 1.5 : y0 + opts.lift + k;
+    const hy = (top - bottom) / 2;
     // (a body thinner than two cells meshes with folded faces: a part thin in two ways has none, a bug steps
     // over it; a panel thin in one way (a screen) gets a body two cells thick)
-    let hx = w / 2 - k;
-    let hz = d / 2 - k;
+    let hx = ball ? (w / 2) * 0.62 : w / 2 - k;
+    let hz = ball ? (d / 2) * 0.62 : d / 2 - k;
     if (hy < 0.95 || (hx < 0.95 && hz < 0.95)) return;
     hx = Math.max(1, hx);
     hz = Math.max(1, hz);
-    const cy = y0 + lift + (h - lift) / 2;
+    const cy = (top + bottom) / 2;
     if (shape === 'cylY') hide(cylinder(x, cy, z, Math.max(1, Math.min(w, d) / 2 - 0.15), hy, 1));
     else if (c === 1 && sn === 0) hide(boxMinMax(x - hx, cy - hy, z - hz, x + hx, cy + hy, z + hz));
     else hide(rotatedBox(x, cy, z, hx, hy, hz, 1, c, sn));
   };
-  /** A cable along `ctrl`: drawn only (thin cables lie flat; a bug steps over them). */
+  /**
+   * A cable along `ctrl`, drawn, with a hidden body so a bug walks over it, never through it. In the air: a
+   * chain of capsules two cells thick, their tops at the cable's top (hanging under it). Lying on a top: a low wide
+   * swell under it instead (0.45 high, about 2.5 wide: a narrow ridge would mesh as a row of lumps), its crest
+   * under the drawn cable.
+   */
   const cable = (ctrl: number[], radius: number, color: number): void => {
-    put(feature('wire', ctrl[0], ctrl[1], ctrl[2], { path: [radius, ...wirePath(ctrl, 8)], color }));
+    const pts = wirePath(ctrl, 8);
+    put(feature('wire', ctrl[0], ctrl[1], ctrl[2], { path: [radius, ...pts], color }));
+    for (let i = 0; i + 5 < pts.length; i += 3) {
+      const [ax, ay, az, bx, by, bz] = [pts[i], pts[i + 1], pts[i + 2], pts[i + 3], pts[i + 4], pts[i + 5]];
+      const lying = terrain.sample((ax + bx) / 2, (ay + by) / 2 - radius - 0.6, (az + bz) / 2) < 0;
+      if (lying) hide(capsule(ax, ay - radius + 0.45 - 2, az, bx, by - radius + 0.45 - 2, bz, 2));
+      else hide(capsule(ax, ay - (1.05 - radius), az, bx, by - (1.05 - radius), bz, 1.05));
+    }
   };
 
   /** A plug where a cable ends on a part: a small dark body (x, y, z), along x or z. */
@@ -246,6 +264,8 @@ export const desk: TerrainGenerator = (terrain, seed, layout) => {
   part(kx, T, kz, L(27.6), L(1.6), L(8.4), WC, WS, 'box', 0x141416, 0.1, 0.55);
   plug(kx + L(13.2) * C45, T + L(0.9), kz - L(13.2) * C45 + L(0.2), true);
   put(feature('keyboard', kx, T + L(1.6), kz, { box: [kx - L(13.5), T, kz - L(3.9), kx + L(13.5), T + L(1.6), kz + L(3.9)], color: 0x1b1c20, yaw: [WC, WS], radius: L(0.8), glow: 0.6, look: 'full' }));
+  // (the caps' body: over the key area, up to the caps' tops)
+  hide(rotatedBox(kx, (T - 1.5 + T + L(1.6) + L(0.8) * 0.65 - 0.15) / 2, kz, L(13.5) - 0.3, (L(1.6) + L(0.8) * 0.65 - 0.15 + 1.5) / 2, L(3.9) - 0.3, 1, WC, WS));
   const [rx, rz] = wing(L(-1), L(10));
   part(rx, T, rz, L(27.6), L(1.4), L(4.6), WC, WS, 'soft', 0x0f0f10, 0, 0.7);
   cable([kx + L(8) * C45, T + L(0.8), kz - L(8) * C45, kx + L(14) * C45, T + 0.3, kz - L(14) * C45, mx0 + L(4), T + 0.3, mz0 + L(10), mx0 + L(10), T + 0.3, mz0 + L(4)], 0.3, 0x131313);
@@ -394,6 +414,7 @@ export const desk: TerrainGenerator = (terrain, seed, layout) => {
   const sk = mz0 + L(37);
   part(mm[0], T, sk, L(29.4), L(1), L(6.8), 1, 0, 'box', 0x3c3d40, 0.2, 0.5);
   put(feature('keyboard', mm[0], T + L(1), sk, { box: [mm[0] - L(14.2), T, sk - L(3.1), mm[0] + L(14.2), T + L(1), sk + L(3.1)], color: 0x26272a, radius: L(0.45), look: 'full' }));
+  hide(boxMinMax(mm[0] - L(14.2) + 0.3, T - 1.5, sk - L(3.1) + 0.3, mm[0] + L(14.2) - 0.3, T + L(1) + L(0.45) * 0.65 - 0.1, sk + L(3.1) - 0.3));
   // the desk mat, the vertical mice (one with its RGB ring), and the small things
   const matX0 = rm[0] - L(16);
   part((matX0 + mx1 - L(2)) / 2, T, mz0 + L(34), mx1 - L(2) - matX0, L(0.15), L(18), 1, 0, 'plate', 0x0f0f10, 0, 0.95, { body: false });
@@ -442,6 +463,7 @@ export const desk: TerrainGenerator = (terrain, seed, layout) => {
   const pcz = bzz + L(0.2);
   const ptop = T + L(2.2);
   put(feature('foil', pcx, ptop + L(0.35), pcz, { box: [pcx - L(2.4), ptop, pcz - L(1.65), pcx + L(2.4), ptop + L(0.7), pcz + L(1.65)], color: 0xb9a46c, radius: L(1) }));
+  hide(boxMinMax(pcx - L(2.1), ptop - 1.5, pcz - L(1.35), pcx + L(2.1), ptop + L(0.5), pcz + L(1.35)));
 
   // a loose cable lying across the middle, and the mat's front
   plug(mm[0] + L(13.2), T + 0.75, mz0 + L(30.3), true);
