@@ -121,7 +121,8 @@ export class FloatingTexts {
     ctx.fillStyle = hex(color);
     ctx.strokeText(text, 64, 48);
     ctx.fillText(text, 64, 48);
-    sprite.scale.set(3, 1.5, 1);
+    // (sprites keep one screen size, whatever the distance)
+    sprite.scale.set(0.13, 0.065, 1);
     sprite.position.copy(at);
     this.scene.add(sprite);
     this.items.push({ sprite, texture, t0: performance.now(), life, y0: at.y });
@@ -138,7 +139,7 @@ export class FloatingTexts {
         this.items.splice(i, 1);
         continue;
       }
-      f.sprite.position.y = f.y0 + k * 3;
+      f.sprite.position.y = f.y0 + k * 2;
       f.sprite.material.opacity = k < 0.6 ? 1 : 1 - (k - 0.6) / 0.4;
     }
   }

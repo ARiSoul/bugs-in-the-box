@@ -5,7 +5,7 @@ import { captureCanvas } from './debug/capture';
 import { readHooks, usesDebugCamera } from './debug/hooks';
 import { PerfLog } from './debug/perf';
 import { viewsFor, type ScenarioViews } from './debug/views';
-import { DT, KILL_Y } from './game/bug';
+import { DT, GRAVITY, KILL_Y } from './game/bug';
 import { Match, NO_INPUT, type MatchEvent, type TeamSpec } from './game/match';
 import { ANT, SPIDER } from './game/species';
 import { SOLDER_BLOB, WEAPONS } from './game/weapons';
@@ -170,14 +170,21 @@ function placeSight(): void {
   if (!on) return;
   const b = match.activeUnit.bug;
   match.aimDirection(match.activeUnit, sightAim);
-  const r = b.species.radius;
-  const x = b.x + b.nx * r * 1.6;
-  const y = b.y + b.ny * r * 1.6;
-  const z = b.z + b.nz * r * 1.6;
-  const t = terrain.raycast(x, y, z, sightAim[0], sightAim[1], sightAim[2], 90);
-  const d = t > 0 ? t : 90;
+  // (where a dart at full draw would end: its drop and the wind are in it; a weaker pull falls short of it)
+  const w = match.currentWeapon;
+  const out = b.species.radius + 0.5;
+  at.set(b.x + sightAim[0] * out, b.y + sightAim[1] * out, b.z + sightAim[2] * out);
+  at2.set(sightAim[0], sightAim[1], sightAim[2]).multiplyScalar(w.maxSpeed);
+  for (let n = 0; n < 150; n++) {
+    at2.x += match.windX * w.windFactor * DT;
+    at2.y -= GRAVITY * w.gravityFactor * DT;
+    at2.z += match.windZ * w.windFactor * DT;
+    at.addScaledVector(at2, DT);
+    if (terrain.sample(at.x, at.y, at.z) < 0.3 || at.x < 0 || at.z < 0 || at.x > terrain.W || at.z > terrain.D) break;
+    if (match.units.some((q) => q !== match.activeUnit && q.bug.alive && (q.bug.x - at.x) ** 2 + (q.bug.y - at.y) ** 2 + (q.bug.z - at.z) ** 2 < (q.bug.species.radius + 0.4) ** 2)) break;
+  }
   stage.camera.updateMatrixWorld();
-  at.set(x + sightAim[0] * d, y + sightAim[1] * d, z + sightAim[2] * d).project(stage.camera);
+  at.project(stage.camera);
   const box = canvas.getBoundingClientRect();
   sight.style.transform = `translate(${(box.left + ((at.x + 1) / 2) * box.width).toFixed(1)}px, ${(box.top + ((1 - at.y) / 2) * box.height).toFixed(1)}px)`;
   sightPull.setAttribute('stroke-dasharray', `${match.charging ? (match.power * 100).toFixed(0) : 0} 100`);
