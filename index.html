@@ -66,6 +66,12 @@
       body.cinematic.quiet { cursor: none; }
       #banner { left: 50%; top: 40%; transform: translate(-50%, -50%); font-size: 22px; font-weight: 800; padding: 16px 24px; text-align: center; display: none; }
       #banner small { display: block; font-size: 12px; font-weight: 400; opacity: 0.8; margin-top: 6px; }
+    /* a special attack's scene: the bars of a film, and nothing over the picture */
+      body::before, body::after { content: ''; position: fixed; left: 0; right: 0; height: 0; background: #000; z-index: 5; transition: height 0.45s ease; pointer-events: none; }
+      body::before { top: 0; }
+      body::after { bottom: 0; }
+      body.special::before, body.special::after { height: 9vh; }
+      body.special > *:not(canvas):not(script) { opacity: 0; pointer-events: none; transition: opacity 0.25s; }
     </style>
   </head>
   <body>

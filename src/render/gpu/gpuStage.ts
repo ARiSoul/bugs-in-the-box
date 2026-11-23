@@ -1,5 +1,5 @@
 import * as THREE from 'three/webgpu';
-import { emissive, max, mix, mrt, output, pass, renderOutput, screenUV, select, smoothstep, sRGBTransferOETF, uniform, vec4 } from 'three/tsl';
+import { abs, emissive, float, Fn, hash, If, Loop, max, mix, mrt, output, pass, renderOutput, screenUV, select, min, smoothstep, sRGBTransferOETF, uniform, vec2, vec3, vec4 } from 'three/tsl';
 import { bilateralBlur } from 'three/examples/jsm/tsl/display/BilateralBlurNode.js';
 import { fxaa } from 'three/examples/jsm/tsl/display/FXAANode.js';
 import { bloom } from 'three/examples/jsm/tsl/display/BloomNode.js';
@@ -30,6 +30,24 @@ const SUN_OFFSET = new THREE.Vector3(-60, 150, 36);
 const RAYS = 0.5;
 /** Bloom strength (the same at every hue). */
 const BLOOM = 0.3;
+/** Uniforms a special attack's scene drives: the world dims, the edges close in, a flash, a blur towards the edges. */
+export interface StageFx {
+  /** Its lights go here. */
+  scene: THREE.Scene;
+  /** Distance to the world behind a point of the screen (a node). */
+  depthAt(at: THREE.Node): THREE.Node<'float'>;
+  dim: { value: number };
+  vignette: { value: number };
+  flash: { value: number };
+  focusBlur: { value: number };
+  /** How far away the one the picture is about is. */
+  subject: { value: number };
+  /** A place on the screen that does not dim: its middle (u, v down), its radius, the picture's aspect. */
+  spot: { value: THREE.Vector4 };
+  /** How far away it is. */
+  spotAt: { value: number };
+}
+
 /** Ray-march steps of the god rays (half resolution). */
 const RAY_STEPS = 16;
 
@@ -96,19 +114,24 @@ export async function createGpuStage(canvas: HTMLCanvasElement, terrain: Terrain
 
   // ---- post: scene (MSAA, colour + emissive + depth) -> heat shimmer, god rays, bloom -> ACES.
   // Built after the first frame: the god rays read the key light's shadow map, which exists only then.
+  const scenePass = pass(scene, camera, { samples: 4 });
+  // the emissive target blends like the material does: otherwise every transparent surface (glass,
+  // labels) overwrites the emissive under it and the glow behind it loses its bloom
+  const sceneMRT = mrt({ output, emissive });
+  sceneMRT.setBlendMode('emissive', new THREE.BlendMode(THREE.MaterialBlending));
+  scenePass.setMRT(sceneMRT);
+  const sceneColor = scenePass.getTextureNode('output');
+  const sceneEmissive = scenePass.getTextureNode('emissive');
+  const sceneDepth = scenePass.getTextureNode('depth');
+  /** How far the scene is behind each pixel (the camera's near and far are 0.5 and 800). */
+  const depthAt = (at: THREE.Node): THREE.Node<'float'> => float(0.5 * 800).div(float(800).sub(sceneDepth.sample(at as THREE.Node<'vec2'>).r.mul(800 - 0.5))) as unknown as THREE.Node<'float'>;
+  // a special attack's lights are drawn on their own: the dimmed world does not touch them
+  const fxScene = new THREE.Scene();
+  const fxPass = pass(fxScene, camera, { samples: 4 });
   let pipeline: THREE.RenderPipeline | null = null;
   let frames = 0;
   let bloomRef: ReturnType<typeof bloom> | null = null;
   const buildPipeline = (): THREE.RenderPipeline => {
-    const scenePass = pass(scene, camera, { samples: 4 });
-    // the emissive target blends like the material does: otherwise every transparent surface (glass,
-    // labels) overwrites the emissive under it and the glow behind it loses its bloom
-    const sceneMRT = mrt({ output, emissive });
-    sceneMRT.setBlendMode('emissive', new THREE.BlendMode(THREE.MaterialBlending));
-    scenePass.setMRT(sceneMRT);
-    const sceneColor = scenePass.getTextureNode('output');
-    const sceneEmissive = scenePass.getTextureNode('emissive');
-    const sceneDepth = scenePass.getTextureNode('depth');
     const rays = godrays(sceneDepth, camera, sun);
     rays.raymarchSteps.value = RAY_STEPS;
     rays.resolutionScale = 0.5;
@@ -116,13 +139,42 @@ export async function createGpuStage(canvas: HTMLCanvasElement, terrain: Terrain
     rays.maxDensity.value = 0.42;
     const raysBlur = bilateralBlur(rays.getTextureNode());
     const raysTex = raysBlur.getTextureNode();
-    const bloomPass = bloom(sceneEmissive, BLOOM, 0.22, 0.25);
+    const fxColor = fxPass.getTextureNode('output');
+    const bloomPass = bloom(sceneEmissive.mul(fx.dim.mul(0.9).oneMinus()).add(fxColor), BLOOM, 0.22, 0.25);
     bloomRef = bloomPass;
     const base = sceneColor.sample(heat.uv(screenUV));
     // a little warm veil where the air is lit, and the shafts on top of it
     const shaft = smoothstep(0.17, 0.42, raysTex.sample(screenUV).r).mul(raysAmount);
     const p = new THREE.RenderPipeline(renderer);
-    const final = base.rgb.add(sunColor.mul(shaft)).add(bloomPass.rgb);
+    // (a special attack: a few samples towards the middle of the picture, so its edges rush by)
+    const away = screenUV.sub(0.5);
+    const blurred = Fn(() => {
+      const sum = vec3(base.rgb).toVar();
+      const amount = fx.focusBlur.mul(smoothstep(0.22, 0.7, away.length())).mul(0.055).toVar();
+      If(amount.greaterThan(0.0005), () => {
+        const jitter = hash(screenUV.x.mul(1913).add(screenUV.y.mul(7919))).toVar();
+        Loop(12, ({ i }) => {
+          const k = float(i).add(jitter).div(12);
+          sum.addAssign(sceneColor.sample(heat.uv(screenUV.sub(away.mul(amount.mul(k))))).rgb);
+        });
+        sum.divAssign(13);
+      });
+      return sum;
+    })();
+    const world = blurred.add(sunColor.mul(shaft));
+    // (what shines stays bright while the rest dims)
+    // (and what is far dims most: only the fighter stands out)
+    const viewZ = depthAt(screenUV);
+    const far = smoothstep(fx.subject.add(3.5), fx.subject.add(13), viewZ);
+    // (a pale floor dims more, so the lights on it show; what shines of its own, the fighter and its bow, does not)
+    const own = smoothstep(0.004, 0.03, sceneEmissive.sample(screenUV).rgb.dot(vec3(0.33)));
+    const pale = mix(0.3, 0.86, smoothstep(0.12, 0.5, world.dot(vec3(0.3, 0.6, 0.1))).mul(own.oneMinus()));
+    // (the one it aims at keeps its light: a soft spot on the screen)
+    const spot = smoothstep(fx.spot.z, 0, vec2(screenUV.x.sub(fx.spot.x).mul(fx.spot.w), screenUV.y.sub(fx.spot.y)).length()).mul(smoothstep(6, 1.5, abs(viewZ.sub(fx.spotAt))));
+    const dimBy = spot.mul(0.8).oneMinus().mul(min(fx.dim.mul(mix(pale, 1.12, far)), 0.988));
+    const dimmed = world.mul(dimBy.oneMinus());
+    const edge = smoothstep(0.35, 0.85, away.length());
+    const final = dimmed.mul(edge.mul(fx.vignette).oneMinus()).add(fxColor.sample(screenUV).rgb).add(bloomPass.rgb.mul(fx.dim.mul(0.25).add(1))).add(vec3(0.25, 0.8, 1).mul(fx.flash).mul(smoothstep(0.34, 0.0, away.length())).mul(1.5));
     // debug views: 1 = god rays only, 2 = bloom only, 3 = emissive buffer
     const raysView = mix(base.rgb.mul(0.15), sunColor, raysTex.sample(screenUV).r);
     const viewN = select(debugView.lessThan(2.5), bloomPass.rgb, sceneEmissive.sample(screenUV).rgb);
@@ -136,6 +188,7 @@ export async function createGpuStage(canvas: HTMLCanvasElement, terrain: Terrain
     return p;
   };
   const raysAmount = uniform(RAYS);
+  const fx = { scene: fxScene, depthAt, dim: uniform(0), vignette: uniform(0), flash: uniform(0), focusBlur: uniform(0), subject: uniform(10), spot: uniform(new THREE.Vector4(0, 0, 0.0001, 1)), spotAt: uniform(10) };
   const debugView = uniform(0);
   /** The shafts in the dust are warmer than the light itself (scattering in warm, dusty air). */
   const sunColor = uniform(new THREE.Color(0xffb36b));
@@ -241,6 +294,7 @@ export async function createGpuStage(canvas: HTMLCanvasElement, terrain: Terrain
         }
       }
     },
+    fx,
     frameNumber: () => renderer.info.frame,
     tune: {
       rays: raysAmount,

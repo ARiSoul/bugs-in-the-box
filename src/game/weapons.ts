@@ -12,7 +12,7 @@ export type WeaponKind =
   | 'tunnel'
   /** Projectile that spreads a sticky web where it lands (no blast, the terrain stays). */
   | 'web'
-  /** Projectile that hurts and throws only the bug it hits, the more the faster it flies; it sticks in terrain. */
+  /** Projectile that hurts only the bug it hits, the more the faster it flies, and opens a web where it ends. */
   | 'arrow';
 
 export interface Weapon {
@@ -43,6 +43,8 @@ export interface Weapon {
   /** Web: its radius, and how many turns it lasts. */
   readonly webRadius: number;
   readonly webTurns: number;
+  /** A special attack: its scene (ticks) plays between the release and the shot. 0: none. */
+  readonly sceneTicks: number;
   /** The only species that has it (none: every bug). */
   readonly species?: string;
   /** Render only. */
@@ -64,6 +66,7 @@ const BASE = {
   tunnelRadius: 0,
   webRadius: 0,
   webTurns: 0,
+  sceneTicks: 0,
 } as const;
 
 /** A drop of molten solder, flung hard. Explodes on impact; the wind pushes it. */
@@ -136,8 +139,8 @@ export const WEB_SHOT: Weapon = {
 };
 
 /**
- * Spiders only: a web strung between two threads, drawn back like a bow. Its dart of hardened silk flies fast and
- * flat and hardly feels the wind, but it has to hit: no blast, no crater.
+ * Spiders only, their special attack: it stands up, spins a bow of silk and draws it. The dart flies fast and flat and
+ * hardly feels the wind; it hurts only the bug it hits, and bursts into a great web where it ends. No crater.
  */
 export const WEB_BOW: Weapon = {
   ...BASE,
@@ -149,6 +152,9 @@ export const WEB_BOW: Weapon = {
   windFactor: 0.15,
   gravityFactor: 0.5,
   damage: 45,
+  webRadius: 5.5,
+  webTurns: 6,
+  sceneTicks: 174,
   color: 0xf4f4ee,
 };
 

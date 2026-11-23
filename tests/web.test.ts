@@ -205,18 +205,20 @@ describe('Web Bow', () => {
     s.aimH = Math.sqrt(1 - up * up);
     s.aimV = up;
     const events = run(m, ticks, { fire: true });
-    events.push(...run(m, 90));
+    events.push(...run(m, WEB_BOW.sceneTicks + 90));
     return events;
   };
 
-  it('hurts and throws the bug it hits along its flight, more at full draw, and leaves no crater', () => {
+  it('hurts the bug it hits, more at full draw, holds it in a web, and leaves no crater', () => {
     const hurt = (ticks: number): number => {
       const m = setup([20, 32], [27, 32]);
-      const x = m.units[1].bug.x;
+      const before = m.units[1].bug.x;
       const events = shoot(m, ticks, 0.05);
       expect(events.some((e) => e.type === 'arrow' && e.unit === 1)).toBe(true);
       expect(events.some((e) => e.type === 'explosion')).toBe(false);
-      expect(m.units[1].bug.x).toBeGreaterThan(x);
+      expect(m.units[1].bug.x).toBeCloseTo(before, 1);
+      expect(m.webs.length).toBe(1);
+      expect(m.units[1].web).toBe(m.webs[0].id);
       return 100 - m.units[1].bug.health;
     };
     const full = hurt(80);
@@ -231,6 +233,19 @@ describe('Web Bow', () => {
     const events = shoot(m, 20, -0.3);
     expect(events.some((e) => e.type === 'arrow' && e.unit === -1)).toBe(true);
     expect(m.units.every((u) => u.bug.health === 100)).toBe(true);
+  });
+
+  it('plays its scene before the dart leaves, and takes no input meanwhile', () => {
+    const m = setup([20, 32], [27, 32]);
+    run(m, 1, { weapon: BOW });
+    const events = [...run(m, 20, { fire: true }), ...run(m, 1)];
+    expect(events.some((e) => e.type === 'special')).toBe(true);
+    expect(m.phase).toBe('special');
+    const x = m.units[0].bug.x;
+    expect(run(m, WEB_BOW.sceneTicks - 1, { move: 1, fire: true }).some((e) => e.type === 'fire')).toBe(false);
+    expect(m.units[0].bug.x).toBe(x);
+    expect(run(m, 1).some((e) => e.type === 'fire')).toBe(true);
+    expect(m.phase).toBe('flight');
   });
 
   it('ants do not have it', () => {

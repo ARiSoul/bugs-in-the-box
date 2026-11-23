@@ -2,11 +2,16 @@ import * as THREE from 'three';
 import type { Match, Web } from '../game/match';
 import type { DrawnGround } from './drawnGround';
 
-const SPOKES = 15;
-const RINGS = 8;
+/** Strands a special attack's web shoots into the room round it, and how far. */
+const BURST = 34;
+const BURST_REACH = 10;
+
+/** A special attack's web: its spokes and rings. */
+export const GRAND_SPOKES = 16;
+export const GRAND_RINGS = 9;
 /** Half the width of a strand, and how far over the ground it lies. */
 const HALF = 0.035;
-const OVER = 0.07;
+const OVER = 0.1;
 /** How far from the web's plane the ground is looked for. */
 const LOOK = 2.4;
 /** Seconds for a new web to open, and for one to go. */
@@ -27,18 +32,127 @@ interface WebView {
   count: number;
 }
 
+/** Points along a line over the ground, from `from` to `to`: their heights over what is drawn, pulled taut over it. */
+function taut(ground: DrawnGround, pts: THREE.Vector3[], n: THREE.Vector3): void {
+  const last = pts.length - 1;
+  const h: number[] = pts.map((q) => {
+    const t = ground.rest(q.x + n.x * LOOK, q.y + n.y * LOOK, q.z + n.z * LOOK, -n.x, -n.y, -n.z, LOOK * 2);
+    return t > 0 ? LOOK - t + OVER : -LOOK;
+  });
+  // (the upper hull of the heights: a strand bridges a gap, and lies on what stands up)
+  const hull: number[] = [];
+  for (let i = 0; i <= last; i++) {
+    while (hull.length > 1) {
+      const a = hull[hull.length - 2];
+      const b = hull[hull.length - 1];
+      if ((h[b] - h[a]) * (i - a) > (h[i] - h[a]) * (b - a)) break;
+      hull.pop();
+    }
+    hull.push(i);
+  }
+  for (let k = 0; k + 1 < hull.length; k++)
+    for (let i = hull[k]; i <= hull[k + 1]; i++) {
+      const f = (i - hull[k]) / Math.max(1, hull[k + 1] - hull[k]);
+      pts[i].addScaledVector(n, h[hull[k]] + (h[hull[k + 1]] - h[hull[k]]) * f);
+    }
+  // (the ends of a piece were moved twice)
+  for (let k = 1; k + 1 < hull.length; k++) pts[hull[k]].addScaledVector(n, -h[hull[k]]);
+}
+
+/** A web's spoke, `rings` + 1 points from its middle outwards, taut over the ground; it ends where the ground does. */
+export function tautSpoke(ground: DrawnGround, mid: THREE.Vector3, n: THREE.Vector3, u: THREE.Vector3, v: THREE.Vector3, angle: number, reach: number, rings: number): THREE.Vector3[] {
+  const fine = 5;
+  const at = (d: number): THREE.Vector3 => mid.clone().addScaledVector(u, Math.cos(angle) * d).addScaledVector(v, Math.sin(angle) * d);
+  let end = reach;
+  let was = 0;
+  let gap = 0;
+  for (let d = 0.2; d <= reach; d += 0.2) {
+    const q = at(d);
+    const t = ground.rest(q.x + n.x * LOOK, q.y + n.y * LOOK, q.z + n.z * LOOK, -n.x, -n.y, -n.z, LOOK * 2);
+    const h = t > 0 ? LOOK - t : -9;
+    // (over a gap it may stretch; off the end of what it lies on, not)
+    if (h < was - 1) {
+      gap += 0.2;
+      if (gap > 1.3) {
+        end = Math.max(0.5, d - gap);
+        break;
+      }
+      continue;
+    }
+    gap = 0;
+    was = h;
+  }
+  const last = Math.floor((end / reach) * rings + 1e-6);
+  const pts = Array.from({ length: Math.max(1, last) * fine + 1 }, (_, k) => at((k / (rings * fine)) * reach));
+  taut(ground, pts, n);
+  return pts.filter((_, k) => k % fine === 0);
+}
+
+/** Pull a web level between its spokes: one that runs along a gap is held up by its neighbours. */
+export function levelWeb(p: THREE.Vector3[][], n: THREE.Vector3): void {
+  const S = p.length;
+  for (let pass = 0; pass < 4; pass++)
+    for (let s = 0; s < S; s++)
+      for (let k = 1; k < p[s].length; k++) {
+        const a = p[(s + S - 1) % S][k];
+        const b = p[(s + 1) % S][k];
+        if (!a || !b) continue;
+        const up = (a.dot(n) + b.dot(n)) / 2 - p[s][k].dot(n) - 0.06;
+        if (up > 0) p[s][k].addScaledVector(n, up);
+      }
+}
+
+/** A ring's strand from one spoke to the next, sagging to the middle a little, taut over the ground: short pieces. */
+export function tautArc(ground: DrawnGround, a: THREE.Vector3, b: THREE.Vector3, mid: THREE.Vector3, n: THREE.Vector3): [THREE.Vector3, THREE.Vector3][] {
+  const N = 16;
+  const pts = Array.from({ length: N + 1 }, (_, i) => {
+    const f = i / N;
+    return a.clone().lerp(b, f).lerp(mid, 0.06 * Math.sin(Math.PI * f));
+  });
+  // (the upper hull of what stands in its way: no strand dips into a gap, none cuts through an edge)
+  const h = pts.map((q, i) => {
+    if (i === 0 || i === N) return 0;
+    const t = ground.rest(q.x + n.x * LOOK, q.y + n.y * LOOK, q.z + n.z * LOOK, -n.x, -n.y, -n.z, LOOK);
+    return t > 0 ? LOOK - t + OVER : -1;
+  });
+  const hull: number[] = [];
+  for (let i = 0; i <= N; i++) {
+    while (hull.length > 1) {
+      const p = hull[hull.length - 2];
+      const q = hull[hull.length - 1];
+      if ((h[q] - h[p]) * (i - p) > (h[i] - h[p]) * (q - p)) break;
+      hull.pop();
+    }
+    hull.push(i);
+  }
+  for (let k = 0; k + 1 < hull.length; k++)
+    for (let i = hull[k] + (k > 0 ? 1 : 0); i <= hull[k + 1]; i++) pts[i].addScaledVector(n, h[hull[k]] + ((h[hull[k + 1]] - h[hull[k]]) * (i - hull[k])) / (hull[k + 1] - hull[k]));
+  return pts.slice(1).map((q, i) => [pts[i], q]);
+}
+
 /** Sticky webs, the threads spiders hang on, the strands that hold a bug (render only). */
 export class WebViews {
   private readonly views = new Map<number, WebView>();
   private readonly strands: THREE.Mesh[] = [];
   private readonly silk = new THREE.MeshBasicMaterial({ color: 0xd9dadb, transparent: true, opacity: 0.8, depthWrite: false, fog: false });
+  private readonly bound = new THREE.MeshStandardMaterial({ color: 0xe9ebec, roughness: 0.6, emissive: 0x9fb4bd, emissiveIntensity: 0.35, fog: false });
   private readonly strand = new THREE.CylinderGeometry(1, 1, 1, 5, 1, true).translate(0, 0.5, 0);
   private used = 0;
   private readonly a = new THREE.Vector3();
   private readonly b = new THREE.Vector3();
   private static readonly UP = new THREE.Vector3(0, 1, 0);
 
-  constructor(private readonly scene: THREE.Scene) {}
+  constructor(private readonly scene: THREE.Scene) {
+    // (each material drawn once from the start, too small to see: none is compiled when the first web opens)
+    const web = new THREE.MeshBasicMaterial({ color: 0xd4d6d8, transparent: true, opacity: 0.75, depthWrite: false, side: THREE.DoubleSide, fog: false });
+    for (const m of [this.silk, this.bound, web]) {
+      const speck = new THREE.Mesh(m === web ? new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 1, 0)]) : this.strand, m);
+      speck.position.set(0, -500, 0);
+      speck.scale.setScalar(1e-4);
+      speck.frustumCulled = false;
+      scene.add(speck);
+    }
+  }
 
   /** A new match: no webs. */
   clear(): void {
@@ -54,7 +168,9 @@ export class WebViews {
     }
     for (const [id, v] of this.views) {
       if (v.gone < 0 && !match.webs.includes(v.web)) v.gone = t;
-      const open = Math.min(1, (t - v.born) / OPEN);
+      // (a great web first has its spokes shot out, see BowScene)
+      const open = Math.min(1, Math.max(0, t - v.born - (v.web.grand ? 0.22 : 0)) / (v.web.grand ? OPEN * 1.6 : OPEN));
+      if (v.web.grand) v.mesh.material.color.setRGB(0.83, 0.84, 0.85).multiplyScalar(1 + 3.5 * Math.exp(-(t - v.born) * 1.6));
       v.mesh.geometry.setDrawRange(0, Math.floor((v.count * open) / 6) * 6);
       if (v.gone >= 0) {
         const k = (t - v.gone) / GO;
@@ -76,6 +192,49 @@ export class WebViews {
       if (!w) continue;
       at(u.id, this.b);
       const r = b.species.radius;
+      if (w.grand) {
+        // (they close over it one after the other, once the web has opened)
+        const age = t - (this.views.get(w.id)?.born ?? t) - 0.35;
+        // bound: threads that arc over its back from one side of the web to the other, and turns round its abdomen
+        const side = this.side(b).clone();
+        const mid = this.b.clone();
+        const pt = (along: number, out: number, up: number): THREE.Vector3 =>
+          new THREE.Vector3(mid.x + (b.hx * along + side.x * out + b.nx * up) * r, mid.y + (b.hy * along + side.y * out + b.ny * up) * r, mid.z + (b.hz * along + side.z * out + b.nz * up) * r);
+        for (let k = 0; k < 8; k++) {
+          // (across it, none along its length: those would end in the abdomen)
+          const an = Math.PI / 2 + (k - 3.5) * 0.17;
+          const reach = 2.1 + 0.35 * Math.sin(k * 2.7);
+          const off = (k - 4.2) * 0.36;
+          let last: THREE.Vector3 | null = null;
+          const come = Math.min(1, Math.max(0, age * 4 - k * 0.22));
+          if (come <= 0) continue;
+          for (let i = 0; i <= Math.round(8 * come); i++) {
+            const f = -1 + (2 * i) / 8;
+            const q = pt(Math.cos(an) * f * reach + off * (1 - f * f) - 0.25, Math.sin(an) * f * reach, 0.5 * (1 - Math.min(1, Math.abs(f) * 1.15) ** 1.4) - 0.6 * Math.min(1, Math.abs(f) * 1.15) ** 1.4);
+            if (i === 0 || i === 8) {
+              const t = ground.rest(q.x + b.nx, q.y + b.ny, q.z + b.nz, -b.nx, -b.ny, -b.nz, 3);
+              if (t > 0 && t < 2.2) q.set(q.x + b.nx * (1.08 - t), q.y + b.ny * (1.08 - t), q.z + b.nz * (1.08 - t));
+            }
+            if (last) this.line(last, q, 0.032, true);
+            last = q;
+          }
+        }
+        const ab = b.species.abdomen;
+        for (let k = 0; k < 4; k++) {
+          let last: THREE.Vector3 | null = null;
+          const come = Math.min(1, Math.max(0, age * 4 - 2 - k * 0.4));
+          if (come <= 0) continue;
+          for (let i = 0; i <= Math.round(10 * come); i++) {
+            const th = (i / 10) * Math.PI * 2;
+            const z = -(0.3 + ab * (0.35 + 0.33 * k)) + Math.sin(th + k) * 0.07;
+            const ring = ab * Math.sqrt(Math.max(0.1, 1 - ((z + 0.3 + ab * 0.85) / ab) ** 2));
+            const q = pt(z, Math.cos(th) * ring * 0.84, 0.08 + Math.sin(th) * ring * 0.72);
+            if (last) this.line(last, q, 0.028, true);
+            last = q;
+          }
+        }
+        continue;
+      }
       for (let k = 0; k < HOLD; k++) {
         const c = Math.cos((k / HOLD) * Math.PI * 2 + 0.4);
         const s = Math.sin((k / HOLD) * Math.PI * 2 + 0.4);
@@ -128,7 +287,7 @@ export class WebViews {
     return this.across.set(b.ny * b.hz - b.nz * b.hy, b.nz * b.hx - b.nx * b.hz, b.nx * b.hy - b.ny * b.hx);
   }
 
-  private line(from: THREE.Vector3, to: THREE.Vector3, radius: number): void {
+  private line(from: THREE.Vector3, to: THREE.Vector3, radius: number, solid = false): void {
     let m = this.strands[this.used];
     if (!m) {
       m = new THREE.Mesh(this.strand, this.silk);
@@ -137,6 +296,7 @@ export class WebViews {
       this.strands.push(m);
     }
     this.used++;
+    m.material = solid ? this.bound : this.silk;
     m.visible = true;
     m.position.copy(from);
     const d = this.across.copy(to).sub(from);
@@ -155,44 +315,54 @@ export class WebViews {
       return s - Math.floor(s);
     };
     const p: THREE.Vector3[][] = [];
+    // (a great web is the very one whose light BowScene draws on it)
+    const SPOKES = w.grand ? GRAND_SPOKES : 15;
+    const RINGS = w.grand ? GRAND_RINGS : 8;
     for (let s = 0; s < SPOKES; s++) {
-      const a = ((s + (rnd(s) - 0.5) * 0.5) / SPOKES) * Math.PI * 2;
-      const reach = w.radius * (0.85 + 0.2 * rnd(s + 50));
-      const row: THREE.Vector3[] = [];
-      let height = 0;
-      for (let k = 0; k <= RINGS; k++) {
-        const d = (k / RINGS) * reach;
-        const q = new THREE.Vector3(w.x, w.y, w.z).addScaledVector(u, Math.cos(a) * d).addScaledVector(v, Math.sin(a) * d);
-        const o = q.clone().addScaledVector(n, height + LOOK);
-        const hit = ground.rest(o.x, o.y, o.z, -n.x, -n.y, -n.z, LOOK * 2);
-        // (past an edge it hangs on level with the last strand)
-        if (hit > 0) height += LOOK - hit;
-        row.push(q.addScaledVector(n, height + OVER));
-      }
-      p.push(row);
+      const a = ((s + (w.grand ? 0 : (rnd(s) - 0.5) * 0.5)) / SPOKES) * Math.PI * 2;
+      const reach = w.radius * (w.grand ? 1 : 0.85 + 0.2 * rnd(s + 50));
+      p.push(tautSpoke(ground, new THREE.Vector3(w.x, w.y, w.z), n, u, v, a, reach, RINGS));
     }
+    levelWeb(p, n);
     const pos: number[] = [];
     const e = new THREE.Vector3();
     const f = new THREE.Vector3();
     const ribbon = (a: THREE.Vector3, b: THREE.Vector3): void => {
       e.copy(b).sub(a);
       if (e.lengthSq() < 1e-6) return;
-      f.crossVectors(e, n).normalize().multiplyScalar(HALF);
+      // (a strand that climbs a key's side shows its width along the wall)
+      f.crossVectors(e, n);
+      if (f.lengthSq() < 0.1 * e.lengthSq()) f.crossVectors(e, u);
+      if (f.lengthSq() < 0.1 * e.lengthSq()) f.crossVectors(e, v);
+      f.normalize().multiplyScalar(HALF);
       pos.push(a.x - f.x, a.y - f.y, a.z - f.z, b.x - f.x, b.y - f.y, b.z - f.z, b.x + f.x, b.y + f.y, b.z + f.z);
       pos.push(a.x - f.x, a.y - f.y, a.z - f.z, b.x + f.x, b.y + f.y, b.z + f.z, a.x + f.x, a.y + f.y, a.z + f.z);
     };
     for (let k = 0; k < RINGS; k++)
       for (let s = 0; s < SPOKES; s++) {
-        ribbon(p[s][k], p[s][k + 1]);
-        if (k === 0) continue;
+        // (a spoke that ends early has no more points; a ring's strand needs both its ends)
+        if (p[s][k + 1]) ribbon(p[s][k], p[s][k + 1]);
+        if (k === 0 || !p[s][k] || !p[(s + 1) % SPOKES][k]) continue;
         // a ring's strand sags towards the middle between two spokes
-        const a = p[s][k];
-        const b = p[(s + 1) % SPOKES][k];
-        const mid = a.clone().add(b).multiplyScalar(0.5);
-        mid.lerp(p[s][0], 0.06);
-        ribbon(a, mid);
-        ribbon(mid, b);
+        for (const [a, b] of tautArc(ground, p[s][k], p[(s + 1) % SPOKES][k], p[s][0], n)) ribbon(a, b);
       }
+    if (w.grand) {
+      // (from the middle out to whatever is there: a wall, a ceiling, a part standing by; tied to each other)
+      const out: THREE.Vector3[] = [];
+      for (let k = 0; k < BURST; k++) {
+        const a = k * 2.39996 + rnd(k + 900) * 0.5;
+        const up = 0.06 + 0.9 * rnd(k + 700) * rnd(k + 701);
+        const c = Math.sqrt(1 - up * up);
+        const d = u.clone().multiplyScalar(Math.cos(a) * c).addScaledVector(v, Math.sin(a) * c).addScaledVector(n, up);
+        const o = new THREE.Vector3(w.x, w.y, w.z).addScaledVector(n, 0.9);
+        if (up < 0.22) continue;
+        const hit = ground.raycast(o.x, o.y, o.z, d.x, d.y, d.z, BURST_REACH);
+        if (hit < 2.5) continue;
+        const end = o.clone().addScaledVector(d, hit);
+        out.push(end);
+        ribbon(new THREE.Vector3(w.x, w.y, w.z).addScaledVector(n, 0.15), end);
+      }
+    }
     const g = new THREE.BufferGeometry();
     // (about the turntable-proof origin: the web's own middle)
     for (let i = 0; i < pos.length; i += 3) {

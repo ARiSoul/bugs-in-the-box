@@ -13,7 +13,7 @@ import { Controls } from './input/controls';
 import { pickTerrain } from './input/picking';
 import { AimView } from './render/aim';
 import { BugView } from './render/BugView';
-import { BowView } from './render/bow';
+import { BowScene } from './render/gpu/bowScene';
 import { WebViews } from './render/webs';
 import { DrawnGround } from './render/drawnGround';
 import { ChunkRenderer } from './render/ChunkRenderer';
@@ -56,7 +56,7 @@ const texts = new FloatingTexts(stage.hud);
 const projectiles = new ProjectileViews(stage.scene);
 const aim = new AimView(stage.scene);
 const webViews = new WebViews(stage.scene);
-const bow = new BowView(stage.scene);
+const bow = new BowScene(stage.scene, stage.fx);
 const follow = new FollowCamera(stage.camera, stage.controls);
 // the right button turns the view (and the bug with it), the wheel zooms; the left button stays free
 stage.controls.mouseButtons = { LEFT: null, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.ROTATE };
@@ -100,6 +100,8 @@ function onMeshBatch(b: MeshBatch): void {
 }
 
 let match: Match;
+/** A special attack starts: its scene is set up with the frame's bugs in place. */
+let bowPending = false;
 /** The turntable's turn when the drawn ground was indexed. */
 let indexedTurns = 0;
 let views: ScenarioViews;
@@ -181,8 +183,16 @@ function handleEvents(events: readonly MatchEvent[]): void {
         if (u.bug.y > KILL_Y && deathFocus < 0) deathFocus = e.unit;
         break;
       }
+      case 'special':
+        bowPending = true;
+        break;
+      case 'fire':
+        if (match.currentWeapon.sceneTicks > 0) bow.onFire();
+        break;
       case 'arrow':
-        if (e.unit < 0) bow.stick(e.x, e.y, e.z, e.dx, e.dy, e.dz, performance.now());
+        // (a bug it hits: in the middle of it)
+        if (e.unit >= 0) bow.onHit(match.units[e.unit].bug.x, match.units[e.unit].bug.y, match.units[e.unit].bug.z);
+        else bow.onHit(e.x, e.y, e.z);
         break;
       case 'stuck': {
         const u = match.units[e.unit];
@@ -454,12 +464,20 @@ let prevTurns = 0;
 /** Time per frame for indexing the drawn ground of a new map (ms). */
 const INDEX_MS = 3;
 let paused = false;
+/** Paused, and played on by hand (`__debug.advance`): the clock is its own. */
+let advancing = false;
+/** The last frame's view belonged to a special attack's scene. */
+let wasSpecial = false;
 function loop(now: number): void {
   requestAnimationFrame(loop);
   if (paused) {
-    lastFrame = now;
+    if (!advancing) lastFrame = now;
     return;
   }
+  frame(now);
+}
+
+function frame(now: number): void {
   // after a stall, drop time instead of spiralling; never negative (the first frame's timestamp can be
   // older than `lastFrame`, which would end the intro before it starts)
   const dt = Math.min(0.25, Math.max(0, (now - lastFrame) / 1000));
@@ -484,7 +502,9 @@ function loop(now: number): void {
     controls.face(t.x - c.x, t.z - c.z);
   }
   let faced = false;
-  accumulator += dt;
+  // (a special attack slows the match for a moment: the same ticks, later)
+  const scaled = dt * bow.timeScale;
+  accumulator += scaled;
   while (accumulator >= DT) {
     prevTurns = match.turntableTurns;
     // a debug camera (or the intro) owns the view: the match keeps running without input
@@ -506,13 +526,22 @@ function loop(now: number): void {
     ground.reindex(stage.scene, bugViews.map((v) => v.view.root));
   }
   ground.step(INDEX_MS);
+  // (the special attack's scene first: it sets the pose the bug is then drawn in)
+  if (bowPending) {
+    bowPending = false;
+    const u = match.activeUnit;
+    bow.prepare(bugViews[match.active].view, at.set(u.bug.nx, u.bug.ny, u.bug.nz).clone(), ground);
+  }
+  bow.update({ match, view: bugViews[match.active].view, views: bugViews.map((v) => v.view), ground, camera: stage.camera, alpha, dt: scaled });
   match.units.forEach((u, i) => {
     const v = bugViews[i];
-    v.view.update(u.bug, alpha, dt, ground);
+    v.view.held = u.web >= 0 ? 1 : 0;
+    v.view.update(u.bug, alpha, scaled, ground);
   });
   projectiles.sync(match.projectiles, alpha, ground);
-  match.units.forEach((u, i) => (bugViews[i].view.raise = u.id === match.activeUnit.id && bow.ready(match) ? 1 : 0));
-  bow.update(match, bugViews[match.active].view.root.position, ground, now);
+  document.body.classList.toggle('special', bow.camera.active && !debugCamera);
+  if (bow.camera.active) stage.hud.visible = false;
+  else if (wasSpecial) stage.hud.visible = true;
   webViews.update(match, ground, (i, out) => out.copy(bugViews[i].view.root.position), now);
   const active = bugViews[match.active];
   aim.update(match, active.view.root.position, active.height, now);
@@ -536,7 +565,7 @@ function loop(now: number): void {
   }
 
   // follow the shot while it flies, then a bug that dies, otherwise the bug whose turn it is
-  if (!debugCamera && !intro) {
+  if (!debugCamera && !intro && !bow.camera.active) {
     let tracking = true;
     if (match.projectiles.length > 0 && projectiles.first(target)) {
       // the shot
@@ -558,10 +587,19 @@ function loop(now: number): void {
   if (debugCamera) {
     if (path) path.at(pathFrozenAt ?? (now - pathStart) / 1000, stage.camera, pathTarget);
     if (fly) fly.update(dt);
-  } else if (!intro) {
+  } else if (!intro && !bow.camera.active) {
+    if (wasSpecial) {
+      // out of a special attack's scene: the game's lens, and a glide back to the active bug
+      stage.camera.fov = bow.camera.fov;
+      stage.camera.updateProjectionMatrix();
+      const b = match.activeUnit.bug;
+      stage.controls.target.copy(active.view.root.position);
+      follow.chase(terrain, active.view.root.position, b.fx, b.fz, 1.1);
+    }
     stage.controls.update();
     follow.avoid(terrain, dt);
   }
+  wasSpecial = bow.camera.active;
   flashes.update(now);
   lines.update(now);
   texts.update(now);
@@ -661,6 +699,15 @@ const debugApi = {
   /** Stop (or resume) the live loop, so captures alone advance the frames. */
   pause(on: boolean): void {
     paused = on;
+    advancing = false;
+  },
+  bow,
+  webViews,
+  /** With the loop paused: play on for `seconds` at 60 frames a second (scripted reviews of moving scenes). */
+  advance(seconds: number): void {
+    advancing = true;
+    const n = Math.max(1, Math.round(seconds * 60));
+    for (let i = 0; i < n; i++) frame(lastFrame + 1000 / 60);
   },
   /**
    * Draw a frame now and save it as captures/<name>.png (dev server only). With `t`, the fly-through

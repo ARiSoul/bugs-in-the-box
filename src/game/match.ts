@@ -14,6 +14,7 @@ import { hasWeapon, WEAPONS, type Weapon } from './weapons';
  *
  * Turn flow:
  *   aim     the active bug walks, jumps, aims, picks a weapon and fires (AIM_SECONDS)
+ *   special (special attacks) the attack's scene plays before the shot leaves; nothing else moves on
  *   flight  projectiles fly; the shooter may retreat for RETREAT_SECONDS but not fire again
  *   settle  wait until every bug and projectile is at rest; bugs at 0 health die
  *   spin    (maps with a turntable) the turntable turns a quarter, carrying what rests on it
@@ -73,12 +74,14 @@ export interface Web {
   ny: number;
   nz: number;
   readonly radius: number;
+  /** Burst open by a special attack (render only). */
+  readonly grand: boolean;
   /** Turns left, and pulling (ticks) it still stands. */
   turns: number;
   strength: number;
 }
 
-export type Phase = 'aim' | 'flight' | 'settle' | 'spin' | 'over';
+export type Phase = 'aim' | 'special' | 'flight' | 'settle' | 'spin' | 'over';
 
 /**
  * A turntable (a microwave's glass plate): it turns a quarter turn (+x towards +z) between turns, over
@@ -147,6 +150,7 @@ export const NO_INPUT: Readonly<MatchInput> = Object.freeze({ move: 0, turn: 0, 
 
 export type MatchEvent =
   | { type: 'turn'; unit: number }
+  | { type: 'special'; unit: number; weapon: string }
   | { type: 'fire'; unit: number; weapon: string }
   | { type: 'explosion'; x: number; y: number; z: number; radius: number }
   | { type: 'arc'; x1: number; y1: number; z1: number; x2: number; y2: number; z2: number }
@@ -205,6 +209,8 @@ export class Match {
   windZ = 0;
   weapon = 0;
   charging = false;
+  /** Ticks left of a special attack's scene. */
+  specialTicks = 0;
   /** 0..1 while charging. */
   power = 0;
   /** Team index of the winner once over, -1 for a draw. */
@@ -303,6 +309,9 @@ export class Match {
         move = this.movement(input);
       }
       if (this.projectiles.length === 0 && this.retreatTicks === 0) this.startSettle();
+    } else if (this.phase === 'special') {
+      if (!unit.bug.alive) this.endAim();
+      else if (--this.specialTicks <= 0) this.fire(unit, this.currentWeapon);
     } else if (this.phase === 'settle') {
       this.settleTick();
     } else if (this.phase === 'spin') {
@@ -421,7 +430,12 @@ export class Match {
       if (input.fire) this.power += 1 / CHARGE_TICKS;
       if (!input.fire || this.power >= 1) {
         if (this.power > 1) this.power = 1;
-        this.fire(unit, w);
+        if (w.sceneTicks > 0) {
+          this.charging = false;
+          this.phase = 'special';
+          this.specialTicks = w.sceneTicks;
+          this.events.push({ type: 'special', unit: unit.id, weapon: w.id });
+        } else this.fire(unit, w);
       }
       return IDLE;
     }
@@ -478,7 +492,7 @@ export class Match {
     this.events.push({ type: 'webGone', id: w.id, torn });
   }
 
-  /** A dart hits: a bug is hurt and thrown along its flight, the faster the more; terrain only holds it. */
+  /** A dart ends: a bug it hits is hurt, the faster the more, and held by the web it bursts into. */
   private arrowHit(p: Projectile): void {
     const speed = Math.sqrt(p.vx * p.vx + p.vy * p.vy + p.vz * p.vz);
     const l = speed > 1e-6 ? speed : 1;
@@ -488,10 +502,10 @@ export class Match {
     const b = p.touched(this.bugs);
     const u = b ? this.units[this.bugs.indexOf(b)] : null;
     this.events.push({ type: 'arrow', x: p.x, y: p.y, z: p.z, dx, dy, dz, unit: u ? u.id : -1 });
-    if (!u) return;
-    const f = Math.min(1, speed / p.weapon.maxSpeed);
-    this.damage(u, Math.max(1, Math.round(p.weapon.damage * f)));
-    u.bug.push(dx * KNOCKBACK * f, (dy + 0.35) * KNOCKBACK * f, dz * KNOCKBACK * f);
+    if (u) {
+      this.damage(u, Math.max(1, Math.round(p.weapon.damage * Math.min(1, speed / p.weapon.maxSpeed))));
+      this.openWeb(u.bug.x, u.bug.y, u.bug.z, p.weapon, true);
+    } else this.openWeb(p.x, p.y, p.z, p.weapon, true);
   }
 
   /** A ball of silk lands: a web on the surface there; a bug it hits is hurt a little. */
@@ -512,6 +526,11 @@ export class Match {
         break;
       }
     }
+    this.openWeb(x, y, z, w, false);
+  }
+
+  /** A web on the surface nearest (x, y, z), if there is one near. */
+  private openWeb(x: number, y: number, z: number, w: Weapon, grand: boolean): void {
     // onto the surface: a few steps along the way to the nearest point
     for (let k = 0; k < 4; k++) {
       const d = surfaceDistance(this.field, x, y, z, aimed);
@@ -524,7 +543,7 @@ export class Match {
     // (nothing near to hold on to: a bug hit in the air)
     if (d > 1 || d < -1 || l < 0.5) return;
     const id = this.nextWebId++;
-    this.webs.push({ id, x, y, z, nx: aimed[0] / l, ny: aimed[1] / l, nz: aimed[2] / l, radius: w.webRadius, turns: w.webTurns, strength: WEB_TEAR_TICKS });
+    this.webs.push({ id, x, y, z, nx: aimed[0] / l, ny: aimed[1] / l, nz: aimed[2] / l, radius: w.webRadius, turns: w.webTurns, strength: WEB_TEAR_TICKS, grand });
     this.events.push({ type: 'web', id });
   }
 

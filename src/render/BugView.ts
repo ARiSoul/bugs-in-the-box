@@ -2,9 +2,12 @@ import * as THREE from 'three';
 import { KILL_Y, TICK_RATE, type Bug } from '../game/bug';
 import type { BugSpecies } from '../game/species';
 
-const sphere = new THREE.SphereGeometry(1, 16, 12);
+const sphere = new THREE.SphereGeometry(1, 28, 20);
 /** Unit cylinder along +Y from y=0 to y=1, so it can be stretched between two points. */
-const limb = new THREE.CylinderGeometry(1, 1, 1, 6).translate(0, 0.5, 0);
+const limb = new THREE.LatheGeometry(
+  [[0.001, -0.04], [0.6, -0.032], [0.9, -0.016], [1, 0], [1, 1], [0.9, 1.016], [0.6, 1.032], [0.001, 1.04]].map(([x, y]) => new THREE.Vector2(x, y)),
+  9,
+);
 const UP = new THREE.Vector3(0, 1, 0);
 const FORWARD = new THREE.Vector3(0, 0, 1);
 
@@ -25,7 +28,32 @@ const CORPSE_GRAVITY = 40;
 /** Corpse colours: this much of the way to dull grey, and this dark. */
 const CORPSE_GREY = new THREE.Color(0x3a3833);
 
+/** An archer's stance (special attack): all in the view's own frame, in units of the species' radius. */
+export interface StandPose {
+  /** 0: on all its legs, 1: up on its hind two. */
+  weight: number;
+  /** How far the body leans back from upright, with the aim (radians, about its x). */
+  lean: number;
+  /** The face's angle up from level (radians). */
+  look: number;
+  /** Where the bow's grip and the string's nock are. */
+  grip: THREE.Vector3;
+  nock: THREE.Vector3;
+  /** Sway of the free legs (radians), and how far they spread (0..1). */
+  sway: number;
+  spread: number;
+  /** The free legs folded down and back along the body (0..1). */
+  fold: number;
+}
+
 interface Leg {
+  /** Its two segments, with their rest lengths and thickness. */
+  upper: THREE.Mesh;
+  lower: THREE.Mesh;
+  knee: THREE.Vector3;
+  l1: number;
+  l2: number;
+  home: THREE.Vector3;
   pivot: THREE.Object3D;
   /** +1 on the bug's left (+x local), -1 on its right. */
   side: number;
@@ -54,9 +82,27 @@ export class BugView {
   private readonly target = new THREE.Vector3();
   private readonly foot = new THREE.Vector3();
   private phase = 0;
-  /** How far the front legs are raised (0..1), to hold a bow; eased. */
-  raise = 0;
-  private raised = 0;
+  /** Everything but the legs: it pitches up when the bug stands. */
+  readonly torso = new THREE.Group();
+  /** Set by a special attack: the stance it is in (weight 0: none). */
+  readonly pose: StandPose = { weight: 0, lean: 0, look: 0, grip: new THREE.Vector3(), nock: new THREE.Vector3(), sway: 0, spread: 0, fold: 0 };
+  private posed = false;
+  /** The head (eyes, antennae) and the abdomen turn on their own in a stance. */
+  readonly head = new THREE.Group();
+  private readonly abdomen = new THREE.Group();
+  /** Held down by a web (0..1, eased): it crouches and pulls. */
+  held = 0;
+  private heldNow = 0;
+  /** The head's middle and radius, and the eyes' material (for what a special attack adds to them). */
+  readonly headAt = new THREE.Vector3();
+  readonly headRadius: number = 0;
+  readonly eyes: THREE.MeshStandardMaterial;
+  readonly skin: THREE.MeshStandardMaterial;
+  readonly legSkin: THREE.MeshStandardMaterial;
+  private readonly t1 = new THREE.Vector3();
+  private readonly t2 = new THREE.Vector3();
+  private readonly t3 = new THREE.Vector3();
+  private readonly t4 = new THREE.Vector3();
   /** How far the body is drawn off its place in the simulation, along its up: what is drawn lies that much above the density (smoothed). */
   private lift = 0;
   /** The same, summed over the feet of the last update. */
@@ -93,26 +139,36 @@ export class BugView {
     teamColor?: number,
   ) {
     const r = species.radius;
+    this.root.add(this.torso);
+    this.torso.add(this.head, this.abdomen);
     const body = this.material(species.color, 0.45);
+    this.skin = body;
     // a faint glow in the team colour: the bug reads from far away and in the dark
     if (teamColor !== undefined) body.emissive.setHex(teamColor).multiplyScalar(0.22);
     const dark = this.material(species.accent, 0.6);
+    this.legSkin = dark;
     const eye = this.material(0x050505, 0.2);
+    this.eyes = eye;
     const len = species.bodyLength * r;
 
     const thoraxR = 0.3 * r;
     this.part(body, 0, -0.05 * r, 0, thoraxR * 1.1, thoraxR, thoraxR * 1.3);
     const ab = species.abdomen * r;
-    this.part(body, 0, 0.08 * r, -(thoraxR + ab * 0.85), ab * 0.8, ab * 0.68, ab);
+    // (it hangs from the waist, just behind the thorax)
+    this.abdomen.position.set(0, 0, -thoraxR * 0.8);
+    this.part(body, 0, 0.08 * r, -(thoraxR * 0.2 + ab * 0.85), ab * 0.8, ab * 0.68, ab, this.abdomen);
     const hd = species.head * r;
     const headZ = thoraxR * 1.2 + hd * 0.8;
-    this.part(body, 0, 0.02 * r, headZ, hd, hd * 0.9, hd);
+    this.head.position.set(0, 0.02 * r, headZ);
+    this.part(body, 0, 0, 0, hd, hd * 0.9, hd, this.head);
+    this.headAt.set(0, 0.02 * r, headZ);
+    this.headRadius = hd;
     for (const s of [-1, 1]) {
-      this.part(eye, s * hd * 0.55, 0.15 * hd, headZ + hd * 0.6, hd * 0.28, hd * 0.28, hd * 0.28);
+      this.part(eye, s * hd * 0.55, 0.15 * hd - 0.02 * r, hd * 0.6, hd * 0.28, hd * 0.28, hd * 0.28, this.head);
       if (species.antennae > 0) {
-        const base = new THREE.Vector3(s * hd * 0.35, hd * 0.6, headZ + hd * 0.5);
+        const base = new THREE.Vector3(s * hd * 0.35, hd * 0.6, hd * 0.5);
         const tip = base.clone().add(new THREE.Vector3(s * 0.35, 0.55, 0.75).normalize().multiplyScalar(species.antennae * r));
-        this.root.add(this.limb(dark, base, tip, 0.035 * r));
+        this.head.add(this.limb(dark, base, tip, 0.035 * r));
       }
     }
 
@@ -126,10 +182,11 @@ export class BugView {
         const splay = (z / (thoraxR * 1.2)) * 0.6 * reach;
         const knee = new THREE.Vector3(s * reach * 0.5, 0.35 * r, splay * 0.5);
         const foot = new THREE.Vector3(s * reach, -0.9 * r, splay);
-        pivot.add(this.limb(dark, new THREE.Vector3(), knee, 0.06 * r));
-        pivot.add(this.limb(dark, knee, foot, 0.045 * r));
+        const upper = this.limb(dark, new THREE.Vector3(), knee, 0.06 * r);
+        const lower = this.limb(dark, knee, foot, 0.045 * r);
+        pivot.add(upper, lower);
         this.root.add(pivot);
-        this.legs.push({ pivot, side: s, offset: (i + (s > 0 ? 0 : 1)) % 2 ? Math.PI : 0, foot, bend: 0 });
+        this.legs.push({ upper, lower, knee, l1: knee.length(), l2: knee.distanceTo(foot), home: pivot.position.clone(), pivot, side: s, offset: (i + (s > 0 ? 0 : 1)) % 2 ? Math.PI : 0, foot, bend: 0 });
       }
     }
   }
@@ -171,6 +228,8 @@ export class BugView {
       ground.rest(x, y, z, -this.up.x, -this.up.y, -this.up.z, this.species.radius + 1);
       lift = Math.max(ground.offset, this.feetOffset / this.legs.length);
     }
+    this.heldNow += (this.held - this.heldNow) * (1 - Math.exp(-dt * 9));
+    if (this.heldNow > 0.01) lift -= this.species.radius * (0.42 + 0.035 * Math.sin(this.phase * 3 + performance.now() * 0.021)) * this.heldNow;
     this.lift += (lift - this.lift) * (1 - Math.exp(-dt * 14));
     this.root.position.addScaledVector(this.up, this.lift);
     this.groundY = this.root.position.y;
@@ -183,19 +242,120 @@ export class BugView {
     this.phase += speed * dt * 2.2;
     const swingAmp = bug.grounded ? Math.min(1, speed / 2) * 0.45 : 0;
     this.feetOffset = 0;
-    this.raised += (this.raise - this.raised) * (1 - Math.exp(-dt * 12));
     for (const leg of this.legs) {
       const a = this.phase + leg.offset;
       leg.pivot.rotation.y = leg.side * Math.sin(a) * swingAmp;
       const bend = bug.grounded && ground ? this.bendToGround(leg, ground) : 0;
       leg.bend += (bend - leg.bend) * (1 - Math.exp(-dt * 25));
       leg.pivot.rotation.z = leg.side * (leg.bend + (bug.grounded ? Math.max(0, Math.cos(a)) * swingAmp * 0.5 : 0.35));
-      // (the front pair lifts forward, to hold the bow)
-      if (this.raised > 0.01 && this.legs.indexOf(leg) < 2) {
-        leg.pivot.rotation.y += -leg.side * 0.45 * this.raised;
-        leg.pivot.rotation.z = leg.pivot.rotation.z * (1 - this.raised) + leg.side * 1.15 * this.raised;
-      }
     }
+    if (this.pose.weight > 0.001) this.stand(ground);
+    else if (this.posed) this.unpose();
+  }
+
+  /** The stance: the body upright over the hind legs, the front two at the bow, the others spread. */
+  private stand(ground?: RestGround): void {
+    this.posed = true;
+    const r = this.species.radius;
+    const w = this.pose.weight;
+    const { grip, nock, sway, spread } = this.pose;
+    this.torso.rotation.x = (-1.2 - this.pose.lean) * w;
+    this.torso.position.set(0, 1.28 * r * w, -0.1 * r * w);
+    // the face looks where the bow aims; the abdomen swings back, a counterweight
+    this.head.rotation.x = (1.2 + this.pose.lean - this.pose.look) * w;
+    this.head.position.copy(this.headAt);
+    this.head.position.z += 0.05 * r * w;
+    this.abdomen.rotation.x = 0.62 * w;
+    this.torso.updateMatrix();
+    const n = this.legs.length;
+    for (let i = 0; i < n; i++) {
+      const leg = this.legs[i];
+      const s = leg.side;
+      // where the foot is now, on all legs
+      const rest = this.t1.copy(leg.foot).applyQuaternion(leg.pivot.quaternion).add(leg.home);
+      // where the stance has it, and which way its knee points
+      const goal = this.t2;
+      const pole = this.t3;
+      const pair = Math.floor(i / 2);
+      const back = n / 2 - 1;
+      if (pair === back) {
+        goal.set(s * 1.02 * r, -r, (s > 0 ? 0.62 : -0.6) * r);
+        if (ground) {
+          const at = this.foot.copy(goal);
+          at.y += 1.2 * r;
+          at.applyQuaternion(this.root.quaternion).add(this.root.position);
+          const t = ground.rest(at.x, at.y, at.z, -this.up.x, -this.up.y, -this.up.z, 2.6 * r);
+          if (t > 0) goal.y += 1.2 * r - t;
+        }
+        pole.set(s * 1.3, 0.25, 0.45);
+      } else if (pair === 0) {
+        goal.copy(s > 0 ? grip : nock).multiplyScalar(r);
+        if (s > 0) pole.set(0.8, -0.5, -0.2);
+        else pole.set(-1, 0.2, -0.6);
+      } else if (pair === 1 && s > 0) {
+        // (a second hand on the bow, under the first)
+        goal.copy(grip).multiplyScalar(r);
+        goal.y -= 0.34 * r;
+        pole.set(0.9, -0.6, 0.2);
+      } else {
+        // (a fan behind it, like wings)
+        const a = sway * 0.6 + pair * 1.3;
+        goal.set(s * (1.45 + 0.3 * spread) * r, (pair === 1 ? 2.35 : 1.15) * r + Math.sin(a) * 0.1 * r, (-1.15 - 0.2 * spread) * r);
+        pole.set(s * 1.1, pair === 1 ? 0.5 : 0.9, -0.5);
+      }
+      const hip = this.t4.copy(leg.home).applyMatrix4(this.torso.matrix);
+      hip.lerpVectors(leg.home, hip, w);
+      goal.lerpVectors(rest, goal, w);
+      leg.pivot.position.copy(hip);
+      // (over its shoulder, the near ones fold out of the picture)
+      leg.pivot.visible = !(this.pose.fold > 0.5 && s < 0 && pair !== 0 && pair !== back);
+      leg.pivot.rotation.set(0, 0, 0);
+      this.bendTo(leg, goal.sub(hip), pole);
+    }
+  }
+
+  /** Two segments from the hip (the pivot's origin) to `to`, the knee towards `pole`. */
+  private bendTo(leg: Leg, to: THREE.Vector3, pole: THREE.Vector3): void {
+    const reach = leg.l1 + leg.l2;
+    const d = Math.min(reach * 0.999, Math.max(Math.abs(leg.l1 - leg.l2) * 1.02, to.length()));
+    to.setLength(d);
+    const dir = this.foot.copy(to).divideScalar(d);
+    pole.addScaledVector(dir, -pole.dot(dir));
+    if (pole.lengthSq() < 1e-6) pole.set(0, 1, 0).addScaledVector(dir, -dir.y);
+    pole.normalize();
+    const a = (leg.l1 * leg.l1 - leg.l2 * leg.l2 + d * d) / (2 * d);
+    const h = Math.sqrt(Math.max(0, leg.l1 * leg.l1 - a * a));
+    const knee = dir.multiplyScalar(a).addScaledVector(pole, h);
+    leg.upper.position.set(0, 0, 0);
+    leg.upper.quaternion.setFromUnitVectors(UP, pole.copy(knee).normalize());
+    leg.upper.scale.y = knee.length();
+    leg.lower.position.copy(knee);
+    to.sub(knee);
+    leg.lower.scale.y = to.length();
+    leg.lower.quaternion.setFromUnitVectors(UP, to.normalize());
+  }
+
+  /** Back on all its legs. */
+  private unpose(): void {
+    this.posed = false;
+    this.torso.rotation.set(0, 0, 0);
+    this.head.rotation.set(0, 0, 0);
+    this.head.position.copy(this.headAt);
+    this.abdomen.rotation.set(0, 0, 0);
+    this.torso.position.set(0, 0, 0);
+    for (const leg of this.legs) {
+      leg.pivot.position.copy(leg.home);
+      leg.pivot.visible = true;
+      this.bendSegment(leg.upper, this.t1.set(0, 0, 0), leg.knee);
+      this.bendSegment(leg.lower, leg.knee, leg.foot);
+    }
+  }
+
+  private bendSegment(m: THREE.Mesh, from: THREE.Vector3, to: THREE.Vector3): void {
+    m.position.copy(from);
+    const d = this.t2.copy(to).sub(from);
+    m.scale.y = d.length();
+    m.quaternion.setFromUnitVectors(UP, d.normalize());
   }
 
   /**
@@ -232,6 +392,7 @@ export class BugView {
    */
   private updateDead(bug: Bug, dt: number, ground?: RestGround): void {
     const r = this.species.radius;
+    if (this.posed) this.unpose();
     if (this.deadT < 0) {
       this.deadT = 0;
       this.gone = bug.y <= KILL_Y;
@@ -310,12 +471,12 @@ export class BugView {
     return m;
   }
 
-  private part(m: THREE.Material, x: number, y: number, z: number, sx: number, sy: number, sz: number): THREE.Mesh {
+  private part(m: THREE.Material, x: number, y: number, z: number, sx: number, sy: number, sz: number, parent: THREE.Object3D = this.torso): THREE.Mesh {
     const mesh = new THREE.Mesh(sphere, m);
     mesh.castShadow = true;
     mesh.position.set(x, y, z);
     mesh.scale.set(sx, sy, sz);
-    this.root.add(mesh);
+    parent.add(mesh);
     return mesh;
   }
 

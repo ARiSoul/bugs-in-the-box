@@ -1,0 +1,183 @@
+# Flow: Bugs in the Box - Map Creator Prompt
+# Edit by hand or in the visual editor. Check with: agent-flow-studio-flows validate map-creator-prompt
+version: 1
+name: map-creator-prompt
+title: Bugs in the Box - Map Creator Prompt
+description: 'Turns a short map idea into a complete, ready-to-use prompt (from the Bugs in the Box map
+  template) for building a procedural WebGPU map. Read-only: the result is a .md draft for human review.'
+inputs:
+  map_idea:
+    label: Map idea (short pitch)
+    description: E.g. bioluminescent coral reef inside a glass box
+  scene_notes:
+    type: markdown
+    label: Extra scene notes (optional)
+    description: Anything the scene must or must not have
+    required: false
+  priorities:
+    type: markdown
+    label: Priorities (in order)
+    default: |-
+      1. Visual beauty and atmosphere
+      2. Smooth performance on the target (frame-time gates)
+      3. Determinism and reproducibility
+      4. Bundle size
+  target_os: {label: Target OS, default: Windows 11}
+  target_browser: {label: Target browser, default: Chrome stable}
+  target_gpu: {label: Target GPU, default: 'TODO: your GPU'}
+  target_cpu: {label: Target CPU, default: 'TODO: your CPU'}
+  target_hz:
+    type: integer
+    label: Monitor refresh (Hz)
+    default: 144
+    min: 30.0
+    max: 500.0
+  target_res: {label: Target resolution, default: 2560x1440}
+  gpu_avg_ms:
+    type: number
+    label: GPU avg frame time (ms)
+    default: 6.9
+    min: 0.5
+    max: 50.0
+  frame_max_ms:
+    type: number
+    label: Max frame time (ms)
+    default: 16.6
+    min: 1.0
+    max: 100.0
+  flythrough_seconds:
+    type: integer
+    label: Fly-through length (s)
+    default: 60
+    min: 5.0
+    max: 600.0
+  controls:
+    type: markdown
+    label: Controls
+    default: |-
+      - WASD move, Q/E down/up, mouse look (pointer lock), Shift fast, Ctrl slow
+      - Mouse wheel changes fly speed
+      - R resets the camera to the start area
+  pose_count:
+    type: integer
+    label: Number of fixed poses
+    default: 6
+    min: 1.0
+    max: 20.0
+  pose_res: {label: Pose render resolution, default: 1920x1080}
+  recording_seconds:
+    type: integer
+    label: Recording length (s)
+    default: 10
+    min: 2.0
+    max: 120.0
+  critic_pass_level:
+    type: choice
+    label: Critic passes when nothing above
+    default: minor
+    options: [blocker, major, minor]
+task: 'Create the prompt for a new Bugs in the Box map from the idea: {map_idea}. Run id: {run_id}.'
+orchestrator:
+  prompt: |-
+    You coordinate the creation of a map prompt for Bugs in the Box, a browser game POC with procedural WebGPU maps.
+
+    Rules:
+    - Read-only: no agent changes the repository or any external system. The final prompt is a .md draft for human review.
+    - Follow the graph. At the scene approval gate, if the human asks for changes, send their feedback verbatim to scene_designer and run it again; do not edit the scene values yourself.
+    - Every conclusion needs evidence (evidence_ref: a repo path, an input name or a scene key). Do not invent data; if something is missing, say what is missing.
+    - At the end, show the final prompt and the fill report's list of missing/TODO values.
+
+start: repo_context
+
+agents:
+  repo_context:
+    description: 'Run first: reads the Bugs in the Box repository (read only) to find existing maps, their
+      style, shared code (seed, URL hooks, camera) and conventions the new map should reuse.'
+    prompt_file: prompts/repo_context.md
+    tools: [workspace.read, workspace.grep, workspace.glob]
+    inputs:
+      focus:
+        from: input.map_idea
+        type: text
+        description: The new map idea; look for existing maps, shaders and shared code related to it
+        required: false
+    outputs:
+      overview:
+        type: markdown
+        description: Structure, technologies, entry points, how to build and test
+      main_language: {}
+    icon: search
+    origin: {agent: repo_explorer, hash: bd92582bae1a07ba}
+  scene_designer:
+    description: 'After the repo context (and again when the human asks for changes): turns the short
+      map idea into concrete, coherent values for every SCENE field of the map template.'
+    prompt_file: prompts/scene_designer.md
+    inputs:
+      map_idea: {from: input.map_idea, type: text}
+      scene_notes: {from: input.scene_notes, type: markdown, required: false}
+      priorities: {from: input.priorities, type: markdown}
+      repo_overview: {from: repo_context.overview, type: markdown}
+    outputs:
+      scene:
+        type: json
+        description: Object with keys MAP_NAME, MAP_PITCH, MEDIUM, DEPTH_GRADIENT, LIGHT_FX, BOUNDARY_SURFACE,
+          HERO_VEGETATION, TERRAIN, GROUND_AND_FLORA, LIFE, SET_PIECES, WORLD_BOUNDS, START_AREA, BOUNDARY_RULE
+          (all strings)
+      scene_review:
+        type: markdown
+        description: Human-readable table of the proposed values, with rationale and evidence_ref
+        draft: true
+    icon: palette
+  prompt_composer:
+    description: 'After the scene is approved: fills the map template with the approved scene values and
+      the form''s fixed parameters and returns the final prompt as a .md draft.'
+    prompt_file: prompts/prompt_composer.md
+    inputs:
+      scene: {from: scene_designer.scene, type: json}
+      priorities: {from: input.priorities, type: markdown}
+      target_os: {from: input.target_os, type: text}
+      target_browser: {from: input.target_browser, type: text}
+      target_gpu: {from: input.target_gpu, type: text}
+      target_cpu: {from: input.target_cpu, type: text}
+      target_hz: {from: input.target_hz, type: integer}
+      target_res: {from: input.target_res, type: text}
+      gpu_avg_ms: {from: input.gpu_avg_ms, type: number}
+      frame_max_ms: {from: input.frame_max_ms, type: number}
+      flythrough_seconds: {from: input.flythrough_seconds, type: integer}
+      controls: {from: input.controls, type: markdown}
+      pose_count: {from: input.pose_count, type: integer}
+      pose_res: {from: input.pose_res, type: text}
+      recording_seconds: {from: input.recording_seconds, type: integer}
+      critic_pass_level: {from: input.critic_pass_level, type: choice}
+    outputs:
+      final_prompt:
+        type: markdown
+        description: The filled map prompt, ready to paste into a coding agent
+        draft: true
+      fill_report:
+        type: markdown
+        description: Each placeholder, its value and where it came from (evidence_ref)
+    icon: file-text
+
+gates:
+  approve_scene: {kind: human, label: Approve the scene values (or ask for changes)}
+  review_prompt: {kind: human, label: Review the final map prompt}
+
+edges:
+- {from: repo_context, to: scene_designer}
+- {from: scene_designer, to: approve_scene}
+- {from: approve_scene, to: prompt_composer, when: the human approved the scene values, label: approved}
+- {from: approve_scene, to: scene_designer, when: the human asked for changes (pass their feedback to
+    scene_designer), label: changes}
+- {from: prompt_composer, to: review_prompt}
+workspace: {path: 'G:\repos\bugs-in-the-box'}
+
+layout:
+  repo_context: {x: -318, y: 8}
+  scene_designer: {x: 38, y: 51}
+  prompt_composer: {x: 363, y: 299}
+  approve_scene: {x: 332, y: 142}
+  review_prompt:
+    x: -113
+    y: 669
+    compact: {w: 200, h: 35}

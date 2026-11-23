@@ -35,8 +35,12 @@ export class AimView {
   update(match: Match, bugPosition: THREE.Vector3, labelHeight: number, now: number): void {
     const unit = match.activeUnit;
     const aiming = match.phase === 'aim' && unit.bug.alive;
-    // (a bow shows its dart instead)
-    this.pointer.visible = aiming && match.currentWeapon.kind !== 'arrow';
+    // (a special attack's scene has begun: nothing over the picture)
+    if (aiming && match.charging && match.currentWeapon.sceneTicks > 0) {
+      this.pointer.visible = this.marker.visible = false;
+      return;
+    }
+    this.pointer.visible = aiming;
     this.marker.visible = aiming;
     if (!aiming) return;
 
