@@ -438,13 +438,14 @@ export const car: TerrainGenerator = (terrain, seed, layout) => {
   put(feature('room', W / 2, Y(-70), D / 2, { color: 0x1c1c1d }));
   // (a charging cable from the phone to the socket by the gear lever: its slack a little different on every seed)
   const slack = 1.5 + rng() * 3;
-  const ctrl = [142, 52.4, 104.6, 138, 50.4, 106, 131 - slack, 44, 107 + slack, 127 - slack, 27, 112 + slack, 131, 16.4, 117, 137, 14.8, 119.4, 141.6, 10.4, 121];
+  const ctrl = [142, 52.4, 104.6, 138, 50.4, 106, 131 - slack, 44, 107 + slack, 127 - slack, 29, 112 + slack, 128.6, 20.6, 115.6, 133.6, 16.8, 118.6, 139.2, 16, 120.6, 142, 13.6, 121, 142, 10, 121];
   const pts = wirePath(ctrl.map((v, i) => (i % 3 === 0 ? X(v) : i % 3 === 1 ? Y(v) : Z(v))), 8);
   put(feature('wire', pts[0], pts[1], pts[2], { path: [L(0.35), ...pts], color: 0x1a1a1a }));
   for (let i = 0; i + 5 < pts.length; i += 3) hide(capsule(pts[i], pts[i + 1], pts[i + 2], pts[i + 3], pts[i + 4], pts[i + 5], 1.05));
   // (the socket it ends in, its plug; the ring round the gear lever's boot)
   solid(cylinder(X(142), Y(8), Z(121), L(2.8), L(1.2), 1));
   solid(cylinder(X(142), Y(8.8), Z(121), L(2), L(1.7), 1));
+  solid(cylinder(X(142), Y(11.2), Z(121), L(1.1), L(1.6), 1));
   solid(cylinder(X(160), Y(6.6), Z(140), L(10.3), L(1.4), 1));
   // (the key in its lock, right of the column, a plain fob hanging from it)
   {

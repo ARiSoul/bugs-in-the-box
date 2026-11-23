@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { KILL_Y, TICK_RATE, WALKABLE_NY, type Bug } from '../game/bug';
+import { KILL_Y, TICK_RATE, type Bug } from '../game/bug';
 import type { BugSpecies } from '../game/species';
 
 const sphere = new THREE.SphereGeometry(1, 16, 12);
@@ -41,9 +41,6 @@ interface Leg {
  * The look of one bug: a few spheres and cylinders built from its species proportions.
  * Purely cosmetic: reads the simulation state, never writes it. Local frame: +Z forward, +Y up.
  */
-/** Rotation that lays a ring (made in the xy plane) flat on the floor. */
-const FLAT = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2);
-
 export class BugView {
   readonly root = new THREE.Group();
   private readonly legs: Leg[] = [];
@@ -61,8 +58,6 @@ export class BugView {
   private lift = 0;
   /** The same, summed over the feet of the last update. */
   private feetOffset = 0;
-  private ring: THREE.Mesh | null = null;
-  private ringMaterial: THREE.MeshBasicMaterial | null = null;
   /** Colours to fade from when the bug dies. */
   private readonly tints: { m: THREE.MeshStandardMaterial; color: THREE.Color; emissive: THREE.Color }[] = [];
   /** Seconds since death (-1: alive). */
@@ -80,33 +75,21 @@ export class BugView {
 
   /**
    * Readability from afar (render only): the bug grows with the camera distance (from ~50 units, at most
-   * 1.7×, lifted so its feet stay on the floor) and its team ring a little more (at most 1.6× the bug).
+   * 1.7×, lifted so its feet stay on the floor).
    * Call after `update`.
    */
   setCameraDistance(cameraDistance: number): void {
     const s = Math.min(1.7, Math.max(1, cameraDistance / 50));
     this.root.scale.setScalar(s);
     this.root.position.y = this.groundY + (s - 1) * this.species.radius;
-    if (this.ring) this.ring.scale.setScalar(Math.min(1.6, Math.max(1, cameraDistance / 45)));
   }
 
-  /** `teamColor`: a soft ring in the team colour under the bug, so it reads from far away. */
+  /** `teamColor`: a faint glow in the team colour, so the bug reads from far away. */
   constructor(
     readonly species: BugSpecies,
     teamColor?: number,
   ) {
     const r = species.radius;
-    if (teamColor !== undefined) {
-      const ringMat = new THREE.MeshBasicMaterial({ color: teamColor, transparent: true, opacity: 0.85, depthWrite: false, side: THREE.DoubleSide, fog: false });
-      this.materials.push(ringMat);
-      this.ringMaterial = ringMat;
-      const ring = new THREE.Mesh(new THREE.RingGeometry(r * 1.05, r * 1.6, 32), ringMat);
-      ring.quaternion.copy(FLAT);
-      ring.position.y = -r + 0.12;
-      ring.renderOrder = 5;
-      this.root.add(ring);
-      this.ring = ring;
-    }
     const body = this.material(species.color, 0.45);
     // a faint glow in the team colour: the bug reads from far away and in the dark
     if (teamColor !== undefined) body.emissive.setHex(teamColor).multiplyScalar(0.22);
@@ -188,11 +171,6 @@ export class BugView {
     this.lift += (lift - this.lift) * (1 - Math.exp(-dt * 14));
     this.root.position.addScaledVector(this.up, this.lift);
     this.groundY = this.root.position.y;
-    // the team ring stays flat on the floor whatever the bug leans into; on a steep surface it lies on it
-    if (this.ring) {
-      if (bug.grounded && bug.ny < WALKABLE_NY) this.ring.quaternion.copy(FLAT);
-      else this.ring.quaternion.copy(this.root.quaternion).invert().multiply(FLAT);
-    }
 
     // Walk cycle driven by the actual speed along the surface (up a wall too); legs tuck in while airborne.
     const dx = bug.x - bug.px;
@@ -302,15 +280,11 @@ export class BugView {
       leg.pivot.rotation.z = -leg.side * (1.1 * e) + kick * 0.5;
     }
 
-    // dull colours; the team ring fades away
+    // dull colours
     const f = Math.min(1, t / DEATH_FADE);
     for (const tint of this.tints) {
       tint.m.color.copy(tint.color).lerp(CORPSE_GREY, f * 0.6);
       tint.m.emissive.copy(tint.emissive).multiplyScalar(1 - f);
-    }
-    if (this.ring && this.ringMaterial) {
-      this.ringMaterial.opacity = 0.85 * (1 - f);
-      this.ring.visible = f < 1;
     }
   }
 

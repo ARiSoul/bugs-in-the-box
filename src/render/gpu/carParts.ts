@@ -700,8 +700,8 @@ export class CarParts {
         const { color, light } = climateFront();
         this.tex(color);
         this.tex(light);
-        g.add(this.slab(roundedRect(it.w, it.h, 1.4), it.out + 0.6, 0.4, this.mat(0x141416, 0.1, 0.5), it.u, -it.v, z - it.out - 1.2, 4));
-        g.add(this.card(it.w - 1.2, it.h - 1, this.screen(light, 0.8, color, 0.6), it.u, -it.v, z + 0.24));
+        g.add(this.slab(roundedRect(it.w, it.h, 1.4), it.out + 0.6, 0.4, this.mat(0x141416, 0.1, 0.5), it.u, -it.v, z - it.out - 0.84, 4));
+        g.add(this.card(it.w - 1.6, it.h - 1.5, this.screen(light, 0.8, color, 0.6), it.u, -it.v, z + 0.24));
         for (let k = 0; k < 9; k++) g.add(this.box(0.28, 1.8, 0.4, 0.1, this.mat(0x232325, 0.1, 0.5), 11.6 + k * 0.6, -it.v - 3.9, z + 0.26));
       } else if (it.kind === 'knob') this.knob(g, it.id, it.u, -it.v, out, it.w / 2, it.out);
       else {
@@ -1163,6 +1163,10 @@ export class CarParts {
     const socket = new THREE.Group();
     socket.position.set(142, 7.5, 121);
     socket.add(this.mesh(new THREE.TorusGeometry(2.4, 0.4, 10, 48).rotateX(Math.PI / 2), this.mat(0x2a2a2c, 0.5, 0.4)), this.mesh(new THREE.CylinderGeometry(1.7, 2, 2.6, 32), this.mat(0x151516, 0.1, 0.5), 0, 1, 0));
+    // (the cable's plug in it, its ribbed sleeve)
+    const plug = this.mat(0x1f1f21, 0.1, 0.5);
+    socket.add(this.mesh(new THREE.CylinderGeometry(1, 1.15, 1.9, 32), plug, 0, 3, 0));
+    for (let k = 0; k < 4; k++) socket.add(this.mesh(new THREE.CylinderGeometry(0.62 - k * 0.04, 0.68 - k * 0.04, 0.32, 24), plug, 0, 4.1 + k * 0.4, 0));
     this.push(socket);
   }
 
