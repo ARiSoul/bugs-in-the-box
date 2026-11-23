@@ -54,6 +54,7 @@ export type Box3 = [number, number, number, number, number, number];
  * - `screen`: a display panel (`box`), its picture on the face towards local +z: `look` 'game', 'editor', 'desert'
  *   or 'off'. `keyboard`: keycaps on a keyboard's deck (`box`, its top at box[4]): `path` = [columns, rows],
  *   `color` of the caps. `dusty`: a black laminate desk sheet with dust and crumbs (`box`).
+ * - `car`: a car's whole dashboard, drawn from its plan (`carPlan.ts`): `path` = the map's [W, H, D].
  * Any `part`, `screen` or `keyboard` may carry `yaw` = [cos, sin]: turned about the vertical through its box's
  * centre, local +x towards world (cos, 0, sin) (as `rotatedBox` about y).
  *
@@ -67,7 +68,7 @@ export interface Feature {
   kind:
     | 'fan' | 'pump' | 'lightBar' | 'led' | 'heat' | 'tube' | 'capacitor' | 'grommet' | 'pad' | 'connector'
     | 'dust' | 'trace' | 'ramBody' | 'part' | 'screw' | 'wire' | 'driver' | 'port' | 'rod' | 'room' | 'lamp'
-    | 'turntable' | 'perforated' | 'marble' | 'blower' | 'screen' | 'keyboard' | 'dusty' | 'mouse' | 'speakerFront' | 'bottle' | 'foil';
+    | 'turntable' | 'perforated' | 'marble' | 'blower' | 'screen' | 'keyboard' | 'dusty' | 'mouse' | 'speakerFront' | 'bottle' | 'foil' | 'car';
   x: number;
   y: number;
   z: number;

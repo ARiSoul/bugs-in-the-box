@@ -14,6 +14,7 @@ import { insidePC } from '../src/terrain/generators/insidePC';
 import { pcCase } from '../src/terrain/generators/pcCase';
 import { fridge } from '../src/terrain/generators/fridge';
 import { microwave } from '../src/terrain/generators/microwave';
+import { car } from '../src/terrain/generators/car';
 import { desk } from '../src/terrain/generators/desk';
 import { speaker } from '../src/terrain/generators/speaker';
 import { ChunkMesher } from '../src/terrain/mesher';
@@ -91,6 +92,7 @@ for (const [label, gen, size] of [
   ['microwave (microwave)', microwave, [5, 3, 5]],
   // (the desk on its own map: twice the scale, twice as wide)
   ['desk (desk)', desk, [10, 3, 5]],
+  ['car dashboard (car)', car, [10, 4, 5]],
 ] as const) {
   const warm = new Terrain(...size);
   gen(warm, 1); // warm-up

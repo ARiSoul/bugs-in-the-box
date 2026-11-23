@@ -1,3 +1,4 @@
+import { carScale } from '../terrain/generators/carPlan';
 import { deskPlan } from '../terrain/generators/desk';
 import { fridgePlan } from '../terrain/generators/fridge';
 import { microwavePlan } from '../terrain/generators/microwave';
@@ -324,7 +325,50 @@ const desk: ViewBuilder = (t) => {
   return { start, poses, path, duration: 60 };
 };
 
-const BUILDERS: Record<string, ViewBuilder> = { 'pc-case': pcCase, speaker, fridge, microwave, desk };
+/** Car dashboard: the whole of it from the seats, then the driver's side, the stack, the passenger's, close-ups. */
+const car: ViewBuilder = (t) => {
+  const { s, ox, oz } = carScale(t.W, t.H, t.D);
+  const at = (p: [number, number, number], q: [number, number, number]): CameraKey =>
+    key([p[0] * s + ox, p[1] * s, p[2] * s + oz], [q[0] * s + ox, q[1] * s, q[2] * s + oz]);
+  const start = at([150, 150, 250], [156, 62, 70]);
+  const poses = [
+    start,
+    // 2: the driver's side, from the seat: the wheel, the instruments, the hood
+    at([88, 106, 205], [88, 62, 80]),
+    // 3: the instruments over the wheel's rim, close
+    at([88, 92, 130], [88, 70, 72]),
+    // 4: the centre: the vents, the phone, the hazard button
+    at([160, 74, 150], [160, 58, 92]),
+    // 5: the radio and the climate panel
+    at([162, 58, 150], [160, 27, 102]),
+    // 6: the passenger's side: the pad, the glove box, the end vent, the door
+    at([210, 96, 190], [256, 58, 84]),
+    // 7 (detail): the defroster's grille from the left, along the windscreen, the garage behind
+    at([70, 92, 60], [160, 84, 18]),
+    // 8 (detail): the sensor in the grille, low
+    at([146, 91, 48], [164, 84, 18]),
+    // 9 (detail): the left end: the vent, the light switch, the demister, the pillar
+    at([36, 62, 138], [47, 48, 94]),
+    // 10 (detail): the right end: the vent, the tweeter's triangle, the mirror
+    at([232, 84, 130], [290, 72, 70]),
+    // 11 (detail): the wheel's middle: the emblem, the buttons
+    at([88, 70, 176], [88, 50, 124]),
+    // 12 (detail): the radio's cracked screen, close
+    at([156, 34, 126], [160, 28, 101]),
+    // 13 (detail): the climate panel and the gear lever
+    at([186, 50, 166], [158, 12, 118]),
+    // 14 (detail): the phone and its holder, from the right
+    at([170, 76, 128], [145, 66, 100]),
+    // 15 (detail): the top of the dashboard from the passenger's corner: the seam, the hood, the dust
+    at([252, 106, 110], [110, 82, 50]),
+    // 16 (detail): the open glove box and what lies in it, the trim over it
+    at([240, 54, 142], [240, 32, 92]),
+  ];
+  const path: CameraKey[] = [start, poses[1], poses[2], poses[3], poses[4], poses[5], poses[14], poses[6]];
+  return { start, poses, path, duration: 60 };
+};
+
+const BUILDERS: Record<string, ViewBuilder> = { 'pc-case': pcCase, speaker, fridge, microwave, desk, car };
 
 export function viewsFor(scenarioId: string, t: Terrain, layout: SceneLayout): ScenarioViews {
   return (BUILDERS[scenarioId] ?? generic)(t, layout);

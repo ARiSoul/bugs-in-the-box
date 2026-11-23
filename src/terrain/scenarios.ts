@@ -1,3 +1,4 @@
+import { car } from './generators/car';
 import { desk } from './generators/desk';
 import { floatingIslands } from './generators/floatingIslands';
 import { fridge } from './generators/fridge';
@@ -33,6 +34,10 @@ export interface Scenario {
   /** WebGPU path: colour and intensity of the key light (defaults 0xffb878 and 3.9: late sun into a dark case). */
   sunColor?: number;
   sunIntensity?: number;
+  /** WebGPU path: how bright the light from all round is (default 0.4). */
+  environment?: number;
+  /** WebGPU path: how strong the shafts of light in the air are (default 0.5). */
+  rays?: number;
   /** Lowest angle of the chase view above the active bug (radians; default 0.42): higher over tall walls. */
   chaseElevation?: number;
   /** Bugs may start on any level (shelves under shelves), not only on the topmost surface. */
@@ -138,6 +143,26 @@ export const SCENARIOS: readonly Scenario[] = [
     sunColor: 0xfff0e2,
     sunIntensity: 2.6,
     chaseElevation: 0.55,
+    spawnLevels: true,
+  },
+  {
+    id: 'car',
+    name: 'Car Dashboard',
+    generate: car,
+    sharpEdges: true,
+    // a car parked in a bright garage, its ignition on
+    sky: { css: 'radial-gradient(ellipse at 50% 40%, #3a3835 0%, #0c0b0a 72%)', fog: 0x14120f, fogClear: 300, fogSpan: 600, cornerDark: 0.1, backdrop: 0x3a3733 },
+    render: 'webgpu',
+    strictBounds: true,
+    // (the desk's scale: 2 units a centimetre; a row of chunks taller, for the dashboard stands high)
+    mapSize: [10, 4, 5],
+    // the low sun of the photos, from the left through the open garage door: long shadows over the top
+    sun: [-230, 250, 120],
+    sunColor: 0xfff3e6,
+    sunIntensity: 5.5,
+    environment: 0.5,
+    rays: 0.16,
+    chaseElevation: 0.5,
     spawnLevels: true,
   },
   {

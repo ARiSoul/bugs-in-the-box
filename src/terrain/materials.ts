@@ -44,6 +44,9 @@ export const CHASSIS_RED = 30; // a retro appliance's glossy red painted steel
 export const MARBLE = 31; // a pale marble worktop and splashback
 export const DESK_BLACK = 32; // a black laminate desk top (dust and crumbs are drawn on it)
 export const DESK_WHITE = 33; // a white laminate table top (ash and dust are drawn on it)
+export const DASH = 34; // a dashboard's dark moulded skin (the drawn skin lies over it)
+export const DASH_FOAM = 35; // the yellowed foam under a dashboard's skin
+export const DASH_TRIM = 36; // a car's dark grey hard plastic: the doors, the tunnel
 
 /**
  * Glow of each material (`MATERIAL_PBR[id][2]`): what the renderer may light up. Signed so that the
@@ -92,6 +95,9 @@ export const MATERIAL_PBR: readonly (readonly [number, number, number])[] = [
   [0.22, 0, 0], // MARBLE: polished
   [0.6, 0, 0], // DESK_BLACK: satin laminate
   [0.55, 0, 0], // DESK_WHITE: satin laminate
+  [0.8, 0, 0], // DASH: matte soft plastic
+  [0.95, 0, 0], // DASH_FOAM
+  [0.7, 0, 0], // DASH_TRIM
 ];
 
 /**
@@ -99,7 +105,7 @@ export const MATERIAL_PBR: readonly (readonly [number, number, number])[] = [
  * Clean painted and moulded surfaces barely vary; a white one shows any variation as dirt.
  */
 export const MATERIAL_NOISE: readonly number[] = (() => {
-  const n = new Array<number>(DESK_WHITE + 1).fill(0.24);
+  const n = new Array<number>(DASH_TRIM + 1).fill(0.24);
   n[ENAMEL] = 0.025;
   n[LINER] = 0.025;
   n[TILE] = 0.1;
@@ -109,6 +115,8 @@ export const MATERIAL_NOISE: readonly number[] = (() => {
   n[MARBLE] = 0; // (drawn sheets with veins lie over it)
   n[DESK_BLACK] = 0; // (a drawn dusty sheet lies over it)
   n[DESK_WHITE] = 0; // (a drawn dusty sheet lies over it)
+  n[DASH] = 0.04;
+  n[DASH_TRIM] = 0.04;
   n[STEEL] = 0.08; // (galvanised and brushed sheet: a cloudy swing reads as dirt)
   return n;
 })();
@@ -149,4 +157,7 @@ export const MATERIAL_RGB: readonly (readonly [number, number, number])[] = [
   [0.74, 0.74, 0.72], // MARBLE: warm white
   [0.03, 0.03, 0.032], // DESK_BLACK
   [0.8, 0.8, 0.78], // DESK_WHITE
+  [0.027, 0.027, 0.028], // DASH
+  [0.34, 0.27, 0.15], // DASH_FOAM: pale yellow-brown
+  [0.05, 0.05, 0.053], // DASH_TRIM
 ];

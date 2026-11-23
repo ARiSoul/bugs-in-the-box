@@ -41,11 +41,14 @@ export class Craters {
     this.count.value = 0;
   }
 
+  /** The test every cut material shares (one node: materials that differ only in their numbers share a shader). */
+  private mask: THREE.Node<'bool'> | null = null;
+
   /** Make `material` drop its fragments inside the craters (in colour and in the shadow pass). */
   cut<M extends THREE.NodeMaterial>(material: M): M {
     const list = this.list;
     const count = this.count;
-    material.maskNode = Fn(() => {
+    this.mask ??= Fn(() => {
       const keep = bool(true).toVar();
       Loop(count, ({ i }) => {
         const c = list.element(i) as unknown as THREE.Node<'vec4'>;
@@ -54,7 +57,8 @@ export class Craters {
         });
       });
       return keep;
-    })();
+    })() as unknown as THREE.Node<'bool'>;
+    material.maskNode = this.mask;
     return material;
   }
 }

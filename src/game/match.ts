@@ -621,6 +621,16 @@ export class Match {
 
   // ---------------------------------------------------------------- setup
 
+  /** Does a bug dropped where this one is come to rest, and not fall out of the map? */
+  private staysUp(bug: Bug): boolean {
+    const probe = new Bug(bug.species);
+    probe.x = bug.x;
+    probe.y = bug.y;
+    probe.z = bug.z;
+    for (let t = 0; t < SPAWN_SETTLE_TICKS && probe.alive && !probe.settled; t++) probe.step(this.field, IDLE);
+    return probe.alive && probe.settled;
+  }
+
   /** Spread the bugs over the map (deterministic from the match seed) and let them land. */
   private placeBugs(): void {
     const { W, H, D } = this.field;
@@ -638,6 +648,8 @@ export class Match {
           const dz = o.z - u.bug.z;
           if (dx * dx + dz * dz < SPAWN_SPACING * SPAWN_SPACING) ok = false;
         }
+        // (on a ledge it slips off, with a drop under it: somewhere else)
+        if (ok && this.options.spawnLevels && !this.staysUp(u.bug)) ok = false;
         if (ok || attempt === 39) break;
       }
       placed.push(u.bug);

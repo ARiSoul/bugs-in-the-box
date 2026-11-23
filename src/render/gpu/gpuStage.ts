@@ -18,6 +18,7 @@ import { HeatShimmer } from './heat';
 import { ActivityLeds } from './leds';
 import { HeroOverlays } from './heroOverlays';
 import { LightOverlays } from './lightOverlays';
+import { CarParts } from './carParts';
 import { DeskParts } from './deskParts';
 import { MicrowaveParts } from './microwaveParts';
 import { SpeakerParts } from './speakerParts';
@@ -89,6 +90,7 @@ export async function createGpuStage(canvas: HTMLCanvasElement, terrain: Terrain
   const speakerParts = new SpeakerParts(scene, craters);
   const microwaveParts = new MicrowaveParts(scene, craters);
   const deskParts = new DeskParts(scene, craters);
+  const carParts = new CarParts(scene, craters);
   const dust = isGPU ? new DustMotes(renderer, glow, uniform(sunDir), options.seed) : null;
   if (dust) scene.add(dust.sprite);
 
@@ -189,6 +191,8 @@ export async function createGpuStage(canvas: HTMLCanvasElement, terrain: Terrain
       if (sc.sun) sunOffset.set(...sc.sun);
       sun.color.setHex(sc.sunColor ?? 0xffb878);
       sun.intensity = sc.sunIntensity ?? 3.9;
+      scene.environmentIntensity = sc.environment ?? 0.4;
+      raysAmount.value = sc.rays ?? RAYS;
       sun.position.copy(sun.target.position).add(sunOffset);
       sunDir.copy(sunOffset).normalize();
       atmosphere.clear.value = sc.sky.fogClear ?? 40;
@@ -207,6 +211,7 @@ export async function createGpuStage(canvas: HTMLCanvasElement, terrain: Terrain
       speakerParts.setLayout(layout);
       microwaveParts.setLayout(layout);
       deskParts.setLayout(layout);
+      carParts.setLayout(layout);
       dust?.setLayout(layout, layout.floorY);
       // the top of the scene: the glass, or (an open scene) the top of the inner box
       const top = layout.glassY > 0 ? layout.glassY : layout.inner[4];
@@ -226,6 +231,7 @@ export async function createGpuStage(canvas: HTMLCanvasElement, terrain: Terrain
       heat.update(camera, seconds);
       leds.update(seconds);
       heroes.update(seconds);
+      carParts.update(seconds);
       dust?.update(dt);
       if (pipeline) pipeline.render();
       else {
