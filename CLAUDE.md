@@ -38,7 +38,7 @@ src/
     materials.ts        material ids and their colours (visual only)
     sdf.ts              SDF primitives + stamps (add/cut into a shape's bounding box)
     scenarios.ts        scenario list: generator + background/fog
-    generators/         one generator per scenario: pcCase (default), speaker, fridge, microwave, desk, car, floatingIslands; parts.ts (shared fans, cables, ribbons, placement); keyboards.ts (key layouts and their relief); carPlan.ts (the car dashboard's shape and parts, shared with the render); types.ts (TerrainGenerator, SceneLayout)
+    generators/         one generator per scenario: pcCase (default), speaker, fridge, microwave, desk, car; bodies.ts (hidden bodies for drawn parts); parts.ts (shared fans, cables, ribbons, placement); keyboards.ts (key layouts and their relief); carPlan.ts (the car dashboard's shape and parts, shared with the render); types.ts (TerrainGenerator, SceneLayout)
   game/               gameplay, SAME purity rule as terrain/ (no three.js, no DOM)
     bug.ts              Bug: sphere physics against the field, fixed 60 Hz tick, discrete input
     field.ts            TerrainField (what gameplay may see) + surfaceDistance
@@ -48,8 +48,8 @@ src/
     projectile.ts       shells and grenades (gravity, wind, bounces)
     weapons.ts          weapons as data (Solder Blob, Capacitor, Short Circuit, Soldering Iron)
     math.ts             rotate2: deterministic rotation without sin/cos
-  render/             three.js: stage (Stage interface + WebGL path), ChunkRenderer (1 mesh per chunk), MeshWorkers (worker pool), BugView, DrawnGround (where a foot rests: the drawn parts, not their hidden bodies), FollowCamera, labels, projectiles, aim, effects
-    gpu/                WebGPU render path (TSL): terrain material + glow, atmosphere (fog, glass, backdrop), god rays + bloom post, dust compute, heat shimmer, LEDs
+  render/             three.js: stage (Stage interface, key light), ChunkRenderer (1 mesh per chunk), MeshWorkers (worker pool), BugView, DrawnGround (where a foot rests: the drawn parts, not their hidden bodies), FollowCamera, labels, projectiles, aim, effects
+    gpu/                the renderer, WebGPU (TSL): terrain material + glow, atmosphere (fog, glass, backdrop), god rays + bloom post, dust compute, heat shimmer, LEDs
   debug/              shared hooks for every map: ?pose, ?flythrough, ?fly, ?perf, ?res, ?hud; camera views per scenario; perf log; captures
   workers/            mesh.worker.ts (runs the mesher on a mirror grid) + message types; no three.js, no DOM
   input/              Controls (keyboard + on-screen pad -> MatchInput), picking against the density field
@@ -72,6 +72,7 @@ Details and rationale in `docs/ARCHITECTURE.md`. Plan in `docs/ROADMAP.md`.
 5. **Determinism by seed.** A shared map is just a number. In generation and game logic: **`Math.random()` is forbidden**, as are `Math.sin/cos` and anything else that varies between devices. Use `noise.ts` (integer hash) and `createRng`. (`Math.random` is only acceptable in the UI, e.g. the "random" button.)
 6. **Turn-based multiplayer = send events** (shot, angle, power), not state; every client simulates the same. That is why the determinism above is critical.
 7. **Performance first, measure before optimizing.** Planned order: Worker for meshing → (only if the benchmark demands it) WASM → (only if meshing is still the bottleneck) WebGPU compute shaders. See ROADMAP.
+8. **Every map renders with WebGPU** (three's `WebGPURenderer`, TSL; it falls back to WebGL2 by itself where WebGPU is missing). There is no separate WebGL path.
 
 ## Conventions
 

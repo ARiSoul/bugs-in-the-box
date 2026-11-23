@@ -26,10 +26,9 @@ const surfaceUnder = (t: Terrain, x: number, fromY: number, z: number): number =
 };
 
 describe('Mini Fridge (fridge)', () => {
-  it('is registered on the WebGPU path with strict bounds and spawns on any level', () => {
+  it('is registered with strict bounds and spawns on any level', () => {
     const sc = scenarioById('fridge');
     expect(sc.id).toBe('fridge');
-    expect(sc.render).toBe('webgpu');
     expect(sc.strictBounds).toBe(true);
     expect(sc.spawnLevels).toBe(true);
   });

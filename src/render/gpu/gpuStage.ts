@@ -24,7 +24,7 @@ import { MicrowaveParts } from './microwaveParts';
 import { SpeakerParts } from './speakerParts';
 import { createTerrainMaterial } from './terrainMaterial';
 
-/** Key light direction on this path: steeper from the side, so the walls cast long shafts. */
+/** Key light direction: steep from the side, so the walls cast long shafts. */
 const SUN_OFFSET = new THREE.Vector3(-60, 150, 36);
 /** Strength of the god rays added to the image. */
 const RAYS = 0.5;
@@ -34,7 +34,7 @@ const BLOOM = 0.3;
 const RAY_STEPS = 16;
 
 /**
- * The WebGPU render path (three.js WebGPURenderer + TSL). Same scene graph as the WebGL path, plus:
+ * The renderer (three.js WebGPURenderer + TSL), with:
  * height fog with a coloured floor layer and dark corners, half-resolution ray-marched god rays from
  * the key light's shadow map, HDR bloom from emissive parts under ACES tone mapping, the render-only
  * glass panel, dust motes moved by a compute shader, heat shimmer and blinking activity LEDs.
@@ -71,7 +71,7 @@ export async function createGpuStage(canvas: HTMLCanvasElement, terrain: Terrain
   const [sun, sunTarget] = keyLight(terrain, SUN_OFFSET);
   /** Where the key light stands, from the map centre (the scenario may set its own). */
   const sunOffset = SUN_OFFSET.clone();
-  // warmer than the WebGL path's key light (0xfff0d8): late sun in a warm room
+  // late sun in a warm room
   sun.color.setHex(0xffb878);
   sun.intensity = 3.9;
   sun.shadow.radius = 5;
@@ -160,7 +160,6 @@ export async function createGpuStage(canvas: HTMLCanvasElement, terrain: Terrain
   const timer: GpuTimer | null = tracking ? createTimer(renderer) : null;
 
   return {
-    kind: 'webgpu',
     backend: isGPU ? 'WebGPU' : 'WebGL2 (no WebGPU)',
     scene,
     hud,

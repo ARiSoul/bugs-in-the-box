@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { floatingIslands } from '../src/terrain/generators/floatingIslands';
+import { floatingIslands } from './helpers/floatingIslands';
 import { ChunkMesher } from '../src/terrain/mesher';
 import { REGION_BYTES, REGION_SAMPLES, readRegion, regionArrays, regionBox, writeRegion } from '../src/terrain/region';
 import { Terrain } from '../src/terrain/Terrain';

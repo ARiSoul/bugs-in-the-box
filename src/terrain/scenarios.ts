@@ -1,7 +1,6 @@
 import { car } from './generators/car';
 import { carScale, insideCar } from './generators/carPlan';
 import { desk } from './generators/desk';
-import { floatingIslands } from './generators/floatingIslands';
 import { fridge } from './generators/fridge';
 import { microwave, microwavePlan } from './generators/microwave';
 import { pcCase } from './generators/pcCase';
@@ -16,27 +15,22 @@ export interface Scenario {
   /** Mesh with sharp edges (Dual Contouring, for built things) or smooth (Surface Nets, for natural terrain). */
   sharpEdges: boolean;
   /**
-   * Background: CSS gradient behind the canvas, and the fog colour (0xRRGGBB). WebGPU path: the distance
+   * Background: CSS gradient behind the canvas, and the fog colour (0xRRGGBB). The distance
    * fog is clear up to `fogClear` and nearly full `fogSpan` further (defaults 40 and 110: a closed case),
    * and the map's edges and corners fall dark by `cornerDark` (default 0.75). `backdrop`: the colour of the
    * room behind the map at the middle of the view (default a very dark blue-grey).
    */
   sky: { css: string; fog: number; fogClear?: number; fogSpan?: number; cornerDark?: number; backdrop?: number };
-  /**
-   * Render path: 'webgl' (the classic look) or 'webgpu' (the atmosphere path: height fog, god rays,
-   * bloom, glass, dust). A 'webgpu' scenario still runs where WebGPU is missing, on WebGL2, with less.
-   */
-  render: 'webgl' | 'webgpu';
   /** Projectiles that leave the map box by its sides are discarded; at its top they stop and fall back. */
   strictBounds: boolean;
-  /** WebGPU path: where the key light stands, from the map centre (default: high on the low-x side). */
+  /** Where the key light stands, from the map centre (default: high on the low-x side). */
   sun?: [number, number, number];
-  /** WebGPU path: colour and intensity of the key light (defaults 0xffb878 and 3.9: late sun into a dark case). */
+  /** Colour and intensity of the key light (defaults 0xffb878 and 3.9: late sun into a dark case). */
   sunColor?: number;
   sunIntensity?: number;
-  /** WebGPU path: how bright the light from all round is (default 0.4). */
+  /** How bright the light from all round is (default 0.4). */
   environment?: number;
-  /** WebGPU path: how strong the shafts of light in the air are (default 0.5). */
+  /** How strong the shafts of light in the air are (default 0.5). */
   rays?: number;
   /** Lowest angle of the chase view above the active bug (radians; default 0.42): higher over tall walls. */
   chaseElevation?: number;
@@ -60,7 +54,6 @@ export const SCENARIOS: readonly Scenario[] = [
     generate: pcCase,
     sharpEdges: true,
     sky: { css: 'radial-gradient(ellipse at 50% 45%, #1a1d24 0%, #050608 70%)', fog: 0x0b1016 },
-    render: 'webgpu',
     strictBounds: true,
   },
   {
@@ -71,7 +64,6 @@ export const SCENARIOS: readonly Scenario[] = [
     // an open desk: the fog only darkens the far end of the room, and a dim warm room shows behind (the
     // black cabinet must not melt into the background)
     sky: { css: 'radial-gradient(ellipse at 50% 40%, #221d19 0%, #070605 72%)', fog: 0x0d0b09, fogClear: 80, fogSpan: 220, cornerDark: 0.2, backdrop: 0x3a2e25 },
-    render: 'webgpu',
     strictBounds: true,
     // high, a little from the amp side: into the open cabinet, short shadows on the desk around it
     sun: [0, 180, 48],
@@ -89,7 +81,6 @@ export const SCENARIOS: readonly Scenario[] = [
     sharpEdges: true,
     // a kitchen at night: the fridge's light and a soft key light from the front, a dim warm room behind
     sky: { css: 'radial-gradient(ellipse at 50% 40%, #24211e 0%, #080706 72%)', fog: 0x0e0c0b, fogClear: 90, fogSpan: 230, cornerDark: 0.2, backdrop: 0x2e2a26 },
-    render: 'webgpu',
     strictBounds: true,
     // high in front, a little from the right: into the open fridge, onto the door's bins
     sun: [25, 160, 140],
@@ -106,7 +97,6 @@ export const SCENARIOS: readonly Scenario[] = [
     sharpEdges: true,
     // a bright kitchen: a pale marble worktop, a warm dim room behind
     sky: { css: 'radial-gradient(ellipse at 50% 40%, #2a2622 0%, #0a0908 72%)', fog: 0x100e0c, fogClear: 90, fogSpan: 230, cornerDark: 0.2, backdrop: 0x34302b },
-    render: 'webgpu',
     strictBounds: true,
     // high in front, from the right: into the cavity, onto the bay
     sun: [40, 160, 140],
@@ -126,7 +116,6 @@ export const SCENARIOS: readonly Scenario[] = [
     sharpEdges: true,
     // an evening room: warm walls far off, the screens' glow on the black desk
     sky: { css: 'radial-gradient(ellipse at 50% 40%, #2a2724 0%, #0b0a09 72%)', fog: 0x110f0e, fogClear: 220, fogSpan: 480, cornerDark: 0.2, backdrop: 0x3a352f },
-    render: 'webgpu',
     strictBounds: true,
     // (twice the scale of the other maps' desks and shelves: about 0.8 cm a unit, like the fridge, so a bug
     // stays bug-sized next to a keyboard; the map is twice as wide)
@@ -145,7 +134,6 @@ export const SCENARIOS: readonly Scenario[] = [
     sharpEdges: true,
     // a car parked in a bright garage, its ignition on
     sky: { css: 'radial-gradient(ellipse at 50% 40%, #3a3835 0%, #0c0b0a 72%)', fog: 0x14120f, fogClear: 300, fogSpan: 600, cornerDark: 0.1, backdrop: 0x3a3733 },
-    render: 'webgpu',
     strictBounds: true,
     // (the desk's scale: 2 units a centimetre; a row of chunks taller, for the dashboard stands high)
     mapSize: [10, 4, 5],
@@ -161,15 +149,6 @@ export const SCENARIOS: readonly Scenario[] = [
       const { s, ox, oz } = carScale(W, H, D);
       return (x, y, z) => insideCar((x - ox) / s, y / s, (z - oz) / s);
     },
-  },
-  {
-    id: 'islands',
-    name: 'Floating islands',
-    generate: floatingIslands,
-    sharpEdges: false,
-    sky: { css: 'radial-gradient(ellipse at 50% 30%, #2a3a5c 0%, #141a2b 70%)', fog: 0x1b2233 },
-    render: 'webgl',
-    strictBounds: false,
   },
 ];
 

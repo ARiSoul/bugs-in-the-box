@@ -28,13 +28,12 @@ const surfaceUnder = (t: Terrain, x: number, fromY: number, z: number): number =
 };
 
 describe('Desk (desk)', () => {
-  it('is registered on the WebGPU path, on its own larger map, and spawns on any level', () => {
+  it('is registered on its own larger map, and spawns on any level', () => {
     const sc = scenarioById('desk');
     expect(sc.id).toBe('desk');
     expect(sc.mapSize).toEqual([10, 3, 5]);
     // (on its own map, twice the scale of the other maps: a bug keeps its size next to a keyboard)
     expect(deskPlan(320, 96, 160).scale).toBe(2);
-    expect(sc.render).toBe('webgpu');
     expect(sc.spawnLevels).toBe(true);
   });
 

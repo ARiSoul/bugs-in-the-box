@@ -9,7 +9,7 @@ import { runExplosionBenchmark } from '../src/bench/explosions';
 import { Bug } from '../src/game/bug';
 import { dropNear } from '../src/game/spawn';
 import { ANT } from '../src/game/species';
-import { floatingIslands } from '../src/terrain/generators/floatingIslands';
+import { floatingIslands } from '../tests/helpers/floatingIslands';
 import { pcCase } from '../src/terrain/generators/pcCase';
 import { fridge } from '../src/terrain/generators/fridge';
 import { microwave } from '../src/terrain/generators/microwave';
@@ -19,7 +19,7 @@ import { speaker } from '../src/terrain/generators/speaker';
 import { ChunkMesher } from '../src/terrain/mesher';
 import { Terrain } from '../src/terrain/Terrain';
 
-// The islands use smooth meshing (Surface Nets) in the game; built scenarios use Dual Contouring.
+// The islands (a test terrain) use smooth meshing (Surface Nets); the game's maps use Dual Contouring.
 const smooth = new ChunkMesher(false);
 const sharp = new ChunkMesher(true);
 const coords: [number, number, number] = [0, 0, 0];

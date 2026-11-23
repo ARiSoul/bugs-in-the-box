@@ -46,8 +46,8 @@ const FAN_STRIPE = 0;
 const FAN_SPIN = 2.4;
 
 /**
- * Terrain material for the WebGPU path (TSL): the same inputs as the WebGL one (vertex colours with AO,
- * per-vertex roughness / metalness / glow kind in `pbr`, hard-edge shading), plus glow: RGB diffusers
+ * Terrain material (TSL): vertex colours with AO, per-vertex roughness / metalness / glow kind in `pbr`,
+ * hard-edge shading, plus glow: RGB diffusers
  * show the shared hue, and fan blades carry a bright stripe that turns, so the static blades read as
  * spinning.
  */

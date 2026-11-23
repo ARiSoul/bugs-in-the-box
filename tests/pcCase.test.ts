@@ -24,12 +24,11 @@ const make = (seed: number, cx = 5, cy = 3, cz = 5): { t: Terrain; layout: Scene
 const count = (layout: SceneLayout, kind: string): number => layout.features.filter((f) => f.kind === kind).length;
 
 describe('Tower Case (pc-case)', () => {
-  it('is registered next to islands, and is the default', () => {
-    expect(SCENARIOS.map((s) => s.id)).toEqual(expect.arrayContaining(['pc-case', 'islands']));
+  it('is registered, and is the default', () => {
+    expect(SCENARIOS[0].id).toBe('pc-case');
     expect(scenarioById(null).id).toBe('pc-case');
     const sc = scenarioById('pc-case');
     expect(sc.sharpEdges).toBe(true);
-    expect(sc.render).toBe('webgpu');
     expect(sc.strictBounds).toBe(true);
     expect(sc.sky.fog).toBe(0x0b1016);
   });

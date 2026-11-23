@@ -26,10 +26,9 @@ const surfaceUnder = (t: Terrain, x: number, fromY: number, z: number): number =
 };
 
 describe('Microwave (microwave)', () => {
-  it('is registered on the WebGPU path, spawns on any level and has a turntable', () => {
+  it('is registered spawns on any level and has a turntable', () => {
     const sc = scenarioById('microwave');
     expect(sc.id).toBe('microwave');
-    expect(sc.render).toBe('webgpu');
     expect(sc.spawnLevels).toBe(true);
     const tt = sc.turntable?.(160, 96, 160);
     const p = microwavePlan(160, 96, 160).turntable;

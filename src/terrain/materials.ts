@@ -2,7 +2,7 @@
  * Surface materials: one id per density sample (`Terrain.material`), visual only (gameplay never reads
  * it). Ids are shared by every scenario; each scenario uses the ones it needs.
  */
-export const GROUND = 0; // natural terrain: grass on top, rock on the sides (the floating islands)
+export const GROUND = 0; // natural terrain: grass on top, rock on the sides (no map uses it now; tests do)
 export const PCB = 1; // green solder mask
 export const COPPER = 2;
 export const ALUMINIUM = 3;

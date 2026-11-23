@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { Bug, IDLE, RUN_FACTOR, TICK_RATE, type BugInput } from '../src/game/bug';
 import { ANT } from '../src/game/species';
-import { floatingIslands } from '../src/terrain/generators/floatingIslands';
+import { floatingIslands } from './helpers/floatingIslands';
 import { createRng } from '../src/terrain/noise';
 import { Terrain } from '../src/terrain/Terrain';
 import { flat, world } from './helpers/worlds';

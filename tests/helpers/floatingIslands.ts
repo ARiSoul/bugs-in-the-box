@@ -1,6 +1,6 @@
-import { DENSITY_CLAMP } from '../constants';
-import { createRng, fbm3 } from '../noise';
-import type { TerrainGenerator } from './types';
+import { DENSITY_CLAMP } from '../../src/terrain/constants';
+import { createRng, fbm3 } from '../../src/terrain/noise';
+import type { TerrainGenerator } from '../../src/terrain/generators/types';
 
 interface Island {
   x: number;
@@ -13,7 +13,7 @@ interface Island {
   m: number;
 }
 
-/** Generic test scenario: rolling slab with interior cave pockets plus floating islands. */
+/** A natural terrain for tests and the benchmark (not a map of the game): rolling slab with interior cave pockets plus floating islands. */
 export const floatingIslands: TerrainGenerator = (terrain, seed) => {
   terrain.beginGeneration();
   const { W, H, D, sx, sy, sz, dens } = terrain;

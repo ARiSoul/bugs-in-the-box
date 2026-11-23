@@ -91,7 +91,7 @@ describe('scenario list', () => {
     expect(new Set(SCENARIOS.map((s) => s.id)).size).toBe(SCENARIOS.length);
     expect(scenarioById('nope')).toBe(SCENARIOS[0]);
     expect(scenarioById(null).id).toBe('pc-case');
-    expect(scenarioById('islands').id).toBe('islands');
+    expect(scenarioById('car').id).toBe('car');
   });
 });
 

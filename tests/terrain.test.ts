@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { floatingIslands } from '../src/terrain/generators/floatingIslands';
+import { floatingIslands } from './helpers/floatingIslands';
 import { Terrain } from '../src/terrain/Terrain';
 import { analyze, meshAll } from './helpers/meshIntegrity';
 

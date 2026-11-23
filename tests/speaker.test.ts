@@ -24,11 +24,10 @@ const make = (seed: number, cx = 5, cy = 3, cz = 5): { t: Terrain; layout: Scene
 const all = (layout: SceneLayout, kind: string) => layout.features.filter((f) => f.kind === kind);
 
 describe('Studio Monitor (speaker)', () => {
-  it('is registered on the WebGPU path with strict bounds', () => {
+  it('is registered with strict bounds', () => {
     const sc = scenarioById('speaker');
     expect(sc.id).toBe('speaker');
     expect(sc.sharpEdges).toBe(true);
-    expect(sc.render).toBe('webgpu');
     expect(sc.strictBounds).toBe(true);
   });
 

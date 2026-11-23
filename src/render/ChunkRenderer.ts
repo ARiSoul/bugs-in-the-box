@@ -20,7 +20,7 @@ export class ChunkRenderer {
   /** Sharp edges (Dual Contouring + hard-edge shading) or smooth (Surface Nets): set per scenario. */
   sharp = true;
 
-  /** `look`: the terrain material of the render path (WebGL or WebGPU). */
+  /** `look`: the terrain material. */
   constructor(
     private readonly scene: THREE.Scene,
     private readonly look: TerrainLook,

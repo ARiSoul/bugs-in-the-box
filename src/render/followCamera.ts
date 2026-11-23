@@ -183,7 +183,7 @@ export class FollowCamera {
     const canSee = need >= 0;
     const goalLift = canSee ? Math.min(MAX_LIFT, need + LIFT_MARGIN) : MAX_LIFT;
     // Rise at once (at a steady speed); come down only after the lower view has stayed clear for a while,
-    // so islands passing by do not make the camera bob up and down.
+    // so things passing by do not make the camera bob up and down.
     if (goalLift >= this.lift) {
       this.lowerWait = 0;
       this.lift = Math.min(goalLift, this.lift + RISE_SPEED * dt);

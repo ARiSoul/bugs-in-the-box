@@ -3,7 +3,7 @@ import { TICK_RATE } from '../src/game/bug';
 import { AIM_TICKS, DEATH_HOLD_TICKS, Match, NO_INPUT, type MatchEvent, type MatchInput } from '../src/game/match';
 import { ANT, SPIDER } from '../src/game/species';
 import { CAPACITOR, SHORT_CIRCUIT, SOLDER_BLOB, WEAPONS } from '../src/game/weapons';
-import { floatingIslands } from '../src/terrain/generators/floatingIslands';
+import { floatingIslands } from './helpers/floatingIslands';
 import { createRng } from '../src/terrain/noise';
 import { Terrain } from '../src/terrain/Terrain';
 import { flat, world } from './helpers/worlds';

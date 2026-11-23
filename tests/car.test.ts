@@ -26,12 +26,11 @@ const make = (seed: number, cx = 10, cy = 4, cz = 5): { t: Terrain; layout: Scen
 };
 
 describe('Car Dashboard (car)', () => {
-  it('is registered on the WebGPU path, on its own map, and spawns on any level', () => {
+  it('is registered on its own map, and spawns on any level', () => {
     const sc = scenarioById('car');
     expect(sc.id).toBe('car');
     expect(sc.mapSize).toEqual([10, 4, 5]);
     expect(carScale(320, 128, 160).s).toBe(1);
-    expect(sc.render).toBe('webgpu');
     expect(sc.spawnLevels).toBe(true);
   });
 

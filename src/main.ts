@@ -20,7 +20,8 @@ import { CHASE_ELEVATION, FollowCamera } from './render/followCamera';
 import { MeshWorkers, type MeshBatch } from './render/MeshWorkers';
 import { FloatingTexts, UnitLabel } from './render/labels';
 import { ProjectileViews } from './render/projectiles';
-import { createStage, type Stage, type StageOptions } from './render/stage';
+import { createGpuStage } from './render/gpu/gpuStage';
+import type { Stage, StageOptions } from './render/stage';
 import { createLayout } from './terrain/generators/types';
 import { SCENARIOS, scenarioById, type Scenario } from './terrain/scenarios';
 import { Terrain } from './terrain/Terrain';
@@ -44,11 +45,7 @@ const mapSize = (sc: Scenario): [number, number, number] => (size ? [Number(size
 const terrain = new Terrain(...mapSize(scenario));
 const layout = createLayout();
 const stageOptions: StageOptions = { fixedSize: hooks.fixedSize, timestamps: hooks.perf, seed };
-// The scenario picks the render path; the WebGPU one is loaded only when needed (it is large).
-const stage: Stage =
-  scenario.render === 'webgpu'
-    ? await import('./render/gpu/gpuStage').then((m) => m.createGpuStage(canvas, terrain, stageOptions))
-    : createStage(canvas, terrain, stageOptions);
+const stage: Stage = await createGpuStage(canvas, terrain, stageOptions);
 const chunks = new ChunkRenderer(stage.scene, stage.look);
 const ground = new DrawnGround(terrain);
 const flashes = new ExplosionFlashes(stage.scene);
@@ -155,7 +152,7 @@ function handleEvents(events: readonly MatchEvent[]): void {
     switch (e.type) {
       case 'explosion':
         flashes.spawn(at.set(e.x, e.y, e.z), e.radius);
-        stage.craters?.add(e.x, e.y, e.z, e.radius);
+        stage.craters.add(e.x, e.y, e.z, e.radius);
         ground.addCrater(e.x, e.y, e.z, e.radius);
         break;
       case 'arc':
@@ -163,7 +160,7 @@ function handleEvents(events: readonly MatchEvent[]): void {
         break;
       case 'dig':
         lines.beam(at.set(e.x1, e.y1, e.z1), at2.set(e.x2, e.y2, e.z2));
-        stage.craters?.addTunnel(e.x1, e.y1, e.z1, e.x2, e.y2, e.z2, e.radius);
+        stage.craters.addTunnel(e.x1, e.y1, e.z1, e.x2, e.y2, e.z2, e.radius);
         ground.addTunnel(e.x1, e.y1, e.z1, e.x2, e.y2, e.z2, e.radius);
         break;
       case 'turn':
@@ -228,8 +225,8 @@ hud.scenario.value = scenario.id;
 hud.scenario.addEventListener('change', () => {
   const next = scenarioById(hud.scenario.value);
   params.set('scenario', next.id);
-  if (next.render !== scenario.render || mapSize(next).join() !== mapSize(scenario).join()) {
-    // another render path needs another canvas context, another map size another grid: reload with it
+  if (mapSize(next).join() !== mapSize(scenario).join()) {
+    // another map size needs another grid: reload with it
     location.search = params.toString();
     return;
   }
@@ -485,7 +482,7 @@ function loop(now: number): void {
   }
   syncTerrain();
   const alpha = accumulator / DT;
-  stage.setTurntable?.(prevTurns + (match.turntableTurns - prevTurns) * alpha);
+  stage.setTurntable(prevTurns + (match.turntableTurns - prevTurns) * alpha);
 
   // the turntable rests at a new place: so do the things on it
   if (match.turntableTurns !== indexedTurns && match.turntableTurns === prevTurns && match.phase !== 'spin') {
