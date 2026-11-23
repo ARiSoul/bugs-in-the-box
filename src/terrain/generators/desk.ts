@@ -54,7 +54,7 @@ export function deskPlan(W: number, H: number, D: number): DeskPlan {
  * Desk: the owner's real desk, as it stands (from photos and a video), without brands, faces or text. An
  * L-shaped black desk: the main top at the back, the left wing turned 45° towards the viewer. On the wing, a
  * white monitor on its stand (showing this game), a mechanical keyboard with a wrist rest and its purple glow,
- * a glass ashtray with butts, a beer bottle. On the main top, left to right: a phone charger stand, a red audio
+ * a beer bottle. On the main top, left to right: a phone charger stand, a red audio
  * interface, two docks, a curved monitor (a film playing) on one of a dual arm's two arms (a base with two posts) over a silver laptop (its desktop) on a riser and a slim keyboard;
  * a smaller curved monitor on the other arm over a black laptop (a desert lock screen), a desk mat, two vertical
  * mice, a glasses case, a wallet, an air-conditioner remote, a medicine box and a tobacco pouch; the desk's
@@ -239,7 +239,7 @@ export const desk: TerrainGenerator = (terrain, seed, layout) => {
     cable([ax + L(i === 0 ? -1.5 : 1.5), ay - L(2), tz - L(0.8), (sx + ax) / 2, (qy + ay) / 2 - L(3), (pz + tz) / 2 - L(1.5), sx, T + 0.3, pz - L(4), sx, T + 0.25, mz0 + 0.15, sx, T - L(1.2), mz0 - L(0.45), sx, T - L(4), mz0 - L(0.65), sx, T - L(8), mz0 - L(0.75), sx, T - L(12), mz0 - L(0.8), sx, T - L(16), mz0 - L(0.8)], 0.32, 0x121212);
   });
 
-  // ---- the wing: a mechanical keyboard with its wrist rest, an ashtray, a beer bottle
+  // ---- the wing: a mechanical keyboard with its wrist rest, a beer bottle
   const [kx, kz] = wing(L(-1), L(3));
   const [mtx, mtz] = wing(L(-1), L(5.5));
   part(mtx, T, mtz, L(34), L(0.15), L(18), WC, WS, 'plate', 0x0e0e0f, 0, 0.95, { body: false });
@@ -249,55 +249,6 @@ export const desk: TerrainGenerator = (terrain, seed, layout) => {
   const [rx, rz] = wing(L(-1), L(10));
   part(rx, T, rz, L(27.6), L(1.4), L(4.6), WC, WS, 'soft', 0x0f0f10, 0, 0.7);
   cable([kx + L(8) * C45, T + L(0.8), kz - L(8) * C45, kx + L(14) * C45, T + 0.3, kz - L(14) * C45, mx0 + L(4), T + 0.3, mz0 + L(10), mx0 + L(10), T + 0.3, mz0 + L(4)], 0.3, 0x131313);
-  // the ashtray: thick glass with a beaded rim, ash and butts
-  const [tx, tz] = wing(L(19.5), L(8));
-  part(tx, T, tz, L(8.8), L(1.6), L(8.8), 1, 0, 'cylY', 0xa9bdb5, 0, 0.1, { opacity: 0.8, lift: 0 });
-  part(tx, T + L(1.57), tz, L(8.86), 0.06, L(8.86), 1, 0, 'cylY', 0xe2eeea, 0, 0.05, { opacity: 0.85, body: false });
-  for (let k = 0; k < 24; k++) {
-    const a = (k / 24) * 6.283185307179586;
-    // (a pillar every 15°: cos and sin from their series, exact enough for a ring)
-    const ca = 1 - (a * a) / 2 + (a * a * a * a) / 24 - (a * a * a * a * a * a) / 720 + (a * a * a * a * a * a * a * a) / 40320 - (a * a * a * a * a * a * a * a * a * a) / 3628800;
-    const sa = a - (a * a * a) / 6 + (a * a * a * a * a) / 120 - (a * a * a * a * a * a * a) / 5040 + (a * a * a * a * a * a * a * a * a) / 362880 - (a * a * a * a * a * a * a * a * a * a * a) / 39916800;
-    const n = Math.sqrt(ca * ca + sa * sa) || 1;
-    const qx = tx + (L(4.45) * ca) / n;
-    const qz = tz + (L(4.45) * sa) / n;
-    part(qx, T, qz, L(0.9), L(1.9), L(0.9), 1, 0, 'cylY', 0xa9bdb5, 0, 0.1, { opacity: 0.8, body: false });
-    part(qx, T + L(1.9) - L(0.45), qz, L(0.9), L(0.9), L(0.9), 1, 0, 'ball', 0xa9bdb5, 0, 0.08, { opacity: 0.8, body: false });
-  }
-  part(tx, T + L(1.45), tz, L(7.4), L(0.4), L(7.4), 1, 0, 'dome', 0x8f8d8a, 0, 1, { body: false });
-  // (the mound: lumps of powdery ash, a few charcoal flecks, small flat flakes)
-  for (const [ox, oz, r, hh] of [[0, 0, 4.2, 0.6], [0.8, -0.5, 2.6, 0.75], [-0.9, 0.6, 2.2, 0.6], [0.3, 1, 1.8, 0.5], [-0.4, -1, 1.6, 0.55]] as const)
-    part(tx + L(ox), T + L(1.6), tz + L(oz), L(r), L(hh), L(r * 0.9), 1, 0, 'dome', 0x8a8781, 0, 1, { body: false });
-  for (let k = 0; k < 24; k++) {
-    const r = L(rand(0.25, 0.6));
-    part(tx + L(rand(-1.8, 1.8)), T + L(1.9), tz + L(rand(-1.8, 1.8)), r, r * 0.12, r * rand(0.7, 1), 1, 0, 'dome', [0x8f8c86, 0x817e78, 0x9a9790, 0x76736e][k % 4], 0, 1, { body: false });
-  }
-  for (let k = 0; k < 40; k++) {
-    const r = L(rand(0.03, 0.08));
-    part(tx + L(rand(-3, 3)), T + L(1.82), tz + L(rand(-3, 3)), r * rand(1, 1.8), r * 0.4, r, 1, 0, 'ball', k % 3 ? 0x4a4744 : 0x353230, 0, 1, { body: false });
-  }
-  for (let k = 0; k < 10; k++) {
-    // (a flake of ash: an irregular torn outline, one edge curled up; drawn by the render)
-    const r = L(rand(0.08, 0.2));
-    const fx = tx + L(rand(-2.4, 2.4));
-    const fz = tz + L(rand(-2.4, 2.4));
-    put(feature('flake', fx, T + L(1.95), fz, { box: [fx - r, T + L(1.95), fz - r, fx + r, T + L(1.95) + 0.04, fz + r], color: [0xd2cec8, 0xb8b4ae, 0x9e9a94][k % 3] }));
-  }
-  for (let k = 0; k < 7; k++) {
-    // (a butt in the heap: some lie on the mound, some lean up out of it; most bent where they were stubbed
-    // out, some filters flattened; two burnt down to the paper, no ash left)
-    const ux = rand(-1, 1);
-    const uz = rand(-1, 1);
-    const n = Math.sqrt(ux * ux + uz * uz) || 1;
-    const up = k % 3 === 0;
-    const tc = up ? 0.82 : 0.99;
-    const ts = up ? 0.57 : 0.14;
-    const bx = tx + L(rand(-0.9, 0.9));
-    const bz = tz + L(rand(-0.9, 0.9));
-    const by = T + L(up ? 2.5 : 2.25);
-    const r = L(0.23);
-    put(feature('butt', bx, by, bz, { box: [bx - r, by - r, bz - L(0.6), bx + r, by + r, bz + L(0.6)], radius: r, yaw: [uz / n, -ux / n], path: [tc, -ts], butt: { ash: k === 3 || k === 5 ? 0 : L(rand(0.3, 0.6)), bend: k % 3 === 0 ? 0 : k % 2 ? 0.52 : -0.52, flat: k % 3 === 2 } }));
-  }
   // the beer bottle on a plain coaster: brown glass, a tall body, a sloping shoulder, a long neck, an open ringed lip
   const [bx, bz] = wing(L(21.5), L(-3));
   part(bx, T, bz, L(6), L(0.3), L(6), WC, WS, 'soft', 0x4f6478, 0, 0.8, { body: false });
@@ -463,8 +414,8 @@ export const desk: TerrainGenerator = (terrain, seed, layout) => {
     }
   };
   // (the RGB one at the mat's front left, the other in front of the black laptop)
-  mouse(rm[0] - L(8), mz0 + L(38), 1, true);
-  mouse(rm[0] + L(2), mz0 + L(31), 0.85, false);
+  mouse(rm[0] - L(8 + rand(-0.6, 0.6)), mz0 + L(38 + rand(-0.6, 0.6)), 1, true);
+  mouse(rm[0] + L(2 + rand(-0.6, 0.6)), mz0 + L(31 + rand(-0.6, 0.6)), 0.85, false);
   // (a thick clamshell, about 0.7 as tall as wide: its widest at mid-height, where the seam runs, rounded down to
   // the desk)
   part(mx1 - L(6.4), T - L(0.9), mz0 + L(21.5), L(10.5), L(3.6), L(3.5), 1, 0, 'ball', 0x1a1a1c, 0.05, 0.85);
@@ -495,7 +446,8 @@ export const desk: TerrainGenerator = (terrain, seed, layout) => {
   // a loose cable lying across the middle, and the mat's front
   plug(mm[0] + L(13.2), T + 0.75, mz0 + L(30.3), true);
   plug(rm[0] - L(9.2), T + 0.75, mz0 + L(28.8), true);
-  cable([mm[0] + L(14), T + 0.3, mz0 + L(30), mm[0] + L(20), T + 0.3, mz0 + L(27), rm[0] - L(16), T + 0.3, mz0 + L(31), rm[0] - L(10), T + 0.3, mz0 + L(29)], 0.28, 0x2a2b2e);
+  // (its middle lies a little differently on every seed)
+  cable([mm[0] + L(14), T + 0.3, mz0 + L(30), mm[0] + L(20), T + 0.3, mz0 + L(27 + rand(-1.5, 1.5)), rm[0] - L(16), T + 0.3, mz0 + L(31 + rand(-1.5, 1.5)), rm[0] - L(10), T + 0.3, mz0 + L(29)], 0.28, 0x2a2b2e);
 
   // ---- the speaker on its felt shelf, right of the desk: a black box, a yellow woofer, a tweeter
   const [sx0, sz0, sx1, sz1, sTop] = plan.shelf;

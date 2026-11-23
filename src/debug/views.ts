@@ -287,7 +287,7 @@ const desk: ViewBuilder = (t) => {
   const start = key([W * 0.55, T + 70 * s, mz1 + 62 * s], [W * 0.5, T + 6 * s, (mz0 + mz1) / 2 + 6 * s]);
   const poses = [
     start,
-    // 2: the wing: the white monitor with the game, the keyboard, the ashtray, the bottle
+    // 2: the wing: the white monitor with the game, the keyboard, the bottle, the left speaker
     key([wcx + 30 * s, T + 26 * s, wcz + 40 * s], [am[0], T + 8 * s, am[1] + 4 * s]),
     // 3: the middle: the curved monitor on its arm, the silver laptop, the slim keyboard
     key([mm[0] + 6 * s, T + 22 * s, mz1 + 30 * s], [mm[0], T + 10 * s, mz0 + 14 * s]),
@@ -297,8 +297,8 @@ const desk: ViewBuilder = (t) => {
     key([sh[0] - 16 * s, sh[4] + 16 * s, sh[3] + 26 * s], [(sh[0] + sh[2]) / 2, sh[4] + 6 * s, (sh[1] + sh[3]) / 2]),
     // 6: along the back edge from the left: the interface, the docks, the cables, the monitor arm
     key([mx0 - 6 * s, T + 26 * s, mz0 - 8 * s], [mx0 + 32 * s, T + 2 * s, mz0 + 8 * s]),
-    // 7 (detail): the ashtray and the bottle close
-    key([wcx - 2 * s, T + 12 * s, wcz + 34 * s], [wcx - 14 * s, T + 2 * s, wcz + 16 * s]),
+    // 7 (detail): the bottle on its coaster and the left speaker's riser, close
+    key([wing(26, 12)[0], T + 12 * s, wing(26, 12)[1]], [wing(21.5, -3)[0], T + 5 * s, wing(21.5, -3)[1]]),
     // 8 (detail): the small things by the mat: glasses case, remote, medicine, tobacco, mice
     key([rm[0] + 22 * s, T + 14 * s, mz1 + 12 * s], [rm[0] + 10 * s, T + 1 * s, mz0 + 24 * s]),
     // 9 (detail): the wing keyboard close: the caps and their backlight, the wrist rest

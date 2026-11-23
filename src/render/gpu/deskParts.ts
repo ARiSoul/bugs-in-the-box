@@ -179,8 +179,6 @@ export class DeskParts {
       else if (f.kind === 'speakerFront') this.addSpeakerFront(f);
       else if (f.kind === 'bottle') this.addBottle(f);
       else if (f.kind === 'foil') this.addFoil(f);
-      else if (f.kind === 'butt') this.addButt(f);
-      else if (f.kind === 'flake') this.addFlake(f);
     }
   }
 
@@ -1018,123 +1016,6 @@ export class DeskParts {
       g.add(twist);
     }
     this.push(g);
-  }
-
-  /**
-   * A cigarette butt in its box, along its local z (turned by `yaw`, tilted by `path`): a cork-orange filter with
-   * fine pale speckle (flattened when stubbed out), the white paper bent off it by `butt.bend` with a ragged
-   * edge, a thin dark char band, and a crumbly ash stub no wider than the paper, grey to its tip (none when
-   * `butt.ash` is 0: a scorched paper edge only).
-   */
-  private addButt(f: Feature): void {
-    const rr = f.radius;
-    const spec = f.butt ?? { ash: 0, bend: 0, flat: false };
-    const g = new THREE.Group();
-    this.place(g, f);
-    if (f.yaw) g.rotation.y = Math.atan2(-f.yaw[1], f.yaw[0]);
-    if (f.path.length === 2) g.rotation.x = Math.atan2(f.path[1], f.path[0]);
-    const hash = (a: number): number => {
-      const s = Math.sin(a * 91.7 + f.x * 12.9 + f.z * 7.3) * 43758.5453;
-      return s - Math.floor(s) - 0.5;
-    };
-    const along = (geo: THREE.BufferGeometry): THREE.BufferGeometry => geo.rotateX(Math.PI / 2);
-    // the filter: from -len/2 to +len/2
-    const flen = rr * 5.2;
-    const filterMat = new THREE.MeshStandardNodeMaterial({ metalness: 0, roughness: 0.85 });
-    const speck = smoothstep(0.55, 0.65, mx_noise_float(positionWorld.mul(9)));
-    // (linear values: a cork-orange (#cf8a45) with paler specks)
-    filterMat.colorNode = mix(vec3(0.62, 0.25, 0.06), vec3(0.85, 0.6, 0.35), speck.mul(0.6));
-    const filter = new THREE.Mesh(along(new THREE.CylinderGeometry(rr, rr, flen, 20)), filterMat);
-    // (the mouth end: cream acetate fibre, a fine grain, a thin cork-orange rim of tipping paper round it;
-    // squashed with the filter when it was stubbed out)
-    const fibre = new THREE.MeshStandardNodeMaterial({ metalness: 0, roughness: 1 });
-    fibre.colorNode = vec3(0.8, 0.72, 0.56).mul(mx_noise_float(positionWorld.mul(60)).mul(0.08).add(0.97));
-    const mouth = new THREE.Mesh(new THREE.CircleGeometry(rr * 0.9, 24).rotateY(Math.PI), fibre);
-    mouth.position.z = -flen / 2 - 0.004;
-    filter.add(mouth);
-    if (spec.flat) filter.scale.set(1.25, 0.55, 1);
-    g.add(filter);
-    // the paper, bent off the filter's end
-    const pg = new THREE.Group();
-    pg.position.z = flen / 2;
-    pg.rotation.y = spec.bend;
-    g.add(pg);
-    const plen = rr * 2.2;
-    const paperGeo = along(new THREE.CylinderGeometry(rr * 0.97, rr * 0.97, plen, 20, 1));
-    // (a ragged burnt edge: the far ring's points pulled back unevenly)
-    const pp = paperGeo.getAttribute('position');
-    for (let i = 0; i < pp.count; i++) if (pp.getZ(i) > 0) pp.setZ(i, pp.getZ(i) - Math.abs(hash(i)) * rr * 0.5);
-    paperGeo.computeVertexNormals();
-    const paper = new THREE.Mesh(paperGeo, new THREE.MeshStandardNodeMaterial({ color: 0xece7dc, metalness: 0, roughness: 0.9 }));
-    paper.position.z = plen / 2;
-    pg.add(paper);
-    const charLen = rr * 0.45;
-    const charGeo = along(new THREE.CylinderGeometry(rr * 0.96, rr * 0.97, charLen, 20, 1, true));
-    const cp = charGeo.getAttribute('position');
-    for (let i = 0; i < cp.count; i++) cp.setZ(i, cp.getZ(i) + hash(i + 50) * rr * 0.3);
-    charGeo.computeVertexNormals();
-    const char = new THREE.Mesh(charGeo, new THREE.MeshStandardNodeMaterial({ color: 0x3a332d, metalness: 0, roughness: 1, side: THREE.DoubleSide }));
-    char.position.z = plen - charLen * 0.3;
-    pg.add(char);
-    // (inside the burnt end: brown-grey tobacco and ash, a little sunk)
-    const tobacco = new THREE.MeshStandardNodeMaterial({ metalness: 0, roughness: 1 });
-    tobacco.colorNode = vec3(0.12, 0.09, 0.065).mul(mx_noise_float(positionWorld.mul(40)).mul(0.5).add(1));
-    const inside = new THREE.Mesh(new THREE.CircleGeometry(rr * 0.93, 20), tobacco);
-    inside.position.z = plen - charLen * 0.6;
-    pg.add(inside);
-    if (spec.ash > 0) {
-      // the ash stub: a little narrower than the paper, tapering to a broken face, crumbly, grey to its tip
-      const ashGeo = along(new THREE.CylinderGeometry(rr * 0.78, rr * 0.9, spec.ash, 18, 4));
-      const ap = ashGeo.getAttribute('position');
-      const colors = new Float32Array(ap.count * 3);
-      const dark = new THREE.Color(0x3a332d);
-      const light = new THREE.Color(0xa9a5a0);
-      const c = new THREE.Color();
-      for (let i = 0; i < ap.count; i++) {
-        const z = ap.getZ(i);
-        const tt = z / spec.ash + 0.5;
-        const k = 1 + hash(i + 100) * 0.25;
-        const broken = tt > 0.99 ? hash(i + 200) * rr * 0.6 : 0;
-        ap.setXYZ(i, ap.getX(i) * k, ap.getY(i) * k, z + broken);
-        c.copy(dark).lerp(light, Math.min(1, tt * 2.2));
-        colors.set([c.r, c.g, c.b], i * 3);
-      }
-      ashGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-      ashGeo.computeVertexNormals();
-      const ashMat = new THREE.MeshStandardNodeMaterial({ metalness: 0, roughness: 1 });
-      ashMat.colorNode = vertexColor();
-      const ash = new THREE.Mesh(ashGeo, ashMat);
-      ash.position.z = plen + spec.ash / 2 - charLen * 0.2;
-      pg.add(ash);
-    }
-    this.push(g);
-  }
-
-  /** A flake of ash lying flat: an irregular 7-sided outline from a hash of its place, one edge curled up. */
-  private addFlake(f: Feature): void {
-    const [x0, y0, z0, x1] = f.box;
-    const rad = (x1 - x0) / 2;
-    const hash = (a: number): number => {
-      const s = Math.sin(a * 37.1 + f.x * 3.7 + f.z * 9.1) * 43758.5453;
-      return s - Math.floor(s);
-    };
-    const shape = new THREE.Shape();
-    for (let i = 0; i < 7; i++) {
-      const a = (i / 7) * Math.PI * 2 + hash(i) * 0.5;
-      const rr = rad * (0.55 + hash(i + 10) * 0.6);
-      if (i === 0) shape.moveTo(Math.cos(a) * rr, Math.sin(a) * rr);
-      else shape.lineTo(Math.cos(a) * rr, Math.sin(a) * rr);
-    }
-    shape.closePath();
-    const geo = new THREE.ShapeGeometry(shape).rotateX(-Math.PI / 2);
-    // (one edge curled up a little)
-    const p = geo.getAttribute('position');
-    for (let i = 0; i < p.count; i++) if (p.getX(i) > rad * 0.3) p.setY(i, (p.getX(i) - rad * 0.3) * 0.4);
-    geo.computeVertexNormals();
-    const mesh = new THREE.Mesh(geo, new THREE.MeshStandardNodeMaterial({ color: f.color, metalness: 0, roughness: 1, side: THREE.DoubleSide }));
-    mesh.position.set((x0 + x1) / 2, y0 + 0.01, (z0 + f.box[5]) / 2);
-    mesh.rotation.y = hash(30) * Math.PI * 2;
-    this.push(mesh);
   }
 
   private push(object: THREE.Object3D): void {

@@ -67,7 +67,7 @@ export interface Feature {
   kind:
     | 'fan' | 'pump' | 'lightBar' | 'led' | 'heat' | 'tube' | 'capacitor' | 'grommet' | 'pad' | 'connector'
     | 'dust' | 'trace' | 'ramBody' | 'part' | 'screw' | 'wire' | 'driver' | 'port' | 'rod' | 'room' | 'lamp'
-    | 'turntable' | 'perforated' | 'marble' | 'blower' | 'screen' | 'keyboard' | 'dusty' | 'mouse' | 'speakerFront' | 'bottle' | 'foil' | 'butt' | 'flake';
+    | 'turntable' | 'perforated' | 'marble' | 'blower' | 'screen' | 'keyboard' | 'dusty' | 'mouse' | 'speakerFront' | 'bottle' | 'foil';
   x: number;
   y: number;
   z: number;
@@ -92,8 +92,6 @@ export interface Feature {
   chin?: number;
   /** A curved `screen`'s coloured trim along the front of its lower bezel (0 = none). */
   trim?: number;
-  /** A cigarette `butt`: its ash stub's length (0: burnt to the paper), its paper's bend (radians), a flattened filter. */
-  butt?: { ash: number; bend: number; flat: boolean };
 }
 
 export interface SceneLayout {
