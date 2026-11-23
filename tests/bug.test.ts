@@ -93,19 +93,100 @@ describe('bug on the ground', () => {
 });
 
 describe('bug against walls and slopes', () => {
-  it('does not pass through a wall', () => {
-    // ground at y=10 plus a 3-cell slab at x in [40, 43]
-    const t = world(2, 1, 2, (i, j) => Math.min(j - 10, Math.max(40 - i, i - 43)));
+  it('climbs a tall wall, goes over its top and down the other side, never letting go or passing through', () => {
+    // ground at y=10 plus a 4-cell slab at x in [40, 44], 14 high
+    const t = world(2, 1, 2, (i, j) => Math.min(j - 10, Math.max(40 - i, i - 44, j - 24)));
     const bug = settled(t, 30, 32);
     face(bug, 1, 0);
-    let maxX = bug.x;
-    for (let n = 0; n < TICK_RATE * 5; n++) {
+    let top = 0;
+    for (let n = 0; n < TICK_RATE * 14 && bug.x < 52; n++) {
       bug.step(t, FORWARD);
-      maxX = Math.max(maxX, bug.x);
+      expect(bug.grounded).toBe(true);
+      expect(t.sample(bug.x, bug.y, bug.z)).toBeGreaterThan(ANT.radius * 0.6);
+      top = Math.max(top, bug.y);
     }
-    expect(maxX).toBeLessThan(40 - ANT.radius + 0.1);
-    expect(maxX).toBeGreaterThan(40 - ANT.radius - 0.3);
+    expect(top).toBeCloseTo(24 + ANT.radius, 0);
+    expect(bug.x).toBeGreaterThan(50);
+    expect(bug.y).toBeCloseTo(10 + ANT.radius, 0);
+  });
+
+  it('climbs on past a ledge that sticks out of a wall, under it and round it', () => {
+    // a wall for x >= 40, up to y = 30, with a shelf 4 wide and 3 thick sticking out of it at y = 18
+    const t = world(2, 1, 2, (i, j) => Math.min(j - 8, Math.max(40 - i, j - 30), Math.max(36 - i, j - 21, 18 - j)));
+    const bug = settled(t, 28, 32);
+    face(bug, 1, 0);
+    let under = false;
+    for (let n = 0; n < TICK_RATE * 20 && bug.y < 30; n++) {
+      bug.step(t, FORWARD);
+      expect(bug.grounded).toBe(true);
+      if (bug.ny < -0.8) under = true;
+    }
+    expect(under).toBe(true);
+    expect(bug.y).toBeGreaterThan(29);
+  });
+
+  it('walks down a wall backwards and forwards, and turns along it', () => {
+    const t = world(2, 1, 2, (i, j) => Math.min(j - 6, Math.max(40 - i, j - 28)));
+    const bug = settled(t, 30, 32);
+    face(bug, 1, 0);
+    while (bug.y < 18) bug.step(t, FORWARD);
+    const [y0, z0] = [bug.y, bug.z];
+    run(bug, t, 60, { ...FORWARD, move: -1 });
+    expect(bug.y).toBeLessThan(y0 - 1.5); // (facing the wall, back is down)
+    face(bug, 0, 1);
+    const y1 = bug.y;
+    run(bug, t, 60, FORWARD);
+    expect(bug.z).toBeGreaterThan(z0 + 3); // along it: level
+    expect(bug.y).toBeCloseTo(y1, 1);
+    face(bug, -1, 0);
+    run(bug, t, 30, FORWARD);
+    expect(bug.y).toBeLessThan(y1 - 1); // facing away from it: down
     expect(bug.grounded).toBe(true);
+  });
+
+  it('rests on a wall and under a ceiling without moving, and stays at the end of its turn', () => {
+    const t = world(2, 1, 2, (i, j) => Math.min(j - 6, Math.max(40 - i, j - 28), Math.max(34 - i, 22 - j, j - 26)));
+    for (const until of [(b: Bug) => b.y > 14, (b: Bug) => b.ny < -0.95]) {
+      const bug = settled(t, 30, 32);
+      face(bug, 1, 0);
+      for (let n = 0; n < 1200 && !until(bug); n++) bug.step(t, FORWARD);
+      expect(until(bug)).toBe(true);
+      bug.step(t, IDLE);
+      const at = [bug.x, bug.y, bug.z];
+      run(bug, t, TICK_RATE * 5);
+      expect(bug.grounded).toBe(true);
+      expect(bug.settled).toBe(true);
+      expect(Math.hypot(bug.x - at[0], bug.y - at[1], bug.z - at[2])).toBeLessThan(0.15);
+    }
+  });
+
+  it('falls off a wall when pushed, when it jumps, and when the wall is blown away', () => {
+    for (const how of ['push', 'jump', 'carve']) {
+      const t = world(2, 1, 2, (i, j) => Math.min(j - 6, Math.max(40 - i, j - 30)));
+      const bug = settled(t, 34, 32);
+      face(bug, 1, 0);
+      while (bug.y < 20) bug.step(t, FORWARD);
+      if (how === 'push') bug.push(-6, 2, 0);
+      if (how === 'carve') t.carve(41, 20, 32, 6);
+      bug.step(t, how === 'jump' ? JUMP : IDLE);
+      expect(bug.grounded).toBe(false);
+      run(bug, t, TICK_RATE * 3);
+      expect(bug.grounded).toBe(true);
+      expect(bug.y).toBeLessThan(how === 'carve' ? 18.5 : 8);
+    }
+  });
+
+  it('falling against a wall it walks into, it catches hold', () => {
+    const t = world(2, 1, 2, (i, j) => Math.min(j - 4, Math.max(40 - i, j - 30)));
+    const bug = new Bug(ANT);
+    bug.x = bug.px = 37;
+    bug.y = bug.py = 22;
+    bug.z = bug.pz = 32;
+    bug.vx = 4;
+    face(bug, 1, 0);
+    run(bug, t, 60, FORWARD);
+    expect(bug.grounded).toBe(true);
+    expect(bug.y).toBeGreaterThan(10);
   });
 
   it('climbs over a cable lying on the ground and walks on', () => {
@@ -113,7 +194,7 @@ describe('bug against walls and slopes', () => {
     const t = world(2, 1, 2, (i, j) => Math.min(j - 10, Math.sqrt((i - 40) * (i - 40) + (j - 11) * (j - 11)) - 1));
     const bug = settled(t, 30, 32);
     face(bug, 1, 0);
-    for (let n = 0; n < TICK_RATE * 5; n++) bug.step(t, FORWARD);
+    for (let n = 0; n < TICK_RATE * 6; n++) bug.step(t, FORWARD);
     expect(bug.x).toBeGreaterThan(45);
     expect(bug.alive).toBe(true);
     expect(bug.grounded).toBe(true);
@@ -173,11 +254,15 @@ describe('bug in the air', () => {
     expect(bug.lastImpact).toBeGreaterThan(5);
   });
 
-  it('dies after walking off the edge of the world', () => {
+  it('turns back at the edge of the world instead of walking off it, and dies when thrown off', () => {
     const t = flat(10);
     const bug = settled(t, 12, 32);
     face(bug, -1, 0);
     run(bug, t, TICK_RATE * 6, FORWARD);
+    expect(bug.alive).toBe(true);
+    expect(bug.grounded).toBe(true);
+    bug.push(-25, 8, 0);
+    run(bug, t, TICK_RATE * 4);
     expect(bug.alive).toBe(false);
     // a dead bug no longer moves
     const y = bug.y;

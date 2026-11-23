@@ -26,7 +26,7 @@ Ants, spiders, cockroaches and made-up creatures. Technical idea: one configurab
 Special abilities per species (for when each bug gets its proper treatment; to tune later):
 
 - **Spider:** spins webs. A web can trap enemies, or let the spider lower itself safely from a tall drop on a thread instead of falling (no fall damage).
-- **Ant:** climbs tall vertical walls, up and down (today every bug only climbs low or thin obstacles: cables, ledges, small parts).
+- **Ant:** to be defined (climbing walls is now every bug's: they all crawl on any surface).
 - **Cockroach and others:** to be defined, each with an ability of its own.
 
 Special skills as attacks, each with its own attack animation (a skill is a weapon only that species has):
@@ -34,7 +34,7 @@ Special skills as attacks, each with its own attack animation (a skill is a weap
 - **Spider web bow:** the spider spins a web between two points and uses it as a bow: it pulls back and shoots, like an arrow. Aimed and charged like the other shots.
 - More of the same kind: an attack that comes from the creature's body or habits, not a borrowed weapon.
 
-Technically these fit the existing data: a species already holds its physics numbers, so an ability would be one more field (for example the ant's climb height), with any new action sent as a turn event like a shot.
+Technically these fit the existing data: a species already holds its physics numbers, so an ability would be one more field, with any new action sent as a turn event like a shot.
 
 ## Music-driven mechanics
 

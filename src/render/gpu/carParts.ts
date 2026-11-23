@@ -3,8 +3,8 @@ import { Fn, If, float, length, materialColor, mix, mx_noise_float, mx_noise_vec
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { toCreasedNormals } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import {
-  carScale, DASH_X0, DASH_X1, dashFace, dashTop, GLASS, glassFoot, GLOVE, GLOVE_THINGS, HOLDER, OPENING, openingNorm, PHONE, PLATE, SECTION_LEN,
-  SECTION_SUB, section, STACK, STACK_ITEMS, VENT_BACK, VENT_DEPTH, VENTS, WHEEL, type Leaning,
+  carScale, DASH_X0, DASH_X1, dashFace, dashTop, GLASS, glassFoot, GLOVE, GLOVE_THINGS, GRILLE, grilleHalf, grilleMid, HOLDER, OPENING, openingNorm, PHONE, pillarA, pillarB, PLATE, SECTION_LEN,
+  SECTION_SUB, section, STACK, STACK_ITEMS, SWITCH, VENT_BACK, VENT_DEPTH, VENTS, WHEEL, type Leaning,
 } from '../../terrain/generators/carPlan';
 import type { SceneLayout } from '../../terrain/generators/types';
 import {
@@ -612,15 +612,10 @@ export class CarParts {
 
   /** The defroster's grille along the windscreen: two broad rails that meet in long tips, two black slots, the sensor. */
   private defroster(): void {
-    const x0 = 60;
-    const x1 = 260;
+    const { x0, x1 } = GRILLE;
     const N = 220;
-    const ease = (v: number): number => {
-      const t = Math.max(0, Math.min(1, v));
-      return t * t * (3 - 2 * t);
-    };
-    const half = (x: number): number => 6.6 * Math.max(0.02, Math.min(1, Math.max(0, Math.min(x - x0, x1 - x) / 36))) ** 0.72;
-    const mid = (x: number): number => glassFoot(x) + 13.8 - 2 * (1 - ease(Math.min(x - x0, x1 - x) / 60));
+    const half = grilleHalf;
+    const mid = grilleMid;
     /** A strip over the top from `a` to `b` (across, -1 the windscreen's side), `lift` high, its sides and ends closed. */
     const strip = (a: number, b: number, lift: number, m: THREE.Material, from: number, to: number, n = N): void => {
       this.push(this.sheet(n + 2, 5, (u, v) => {
@@ -924,7 +919,7 @@ export class CarParts {
 
   /** Under the left vent: the light switch on its dark oval panel. */
   private lightSwitch(): void {
-    const g = this.frame({ x: 44, y: 39.6, z: 98.8, c: 0.93, s: 0.367 });
+    const g = this.frame(SWITCH);
     g.add(this.slab(roundedRect(32, 10.6, 5), 8, 0.9, this.mat(0x121213, 0.05, 0.45), 0, 0, -8, 8));
     const k = new THREE.Group();
     k.position.set(-4, 0, 1.8);
@@ -1051,8 +1046,8 @@ export class CarParts {
     f.add(this.box(folder.w, folder.h - 0.2, folder.d, 0.5, this.grained(0x15161a, 0.55, 3.4, 0.05), 0, (folder.h - 0.2) / 2, 0));
     const sheets: [number, number, number, string][] = [[0.4, 0.06, 0.2, 'form'], [1.4, -0.05, 0.75, 'lines'], [-1, 0.12, 1.25, 'stamp']];
     for (const [dx, turn, h, look] of sheets) {
-      const p = this.mesh(new RoundedBoxGeometry(papers.w - 1, 0.14, papers.d - 1, 1, 0.05), this.mat(0xe9e7df, 0, 0.9), dx, folder.h + h - 0.1, 1.6);
-      const top = this.mesh(new THREE.PlaneGeometry(papers.w - 1.2, papers.d - 1.2).rotateX(-Math.PI / 2), new THREE.MeshStandardNodeMaterial({ map: this.tex(paperTexture(look as 'form')), roughness: 0.9 }), 0, 0.085, 0, false);
+      const p = this.mesh(new RoundedBoxGeometry(papers.w - 2, 0.14, papers.d - 2, 1, 0.05), this.mat(0xe9e7df, 0, 0.9), dx, folder.h + h - 0.1, papers.z - folder.z);
+      const top = this.mesh(new THREE.PlaneGeometry(papers.w - 2.2, papers.d - 2.2).rotateX(-Math.PI / 2), new THREE.MeshStandardNodeMaterial({ map: this.tex(paperTexture(look as 'form')), roughness: 0.9 }), 0, 0.085, 0, false);
       p.add(top);
       p.rotation.y = turn;
       f.add(p);
@@ -1266,13 +1261,8 @@ export class CarParts {
       const flip = m > 0;
       const V = (x: number, y: number, z: number): THREE.Vector3 => new THREE.Vector3(X(x), y, z);
       // (three lines up the windscreen's side: the glass's edge, the pillar's other edge, the window frame's)
-      const A = (t: number): [number, number, number] => [26 + 24 * t, 77 + 143 * t - 10 * Math.max(0, 1 - t / 0.08) ** 2, 28 + 113 * t];
-      const flare = (t: number): number => Math.max(0, 1 - t / 0.13) ** 2;
-      const B = (t: number): [number, number, number] => {
-        const [x, y, z] = A(t);
-        const f = flare(t);
-        return [x - 4 - 1.5 * f, y - 4 - 9 * f, z + 17 + 20 * f];
-      };
+      const A = pillarA;
+      const B = pillarB;
       const lining = this.grained(0x8f8e8a, 0.9, 3, 0.03);
       lining.side = THREE.DoubleSide;
       this.push(this.sheet(64, 16, (t, v) => {

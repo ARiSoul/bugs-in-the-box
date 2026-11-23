@@ -47,7 +47,8 @@ export class BugView {
   private readonly materials: THREE.Material[] = [];
   private readonly up = new THREE.Vector3(0, 1, 0);
   private readonly fwd = new THREE.Vector3();
-  private readonly ascent = new THREE.Vector3();
+  private readonly heading = new THREE.Vector3();
+  private readonly lastFwd = new THREE.Vector3(0, 0, 1);
   private readonly side = new THREE.Vector3();
   private readonly basis = new THREE.Matrix4();
   private readonly target = new THREE.Vector3();
@@ -161,13 +162,13 @@ export class BugView {
     if (bug.grounded) this.target.set(bug.nx, bug.ny, bug.nz);
     else this.target.copy(UP);
     this.up.lerp(this.target, 1 - Math.exp(-dt * 12)).normalize();
-    // forward along the surface; on a steep one (climbing), facing into it means heading up it
-    this.fwd.set(bug.fx, 0, bug.fz);
-    const into = this.fwd.dot(this.up);
-    this.fwd.addScaledVector(this.up, -into);
-    if (into < 0) this.fwd.addScaledVector(this.ascent.copy(UP).addScaledVector(this.up, -this.up.y), -into / Math.max(1e-6, Math.sqrt(1 - this.up.y * this.up.y)));
-    if (this.fwd.lengthSq() < 1e-8) this.fwd.set(bug.fx, 0, bug.fz).addScaledVector(this.up, -this.up.dot(this.fwd));
+    // forward along the surface, as the simulation heads (eased with the lean)
+    this.heading.set(bug.hx, bug.hy, bug.hz);
+    this.fwd.copy(this.heading).addScaledVector(this.up, -this.heading.dot(this.up));
+    if (this.fwd.lengthSq() < 1e-4) this.fwd.copy(this.lastFwd).addScaledVector(this.up, -this.lastFwd.dot(this.up));
+    if (this.fwd.lengthSq() < 1e-8) this.fwd.set(bug.fx, 0, bug.fz);
     this.fwd.normalize();
+    this.lastFwd.copy(this.fwd);
     this.side.crossVectors(this.up, this.fwd);
     this.basis.makeBasis(this.side, this.up, this.fwd);
     this.root.quaternion.setFromRotationMatrix(this.basis);

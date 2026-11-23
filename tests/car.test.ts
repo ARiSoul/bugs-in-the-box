@@ -4,9 +4,10 @@ import { Match, type TeamSpec } from '../src/game/match';
 import { ANT, SPIDER } from '../src/game/species';
 import { car } from '../src/terrain/generators/car';
 import {
-  carScale, dashFace, dashTop, GLASS, glassFoot, GLOVE, GLOVE_THINGS, HOLDER, leaning, onLid, OPENING, openingNorm, PHONE, PLATE, STACK, STACK_ITEMS, VENT_DEPTH, VENTS, WHEEL,
+  carScale, dashFace, dashTop, GLASS, glassFoot, GLOVE, GLOVE_THINGS, HOLDER, leaning, onLid, OPENING, openingNorm, PHONE, PLATE, STACK, STACK_ITEMS, SWITCH, VENT_DEPTH, VENTS, WHEEL,
 } from '../src/terrain/generators/carPlan';
 import { createLayout, type SceneLayout } from '../src/terrain/generators/types';
+import { createRng } from '../src/terrain/noise';
 import { scenarioById } from '../src/terrain/scenarios';
 import { Terrain } from '../src/terrain/Terrain';
 import { analyze, meshAll } from './helpers/meshIntegrity';
@@ -122,6 +123,37 @@ describe('Car Dashboard (car)', () => {
       expect(bug.alive).toBe(true);
       expect(Math.abs(bug.y - ANT.radius - ly)).toBeLessThan(1);
       expect(t.sample((x0 + x1) / 2, y0 + 9, 90)).toBeGreaterThan(0);
+    });
+
+    it('the small things: the pen, the coins, the tissue, the cable with its plug and socket, the key, the light switch', () => {
+      const { y0 } = GLOVE;
+      inside(...onLid(-3.5, 0.4, 14.4));
+      inside(...onLid(10.6, 0.1, 14.6));
+      inside(GLOVE_THINGS.tissues.x, y0 + GLOVE_THINGS.tissues.h + 1.5, GLOVE_THINGS.tissues.z);
+      inside(142, 9.6, 121);
+      inside(PHONE.x - 2, PHONE.y - PHONE.hh - 1, PHONE.z);
+      const [kx, ky, kz] = leaning(WHEEL, 12.6, -7, -14);
+      inside(kx + 5.4, ky, kz);
+      for (const [u, w, n] of [[12, 0, 0.5], [-14, 0, 0.5], [-4, 0, 4], [8.3, -0.8, 1]]) inside(...leaning(SWITCH, u, w, n));
+      const { layout } = make(9);
+      const wire = layout.features.filter((f) => f.kind === 'wire')[0].path;
+      for (let i = 1; i + 2 < wire.length; i += 9) inside(wire[i], wire[i + 1], wire[i + 2]);
+    });
+
+    it('a bug crawls anywhere for minutes without falling, passing through anything or dying', () => {
+      const rnd = createRng(5);
+      for (const [x, z] of [[120, 60], [230, 70], [150, 150], [12, 90], [240, 108]]) {
+        const bug = new Bug(ANT);
+        expect(bug.drop(t, x, z, 112)).toBe(true);
+        for (let n = 0; n < 120; n++) bug.step(t, IDLE);
+        let turn = 0;
+        for (let n = 0; n < 60 * 25; n++) {
+          if (n % 50 === 0) turn = rnd() < 0.5 ? 0 : rnd() < 0.5 ? -1 : 1;
+          bug.step(t, { move: 1, turn, jump: false, run: n % 400 < 100 });
+          expect(bug.grounded, `${bug.x.toFixed(1)} ${bug.y.toFixed(1)} ${bug.z.toFixed(1)}`).toBe(true);
+          expect(t.sample(bug.x, bug.y, bug.z)).toBeGreaterThan(0.3);
+        }
+      }
     });
 
     it('the windscreen keeps everybody in: solid from the pane outwards', () => {

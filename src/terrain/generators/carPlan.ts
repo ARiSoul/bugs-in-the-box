@@ -30,6 +30,13 @@ export interface Leaning {
 }
 /** The hood's opening, an oval tunnel along z from its face to the plate: its middle's height, its half height. */
 export const OPENING = { x: CLUSTER_X, y: 70.6, a: 35.5, b: 13.4, back: 71.6 };
+/** The dials on the instrument plate: their middles and radii (u, w on the plate). */
+export const DIAL_WELLS: readonly { u: number; w: number; r: number }[] = [
+  { u: -17.4, w: -0.8, r: 9.9 },
+  { u: 17.4, w: -0.8, r: 9.9 },
+  { u: -4.9, w: 7.6, r: 3.5 },
+  { u: 4.9, w: 7.6, r: 3.5 },
+];
 /** Where (x, y) is against the opening's outline: 1 on it, less inside (an oval between an ellipse and a box). */
 export function openingNorm(x: number, y: number): number {
   const u = (x - OPENING.x) / OPENING.a;
@@ -196,7 +203,7 @@ export function onLid(u: number, n: number, d: number): [number, number, number]
 /** What lies in the glove box: boxes [x, y, z middle, w, h, d, turn] on its floor, a torch. */
 export const GLOVE_THINGS = {
   folder: { x: 232, z: 84, w: 32, h: 2.6, d: 24 },
-  papers: { x: 233, z: 83, w: 29, h: 1.6, d: 21 },
+  papers: { x: 232, z: 85.4, w: 30, h: 1.5, d: 22 },
   map: { x: 256, z: 86, w: 14, h: 2.4, d: 22 },
   tissues: { x: 256, z: 70, w: 15, h: 6, d: 10 },
   torch: { x0: 216, x1: 236, z: 68, r: 2.3 },
@@ -234,6 +241,32 @@ export const STACK_ITEMS: readonly StackItem[] = [
   { kind: 'knob', id: 'fan', u: -14, v: 40.2, w: 5.6, h: 5.6, out: 4 },
   { kind: 'knob', id: 'temp', u: 14, v: 40.2, w: 5.6, h: 5.6, out: 4 },
 ];
+
+/** The light switch's plate, under the left vent. */
+export const SWITCH: Leaning = { x: 44, y: 39.6, z: 98.8, c: 0.93, s: 0.367 };
+
+/** The defroster's grille along the windscreen: its ends, and at x its middle (z) and half depth. */
+export const GRILLE = { x0: 60, x1: 260 };
+export function grilleHalf(x: number): number {
+  const e = Math.min(1, Math.max(0, Math.min(x - GRILLE.x0, GRILLE.x1 - x) / 36));
+  // (0.72 of a power of e, near enough, without Math.pow)
+  return 6.6 * Math.max(0.06, 0.56 * Math.sqrt(e) + 0.44 * e);
+}
+export function grilleMid(x: number): number {
+  return glassFoot(x) + 13.8 - 2 * (1 - smooth(Math.min(x - GRILLE.x0, GRILLE.x1 - x) / 60));
+}
+
+/** The pillar's lines up the windscreen's side: along the glass (A) and its other edge (B), t 0 at its foot. */
+export function pillarA(t: number): [number, number, number] {
+  const q = Math.max(0, 1 - t / 0.08);
+  return [26 + 24 * t, 77 + 143 * t - 10 * q * q, 28 + 113 * t];
+}
+export function pillarB(t: number): [number, number, number] {
+  const [x, y, z] = pillarA(t);
+  const q = Math.max(0, 1 - t / 0.13);
+  const f = q * q;
+  return [x - 4 - 1.5 * f, y - 4 - 9 * f, z + 17 + 20 * f];
+}
 
 /** A point of a leaning frame: u right, w up along its face, n out of it. */
 export function leaning(f: Leaning, u: number, w: number, n: number): [number, number, number] {
