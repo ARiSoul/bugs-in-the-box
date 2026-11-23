@@ -1,3 +1,4 @@
+import { giveBodies } from './bodies';
 import { createRng } from '../noise';
 import {
   ALUMINIUM,
@@ -74,7 +75,10 @@ export const speaker: TerrainGenerator = (terrain, seed, layout) => {
   const rng = createRng(seed * 104729 + 31);
   const rand = (a: number, b: number): number => a + rng() * (b - a);
   const features: Feature[] | null = layout ? layout.features : null;
+  /** Everything drawn (with or without a layout), for `giveBodies`. */
+  const drawn: Feature[] = [];
   const put = (f: Feature): void => {
+    drawn.push(f);
     features?.push(f);
   };
   const part = (
@@ -773,5 +777,6 @@ export const speaker: TerrainGenerator = (terrain, seed, layout) => {
   seg(handle - 3, handle, 2.2, STEEL, 0xb4b9c0, 1, 0.3);
   seg(handle, len, 3.2, CABLE_YELLOW, 0xd98e1a, 0, 0.25, { axis: 0 }); // (a fluted grip)
 
+  giveBodies(terrain, drawn);
   terrain.commitGeneration();
 };

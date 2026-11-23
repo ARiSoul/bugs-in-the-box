@@ -1,3 +1,4 @@
+import { giveBodies } from './bodies';
 import { createRng } from '../noise';
 import { COLLIDER, DESK_BLACK, DESK_WHITE, SLEEVE } from '../materials';
 import { keyRelief } from './keyboards';
@@ -74,7 +75,10 @@ export const desk: TerrainGenerator = (terrain, seed, layout) => {
   const rng = createRng(seed * 4099 + 11);
   const rand = (a: number, b: number): number => a + rng() * (b - a);
   const features: Feature[] | null = layout ? layout.features : null;
+  /** Everything drawn (with or without a layout), for `giveBodies`. */
+  const drawn: Feature[] = [];
   const put = (f: Feature): void => {
+    drawn.push(f);
     features?.push(f);
   };
   const plan = deskPlan(W, H, D);
@@ -567,6 +571,7 @@ export const desk: TerrainGenerator = (terrain, seed, layout) => {
   const pcz = bzz + L(0.2);
   const ptop = T + L(2.2);
   put(feature('foil', pcx, ptop + L(0.35), pcz, { box: [pcx - L(2.4), ptop, pcz - L(1.65), pcx + L(2.4), ptop + L(0.7), pcz + L(1.65)], color: 0xb9a46c, radius: L(1) }));
+  hide(capsule(pcx + L(2.4), ptop + L(0.2), pcz, pcx + L(3.7), ptop - L(0.9), pcz, 1.05));
   hide(boxMinMax(pcx - L(2.2), ptop - 1.5, pcz - L(1.45), pcx + L(2.2), ptop + L(0.3), pcz + L(1.45)));
   hide(boxMinMax(pcx - L(1.5), ptop - 1.5, pcz - L(0.8), pcx + L(1.5), ptop + L(0.62), pcz + L(0.8)));
 
@@ -589,5 +594,6 @@ export const desk: TerrainGenerator = (terrain, seed, layout) => {
   speaker(spx, spz, sTop, rc, rs);
   cable([spx + rs * L(5.8), sTop + L(3), spz - rc * L(5.8), spx - L(1), sTop + 0.3, sz0 + L(1), sx0 + L(2), sTop + 0.3, sz0 + L(0.3), sx0 + L(1.6), sTop - L(2), sz0 - 0.5, L(144.5), T + 0.3, mz0 + L(1.5), L(144.2), T + 0.25, mz0 + 0.15, L(144.2), T - L(1.2), mz0 - L(0.45), L(144.2), T - L(4), mz0 - L(0.65), L(144.2), T - L(8), mz0 - L(0.75), L(144.2), T - L(12), mz0 - L(0.8), L(144.2), T - L(16), mz0 - L(0.8)], 0.32, 0x131313);
 
+  giveBodies(terrain, drawn);
   terrain.commitGeneration();
 };

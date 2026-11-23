@@ -1,3 +1,4 @@
+import { giveBodies } from './bodies';
 import { createRng } from '../noise';
 import { CHASSIS_RED, COLLIDER, ENAMEL, FERRITE, MARBLE, PCB, STEEL } from '../materials';
 import { add, addHidden, boxMinMax, capsule, cut, cylinder, paint, rotatedBox, type Shape } from '../sdf';
@@ -68,7 +69,10 @@ export const microwave: TerrainGenerator = (terrain, seed, layout) => {
   const rng = createRng(seed * 6007 + 3);
   const rand = (a: number, b: number): number => a + rng() * (b - a);
   const features: Feature[] | null = layout ? layout.features : null;
+  /** Everything drawn (with or without a layout), for `giveBodies`. */
+  const drawn: Feature[] = [];
   const put = (f: Feature): void => {
+    drawn.push(f);
     features?.push(f);
   };
   const plan = microwavePlan(W, H, D);
@@ -454,5 +458,6 @@ export const microwave: TerrainGenerator = (terrain, seed, layout) => {
     deco(x - 0.08, WORKTOP + 0.45 - L(0.55), z + L(1.66), x + 0.08, WORKTOP + 0.45 + L(0.55), z + L(1.74), 'plate', 0x3a3c3e, 0.5, 0.5);
   }
 
+  giveBodies(terrain, drawn);
   terrain.commitGeneration();
 };

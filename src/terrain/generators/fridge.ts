@@ -1,3 +1,4 @@
+import { giveBodies } from './bodies';
 import { createRng } from '../noise';
 import { ALUMINIUM, BLACK_PLASTIC, COLLIDER, ENAMEL, FROST, LINER, PAINT, TILE } from '../materials';
 import { add, addHidden, boxMinMax, capsule, cut, cylinder, paint, rotatedBox, sphere, type Shape } from '../sdf';
@@ -70,7 +71,10 @@ export const fridge: TerrainGenerator = (terrain, seed, layout) => {
   const rng = createRng(seed * 7919 + 17);
   const rand = (a: number, b: number): number => a + rng() * (b - a);
   const features: Feature[] | null = layout ? layout.features : null;
+  /** Everything drawn (with or without a layout), for `giveBodies`. */
+  const drawn: Feature[] = [];
   const put = (f: Feature): void => {
+    drawn.push(f);
     features?.push(f);
   };
   const plan = fridgePlan(W, H, D);
@@ -645,5 +649,6 @@ export const fridge: TerrainGenerator = (terrain, seed, layout) => {
   put(feature('part', ux + L(0.6), FLOOR, uz + L(0.8), { shape: 'ball', box: [ux - L(5.6), FLOOR + 0.05, uz - L(3.4), ux + L(6.8), FLOOR + 0.14, uz + L(5)], color: 0xd8e8f0, metal: 0, rough: 0.02, opacity: 0.09 }));
   deco(ux - L(1.8), FLOOR, uz - L(1.8), ux + L(1.8), FLOOR + L(2.6), uz + L(1.8), 'soft', 0xe6f2ff, 0, 0.04, 0.3);
 
+  giveBodies(terrain, drawn);
   terrain.commitGeneration();
 };

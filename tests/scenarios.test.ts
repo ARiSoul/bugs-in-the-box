@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { Match, type TeamSpec } from '../src/game/match';
 import { ANT, SPIDER } from '../src/game/species';
+import { giveBodies } from '../src/terrain/generators/bodies';
+import { createLayout, feature } from '../src/terrain/generators/types';
 import { insidePC } from '../src/terrain/generators/insidePC';
 import { COPPER, FAN, PCB } from '../src/terrain/materials';
 import { SCENARIOS, scenarioById } from '../src/terrain/scenarios';
@@ -147,5 +149,25 @@ describe('scenario list', () => {
     expect(new Set(SCENARIOS.map((s) => s.id)).size).toBe(SCENARIOS.length);
     expect(scenarioById('nope')).toBe(SCENARIOS[0]);
     expect(scenarioById('islands').id).toBe('islands');
+  });
+});
+
+describe('bodies for drawn parts', () => {
+  it('a wire in the air is solid; a thin plate on a floor changes nothing; the grid does not depend on a layout', () => {
+    const t = new Terrain(1, 1, 1);
+    t.beginGeneration();
+    add(t, boxMinMax(2, 2, 2, 30, 8, 30), PCB);
+    const before = t.dens.slice();
+    giveBodies(t, [feature('part', 16, 8, 16, { box: [10, 8, 10, 22, 8.1, 22] })]);
+    expect(Buffer.from(t.dens.buffer).equals(Buffer.from(before.buffer))).toBe(true);
+    giveBodies(t, [feature('wire', 10, 20, 16, { path: [0.3, 10, 20, 16, 22, 20, 16] })]);
+    expect(t.sample(16, 20, 16)).toBeLessThan(0);
+    expect(t.sample(16, 8, 5)).toBeCloseTo(0, 0);
+    const make = (layout: boolean): Terrain => {
+      const m = new Terrain(5, 3, 5);
+      scenarioById('microwave').generate(m, 3, layout ? createLayout() : undefined);
+      return m;
+    };
+    expect(Buffer.from(make(true).dens.buffer).equals(Buffer.from(make(false).dens.buffer))).toBe(true);
   });
 });

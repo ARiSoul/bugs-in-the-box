@@ -1,3 +1,4 @@
+import { giveBodies } from './bodies';
 import { createRng } from '../noise';
 import {
   ALUMINIUM,
@@ -51,7 +52,10 @@ export const pcCase: TerrainGenerator = (terrain, seed, layout) => {
   const P = BOARD_TOP;
   const glassY = H - 6;
   const { free, claim } = createPlacement(W, D, WALL1 + 2);
+  /** Everything drawn (with or without a layout), for `giveBodies`. */
+  const drawn: ReturnType<typeof feature>[] = [];
   const put = (f: ReturnType<typeof feature>): void => {
+    drawn.push(f);
     if (layout) layout.features.push(f);
   };
   /** A detail: a terrain block (the destructible part) and a clean render shape over it. */
@@ -644,6 +648,7 @@ export const pcCase: TerrainGenerator = (terrain, seed, layout) => {
     put(feature('pad', x, P, z, { radius: 2 }));
   }
 
+  giveBodies(terrain, drawn);
   terrain.commitGeneration();
 };
 
