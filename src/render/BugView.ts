@@ -8,9 +8,12 @@ const limb = new THREE.CylinderGeometry(1, 1, 1, 6).translate(0, 0.5, 0);
 const UP = new THREE.Vector3(0, 1, 0);
 const FORWARD = new THREE.Vector3(0, 0, 1);
 
-/** What a dead bug's body needs to fall onto the terrain below it (render only: the density field). */
-export interface CorpseGround {
+/** What the bug is drawn on (render only, see `DrawnGround`): the density field, and the parts drawn over it. */
+export interface RestGround {
   raycast(ox: number, oy: number, oz: number, dx: number, dy: number, dz: number, maxT?: number): number;
+  /** Distance to what a foot rests on; `offset` is then how far that lies above the density's surface. */
+  rest(ox: number, oy: number, oz: number, dx: number, dy: number, dz: number, maxT: number): number;
+  readonly offset: number;
 }
 
 /** Death on screen: seconds to roll onto the back, of twitching, and of fading to the corpse colours. */
@@ -54,6 +57,10 @@ export class BugView {
   private readonly target = new THREE.Vector3();
   private readonly foot = new THREE.Vector3();
   private phase = 0;
+  /** How far the body is drawn off its place in the simulation, along its up: what is drawn lies that much above the density (smoothed). */
+  private lift = 0;
+  /** The same, summed over the feet of the last update. */
+  private feetOffset = 0;
   private ring: THREE.Mesh | null = null;
   private ringMaterial: THREE.MeshBasicMaterial | null = null;
   /** Colours to fade from when the bug dies. */
@@ -145,7 +152,7 @@ export class BugView {
    * Place the view between the previous and the current tick (`alpha` in [0,1]) and animate it.
    * `dt` is the frame time in seconds (render smoothing only).
    */
-  update(bug: Bug, alpha: number, dt: number, ground?: CorpseGround): void {
+  update(bug: Bug, alpha: number, dt: number, ground?: RestGround): void {
     if (!bug.alive) {
       this.updateDead(bug, dt, ground);
       return;
@@ -156,7 +163,6 @@ export class BugView {
       bug.py + (bug.y - bug.py) * alpha,
       bug.pz + (bug.z - bug.pz) * alpha,
     );
-    this.groundY = this.root.position.y;
 
     // Lean into the ground normal while standing, level out in the air. Smoothed so bumps do not jitter.
     if (bug.grounded) this.target.set(bug.nx, bug.ny, bug.nz);
@@ -172,6 +178,16 @@ export class BugView {
     this.side.crossVectors(this.up, this.fwd);
     this.basis.makeBasis(this.side, this.up, this.fwd);
     this.root.quaternion.setFromRotationMatrix(this.basis);
+    // the body rides at its height over what is drawn under it
+    let lift = 0;
+    if (bug.grounded && ground) {
+      const { x, y, z } = this.root.position;
+      ground.rest(x, y, z, -this.up.x, -this.up.y, -this.up.z, this.species.radius + 1);
+      lift = Math.max(ground.offset, this.feetOffset / this.legs.length);
+    }
+    this.lift += (lift - this.lift) * (1 - Math.exp(-dt * 14));
+    this.root.position.addScaledVector(this.up, this.lift);
+    this.groundY = this.root.position.y;
     // the team ring stays flat on the floor whatever the bug leans into; on a steep surface it lies on it
     if (this.ring) {
       if (bug.grounded && bug.ny < WALKABLE_NY) this.ring.quaternion.copy(FLAT);
@@ -185,6 +201,7 @@ export class BugView {
     const speed = Math.sqrt(dx * dx + dy * dy + dz * dz) * TICK_RATE;
     this.phase += speed * dt * 2.2;
     const swingAmp = bug.grounded ? Math.min(1, speed / 2) * 0.45 : 0;
+    this.feetOffset = 0;
     for (const leg of this.legs) {
       const a = this.phase + leg.offset;
       leg.pivot.rotation.y = leg.side * Math.sin(a) * swingAmp;
@@ -196,9 +213,9 @@ export class BugView {
 
   /**
    * How far a leg turns about its hinge so its foot rests on the ground under it (a key's top on one side, the
-   * gap beside it on the other). Reads the density field, like the simulation.
+   * gap beside it on the other), as it is drawn.
    */
-  private bendToGround(leg: Leg, ground: CorpseGround): number {
+  private bendToGround(leg: Leg, ground: RestGround): number {
     const r = this.species.radius;
     const scale = this.root.scale.x;
     const yaw = leg.pivot.rotation.y;
@@ -210,9 +227,10 @@ export class BugView {
     const at = this.foot.set(p.x + f.x * c + f.z * s, p.y + f.y, p.z + f.z * c - f.x * s).multiplyScalar(scale).applyQuaternion(this.root.quaternion).add(this.root.position);
     at.y += (scale - 1) * r;
     const above = 0.9 * r * scale;
-    const t = ground.raycast(at.x + this.up.x * above, at.y + this.up.y * above, at.z + this.up.z * above, -this.up.x, -this.up.y, -this.up.z, 2.2 * r * scale);
+    const t = ground.rest(at.x + this.up.x * above, at.y + this.up.y * above, at.z + this.up.z * above, -this.up.x, -this.up.y, -this.up.z, 2.2 * r * scale);
     // (nothing under it, or a wall over it: the leg stays as it is)
     if (t <= 0) return 0;
+    this.feetOffset += ground.offset;
     const dy = (above - t) / scale;
     const reach = Math.abs(f.x);
     const long = Math.sqrt(reach * reach + f.y * f.y);
@@ -225,7 +243,7 @@ export class BugView {
    * stays where it died (and falls if the ground under it is blown away). One that fell out of the world
    * is just gone.
    */
-  private updateDead(bug: Bug, dt: number, ground?: CorpseGround): void {
+  private updateDead(bug: Bug, dt: number, ground?: RestGround): void {
     const r = this.species.radius;
     if (this.deadT < 0) {
       this.deadT = 0;
@@ -264,12 +282,16 @@ export class BugView {
       } else this.corpseVy = 0;
     }
 
+    // (it lies on what is drawn)
+    ground?.rest(this.corpse.x, this.corpse.y, this.corpse.z, 0, -1, 0, r + 1);
+    this.lift += ((ground?.offset ?? 0) - this.lift) * (1 - Math.exp(-dt * 14));
+
     // roll onto the back with a hop, then lie a little lower (the legs up)
     const u = Math.min(1, t / DEATH_ROLL);
     const e = u * u * (3 - 2 * u);
     this.roll.setFromAxisAngle(FORWARD, this.rollSide * Math.PI * e);
     this.root.quaternion.copy(this.deathQ).multiply(this.roll);
-    this.root.position.set(this.corpse.x, this.corpse.y + Math.sin(Math.PI * u) * r * 1.1 - r * 0.3 * e, this.corpse.z);
+    this.root.position.set(this.corpse.x, this.corpse.y + this.lift + Math.sin(Math.PI * u) * r * 1.1 - r * 0.3 * e, this.corpse.z);
     this.groundY = this.root.position.y;
     this.root.visible = true;
 

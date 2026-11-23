@@ -13,6 +13,7 @@ import { Controls } from './input/controls';
 import { pickTerrain } from './input/picking';
 import { AimView } from './render/aim';
 import { BugView } from './render/BugView';
+import { DrawnGround } from './render/drawnGround';
 import { ChunkRenderer } from './render/ChunkRenderer';
 import { ExplosionFlashes, LineFlashes } from './render/effects';
 import { CHASE_ELEVATION, FollowCamera } from './render/followCamera';
@@ -49,6 +50,7 @@ const stage: Stage =
     ? await import('./render/gpu/gpuStage').then((m) => m.createGpuStage(canvas, terrain, stageOptions))
     : createStage(canvas, terrain, stageOptions);
 const chunks = new ChunkRenderer(stage.scene, stage.look);
+const ground = new DrawnGround(terrain);
 const flashes = new ExplosionFlashes(stage.scene);
 const lines = new LineFlashes(stage.scene);
 const texts = new FloatingTexts(stage.hud);
@@ -97,6 +99,8 @@ function onMeshBatch(b: MeshBatch): void {
 }
 
 let match: Match;
+/** The turntable's turn when the drawn ground was indexed. */
+let indexedTurns = 0;
 let views: ScenarioViews;
 let bugViews: { view: BugView; label: UnitLabel; height: number }[] = [];
 
@@ -135,6 +139,8 @@ function newMatch(s: number): void {
     stage.hud.add(label.sprite);
     return { view, label, height: u.bug.species.radius * 2.4 };
   });
+  indexedTurns = 0;
+  ground.reset(stage.scene, bugViews.map((v) => v.view.root));
   hud.setupMatch(match, WEAPONS, (i) => controls.selectWeapon(i));
   const active = bugViews[match.active];
   active.view.update(match.activeUnit.bug, 1, 0);
@@ -150,6 +156,7 @@ function handleEvents(events: readonly MatchEvent[]): void {
       case 'explosion':
         flashes.spawn(at.set(e.x, e.y, e.z), e.radius);
         stage.craters?.add(e.x, e.y, e.z, e.radius);
+        ground.addCrater(e.x, e.y, e.z, e.radius);
         break;
       case 'arc':
         lines.arc(at.set(e.x1, e.y1, e.z1), at2.set(e.x2, e.y2, e.z2));
@@ -157,6 +164,7 @@ function handleEvents(events: readonly MatchEvent[]): void {
       case 'dig':
         lines.beam(at.set(e.x1, e.y1, e.z1), at2.set(e.x2, e.y2, e.z2));
         stage.craters?.addTunnel(e.x1, e.y1, e.z1, e.x2, e.y2, e.z2, e.radius);
+        ground.addTunnel(e.x1, e.y1, e.z1, e.x2, e.y2, e.z2, e.radius);
         break;
       case 'turn':
         chasePending = true;
@@ -430,6 +438,8 @@ let lastFrame = performance.now();
 let accumulator = 0;
 /** The turntable's turns before the last tick (render interpolates the plate between ticks). */
 let prevTurns = 0;
+/** Time per frame for indexing the drawn ground of a new map (ms). */
+const INDEX_MS = 3;
 let paused = false;
 function loop(now: number): void {
   requestAnimationFrame(loop);
@@ -477,11 +487,17 @@ function loop(now: number): void {
   const alpha = accumulator / DT;
   stage.setTurntable?.(prevTurns + (match.turntableTurns - prevTurns) * alpha);
 
+  // the turntable rests at a new place: so do the things on it
+  if (match.turntableTurns !== indexedTurns && match.turntableTurns === prevTurns && match.phase !== 'spin') {
+    indexedTurns = match.turntableTurns;
+    ground.reindex(stage.scene, bugViews.map((v) => v.view.root));
+  }
+  ground.step(INDEX_MS);
   match.units.forEach((u, i) => {
     const v = bugViews[i];
-    v.view.update(u.bug, alpha, dt, terrain);
+    v.view.update(u.bug, alpha, dt, ground);
   });
-  projectiles.sync(match.projectiles, alpha);
+  projectiles.sync(match.projectiles, alpha, ground);
   const active = bugViews[match.active];
   aim.update(match, active.view.root.position, active.height, now);
 
@@ -613,6 +629,7 @@ function placeLabels(): void {
 
 const debugApi = {
   terrain,
+  ground,
   stage,
   chunks,
   controls,

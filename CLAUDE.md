@@ -48,7 +48,7 @@ src/
     projectile.ts       shells and grenades (gravity, wind, bounces)
     weapons.ts          weapons as data (Solder Blob, Capacitor, Short Circuit, Soldering Iron)
     math.ts             rotate2: deterministic rotation without sin/cos
-  render/             three.js: stage (Stage interface + WebGL path), ChunkRenderer (1 mesh per chunk), MeshWorkers (worker pool), BugView, FollowCamera, labels, projectiles, aim, effects
+  render/             three.js: stage (Stage interface + WebGL path), ChunkRenderer (1 mesh per chunk), MeshWorkers (worker pool), BugView, DrawnGround (where a foot rests: the drawn parts, not their hidden bodies), FollowCamera, labels, projectiles, aim, effects
     gpu/                WebGPU render path (TSL): terrain material + glow, atmosphere (fog, glass, backdrop), god rays + bloom post, dust compute, heat shimmer, LEDs
   debug/              shared hooks for every map: ?pose, ?flythrough, ?fly, ?perf, ?res, ?hud; camera views per scenario; perf log; captures
   workers/            mesh.worker.ts (runs the mesher on a mirror grid) + message types; no three.js, no DOM

@@ -1,7 +1,9 @@
 import * as THREE from 'three';
 import type { Projectile } from '../game/projectile';
+import type { DrawnGround } from './drawnGround';
 
-const geometry = new THREE.SphereGeometry(0.4, 12, 9);
+const RADIUS = 0.4;
+const geometry = new THREE.SphereGeometry(RADIUS, 12, 9);
 
 /** One small glowing sphere per projectile in flight, kept in sync with the match by id. */
 export class ProjectileViews {
@@ -10,8 +12,8 @@ export class ProjectileViews {
 
   constructor(private readonly scene: THREE.Scene) {}
 
-  /** `alpha` interpolates between the previous and the current tick. */
-  sync(projectiles: readonly Projectile[], alpha: number): void {
+  /** `alpha` interpolates between the previous and the current tick; a grenade lies on what is drawn (`ground`). */
+  sync(projectiles: readonly Projectile[], alpha: number, ground: DrawnGround): void {
     this.seen.clear();
     for (const p of projectiles) {
       this.seen.add(p.id);
@@ -22,6 +24,11 @@ export class ProjectileViews {
         this.meshes.set(p.id, mesh);
       }
       mesh.position.set(p.px + (p.x - p.px) * alpha, p.py + (p.y - p.py) * alpha, p.pz + (p.z - p.pz) * alpha);
+      if (p.weapon.kind === 'grenade') {
+        const { x, y, z } = mesh.position;
+        const below = ground.rest(x, y + 1, z, 0, -1, 0, 1 + RADIUS) - 1;
+        if (below > -1 && below < RADIUS) mesh.position.y += RADIUS - below;
+      }
     }
     for (const [id, mesh] of this.meshes) {
       if (this.seen.has(id)) continue;
