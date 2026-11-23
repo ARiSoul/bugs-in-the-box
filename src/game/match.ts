@@ -1,11 +1,11 @@
 import { createRng } from '../terrain/noise';
 import { Bug, DT, IDLE, TICK_RATE, type BugInput } from './bug';
-import type { TerrainField } from './field';
+import { surfaceDistance, type TerrainField } from './field';
 import { rot, rotate2 } from './math';
 import { Projectile } from './projectile';
 import { dropNear } from './spawn';
 import type { BugSpecies } from './species';
-import { WEAPONS, type Weapon } from './weapons';
+import { hasWeapon, WEAPONS, type Weapon } from './weapons';
 
 /**
  * One match: teams of bugs taking turns on a destructible map. Pure and deterministic like Bug:
@@ -55,6 +55,29 @@ const SPAWN_SETTLE_TICKS = 3 * TICK_RATE;
 /** After bugs die at the end of a turn, wait this long (their death on screen) before the next turn. */
 export const DEATH_HOLD_TICKS = Math.round(1.6 * TICK_RATE);
 
+/** A bug held by a web walks at this fraction of its speed (and cannot jump)... */
+export const WEB_SLOW = 0.12;
+/** ...until it has pulled at it for this long, on its own turns: then the web tears. */
+export const WEB_TEAR_TICKS = 4 * TICK_RATE;
+/** A web holds a bug whose centre is nearer its surface than this many radii. */
+const WEB_REACH = 1.6;
+
+/** A sticky web lying on a surface (Web Shot): it holds every bug but those that spin silk. */
+export interface Web {
+  readonly id: number;
+  /** Its middle, on the surface, and the surface's normal there. */
+  x: number;
+  y: number;
+  z: number;
+  nx: number;
+  ny: number;
+  nz: number;
+  readonly radius: number;
+  /** Turns left, and pulling (ticks) it still stands. */
+  turns: number;
+  strength: number;
+}
+
 export type Phase = 'aim' | 'flight' | 'settle' | 'spin' | 'over';
 
 /**
@@ -96,6 +119,8 @@ export interface Unit {
   aimV: number;
   /** Set once the death has been announced. */
   dead: boolean;
+  /** Held by a web (its id; -1: free). */
+  web: number;
 }
 
 export interface MatchInput {
@@ -126,6 +151,9 @@ export type MatchEvent =
   | { type: 'explosion'; x: number; y: number; z: number; radius: number }
   | { type: 'arc'; x1: number; y1: number; z1: number; x2: number; y2: number; z2: number }
   | { type: 'dig'; x1: number; y1: number; z1: number; x2: number; y2: number; z2: number; radius: number }
+  | { type: 'web'; id: number }
+  | { type: 'stuck'; unit: number }
+  | { type: 'webGone'; id: number; torn: boolean }
   | { type: 'damage'; unit: number; amount: number }
   | { type: 'death'; unit: number }
   | { type: 'over'; winner: number };
@@ -162,6 +190,7 @@ export interface MatchOptions {
 export class Match {
   readonly units: Unit[] = [];
   readonly projectiles: Projectile[] = [];
+  readonly webs: Web[] = [];
   /** What happened during the last `step` (cleared at the start of every step). */
   readonly events: MatchEvent[] = [];
   phase: Phase = 'aim';
@@ -202,6 +231,9 @@ export class Match {
   private aimDir = 0;
   private fireWasDown = false;
   private nextProjectileId = 1;
+  private nextWebId = 1;
+  /** Webs on the turntable this spin, with their offset and normal at the start. */
+  private readonly carriedWebs: { w: Web; dx: number; dz: number; nx: number; nz: number }[] = [];
   private readonly bugs: Bug[] = [];
 
   constructor(
@@ -219,7 +251,7 @@ export class Match {
         if (i >= teams[t].size) continue;
         const bug = new Bug(teams[t].species);
         bug.confine = options.confine ?? null;
-        this.units.push({ id: id++, team: t, name: `${teams[t].species.id} ${i + 1}`, bug, aimH: COS45, aimV: COS45, dead: false });
+        this.units.push({ id: id++, team: t, name: `${teams[t].species.id} ${i + 1}`, bug, aimH: COS45, aimV: COS45, dead: false, web: -1 });
         this.bugs.push(bug);
       }
     this.nextInTeam = teams.map(() => 0);
@@ -276,6 +308,11 @@ export class Match {
       this.spinTick();
     }
 
+    this.holdInWebs(unit, move);
+    if (unit.web >= 0 && move.jump) {
+      bugInput.jump = false;
+    }
+
     for (const u of this.units) {
       const b = u.bug;
       // (what rides the turntable is moved by it, not by its own physics)
@@ -291,7 +328,10 @@ export class Match {
       const p = this.projectiles[i];
       const r = p.step(this.field, this.windX, this.windZ, this.bugs, this.options.strictBounds === true);
       if (r === 'fly') continue;
-      if (r === 'explode') this.explode(p.x, p.y, p.z, p.weapon);
+      if (r === 'explode') {
+        if (p.weapon.kind === 'web') this.castWeb(p.x, p.y, p.z, p.weapon, p.owner);
+        else this.explode(p.x, p.y, p.z, p.weapon);
+      }
       this.projectiles.splice(i--, 1);
     }
   }
@@ -359,7 +399,7 @@ export class Match {
   // ---------------------------------------------------------------- turn flow
 
   private aimTick(unit: Unit, input: Readonly<MatchInput>, fireDown: boolean): Readonly<BugInput> {
-    if (!this.charging && input.weapon >= 0 && input.weapon < WEAPONS.length) this.weapon = input.weapon;
+    if (!this.charging && input.weapon >= 0 && input.weapon < WEAPONS.length && this.canUse(unit, input.weapon)) this.weapon = input.weapon;
     if (input.aim !== 0) {
       rotate2(unit.aimH, unit.aimV, input.aim * AIM_RATE * ramp(this.aimHeld) * DT);
       if (rot[0] <= 0 && rot[1] > 0) {
@@ -391,6 +431,81 @@ export class Match {
     }
     if (this.turnTicks <= 0) this.endAim();
     return this.movement(input);
+  }
+
+  /** Whether the unit has weapon `index`. */
+  canUse(u: Unit, index: number): boolean {
+    return hasWeapon(u.bug.species.id, WEAPONS[index]);
+  }
+
+  /** Which bugs the webs hold now; the active one pulls at its web while it tries to walk or jump. */
+  private holdInWebs(active: Unit, move: Readonly<BugInput>): void {
+    for (const u of this.units) {
+      const w = u.bug.alive && !u.bug.species.silk ? this.webAt(u.bug) : null;
+      if (w && u.web !== w.id) this.events.push({ type: 'stuck', unit: u.id });
+      u.web = w ? w.id : -1;
+      u.bug.slow = w ? WEB_SLOW : 1;
+      if (!w || u !== active || (move.move === 0 && !move.jump)) continue;
+      if (--w.strength > 0) continue;
+      this.removeWeb(w, true);
+      u.web = -1;
+      u.bug.slow = 1;
+    }
+  }
+
+  /** The web a bug stands in (the oldest, if several), or null. */
+  private webAt(b: Bug): Web | null {
+    if (!b.grounded) return null;
+    for (const w of this.webs) {
+      const dx = b.x - w.x;
+      const dy = b.y - w.y;
+      const dz = b.z - w.z;
+      if (dx * dx + dy * dy + dz * dz > w.radius * w.radius) continue;
+      // (over the same surface, not on the other side of a thin wall or on a ledge well above it)
+      const up = dx * w.nx + dy * w.ny + dz * w.nz;
+      if (b.nx * w.nx + b.ny * w.ny + b.nz * w.nz < 0 || up < -b.species.radius || up > b.species.radius * WEB_REACH + w.radius * 0.5) continue;
+      return w;
+    }
+    return null;
+  }
+
+  private removeWeb(w: Web, torn: boolean): void {
+    this.webs.splice(this.webs.indexOf(w), 1);
+    this.events.push({ type: 'webGone', id: w.id, torn });
+  }
+
+  /** A ball of silk lands: a web on the surface there; a bug it hits is hurt a little. */
+  private castWeb(x: number, y: number, z: number, w: Weapon, owner: Bug | null): void {
+    for (const u of this.units) {
+      const b = u.bug;
+      if (!b.alive || b === owner) continue;
+      const dx = b.x - x;
+      const dy = b.y - y;
+      const dz = b.z - z;
+      const reach = b.species.radius + 0.8;
+      if (dx * dx + dy * dy + dz * dz < reach * reach) {
+        this.damage(u, w.damage);
+        // (it hit the bug: the web opens on what that bug stands on)
+        x = b.x;
+        y = b.y;
+        z = b.z;
+        break;
+      }
+    }
+    // onto the surface: a few steps along the way to the nearest point
+    for (let k = 0; k < 4; k++) {
+      const d = surfaceDistance(this.field, x, y, z, aimed);
+      x -= aimed[0] * d;
+      y -= aimed[1] * d;
+      z -= aimed[2] * d;
+    }
+    const d = surfaceDistance(this.field, x, y, z, aimed);
+    const l = Math.sqrt(aimed[0] * aimed[0] + aimed[1] * aimed[1] + aimed[2] * aimed[2]);
+    // (nothing near to hold on to: a bug hit in the air)
+    if (d > 1 || d < -1 || l < 0.5) return;
+    const id = this.nextWebId++;
+    this.webs.push({ id, x, y, z, nx: aimed[0] / l, ny: aimed[1] / l, nz: aimed[2] / l, radius: w.webRadius, turns: w.webTurns, strength: WEB_TEAR_TICKS });
+    this.events.push({ type: 'web', id });
   }
 
   private movement(input: Readonly<MatchInput>): Readonly<BugInput> {
@@ -464,6 +579,12 @@ export class Match {
     this.spinC = 1;
     this.spinS = 0;
     this.carried.length = 0;
+    this.carriedWebs.length = 0;
+    for (const w of this.webs) {
+      const dx = w.x - tt.x;
+      const dz = w.z - tt.z;
+      if (dx * dx + dz * dz < tt.radius * tt.radius && w.y > tt.surface - 1.5 && w.y < tt.surface + 6) this.carriedWebs.push({ w, dx, dz, nx: w.nx, nz: w.nz });
+    }
     const r = tt.radius - 0.5;
     for (const u of this.units) {
       const b = u.bug;
@@ -507,6 +628,12 @@ export class Match {
       b.vx = 0;
       b.vz = 0;
     }
+    for (const k of this.carriedWebs) {
+      k.w.x = tt.x + k.dx * c - k.dz * sn;
+      k.w.z = tt.z + k.dx * sn + k.dz * c;
+      k.w.nx = k.nx * c - k.nz * sn;
+      k.w.nz = k.nx * sn + k.nz * c;
+    }
     if (!last) return;
     this.field.rotateQuarter?.(tt.x, tt.z, tt.j0, tt.j1, tt.radius);
     this.quarterTurns++;
@@ -546,6 +673,8 @@ export class Match {
         this.active = this.units.indexOf(u);
         this.phase = 'aim';
         this.turnTicks = AIM_TICKS;
+        if (!this.canUse(u, this.weapon)) this.weapon = 0;
+        for (let q = this.webs.length - 1; q >= 0; q--) if (--this.webs[q].turns < 0) this.removeWeb(this.webs[q], false);
         this.retreatTicks = 0;
         this.charging = false;
         this.power = 0;
@@ -600,6 +729,15 @@ export class Match {
   explode(x: number, y: number, z: number, w: Weapon): void {
     this.field.carve(x, y, z, w.blastRadius);
     this.events.push({ type: 'explosion', x, y, z, radius: w.blastRadius });
+    // (a web whose surface is blown away goes with it)
+    for (let q = this.webs.length - 1; q >= 0; q--) {
+      const s = this.webs[q];
+      const sx = s.x - x;
+      const sy = s.y - y;
+      const sz = s.z - z;
+      const near = w.blastRadius + s.radius * 0.5;
+      if (sx * sx + sy * sy + sz * sz < near * near) this.removeWeb(s, true);
+    }
     const reach = w.blastRadius * BLAST_REACH;
     for (const u of this.units) {
       const b = u.bug;

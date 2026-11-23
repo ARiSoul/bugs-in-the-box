@@ -19,7 +19,7 @@ export function setupKeysMenu(controls: Controls): void {
     const k = (action: Parameters<Controls['keysOf']>[0]): string => keyName(controls.keysOf(action)[0]);
     hint.textContent =
       `${k('forward')}/${k('back')} walk · ${k('run')} run · ${k('left')}/${k('right')} or ←/→ turn · ${k('jump')} jump · ` +
-      `${k('aimUp')}/${k('aimDown')} aim (tap for fine steps) · hold ${k('fire')} to charge, release to fire · 1–4 weapon · ` +
+      `${k('aimUp')}/${k('aimDown')} aim (tap for fine steps) · hold ${k('fire')} to charge, release to fire · 1–5 weapon · ` +
       'N new match · right drag to turn the view (the bug turns with it; A/D turn it too) · scroll to zoom';
     list.replaceChildren(
       ...ACTIONS.flatMap(({ action, label }) => {

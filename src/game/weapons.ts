@@ -9,7 +9,9 @@ export type WeaponKind =
   /** Projectile that bounces and explodes when its fuse runs out. */
   | 'grenade'
   /** No projectile: digs a straight tunnel along the aim, right away. */
-  | 'tunnel';
+  | 'tunnel'
+  /** Projectile that spreads a sticky web where it lands (no blast, the terrain stays). */
+  | 'web';
 
 export interface Weapon {
   readonly id: string;
@@ -34,6 +36,11 @@ export interface Weapon {
   /** Tunnel: length and radius. */
   readonly tunnelLength: number;
   readonly tunnelRadius: number;
+  /** Web: its radius, and how many turns it lasts. */
+  readonly webRadius: number;
+  readonly webTurns: number;
+  /** The only species that has it (none: every bug). */
+  readonly species?: string;
   /** Render only. */
   readonly color: number;
 }
@@ -50,6 +57,8 @@ const BASE = {
   arcDamage: 0,
   tunnelLength: 0,
   tunnelRadius: 0,
+  webRadius: 0,
+  webTurns: 0,
 } as const;
 
 /** A drop of molten solder, flung hard. Explodes on impact; the wind pushes it. */
@@ -106,4 +115,24 @@ export const SOLDERING_IRON: Weapon = {
   color: 0xff7a2f,
 };
 
-export const WEAPONS: readonly Weapon[] = [SOLDER_BLOB, CAPACITOR, SHORT_CIRCUIT, SOLDERING_IRON];
+/** Spiders only: a ball of silk that opens into a web where it lands. It holds every bug but a spider. */
+export const WEB_SHOT: Weapon = {
+  ...BASE,
+  id: 'web-shot',
+  name: 'Web Shot',
+  kind: 'web',
+  species: 'spider',
+  maxSpeed: 30,
+  windFactor: 0.4,
+  damage: 5,
+  webRadius: 4.5,
+  webTurns: 6,
+  color: 0xf2f2ee,
+};
+
+export const WEAPONS: readonly Weapon[] = [SOLDER_BLOB, CAPACITOR, SHORT_CIRCUIT, SOLDERING_IRON, WEB_SHOT];
+
+/** Whether a bug of this species has the weapon. */
+export function hasWeapon(species: string, w: Weapon): boolean {
+  return w.species === undefined || w.species === species;
+}

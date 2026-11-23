@@ -48,6 +48,9 @@ const CEILING_NY = -0.8;
 /** Aiming: level ground up to this steep (normal Y) aims by the world; from the second on, wholly by the surface. */
 const AIM_LEVEL_NY = 0.94;
 const AIM_SURFACE_NY = 0.64;
+/** A spider on its thread comes down at this speed; sideways it slows by this factor a tick. */
+const THREAD_SPEED = 6;
+const THREAD_DRAG = 0.97;
 /** How near the world's sides (and, under things, its bottom) a crawling bug goes. */
 const EDGE = 2.4;
 /** Falling, a bug that is walking forward into a wall catches hold of it, unless it falls faster than this. */
@@ -105,6 +108,18 @@ export class Bug {
   grounded = false;
   /** Where it may walk (null: anywhere), see `MatchOptions.confine`. */
   confine: ((x: number, y: number, z: number) => boolean) | null = null;
+  /** Walking speed factor (below 1: held by a web). */
+  slow = 1;
+  /**
+   * Hanging on its thread (species with `silk`): it left it on the last surface it stood on (tx, ty, tz), and
+   * comes down slowly. A jump in the air takes hold of it or lets it go; a push, or its surface blown away, cuts it.
+   */
+  thread = false;
+  tx = 0;
+  ty = 0;
+  tz = 0;
+  /** It has stood somewhere (there is a place for a thread to hang from). */
+  private stood = false;
   /** The surface's normal, valid while grounded. */
   nx = 0;
   ny = 1;
@@ -140,6 +155,9 @@ export class Bug {
     this.z = this.pz = z;
     this.vx = this.vy = this.vz = 0;
     this.grounded = false;
+    this.thread = false;
+    this.stood = false;
+    this.slow = 1;
     this.alive = true;
     this.airTicks = 0;
     this.lastImpact = 0;
@@ -201,13 +219,20 @@ export class Bug {
       this.grounded = false;
     } else if (this.grounded) {
       const walk = input.run ? sp.walkSpeed * RUN_FACTOR : sp.walkSpeed;
-      const v = (input.move > 0 ? walk : input.move < 0 ? -walk * WALK_BACK_FACTOR : 0) * (this.ny < WALKABLE_NY ? CLIMB_FACTOR : 1);
+      const v = (input.move > 0 ? walk : input.move < 0 ? -walk * WALK_BACK_FACTOR : 0) * (this.ny < WALKABLE_NY ? CLIMB_FACTOR : 1) * this.slow;
       this.vx = this.hx * v;
       this.vy = this.hy * v;
       this.vz = this.hz * v;
       stick = true;
     } else {
+      if (input.jump && sp.silk && this.stood) this.thread = !this.thread;
+      if (this.thread && field.sample(this.tx, this.ty, this.tz) > 1) this.thread = false;
       this.vy -= GRAVITY * DT;
+      if (this.thread) {
+        if (this.vy < -THREAD_SPEED) this.vy = -THREAD_SPEED;
+        this.vx *= THREAD_DRAG;
+        this.vz *= THREAD_DRAG;
+      }
       if (this.vy < -MAX_FALL_SPEED) this.vy = -MAX_FALL_SPEED;
       fallSpeed = -this.vy;
     }
@@ -282,10 +307,20 @@ export class Bug {
         this.vx = this.vy = this.vz = 0;
       }
     }
-    if (this.grounded) this.airTicks = 0;
-    else this.airTicks++;
+    if (this.grounded) {
+      this.airTicks = 0;
+      this.thread = false;
+      this.stood = true;
+      // (where a thread would hang from)
+      this.tx = this.x - this.nx * sp.radius;
+      this.ty = this.y - this.ny * sp.radius;
+      this.tz = this.z - this.nz * sp.radius;
+    } else this.airTicks++;
 
-    if (this.y < KILL_Y) this.alive = false;
+    if (this.y < KILL_Y) {
+      this.alive = false;
+      this.thread = false;
+    }
   }
 
   private setNormal(): void {
@@ -415,6 +450,7 @@ export class Bug {
     this.vy += vy;
     this.vz += vz;
     this.grounded = false;
+    this.thread = false;
   }
 
   /**

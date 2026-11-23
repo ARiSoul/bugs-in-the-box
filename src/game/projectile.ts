@@ -51,7 +51,7 @@ export class Projectile {
   }
 
   /**
-   * Advance one tick under gravity and wind (wind is an acceleration). Shells explode on the first
+   * Advance one tick under gravity and wind (wind is an acceleration). Shells (and webs) explode on the first
    * contact with terrain or a bug; grenades bounce off terrain and explode when the fuse runs out.
    * On 'explode' the projectile sits at the explosion point.
    */
@@ -77,7 +77,7 @@ export class Projectile {
       this.x += dx / steps;
       this.y += dy / steps;
       this.z += dz / steps;
-      if (w.kind === 'shell') {
+      if (w.kind !== 'grenade') {
         if (field.sample(this.x, this.y, this.z) < PROJECTILE_RADIUS) return 'explode';
         if (this.hitsBug(bugs)) return 'explode';
       } else if (this.bounceOffTerrain(field)) {

@@ -16,8 +16,9 @@ npm run dev
 Open the address that Vite prints.
 
 - **W / S**: walk (hold **shift** to run) · **A / D** or **← / →**: turn · **↑ / ↓**: aim higher / lower
-- **Space**: jump · **hold Q** to charge, release to fire · **1–4**: weapon · **N**: new match
+- **Space**: jump · **hold Q** to charge, release to fire · **1–5**: weapon (5, Web Shot, is the spiders' own) · **N**: new match
 - Bugs crawl on anything: walk into a wall to go up it, face away from it (or walk back) to go down, over edges and under ledges. A jump lets go; so does an explosion.
+- **Spiders** spin silk. **Web Shot** (5) opens a web that holds any other bug: it can aim and fire, and 4 s of pulling tears it. In the air, **jump** again to hang on a thread and come down slowly, unhurt; again to let go.
 - **Right drag** to turn the view (the active bug turns with it, for fine aiming); **A / D** keep turning it while the button is held · **scroll** to zoom
 - The **keys** section of the menu changes the keys (saved in the browser); **default keys** brings them back.
 - **free camera** (in the menu) flies freely round the current map, just to look at it: click the view to look with the mouse, **W/S/A/D** move, **Q/E** down/up, **Shift** faster, **Ctrl** slower, scroll for speed, **R** back to the start; **back to the game** leaves. The seed stays in the address, so a reload keeps the same map.

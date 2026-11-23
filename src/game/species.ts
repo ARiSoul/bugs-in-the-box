@@ -17,6 +17,9 @@ export interface BugSpecies {
   /** Forward take-off speed of a jump. */
   readonly jumpForward: number;
 
+  /** Spins silk: in the air it can hang on a thread (see Bug.thread), and no web holds it. */
+  readonly silk?: boolean;
+
   // ---- looks (render only) ----
   readonly legs: number;
   /** Leg reach relative to `radius`. */
@@ -57,6 +60,7 @@ export const SPIDER: BugSpecies = {
   turnRate: 3.4,
   jumpSpeed: 10,
   jumpForward: 5,
+  silk: true,
   legs: 8,
   legLength: 1.7,
   bodyLength: 2,

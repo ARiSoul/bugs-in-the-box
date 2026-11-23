@@ -1,0 +1,180 @@
+import { describe, expect, it } from 'vitest';
+import { Bug, IDLE, TICK_RATE, type BugInput } from '../src/game/bug';
+import { Match, NO_INPUT, WEB_TEAR_TICKS, type MatchEvent, type MatchInput } from '../src/game/match';
+import { ANT, SPIDER } from '../src/game/species';
+import { SOLDER_BLOB, WEAPONS, WEB_SHOT } from '../src/game/weapons';
+import { flat, world } from './helpers/worlds';
+
+const WEB = WEAPONS.indexOf(WEB_SHOT);
+
+/** A match with a spider (first) and an ant on flat ground at the given places. */
+function setup(spider: [number, number], ant: [number, number]): Match {
+  const t = flat(10);
+  const m = new Match(
+    t,
+    [
+      { name: 'S', species: SPIDER, color: 0, size: 1 },
+      { name: 'A', species: ANT, color: 0, size: 1 },
+    ],
+    1,
+    { placeBugs: false },
+  );
+  m.units[0].bug.drop(t, ...spider);
+  m.units[1].bug.drop(t, ...ant);
+  run(m, 60);
+  return m;
+}
+
+function run(m: Match, ticks: number, input: Partial<MatchInput> = {}): MatchEvent[] {
+  const events: MatchEvent[] = [];
+  for (let n = 0; n < ticks; n++) {
+    m.step({ ...NO_INPUT, ...input });
+    events.push(...m.events);
+  }
+  return events;
+}
+
+/** Fire the web straight at the ant, and wait for the ant's turn. */
+function web(m: Match): MatchEvent[] {
+  run(m, 1, { weapon: WEB });
+  const s = m.units[0];
+  const a = m.units[1].bug;
+  const dx = a.x - s.bug.x;
+  const dz = a.z - s.bug.z;
+  run(m, 1, { faceX: dx, faceZ: dz });
+  s.aimH = 1;
+  s.aimV = 0;
+  const events = run(m, 60, { fire: true });
+  for (let n = 0; n < 1200 && m.active === 0; n++) events.push(...run(m, 1));
+  return events;
+}
+
+describe('Web Shot', () => {
+  it('only spiders have it', () => {
+    const m = setup([20, 32], [26, 32]);
+    expect(m.canUse(m.units[0], WEB)).toBe(true);
+    expect(m.canUse(m.units[1], WEB)).toBe(false);
+    run(m, 1, { weapon: WEB });
+    expect(m.currentWeapon).toBe(WEB_SHOT);
+    web(m);
+    expect(m.active).toBe(1);
+    expect(m.currentWeapon).not.toBe(WEB_SHOT);
+    run(m, 1, { weapon: WEB });
+    expect(m.currentWeapon).not.toBe(WEB_SHOT);
+  });
+
+  it('leaves the terrain whole, makes a web, and holds the ant it hits', () => {
+    const m = setup([20, 32], [26, 32]);
+    const t = m.field;
+    const before = t.sample(26, 9.5, 32);
+    const events = web(m);
+    expect(events.some((e) => e.type === 'web')).toBe(true);
+    expect(events.some((e) => e.type === 'stuck' && e.unit === 1)).toBe(true);
+    expect(events.some((e) => e.type === 'explosion')).toBe(false);
+    expect(t.sample(26, 9.5, 32)).toBe(before);
+    expect(m.webs.length).toBe(1);
+    expect(m.webs[0].ny).toBeGreaterThan(0.9);
+    const x = m.units[1].bug.x;
+    const z = m.units[1].bug.z;
+    run(m, TICK_RATE * 2, { move: 1, jump: true });
+    expect(m.units[1].bug.grounded).toBe(true);
+    expect(Math.hypot(m.units[1].bug.x - x, m.units[1].bug.z - z)).toBeLessThan(2);
+  });
+
+  it('tears after enough pulling, and the ant walks off', () => {
+    const m = setup([20, 32], [26, 32]);
+    web(m);
+    const events = run(m, WEB_TEAR_TICKS + 2, { move: 1 });
+    expect(events.some((e) => e.type === 'webGone' && e.torn)).toBe(true);
+    expect(m.webs.length).toBe(0);
+    const x = m.units[1].bug.x;
+    const z = m.units[1].bug.z;
+    run(m, 60, { move: 1 });
+    expect(Math.hypot(m.units[1].bug.x - x, m.units[1].bug.z - z)).toBeGreaterThan(3);
+  });
+
+  it('a held bug can still fire; a blast takes the web away; a spider is not held', () => {
+    const m = setup([20, 32], [26, 32]);
+    web(m);
+    expect(m.units[1].web).toBeGreaterThanOrEqual(0);
+    expect(run(m, 40, { fire: true }).length + run(m, 1).length).toBeGreaterThan(0);
+    expect(m.phase).toBe('flight');
+    const s = m.units[0].bug;
+    s.x = s.px = m.webs[0].x;
+    s.z = s.pz = m.webs[0].z + 3;
+    run(m, 5);
+    expect(m.units[0].web).toBe(-1);
+    expect(s.slow).toBe(1);
+    const w = m.webs[0];
+    if (w) m.explode(w.x, w.y, w.z, SOLDER_BLOB);
+    expect(m.webs.length).toBe(0);
+  });
+
+  it('goes by itself after its turns', () => {
+    const m = setup([20, 32], [26, 32]);
+    web(m);
+    const start = m.turnNumber;
+    for (let n = 0; n < TICK_RATE * 60 * 8 && m.webs.length > 0; n++) m.step(NO_INPUT);
+    expect(m.webs.length).toBe(0);
+    expect(m.turnNumber - start).toBeLessThanOrEqual(WEB_SHOT.webTurns);
+  });
+});
+
+describe('the thread', () => {
+  const step = (b: Bug, t: ReturnType<typeof world>, input: Partial<BugInput>, n = 1): void => {
+    for (let k = 0; k < n; k++) b.step(t, { ...IDLE, ...input });
+  };
+  // a table 40 high over ground at 4
+  const table = () => world(2, 2, 2, (i, j) => Math.min(j - 4, Math.max(i - 30, j - 44, 36 - j)));
+  const off = (species: typeof SPIDER): { b: Bug; t: ReturnType<typeof world> } => {
+    const t = table();
+    const b = new Bug(species);
+    b.drop(t, 29, 32);
+    b.fx = 1;
+    b.fz = 0;
+    step(b, t, {}, 60);
+    step(b, t, { jump: true });
+    step(b, t, {}, 25);
+    expect(b.grounded).toBe(false);
+    return { b, t };
+  };
+
+  it('a spider in the air takes hold of it and comes down slowly, unhurt', () => {
+    const { b, t } = off(SPIDER);
+    step(b, t, { jump: true });
+    expect(b.thread).toBe(true);
+    let impact = 0;
+    for (let n = 0; n < TICK_RATE * 12 && !b.grounded; n++) {
+      step(b, t, {});
+      expect(b.vy).toBeGreaterThanOrEqual(-6.001);
+      if (b.justLanded) impact = b.lastImpact;
+    }
+    expect(b.grounded).toBe(true);
+    expect(b.thread).toBe(false);
+    expect(b.y).toBeLessThan(8);
+    expect(impact).toBeLessThan(7);
+  });
+
+  it('a second jump lets go; a push cuts it; an ant has none', () => {
+    const { b, t } = off(SPIDER);
+    step(b, t, { jump: true });
+    step(b, t, { jump: true });
+    expect(b.thread).toBe(false);
+    step(b, t, { jump: true });
+    expect(b.thread).toBe(true);
+    b.push(1, 0, 0);
+    expect(b.thread).toBe(false);
+    const a = off(ANT);
+    step(a.b, a.t, { jump: true });
+    expect(a.b.thread).toBe(false);
+  });
+
+  it('is cut when the place it hangs from is blown away', () => {
+    const { b, t } = off(SPIDER);
+    step(b, t, { jump: true });
+    expect(b.thread).toBe(true);
+    t.carve(b.tx, b.ty, b.tz, 4);
+    step(b, t, {}, 2);
+    expect(b.thread).toBe(false);
+  });
+});

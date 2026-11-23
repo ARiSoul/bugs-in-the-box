@@ -141,6 +141,8 @@ export class Hud {
     const power = match.charging ? match.power : 0;
     this.set('power', () => (this.power.style.width = `${(power * 100).toFixed(0)}%`), power.toFixed(2));
 
+    // (a weapon of another species is not on offer)
+    this.set('weapons', () => this.weaponButtons.forEach((b, i) => (b.style.display = match.canUse(u, i) ? '' : 'none')), u.bug.species.id);
     this.set('weapon', () => this.weaponButtons.forEach((b, i) => b.classList.toggle('on', i === match.weapon)), String(match.weapon));
 
     match.teams.forEach((_t, i) => {
