@@ -51,6 +51,11 @@ export type Box3 = [number, number, number, number, number, number];
  *   `color`; `path` = [cos, sin] tilts it about x like a `part`.
  * - `marble`: a polished marble sheet with fine veins (`box`), its face across `axis`.
  * - `blower`: a fan's impeller facing along `axis` at (x, y, z): hub, swept blades, a wire guard; `radius`, `color`.
+ * - `screen`: a display panel (`box`), its picture on the face towards local +z: `look` 'game', 'editor', 'desert'
+ *   or 'off'. `keyboard`: keycaps on a keyboard's deck (`box`, its top at box[4]): `path` = [columns, rows],
+ *   `color` of the caps. `dusty`: a black laminate desk sheet with dust and crumbs (`box`).
+ * Any `part`, `screen` or `keyboard` may carry `yaw` = [cos, sin]: turned about the vertical through its box's
+ * centre, local +x towards world (cos, 0, sin) (as `rotatedBox` about y).
  *
  * A `part` with `opacity` below 1 is see-through (glass shelves, clear plastic drawers and bins). A `part`
  * with `path` = [cos, sin] is turned about x by that angle round its box's centre (a board leaning on a shelf).
@@ -62,7 +67,7 @@ export interface Feature {
   kind:
     | 'fan' | 'pump' | 'lightBar' | 'led' | 'heat' | 'tube' | 'capacitor' | 'grommet' | 'pad' | 'connector'
     | 'dust' | 'trace' | 'ramBody' | 'part' | 'screw' | 'wire' | 'driver' | 'port' | 'rod' | 'room' | 'lamp'
-    | 'turntable' | 'perforated' | 'marble' | 'blower';
+    | 'turntable' | 'perforated' | 'marble' | 'blower' | 'screen' | 'keyboard' | 'dusty' | 'mouse' | 'speakerFront' | 'bottle' | 'foil' | 'butt' | 'flake';
   x: number;
   y: number;
   z: number;
@@ -79,6 +84,16 @@ export interface Feature {
   glow?: number;
   /** See-through parts: 0..1 (default 1, opaque). */
   opacity?: number;
+  /** Turned about the vertical: [cos, sin] (see above). */
+  yaw?: [number, number];
+  /** What a `screen` shows. */
+  look?: 'game' | 'editor' | 'desert' | 'movie' | 'desktop' | 'off' | 'felt' | 'wood' | 'pale' | 'full' | 'laptop';
+  /** A curved `screen`'s extra bezel under the picture (a monitor's chin). */
+  chin?: number;
+  /** A curved `screen`'s coloured trim along the front of its lower bezel (0 = none). */
+  trim?: number;
+  /** A cigarette `butt`: its ash stub's length (0: burnt to the paper), its paper's bend (radians), a flattened filter. */
+  butt?: { ash: number; bend: number; flat: boolean };
 }
 
 export interface SceneLayout {

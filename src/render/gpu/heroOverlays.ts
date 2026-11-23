@@ -218,17 +218,20 @@ export class HeroOverlays {
       g = new THREE.SphereGeometry(0.5, 48, 24).scale(w, h, d);
     } else if (shape === 'dome') {
       // a half sphere on its base, filling the box (a solder joint)
-      g = new THREE.SphereGeometry(0.5, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2).scale(w, h * 2, d).translate(0, -h / 2, 0);
+      g = new THREE.SphereGeometry(0.5, 48, 16, 0, Math.PI * 2, 0, Math.PI / 2).scale(w, h * 2, d).translate(0, -h / 2, 0);
     } else {
       const along = shape === 'cylX' ? w : shape === 'cylY' ? h : d;
       const r = (shape === 'cylX' ? Math.min(h, d) : shape === 'cylY' ? Math.min(w, d) : Math.min(w, h)) / 2;
-      g = new THREE.CylinderGeometry(r, r, along, 40);
+      g = new THREE.CylinderGeometry(r, r, along, 64);
       if (shape === 'cylX') g.rotateZ(Math.PI / 2);
       else if (shape === 'cylZ') g.rotateX(Math.PI / 2);
     }
     const mesh = new THREE.Mesh(g, m);
     mesh.position.set((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2);
     // a tilted part: `path` = [cos, sin] of its turn about x (its length along z tips down towards +z)
+    // (a turn about the vertical first, then the tilt about the part's own x)
+    mesh.rotation.order = 'YXZ';
+    if (f.yaw) mesh.rotation.y = Math.atan2(-f.yaw[1], f.yaw[0]);
     if (f.path.length === 2) mesh.rotation.x = Math.atan2(f.path[1], f.path[0]);
     // (see-through parts let the light through)
     mesh.castShadow = opacity >= 1;
