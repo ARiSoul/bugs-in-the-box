@@ -134,6 +134,11 @@ describe('Car Dashboard (car)', () => {
       inside(PHONE.x - 2, PHONE.y - PHONE.hh - 1, PHONE.z);
       const [kx, ky, kz] = leaning(WHEEL, 12.6, -7, -14);
       inside(kx + 5.4, ky, kz);
+      // (the doors' cloth, the opener in its bowl, the corner panel and the window's post)
+      for (const [x, y, z] of [[24.4, 47, 118], [24.4, 40, 155], [26.2, 48, 139], [21.6, 80, 80], [19.5, 100, 94.5]]) {
+        inside(x, y, z);
+        inside(320 - x, y, z);
+      }
       for (const [u, w, n] of [[12, 0, 0.5], [-14, 0, 0.5], [-4, 0, 4], [8.3, -0.8, 1]]) inside(...leaning(SWITCH, u, w, n));
       const { layout } = make(9);
       const wire = layout.features.filter((f) => f.kind === 'wire')[0].path;

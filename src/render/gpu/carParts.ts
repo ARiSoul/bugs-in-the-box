@@ -1356,11 +1356,11 @@ export class CarParts {
       const pad = this.box(w, h, 3, 1.1, this.mat(0x0d0d0e, 0, 0.85), x, y, 78);
       pad.rotation.x = -0.7;
       this.push(pad);
-      const arm = this.box(2.4, 50, 2.4, 0.8, metal, x, y + 24, 66);
+      const arm = this.box(2.4, 36, 2.4, 0.8, metal, x, y + 14, 69);
       arm.rotation.x = 0.28;
       this.push(arm);
     }
-    this.push(this.box(40, 80, 130, 8, this.grained(0x1f1f21, 0.85, 2.6, 0.04), 160, -36, 92));
+    this.push(this.box(40, 80, 130, 8, this.grained(0x1f1f21, 0.85, 2.6, 0.04), 160, -38.2, 96));
   }
 
   /** The height of the bonnet's rear edge at x. */

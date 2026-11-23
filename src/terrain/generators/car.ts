@@ -114,7 +114,7 @@ function cutOpening(t: Terrain, s: number, ox: number, oz: number): void {
       const gy = (openingNorm(x, y + 0.5) - openingNorm(x, y - 0.5));
       const g = Math.max(0.004, Math.sqrt(gx * gx + gy * gy));
       // (the distance to the outline, positive inside the hole)
-      const hole = Math.min(8, (1 - r) / g + 1.3) * s;
+      const hole = Math.min(8, (1 - r) / g + 0.6) * s;
       if (hole < -BAND) continue;
       for (let k = k0; k <= k1; k++) {
         // (down to the plate's face, which leans)
@@ -234,24 +234,38 @@ export const car: TerrainGenerator = (terrain, seed, layout) => {
     solid(tube([mx(3), 78, 69], [mx(14), 78, 63.5], 4.2));
     const [ox0, ox1] = span(22, 26.9);
     solid(box(ox0, 45.7, 133, ox1, 50.1, 145, 0.6));
-    const [bx0, bx1] = span(21, 25.6);
-    solid(box(bx0, 39.4, 125, bx1, 55.8, 151, 3));
+    const [bx0, bx1] = span(21, 25.5);
+    solid(box(bx0, 39, 124, bx1, 56.2, 152, 1));
+    // (its cloth panel; the corner panel's rear part up to the post; the pillar's foot; the little box's cable)
+    const [cx0, cx1] = span(21, 24.8);
+    solid(box(cx0, 35.8, 114, cx1, 58.2, 157.4));
+    const [rx0, rx1] = span(17.2, 22.1);
+    solid(box(rx0, 62, 85, rx1, 125, 92.4));
+    solid(tube([mx(25.4), 66, 30], [mx(28), 84, 34], 3));
+    if (m === 0) for (const [a, b] of [[[34, 80, 42], [31, 78.2, 46]], [[31, 78.2, 46], [27.6, 73, 50]], [[27.6, 73, 50], [25, 66.6, 56]]]) solid(tube(a, b, 1.05));
     for (let k = 0; k < 11; k++) {
       const z = 44 + k * 4;
-      const [tx0, tx1] = span(17.2, 21);
+      const [tx0, tx1] = span(17.2, 22.1);
       solid(box(tx0, 62, z - 2.4, tx1, 66 + ((k + 0.5) / 11) * 58, z + 2.4));
     }
   }
+
+  // ---- the bulkhead under the dashboard, behind it
+  solid(box(24.5, 2.2, 27, 295.5, 15, 34, 0.4));
 
   // ---- the tunnel between the seats: a tray (drawn smooth over it) and the gear lever
   add(terrain, box(134.5, 2.6, 92, 185.5, 7, 154, 1.2), DASH_TRIM);
   for (const wx of [133, 183.5]) solid(box(wx, 4, 93, wx + 3.5, 13, 153, 1.4));
   solid(box(136, 4, 152.6, 184, 13, 156, 1.4));
-  for (const [cx, e] of [[135.6, 1], [184.4, -1]]) solid(tube([cx, 5, 153.4], [cx + e * 1.4, 11.6, 153.8], 1.8));
+  for (const cx of [135.9, 184.1]) {
+    solid(tube([cx, 6, 153.5], [cx, 10.2, 153.5], 2.8));
+    solid(tube([cx, 11.6, 152], [cx, 11.6, 154.4], 1.6));
+  }
   skirt(box(131, 1, 92, 189, 14, 158));
   hide(cone(X(160), Y(6), Z(140), L(9), Y(17), L(3)));
   hide(tube([160, 14, 140], [160, 25, 139], 1.5));
-  hide(sphere(X(160), Y(28.4), Z(138.5), L(4.5)));
+  hide(sphere(X(160), Y(28.8), Z(138.5), L(4.6)));
+  hide(cylinder(X(160), Y(31.4), Z(139), L(2.8), L(1.6), 1));
 
   // ---- the vents: a round hole down to the slats, the bezel round it, the tab
   for (const v of VENTS) {
@@ -312,12 +326,15 @@ export const car: TerrainGenerator = (terrain, seed, layout) => {
 
   // ---- the phone in its holder
   solid(box(HOLDER.x - HOLDER.hw, HOLDER.y - HOLDER.hh, VENTS[1].z + 1.4, HOLDER.x + HOLDER.hw, HOLDER.y + HOLDER.hh, HOLDER.z + HOLDER.hd));
+  solid(tube([HOLDER.x, HOLDER.y + 1, HOLDER.z - 6], [HOLDER.x, HOLDER.y + 1, HOLDER.z - 2], 2.2));
   for (const e of [-1, 1]) solid(box(HOLDER.x + e * 10 - 1.9, HOLDER.y - 6.4, HOLDER.z - 2, HOLDER.x + e * 10 + 1.9, HOLDER.y + 6, HOLDER.z + 7));
   solid(box(PHONE.x - 3.2, PHONE.y - PHONE.hh - 2.2, PHONE.z - 1, PHONE.x - 0.8, PHONE.y - PHONE.hh + 1, PHONE.z + 1));
   solid(box(PHONE.x - PHONE.hw, PHONE.y - PHONE.hh, PHONE.z - 1.5, PHONE.x + PHONE.hw, PHONE.y + PHONE.hh, PHONE.z + PHONE.hd));
 
   // ---- the centre stack: its panel, and what stands out of it
-  solid(tilted(STACK, 0, -STACK.len / 2, STACK.out - 2, STACK.topHalf - 2, STACK.len / 2, 2));
+  // (its face stands a unit out of `out`, by the panel's bevel; it narrows downwards)
+  solid(tilted(STACK, 0, -14, STACK.out - 1, STACK.topHalf - 0.8, 13.6, 2));
+  solid(tilted(STACK, 0, -STACK.len / 2, STACK.out - 1, STACK.bottomHalf + 1.4, STACK.len / 2, 2));
   skirt(tilted(STACK, 0, -STACK.len / 2, 0, STACK.topHalf + 1.5, STACK.len / 2 + 2, 4.5));
   for (const it of STACK_ITEMS) {
     const n = STACK.out + it.out;
@@ -331,13 +348,24 @@ export const car: TerrainGenerator = (terrain, seed, layout) => {
   // ---- the dials' wells on the instrument plate, the middle screen's frame
   for (const d of DIAL_WELLS) {
     const [x, y, z] = leaning(PLATE, d.u, d.w, d.r > 5 ? 1.6 : 0.4);
-    solid(torus(X(x), Y(y), Z(z), L(d.r + 0.55), thick(1.05), 2));
+    // (a ring of capsules on the leaning plate: its cos and sin stepped by a 24th of a turn)
+    let cu = 1;
+    let su = 0;
+    for (let k = 0; k < 24; k++) {
+      const nu = cu * 0.9659258262890683 - su * 0.25881904510252074;
+      const nv = su * 0.9659258262890683 + cu * 0.25881904510252074;
+      const at = (a: number, b: number): [number, number, number] => leaning(PLATE, d.u + (d.r + 0.6) * a, d.w + (d.r + 0.6) * b, d.r > 5 ? 1.5 : 0.4);
+      solid(tube(at(cu, su), at(nu, nv), 1.1));
+      cu = nu;
+      su = nv;
+    }
     solid(sphere(X(x), Y(y), Z(z - (d.r > 5 ? 1 : 0.4)), thick(d.r > 5 ? 1.7 : 1.05)));
   }
   for (const w of [3.2, -8.8]) solid(tilted(PLATE, 0, w, 0.2, 5.8, 1.05, 1.1));
   for (const u of [-5.6, 5.6]) solid(tilted(PLATE, u, -2.8, 0.2, 1.05, 6.2, 1.1));
   // (the drawn plate stands in for all of it)
   skirt(tilted(PLATE, 0, 0, 0.5, 38.5, 15.5, 3.4));
+  skirt(tilted(PLATE, 0, 0, 8, 39.5, 17, 13));
 
   // ---- the steering wheel: the rim (a chain of capsules), the hub, the spokes, the column and its stalks
   {
@@ -360,6 +388,8 @@ export const car: TerrainGenerator = (terrain, seed, layout) => {
     hide(tilted(WHEEL, 0, -28, 0.2, 7.6, 8, 2.2));
     // (the emblem's disc with its tongue, the button pods, the stalks' broad tips)
     hide(tilted(WHEEL, 0, -18, 0.2, 13, 6, 2.2));
+    for (const e of [-1, 1]) hide(tilted(WHEEL, e * 16, -12.4, 0.6, 6.4, 5.4, 2.6));
+    hide(tilted(WHEEL, 0, -9, 1.6, 15.5, 11, 3.2));
     hide(tilted(WHEEL, 0, -25, 0.2, 11, 9, 2.2));
     hide(tilted(WHEEL, 0, -8, 4, 8.6, 10.6, 3.1));
     hide(tilted(WHEEL, 0, -8, 4, 10.6, 8.6, 3.1));
@@ -370,7 +400,7 @@ export const car: TerrainGenerator = (terrain, seed, layout) => {
     }
     solid(tilted(WHEEL, 0, -2.5, -20, 12, 8.5, 17));
     skirt(tilted(WHEEL, 0, -2.5, -32, 14.5, 11, 9));
-    for (const e of [-1, 1]) solid(tube(leaning(WHEEL, e * 10, 4, -12), leaning(WHEEL, e * 32, 6, -11), 2.2));
+    for (const e of [-1, 1]) solid(tube(leaning(WHEEL, e * 10, 4, -12), leaning(WHEEL, e * 32, 6, -11), 2.6));
   }
   // ---- the light switch, under the left vent; the sensor on the grille; the box on the left pillar's foot
   solid(tilted(SWITCH, 0, 0, -2.6, 15.8, 5.2, 3.5));
@@ -381,12 +411,13 @@ export const car: TerrainGenerator = (terrain, seed, layout) => {
   {
     const z = glassFoot(160) + 13;
     skirt(box(154, dashTop(160, z) - 4, z - 4, 166, dashTop(160, z) + 4, z + 4));
+    solid(box(156, dashTop(160, z) - 2, z - 2.8, 164, dashTop(160, z) + 0.9, z + 2.8, 0.4));
     solid(box(157.2, dashTop(160, z) - 2, z - 1.8, 162.8, dashTop(160, z) + 2.5, z + 1.8, 0.8));
     // the small outlets by the pillars, a low disc each
     for (const [x, dz] of [[50, 66], [270, 62]]) {
       const y = dashTop(x, dz);
       skirt(box(x - 9, y - 4, dz - 8, x + 9, y + 3, dz + 8));
-      solid(cylinder(X(x), Y(y - 0.7), Z(dz), L(5.9), thick(1.3), 1));
+      solid(cylinder(X(x), Y(y - 0.35), Z(dz), L(6), thick(1.3), 1));
     }
     // the grille's two rails
     for (let x = GRILLE.x0 + 4; x < GRILLE.x1 - 6; x += 4)
