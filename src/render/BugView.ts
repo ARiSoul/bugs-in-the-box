@@ -178,10 +178,11 @@ export class BugView {
       else this.ring.quaternion.copy(this.root.quaternion).invert().multiply(FLAT);
     }
 
-    // Walk cycle driven by actual ground speed; legs tuck in while airborne.
+    // Walk cycle driven by the actual speed along the surface (up a wall too); legs tuck in while airborne.
     const dx = bug.x - bug.px;
     const dz = bug.z - bug.pz;
-    const speed = Math.sqrt(dx * dx + dz * dz) * TICK_RATE;
+    const dy = bug.grounded ? bug.y - bug.py : 0;
+    const speed = Math.sqrt(dx * dx + dy * dy + dz * dz) * TICK_RATE;
     this.phase += speed * dt * 2.2;
     const swingAmp = bug.grounded ? Math.min(1, speed / 2) * 0.45 : 0;
     for (const leg of this.legs) {
