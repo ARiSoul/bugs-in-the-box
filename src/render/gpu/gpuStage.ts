@@ -81,10 +81,10 @@ export async function createGpuStage(canvas: HTMLCanvasElement, terrain: Terrain
   const atmosphere = new Atmosphere(glow, scene);
   const sunDir = new THREE.Vector3().copy(SUN_OFFSET).normalize();
   atmosphere.sunDir.value.copy(sunDir);
-  const look = createTerrainMaterial(glow);
+  const craters = new Craters();
+  const look = createTerrainMaterial(glow, craters);
   const heat = new HeatShimmer();
   const leds = new ActivityLeds(scene);
-  const craters = new Craters();
   const overlays = new LightOverlays(scene, glow, craters);
   const heroes = new HeroOverlays(scene, glow, craters);
   const speakerParts = new SpeakerParts(scene, craters);

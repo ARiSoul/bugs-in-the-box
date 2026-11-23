@@ -33,6 +33,7 @@ import {
   positionViewDirection,
 } from 'three/tsl';
 import { GLOW_FAN, GLOW_FUZZ, GLOW_GRAIN, GLOW_PEEL, GLOW_RGB, HIDDEN_ROUGHNESS } from '../../terrain/materials';
+import type { Craters } from './craters';
 import { Glow, MAX_FANS, hueColor } from './glow';
 
 /** How bright the RGB diffusers glow (HDR, before bloom and tone mapping). */
@@ -50,19 +51,31 @@ const FAN_SPIN = 2.4;
  * show the shared hue, and fan blades carry a bright stripe that turns, so the static blades read as
  * spinning.
  */
-export function createTerrainMaterial(glow: Glow): { material: THREE.MeshStandardNodeMaterial; sharp: { value: number } } {
+export function createTerrainMaterial(glow: Glow, craters: Craters): { material: THREE.MeshStandardNodeMaterial; sharp: { value: number } } {
   const sharp = uniform(1);
   const m = new THREE.MeshStandardNodeMaterial({ vertexColors: true });
   const pbr = attribute('pbr', 'vec3');
   // specular anti-aliasing: where the normal changes fast across a pixel, the surface gets rougher
   m.roughnessNode = min(max(pbr.x, clamp(length(fwidth(normalView)).mul(1.2), 0, 0.9)), 1);
   // collision bodies of drawn-only parts (COLLIDER, marked by an impossible roughness): never drawn, in
-  // colour or in the shadow pass
-  m.maskNode = pbr.x.lessThan((HIDDEN_ROUGHNESS + 1) / 2);
+  // colour or in the shadow pass; only where a crater was blown into one: the drawn part is a hollow shell, and
+  // the body's wall closes the hole in it
+  const seen = pbr.x.lessThan((HIDDEN_ROUGHNESS + 1) / 2);
+  m.maskNode = Fn(() => {
+    const keep = seen.toVar();
+    If(keep.not(), () => {
+      keep.assign(craters.onWall());
+    });
+    return keep;
+  })();
 
   // fibrous wadding (GLOW_FUZZ): a velvet sheen towards the silhouette and a fine fibre mottling
   m.colorNode = Fn(() => {
     const base = vertexColor().rgb.toVar();
+    // (a hidden body's crater: charred, a little uneven)
+    If(seen.not(), () => {
+      base.assign(vec3(0.034, 0.031, 0.029).mul(float(1).add(mx_noise_float(positionWorld.mul(2.1)).mul(0.7))));
+    });
     // (the special shadings are codes in the glow channel; the mesher blends them across borders)
     const fuzz = clamp(float(1).sub(abs(pbr.z.sub(GLOW_FUZZ)).div(0.15)), 0, 1);
     const grain = clamp(float(1).sub(abs(pbr.z.sub(GLOW_GRAIN)).div(0.15)), 0, 1);

@@ -3,6 +3,9 @@ import { Fn, If, Loop, bool, length, positionWorld, uniform, uniformArray } from
 
 /** Most craters a match keeps (explosions and the spheres along a tunnel). */
 const MAX_CRATERS = 256;
+/** How far the meshed wall of a crater may lie inside and outside its sphere. */
+const WALL_IN = 0.9;
+const WALL_OUT = 0.12;
 
 /**
  * The spheres gameplay carved out of the terrain (render only, from the match's explosion and dig events).
@@ -44,6 +47,22 @@ export class Craters {
   /** The test every cut material shares (one node: materials that differ only in their numbers share a shader). */
   private mask: THREE.Node<'bool'> | null = null;
 
+  /** True on the wall of a crater (a fragment about as far from its middle as its radius). */
+  onWall(): THREE.Node<'bool'> {
+    const list = this.list;
+    return Fn(() => {
+      const on = bool(false).toVar();
+      Loop(this.count, ({ i }) => {
+        const c = list.element(i) as unknown as THREE.Node<'vec4'>;
+        const d = length(this.position.sub(c.xyz)).sub(c.w).toVar();
+        If(d.greaterThan(-WALL_IN).and(d.lessThan(WALL_OUT)), () => {
+          on.assign(true);
+        });
+      });
+      return on;
+    })() as unknown as THREE.Node<'bool'>;
+  }
+
   /** Make `material` drop its fragments inside the craters (in colour and in the shadow pass). */
   cut<M extends THREE.NodeMaterial>(material: M): M {
     const list = this.list;
@@ -59,6 +78,11 @@ export class Craters {
       return keep;
     })() as unknown as THREE.Node<'bool'>;
     material.maskNode = this.mask;
+    // (through a hole, the far side of the part shows from inside; its shadow stays as it was)
+    if (material.side === THREE.FrontSide && !material.transparent) {
+      material.side = THREE.DoubleSide;
+      material.shadowSide ??= THREE.BackSide;
+    }
     return material;
   }
 }
