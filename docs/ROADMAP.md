@@ -48,6 +48,7 @@ Goal now: a PC demo first, as a proof of concept. The phone items below are post
 - [x] Studio Monitor (`?scenario=speaker`): a speaker opened up on a desk, the woofer's back as the central hill, the port as a drop into the void, the amp plate on the desk, a screwdriver as the ramp; visual-critic loop to "none"
 - [x] Mini Fridge (`?scenario=fridge`): a bar fridge in a kitchen corner, door open; levels (glass shelf, wire rack, ice box, top, door bins) joined by ramps (a chopping board, a cucumber, the ice box flap); bugs spawn on any level; visual critic to "none", detail critic to "accept"
 - [x] Microwave (`?scenario=microwave`): a red retro microwave with its cover off on a marble worktop; the glass turntable turns a quarter between turns, carrying the bugs on it (lossless grid quarter turns); visual critic to "none", detail critic to "accept"
+- [x] Desk (`?scenario=desk`): the owner's real desk from photos (an L-shaped standing desk, three curved monitors and two laptops with pictures on them, keyboards, vertical mice, two studio speakers, an ashtray, a bottle, small things, cables), at twice the scale on its own 10×3×5 map (`Scenario.mapSize`) so the bugs keep their size; visual critic to "none", detail critic (macro close-ups against the owner's photos) to "accept"
 - [ ] More scenarios: guitar (same quality bar: priorities, frame-time gates, determinism, visual-critic loop)
 
 ## Phase 5 · Multiplayer

@@ -34,11 +34,13 @@ const TEAMS: TeamSpec[] = [
 const canvas = document.getElementById('c') as HTMLCanvasElement;
 const params = new URLSearchParams(location.search);
 const hooks = readHooks(params);
-// Map size in chunks of 32, e.g. `?map=3x2x3` for the small map (default 5x3x5), until there is a setup screen.
-const size = (params.get('map') ?? '').match(/^(\d)x(\d)x(\d)$/);
-const terrain = size ? new Terrain(Number(size[1]), Number(size[2]), Number(size[3])) : new Terrain(5, 3, 5);
+// Map size in chunks of 32, e.g. `?map=3x2x3` for the small map, until there is a setup screen. Without it, the
+// scenario's own size (a scenario at a larger scale needs a larger map), else 5x3x5.
+const size = (params.get('map') ?? '').match(/^(\d+)x(\d+)x(\d+)$/);
 let seed = Number(params.get('seed') ?? 1234) | 0;
 let scenario: Scenario = scenarioById(params.get('scenario'));
+const mapSize = (sc: Scenario): [number, number, number] => (size ? [Number(size[1]), Number(size[2]), Number(size[3])] : (sc.mapSize ?? [5, 3, 5]));
+const terrain = new Terrain(...mapSize(scenario));
 const layout = createLayout();
 const stageOptions: StageOptions = { fixedSize: hooks.fixedSize, timestamps: hooks.perf, seed };
 // The scenario picks the render path; the WebGPU one is loaded only when needed (it is large).
@@ -218,8 +220,8 @@ hud.scenario.value = scenario.id;
 hud.scenario.addEventListener('change', () => {
   const next = scenarioById(hud.scenario.value);
   params.set('scenario', next.id);
-  if (next.render !== scenario.render) {
-    // another render path needs another canvas context: reload with the new scenario
+  if (next.render !== scenario.render || mapSize(next).join() !== mapSize(scenario).join()) {
+    // another render path needs another canvas context, another map size another grid: reload with it
     location.search = params.toString();
     return;
   }

@@ -1,3 +1,4 @@
+import { desk } from './generators/desk';
 import { floatingIslands } from './generators/floatingIslands';
 import { fridge } from './generators/fridge';
 import { insidePC } from './generators/insidePC';
@@ -37,6 +38,11 @@ export interface Scenario {
   /** Bugs may start on any level (shelves under shelves), not only on the topmost surface. */
   spawnLevels?: boolean;
   /** A turntable that turns a quarter between turns (gameplay), for a map of this size. */
+  /**
+   * The map's size in chunks of 32 when the address gives none (default 5x3x5): a scenario at a larger scale
+   * needs a larger map, so the bugs keep their size against the things around them.
+   */
+  mapSize?: [number, number, number];
   turntable?: (W: number, H: number, D: number) => { x: number; z: number; radius: number; j0: number; j1: number; surface: number };
 }
 
@@ -114,6 +120,25 @@ export const SCENARIOS: readonly Scenario[] = [
       const t = microwavePlan(W, H, D).turntable;
       return { x: t.x, z: t.z, radius: t.radius, j0: t.j0, j1: t.j1, surface: t.surface };
     },
+  },
+  {
+    id: 'desk',
+    name: 'Desk',
+    generate: desk,
+    sharpEdges: true,
+    // an evening room: warm walls far off, the screens' glow on the black desk
+    sky: { css: 'radial-gradient(ellipse at 50% 40%, #2a2724 0%, #0b0a09 72%)', fog: 0x110f0e, fogClear: 220, fogSpan: 480, cornerDark: 0.2, backdrop: 0x3a352f },
+    render: 'webgpu',
+    strictBounds: true,
+    // (twice the scale of the other maps' desks and shelves: about 0.8 cm a unit, like the fridge, so a bug
+    // stays bug-sized next to a keyboard; the map is twice as wide)
+    mapSize: [10, 3, 5],
+    // high in front, a little from the right: across the desk, short shadows behind the monitors
+    sun: [60, 340, 300],
+    sunColor: 0xfff0e2,
+    sunIntensity: 2.6,
+    chaseElevation: 0.55,
+    spawnLevels: true,
   },
   {
     id: 'islands',

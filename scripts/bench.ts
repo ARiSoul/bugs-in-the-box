@@ -14,6 +14,7 @@ import { insidePC } from '../src/terrain/generators/insidePC';
 import { pcCase } from '../src/terrain/generators/pcCase';
 import { fridge } from '../src/terrain/generators/fridge';
 import { microwave } from '../src/terrain/generators/microwave';
+import { desk } from '../src/terrain/generators/desk';
 import { speaker } from '../src/terrain/generators/speaker';
 import { ChunkMesher } from '../src/terrain/mesher';
 import { Terrain } from '../src/terrain/Terrain';
@@ -82,17 +83,19 @@ for (const [cx, cy, cz] of [
 }
 
 // Phase 4 scenarios on the default large map (built from SDF stamps, Dual Contouring).
-for (const [label, gen] of [
-  ['inside a PC', insidePC],
-  ['tower case (pc-case)', pcCase],
-  ['studio monitor (speaker)', speaker],
-  ['mini fridge (fridge)', fridge],
-  ['microwave (microwave)', microwave],
+for (const [label, gen, size] of [
+  ['inside a PC', insidePC, [5, 3, 5]],
+  ['tower case (pc-case)', pcCase, [5, 3, 5]],
+  ['studio monitor (speaker)', speaker, [5, 3, 5]],
+  ['mini fridge (fridge)', fridge, [5, 3, 5]],
+  ['microwave (microwave)', microwave, [5, 3, 5]],
+  // (the desk on its own map: twice the scale, twice as wide)
+  ['desk (desk)', desk, [10, 3, 5]],
 ] as const) {
-  const warm = new Terrain(5, 3, 5);
+  const warm = new Terrain(...size);
   gen(warm, 1); // warm-up
   remesh(warm, sharp);
-  const pc = new Terrain(5, 3, 5);
+  const pc = new Terrain(...size);
   let s0 = performance.now();
   gen(pc, 1234);
   const g = performance.now() - s0;

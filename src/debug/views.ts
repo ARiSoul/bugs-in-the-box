@@ -1,3 +1,4 @@
+import { deskPlan } from '../terrain/generators/desk';
 import { fridgePlan } from '../terrain/generators/fridge';
 import { microwavePlan } from '../terrain/generators/microwave';
 import type { SceneLayout } from '../terrain/generators/types';
@@ -270,7 +271,60 @@ const microwave: ViewBuilder = (t) => {
   return { start, poses, path, duration: 60 };
 };
 
-const BUILDERS: Record<string, ViewBuilder> = { 'pc-case': pcCase, speaker, fridge, microwave };
+/** Desk: the whole L from the front, then its corners: the wing, the middle, the right, the speaker, close-ups. */
+const desk: ViewBuilder = (t) => {
+  const { W, H, D } = t;
+  const p = deskPlan(W, H, D);
+  const s = p.scale;
+  const T = p.top;
+  const [mx0, mz0, mx1, mz1] = p.main;
+  const [wcx, wcz] = p.wing;
+  const [am, mm, rm] = p.monitors;
+  const sh = p.shelf;
+  // (a point on the wing: `a` along its long side towards the front left, `b` across it towards the user)
+  const C45 = 0.7071067811865476;
+  const wing = (a: number, b: number): [number, number] => [wcx + (b - a) * C45 * s, wcz + (a + b) * C45 * s];
+  const start = key([W * 0.55, T + 70 * s, mz1 + 62 * s], [W * 0.5, T + 6 * s, (mz0 + mz1) / 2 + 6 * s]);
+  const poses = [
+    start,
+    // 2: the wing: the white monitor with the game, the keyboard, the ashtray, the bottle
+    key([wcx + 30 * s, T + 26 * s, wcz + 40 * s], [am[0], T + 8 * s, am[1] + 4 * s]),
+    // 3: the middle: the curved monitor on its arm, the silver laptop, the slim keyboard
+    key([mm[0] + 6 * s, T + 22 * s, mz1 + 30 * s], [mm[0], T + 10 * s, mz0 + 14 * s]),
+    // 4: the right: the smaller monitor with the editor, the black laptop, the mat and the mice
+    key([rm[0] - 4 * s, T + 22 * s, mz1 + 30 * s], [rm[0] + 4 * s, T + 8 * s, mz0 + 18 * s]),
+    // 5: the speaker on its shelf
+    key([sh[0] - 16 * s, sh[4] + 16 * s, sh[3] + 26 * s], [(sh[0] + sh[2]) / 2, sh[4] + 6 * s, (sh[1] + sh[3]) / 2]),
+    // 6: along the back edge from the left: the interface, the docks, the cables, the monitor arm
+    key([mx0 - 6 * s, T + 26 * s, mz0 - 8 * s], [mx0 + 32 * s, T + 2 * s, mz0 + 8 * s]),
+    // 7 (detail): the ashtray and the bottle close
+    key([wcx - 2 * s, T + 12 * s, wcz + 34 * s], [wcx - 14 * s, T + 2 * s, wcz + 16 * s]),
+    // 8 (detail): the small things by the mat: glasses case, remote, medicine, tobacco, mice
+    key([rm[0] + 22 * s, T + 14 * s, mz1 + 12 * s], [rm[0] + 10 * s, T + 1 * s, mz0 + 24 * s]),
+    // 9 (detail): the wing keyboard close: the caps and their backlight, the wrist rest
+    key([wing(1, 3)[0] + 4 * s, T + 9 * s, wing(1, 3)[1] + 14 * s], [wing(1, 3)[0], T + 1.5 * s, wing(1, 3)[1]]),
+    // 10 (detail): the left speaker on its riser: the felt, the whitewashed wood, the drivers
+    key([wing(14, 4)[0], T + 14 * s, wing(14, 4)[1]], [wing(19, -13.5)[0], T + 12 * s, wing(19, -13.5)[1]]),
+    // 11 (detail): the charger stand, the red interface's jacks and knobs, the silver laptop's corner
+    key([mx0 + 16 * s, T + 8 * s, mz0 + 26 * s], [mx0 + 12 * s, T + 1.5 * s, mz0 + 10 * s]),
+    // 12 (detail): the silver laptop close: the desktop on its screen, the chiclet keys, the riser
+    key([mm[0] + 4 * s, T + 12 * s, mz0 + 36 * s], [mm[0], T + 6 * s, mz0 + 16 * s]),
+    // 13 (detail): the two vertical mice on the mat, low: the hulls, the wheels, the rainbow strip
+    key([rm[0] - 14 * s, T + 5 * s, mz0 + 46 * s], [rm[0] - 3 * s, T + 2 * s, mz0 + 34 * s]),
+    // 14 (detail): the medicine box, the pouch, the wallet and the glasses case, close
+    key([rm[0] + 10 * s, T + 9 * s, mz0 + 26 * s], [rm[0] + 16 * s, T + 1 * s, mz0 + 15 * s]),
+    // 15 (detail): the right speaker on its shelf: the woofer, the tweeter, the port, the felt
+    key([sh[0] - 6 * s, sh[4] + 10 * s, sh[3] + 18 * s], [(sh[0] + sh[2]) / 2, sh[4] + 6 * s, (sh[1] + sh[3]) / 2]),
+    // 16 (detail): the monitor arm from behind and below: the clamp, the post, the elbows, the hubs, the cables
+    key([(mm[0] + rm[0]) / 2 + 8 * s, T + 18 * s, mz0 - 22 * s], [(mm[0] + rm[0]) / 2, T + 14 * s, mz0 + 4 * s]),
+  ];
+  const path: CameraKey[] = [start, poses[1], poses[2], poses[3], poses[4], poses[5], poses[6], poses[7]];
+  void mx0;
+  void mx1;
+  return { start, poses, path, duration: 60 };
+};
+
+const BUILDERS: Record<string, ViewBuilder> = { 'pc-case': pcCase, speaker, fridge, microwave, desk };
 
 export function viewsFor(scenarioId: string, t: Terrain, layout: SceneLayout): ScenarioViews {
   return (BUILDERS[scenarioId] ?? generic)(t, layout);

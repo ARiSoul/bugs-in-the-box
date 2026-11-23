@@ -18,6 +18,7 @@ import { HeatShimmer } from './heat';
 import { ActivityLeds } from './leds';
 import { HeroOverlays } from './heroOverlays';
 import { LightOverlays } from './lightOverlays';
+import { DeskParts } from './deskParts';
 import { MicrowaveParts } from './microwaveParts';
 import { SpeakerParts } from './speakerParts';
 import { createTerrainMaterial } from './terrainMaterial';
@@ -87,6 +88,7 @@ export async function createGpuStage(canvas: HTMLCanvasElement, terrain: Terrain
   const heroes = new HeroOverlays(scene, glow, craters);
   const speakerParts = new SpeakerParts(scene, craters);
   const microwaveParts = new MicrowaveParts(scene, craters);
+  const deskParts = new DeskParts(scene, craters);
   const dust = isGPU ? new DustMotes(renderer, glow, uniform(sunDir), options.seed) : null;
   if (dust) scene.add(dust.sprite);
 
@@ -204,6 +206,7 @@ export async function createGpuStage(canvas: HTMLCanvasElement, terrain: Terrain
       heroes.setLayout(layout);
       speakerParts.setLayout(layout);
       microwaveParts.setLayout(layout);
+      deskParts.setLayout(layout);
       dust?.setLayout(layout, layout.floorY);
       // the top of the scene: the glass, or (an open scene) the top of the inner box
       const top = layout.glassY > 0 ? layout.glassY : layout.inner[4];
