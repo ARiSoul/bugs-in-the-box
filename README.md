@@ -2,7 +2,7 @@
 
 Turn-based 3D artillery game in the browser. Bugs (ants, spiders, cockroaches and made-up creatures) wage war inside electronic devices: the insides of PCs, speakers, fridges, guitars, microwaves. Destructible, procedurally generated terrain.
 
-> Status: prototype (Phase 4 in progress). Local hot-seat matches: two teams take turns on one device, with wind and four weapons, inside a PC (or on floating islands). Meshing runs on Web Workers. No online play yet.
+> Status: prototype (Phase 4 in progress). Local hot-seat matches: two teams take turns on one device, with wind and four weapons, from a PC's tower case to a car's dashboard. Meshing runs on Web Workers. No online play yet.
 
 ## Getting started
 
@@ -23,7 +23,7 @@ Open the address that Vite prints.
 - **free camera** (in the menu) flies freely round the current map, just to look at it: click the view to look with the mouse, **W/S/A/D** move, **Q/E** down/up, **Shift** faster, **Ctrl** slower, scroll for speed, **R** back to the start; **back to the game** leaves. The seed stays in the address, so a reload keeps the same map.
 - **cinematic camera** (in the menu) flies a film-like path over the current map on its own: **Space** pauses, **← / →** skip 3 s, **R** restarts, **Esc** (or **back to the game**) leaves. Its bar hides while the mouse rests.
 - On a touch screen (or with the mouse), use the pad in the bottom-right corner and tap a weapon.
-- The menu lets you pick the scenario (Inside a PC, Tower Case, Studio Monitor, Mini Fridge, Microwave, Desk, Car Dashboard, Floating islands) and the seed (the same seed gives the same map and match) and run a benchmark. It also shows the meshing cost; the frame time is at the top. Add `?mesh=main` to the URL to mesh on the main thread instead of the workers, to compare, and `?map=3x2x3` for the small map (size in chunks of 32; the default is 5x3x5, the Desk and the Car Dashboard, at twice the scale, have their own 10x3x5 and 10x4x5).
+- The menu lets you pick the scenario (Tower Case, Studio Monitor, Mini Fridge, Microwave, Desk, Car Dashboard, Floating islands) and the seed (the same seed gives the same map and match) and run a benchmark. It also shows the meshing cost; the frame time is at the top. Add `?mesh=main` to the URL to mesh on the main thread instead of the workers, to compare, and `?map=3x2x3` for the small map (size in chunks of 32; the default is 5x3x5, the Desk and the Car Dashboard, at twice the scale, have their own 10x3x5 and 10x4x5).
 
 Each turn lasts 30 s. After a shot, the bug has 3 s to walk away. The last team with bugs left wins. On the Microwave, the glass turntable turns a quarter between turns and carries the bugs standing on it.
 

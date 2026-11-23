@@ -3,7 +3,6 @@ import { carScale, insideCar } from './generators/carPlan';
 import { desk } from './generators/desk';
 import { floatingIslands } from './generators/floatingIslands';
 import { fridge } from './generators/fridge';
-import { insidePC } from './generators/insidePC';
 import { microwave, microwavePlan } from './generators/microwave';
 import { pcCase } from './generators/pcCase';
 import { speaker } from './generators/speaker';
@@ -55,15 +54,6 @@ export interface Scenario {
 }
 
 export const SCENARIOS: readonly Scenario[] = [
-  {
-    id: 'pc',
-    name: 'Inside a PC',
-    generate: insidePC,
-    sharpEdges: true,
-    sky: { css: 'radial-gradient(ellipse at 50% 30%, #1d2a38 0%, #07090d 75%)', fog: 0x0b1016 },
-    render: 'webgl',
-    strictBounds: false,
-  },
   {
     id: 'pc-case',
     name: 'Tower Case',

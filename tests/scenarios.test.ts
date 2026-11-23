@@ -1,15 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { Match, type TeamSpec } from '../src/game/match';
-import { ANT, SPIDER } from '../src/game/species';
 import { giveBodies } from '../src/terrain/generators/bodies';
 import { createLayout, feature } from '../src/terrain/generators/types';
-import { insidePC } from '../src/terrain/generators/insidePC';
-import { COPPER, FAN, PCB } from '../src/terrain/materials';
+import { COPPER, PCB } from '../src/terrain/materials';
 import { SCENARIOS, scenarioById } from '../src/terrain/scenarios';
 import { ChunkMesher } from '../src/terrain/mesher';
 import { add, box, boxMinMax, capsule, cut, cylinder, distance, rotatedBox, sphere, torus } from '../src/terrain/sdf';
 import { Terrain } from '../src/terrain/Terrain';
-import { analyze, meshAll } from './helpers/meshIntegrity';
+import { analyze } from './helpers/meshIntegrity';
 
 const S = Math.SQRT1_2;
 
@@ -89,65 +86,11 @@ describe('mesher modes', () => {
   });
 });
 
-describe('Inside a PC', () => {
-  const make = (seed: number, cx = 5, cy = 3, cz = 5): Terrain => {
-    const t = new Terrain(cx, cy, cz);
-    insidePC(t, seed);
-    return t;
-  };
-
-  it('is deterministic for a given seed, and the seed changes it', () => {
-    const a = make(42);
-    const b = make(42);
-    const c = make(43);
-    expect(Buffer.from(a.dens.buffer).equals(Buffer.from(b.dens.buffer))).toBe(true);
-    expect(Buffer.from(a.material.buffer).equals(Buffer.from(b.material.buffer))).toBe(true);
-    expect(Buffer.from(a.dens.buffer).equals(Buffer.from(c.dens.buffer))).toBe(false);
-  });
-
-  it('meshes watertight, outward-facing and non-degenerate, also after explosions', () => {
-    const t = make(1234);
-    for (const [x, z] of [[64, 64], [70, 60], [96, 96], [40, 120]]) {
-      const hit = t.raycast(x, t.H - 3, z, 0, -1, 0);
-      if (hit >= 0) t.carve(x, t.H - 3 - hit, z, 6);
-    }
-    const r = analyze(meshAll(t));
-    expect(r.faces).toBeGreaterThan(50_000);
-    expect(r.openEdges).toBe(0);
-    expect(r.degenerate).toBe(0);
-    expect(r.orientedOutward).toBeGreaterThan(0.99);
-  });
-
-  it('has a board to stand on, real parts on it, and works on the small map too', () => {
-    for (const t of [make(7), make(7, 3, 2, 3)]) {
-      const used = new Set(t.material);
-      expect(used.has(PCB)).toBe(true);
-      expect(used.has(COPPER)).toBe(true);
-      expect(used.has(FAN)).toBe(true);
-      // the board top is solid near its middle edge, and there is nothing under the board
-      expect(t.sample(t.W / 2, 15, 12)).toBeLessThan(0);
-      expect(t.raycast(3, 10, 3, 0, 1, 0, 3)).toBe(-1);
-    }
-  });
-
-  it('a match places every bug on it, alive and standing', () => {
-    const t = make(1234);
-    const teams: TeamSpec[] = [
-      { name: 'A', species: ANT, color: 0, size: 3 },
-      { name: 'B', species: SPIDER, color: 0, size: 3 },
-    ];
-    const m = new Match(t, teams, 1234);
-    for (const u of m.units) {
-      expect(u.bug.alive).toBe(true);
-      expect(u.bug.grounded).toBe(true);
-    }
-  });
-});
-
 describe('scenario list', () => {
   it('has unique ids and falls back to the first one', () => {
     expect(new Set(SCENARIOS.map((s) => s.id)).size).toBe(SCENARIOS.length);
     expect(scenarioById('nope')).toBe(SCENARIOS[0]);
+    expect(scenarioById(null).id).toBe('pc-case');
     expect(scenarioById('islands').id).toBe('islands');
   });
 });

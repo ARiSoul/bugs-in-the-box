@@ -19,7 +19,7 @@ import type { Terrain } from '../Terrain';
 import { cable, createPlacement, detail, fan, ribbon, wire, wirePath, type Vec3 } from './parts';
 import { feature, resetLayout, type TerrainGenerator } from './types';
 
-/** Height of the top of the motherboard (as in Inside a PC). */
+/** Height of the top of the motherboard. */
 export const BOARD_TOP = 16;
 /** Top of the steel tray the board lies on. */
 const TRAY_TOP = 13;

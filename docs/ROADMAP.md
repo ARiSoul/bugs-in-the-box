@@ -40,8 +40,8 @@ Goal now: a PC demo first, as a proof of concept. The phone items below are post
 
 ## Phase 4 · Procedural scenarios
 - [x] Library of SDF primitives (sphere, box, rotated box, cylinder, capsule, torus) and boolean stamps (union, smooth union, subtraction), written only into each shape's bounding box
-- [x] First themed scenario: the inside of a PC (motherboard, traces, CPU cooler and fan, RAM, graphics card, PSU, capacitors, chips, cables as bridges); now the default
-- [x] Palette/shading per scenario: a material id per sample, a colour per material, and a background and fog colour per scenario; scenario picker in the menu (`?scenario=pc|islands`)
+- [x] First themed scenario: the inside of a PC (motherboard, traces, CPU cooler and fan, RAM, graphics card, PSU, capacitors, chips, cables as bridges); later replaced by Tower Case, now the default, and removed
+- [x] Palette/shading per scenario: a material id per sample, a colour per material, and a background and fog colour per scenario; scenario picker in the menu (`?scenario=`)
 - [x] Visual quality, step 1: shadows, image-based light and reflections, per-material roughness/metalness, ambient occlusion from the field, ACES tone mapping; design rule of at least ~2 cells for every part and gap
 - [x] Visual quality, step 2: sharp edges with Dual Contouring for built scenarios (normals from the most linear neighbouring cell), hard-edge shading; Surface Nets stays for natural terrain
 - [x] Tower Case (`pc-case`): a gaming tower on its side under a glass panel (AIO cooler, vertical GPU, RGB RAM, VRM heatsinks, PCIe slots, audio corner, Wi-Fi and LAN, rear I/O, SATA drives and a drive cage on the PSU shroud, rear exhaust fan), on the new WebGPU render path (height fog, god rays, bloom, glass, dust compute, heat shimmer, RGB that cycles); shared debug hooks (`?pose`, `?flythrough`, `?fly`, `?perf`, `?res`) and visual-review tooling for every later map

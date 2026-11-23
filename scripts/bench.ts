@@ -10,7 +10,6 @@ import { Bug } from '../src/game/bug';
 import { dropNear } from '../src/game/spawn';
 import { ANT } from '../src/game/species';
 import { floatingIslands } from '../src/terrain/generators/floatingIslands';
-import { insidePC } from '../src/terrain/generators/insidePC';
 import { pcCase } from '../src/terrain/generators/pcCase';
 import { fridge } from '../src/terrain/generators/fridge';
 import { microwave } from '../src/terrain/generators/microwave';
@@ -85,7 +84,6 @@ for (const [cx, cy, cz] of [
 
 // Phase 4 scenarios on the default large map (built from SDF stamps, Dual Contouring).
 for (const [label, gen, size] of [
-  ['inside a PC', insidePC, [5, 3, 5]],
   ['tower case (pc-case)', pcCase, [5, 3, 5]],
   ['studio monitor (speaker)', speaker, [5, 3, 5]],
   ['mini fridge (fridge)', fridge, [5, 3, 5]],
