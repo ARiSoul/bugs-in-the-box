@@ -1,5 +1,6 @@
 import { createRng } from '../noise';
 import { COLLIDER, DESK_BLACK, DESK_WHITE, SLEEVE } from '../materials';
+import { keyRelief } from './keyboards';
 import { add, addHidden, boxMinMax, capsule, cone, cylinder, paint, rotatedBox, sphere, type Shape } from '../sdf';
 import { wirePath } from './parts';
 import { feature, resetLayout, type Feature, type PartShape, type TerrainGenerator } from './types';
@@ -90,6 +91,11 @@ export const desk: TerrainGenerator = (terrain, seed, layout) => {
   const hideOnSheet = (sh: () => Shape, skirt: () => Shape): void => {
     add(terrain, sh(), COLLIDER);
     paint(terrain, skirt(), COLLIDER);
+  };
+  /** A keyboard's keys: drawn, and the relief a bug walks on. Its deck must be there already. */
+  const keyboard = (f: Feature): void => {
+    put(f);
+    keyRelief(terrain, f);
   };
   /** Is (x, z) over one of the desk's tops (or the shelf), at least `margin` inside the sheet drawn on it? */
   const covered = (x: number, z: number, margin: number): boolean => {
@@ -335,10 +341,7 @@ export const desk: TerrainGenerator = (terrain, seed, layout) => {
   part(mtx, T, mtz, L(34), L(0.15), L(18), WC, WS, 'plate', 0x0e0e0f, 0, 0.95, { body: false });
   part(kx, T, kz, L(27.6), L(1.6), L(8.4), WC, WS, 'box', 0x141416, 0.1, 0.55);
   plug(kx + L(13.2) * C45, T + L(0.9), kz - L(13.2) * C45 + L(0.2), true);
-  put(feature('keyboard', kx, T + L(1.6), kz, { box: [kx - L(13.5), T, kz - L(3.9), kx + L(13.5), T + L(1.6), kz + L(3.9)], color: 0x1b1c20, yaw: [WC, WS], radius: L(0.8), glow: 0.6, look: 'full' }));
-  // (the caps' body: the whole key area, up to the caps' tops)
-  const capTop = T + L(1.6) + L(0.8) * 0.65;
-  hide(rotatedBox(kx, capTop - 1.2, kz, L(13.5), 1.2, L(3.9), 1, WC, WS));
+  keyboard(feature('keyboard', kx, T + L(1.6), kz, { box: [kx - L(13.5), T, kz - L(3.9), kx + L(13.5), T + L(1.6), kz + L(3.9)], color: 0x1b1c20, yaw: [WC, WS], radius: L(0.8), glow: 0.6, look: 'full' }));
   const [rx, rz] = wing(L(-1), L(10));
   part(rx, T, rz, L(27.6), L(1.4), L(4.6), WC, WS, 'soft', 0x0f0f10, 0, 0.7);
   cable([kx + L(8) * C45, T + L(0.8), kz - L(8) * C45, kx + L(14) * C45, T + 0.3, kz - L(14) * C45, mx0 + L(4), T + 0.3, mz0 + L(10), mx0 + L(10), T + 0.3, mz0 + L(4)], 0.3, 0x131313);
@@ -452,8 +455,7 @@ export const desk: TerrainGenerator = (terrain, seed, layout) => {
     const w = L(17);
     const d = L(11.6);
     part(x, y0, z, w, L(1.1), d, 1, 0, 'box', color, color === 0xb5b9bd ? 0.78 : 0.3, 0.36);
-    put(feature('keyboard', x, y0 + L(1.1), z - L(1.4), { box: [x - L(7.4), y0, z - L(4.6), x + L(7.4), y0 + L(1.1), z + L(1.6)], color: keys, radius: L(0.15), look: 'laptop' }));
-    hide(boxMinMax(x - L(7.4), y0 + 0.3, z - L(4.6), x + L(7.4), y0 + L(1.1) + L(0.15) * 0.65, z + L(1.6)));
+    keyboard(feature('keyboard', x, y0 + L(1.1), z - L(1.4), { box: [x - L(7.4), y0, z - L(4.6), x + L(7.4), y0 + L(1.1), z + L(1.6)], color: keys, radius: L(0.15), look: 'laptop' }));
     part(x, y0 + L(1.08), z + L(3.8), L(6), L(0.06), L(3), 1, 0, 'plate', color === 0x1a1b1d ? 0x202124 : 0xb9bcc0, 0.4, 0.4, { body: false });
     if (trackpoint) {
       part(x - L(0.74), y0 + L(1.05), z - L(0.58), L(0.45), L(0.18), L(0.45), 1, 0, 'cylY', 0xb81d17, 0, 0.95, { body: false });
@@ -494,8 +496,7 @@ export const desk: TerrainGenerator = (terrain, seed, layout) => {
   // the slim keyboard in front of the middle laptop
   const sk = mz0 + L(37);
   part(mm[0], T, sk, L(29.4), L(1), L(6.8), 1, 0, 'box', 0x3c3d40, 0.2, 0.5);
-  put(feature('keyboard', mm[0], T + L(1), sk, { box: [mm[0] - L(14.2), T, sk - L(3.1), mm[0] + L(14.2), T + L(1), sk + L(3.1)], color: 0x26272a, radius: L(0.45), look: 'full' }));
-  hide(boxMinMax(mm[0] - L(14.2), T + 0.4, sk - L(3.1), mm[0] + L(14.2), T + L(1) + L(0.45) * 0.65, sk + L(3.1)));
+  keyboard(feature('keyboard', mm[0], T + L(1), sk, { box: [mm[0] - L(14.2), T, sk - L(3.1), mm[0] + L(14.2), T + L(1), sk + L(3.1)], color: 0x26272a, radius: L(0.45), look: 'full' }));
   // the desk mat, the vertical mice (one with its RGB ring), and the small things
   const matX0 = rm[0] - L(16);
   part((matX0 + mx1 - L(2)) / 2, T, mz0 + L(34), mx1 - L(2) - matX0, L(0.15), L(18), 1, 0, 'plate', 0x0f0f10, 0, 0.95, { body: false });

@@ -28,6 +28,10 @@ interface Leg {
   side: number;
   /** 0 or PI: tripod gait, alternate legs move together. */
   offset: number;
+  /** The foot, in the pivot's frame, at rest. */
+  foot: THREE.Vector3;
+  /** Turned about the leg's hinge to rest the foot on the ground under it (smoothed). */
+  bend: number;
 }
 
 /**
@@ -47,6 +51,7 @@ export class BugView {
   private readonly side = new THREE.Vector3();
   private readonly basis = new THREE.Matrix4();
   private readonly target = new THREE.Vector3();
+  private readonly foot = new THREE.Vector3();
   private phase = 0;
   private ring: THREE.Mesh | null = null;
   private ringMaterial: THREE.MeshBasicMaterial | null = null;
@@ -130,7 +135,7 @@ export class BugView {
         pivot.add(this.limb(dark, new THREE.Vector3(), knee, 0.06 * r));
         pivot.add(this.limb(dark, knee, foot, 0.045 * r));
         this.root.add(pivot);
-        this.legs.push({ pivot, side: s, offset: (i + (s > 0 ? 0 : 1)) % 2 ? Math.PI : 0 });
+        this.legs.push({ pivot, side: s, offset: (i + (s > 0 ? 0 : 1)) % 2 ? Math.PI : 0, foot, bend: 0 });
       }
     }
   }
@@ -181,8 +186,36 @@ export class BugView {
     for (const leg of this.legs) {
       const a = this.phase + leg.offset;
       leg.pivot.rotation.y = leg.side * Math.sin(a) * swingAmp;
-      leg.pivot.rotation.z = bug.grounded ? leg.side * Math.max(0, Math.cos(a)) * swingAmp * 0.5 : leg.side * 0.35;
+      const bend = bug.grounded && ground ? this.bendToGround(leg, ground) : 0;
+      leg.bend += (bend - leg.bend) * (1 - Math.exp(-dt * 25));
+      leg.pivot.rotation.z = leg.side * (leg.bend + (bug.grounded ? Math.max(0, Math.cos(a)) * swingAmp * 0.5 : 0.35));
     }
+  }
+
+  /**
+   * How far a leg turns about its hinge so its foot rests on the ground under it (a key's top on one side, the
+   * gap beside it on the other). Reads the density field, like the simulation.
+   */
+  private bendToGround(leg: Leg, ground: CorpseGround): number {
+    const r = this.species.radius;
+    const scale = this.root.scale.x;
+    const yaw = leg.pivot.rotation.y;
+    const c = Math.cos(yaw);
+    const s = Math.sin(yaw);
+    const p = leg.pivot.position;
+    const f = leg.foot;
+    // (the foot at rest, in the world; the far-away lift included, see setCameraDistance)
+    const at = this.foot.set(p.x + f.x * c + f.z * s, p.y + f.y, p.z + f.z * c - f.x * s).multiplyScalar(scale).applyQuaternion(this.root.quaternion).add(this.root.position);
+    at.y += (scale - 1) * r;
+    const above = 0.9 * r * scale;
+    const t = ground.raycast(at.x + this.up.x * above, at.y + this.up.y * above, at.z + this.up.z * above, -this.up.x, -this.up.y, -this.up.z, 2.2 * r * scale);
+    // (nothing under it, or a wall over it: the leg stays as it is)
+    if (t <= 0) return 0;
+    const dy = (above - t) / scale;
+    const reach = Math.abs(f.x);
+    const long = Math.sqrt(reach * reach + f.y * f.y);
+    const bend = Math.asin(Math.min(0.95, Math.max(-0.99, (f.y + dy) / long))) - Math.asin(f.y / long);
+    return Math.min(0.9, Math.max(-0.6, bend));
   }
 
   /**

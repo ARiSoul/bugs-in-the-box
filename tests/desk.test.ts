@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { Bug, IDLE } from '../src/game/bug';
 import { Match, type TeamSpec } from '../src/game/match';
 import { ANT, SPIDER } from '../src/game/species';
+import { CAP_OUT, fullLayout, laptopLayout } from '../src/terrain/generators/keyboards';
 import { desk, deskPlan } from '../src/terrain/generators/desk';
 import { createLayout, type SceneLayout } from '../src/terrain/generators/types';
 import { scenarioById } from '../src/terrain/scenarios';
@@ -126,16 +127,46 @@ describe('Desk (desk)', () => {
       }
     });
 
-    it("a bug's feet stand on the keys, not in them, and a lying cable is solid up to its top", () => {
+    it("a bug stands on every keyboard's keys, sinks between them and steps down where there are none", () => {
       for (const f of layout.features.filter((g) => g.kind === 'keyboard')) {
-        // (the caps stand 0.65 of their height out of the deck)
-        const caps = f.box[4] + f.radius * 0.65;
-        const bug = new Bug(ANT);
-        expect(bug.drop(t, (f.box[0] + f.box[3]) / 2, (f.box[2] + f.box[5]) / 2, caps + 5)).toBe(true);
-        for (let n = 0; n < 90; n++) bug.step(t, IDLE);
-        expect(bug.y - ANT.radius).toBeGreaterThan(caps - 0.1);
-        expect(bug.y - ANT.radius).toBeLessThan(caps + 0.1);
+        const full = f.look === 'full';
+        const { keys, uw, ud } = full ? fullLayout((f.glow ?? 0) > 0) : laptopLayout();
+        const [c, s] = f.yaw ?? [1, 0];
+        // (a key's height over the deck: where a bug dropped at (u, v), in key units, comes to rest)
+        const rest = (u: number, v: number): number => {
+          const lx = (u / uw - 0.5) * (f.box[3] - f.box[0]);
+          const lz = (v / ud - 0.5) * (f.box[5] - f.box[2]);
+          const bug = new Bug(ANT);
+          expect(bug.drop(t, (f.box[0] + f.box[3]) / 2 + lx * c - lz * s, (f.box[2] + f.box[5]) / 2 + lx * s + lz * c, f.box[4] + 5)).toBe(true);
+          for (let n = 0; n < 90; n++) bug.step(t, IDLE);
+          return bug.y - ANT.radius - f.box[4];
+        };
+        const high = f.radius * CAP_OUT;
+        // (a key's middle and its edges, along its row)
+        let tops = 0;
+        let edges = 0;
+        const plain = keys.filter(([x, z, w, d]) => w === 1 && d === 1 && x > 1 && x < 12 && z > ud * 0.3 && z < ud * 0.7);
+        expect(plain.length).toBeGreaterThan(8);
+        for (const [x, z] of plain) {
+          const top = rest(x + 0.5, z + 0.5);
+          expect(top).toBeGreaterThan(high * 0.5);
+          expect(top).toBeLessThan(high + 0.05);
+          tops += top / plain.length;
+          edges += rest(x + 1, z + 0.5) / plain.length;
+        }
+        // (a laptop's keys stand a fifth of a unit out of the deck, two cells apart: no groove to speak of)
+        if (full) {
+          expect(tops - edges).toBeGreaterThan(high * 0.1);
+          const g = ud - 6;
+          // (beside and above the up arrow, and the column right of the Enter: the bug is down at the deck or near it)
+          expect(rest(17, g + 3.5)).toBeLessThan(0.15);
+          expect(rest(16, g + 4.5)).toBeLessThan(0.3 * high);
+          expect(rest(15.25, g + 3.5)).toBeLessThan(0.5 * high);
+        }
       }
+    });
+
+    it('a lying cable is solid up to its top', () => {
       const [mx0, mz0, mx1, mz1] = p.main;
       const lying: number[] = [];
       for (const g of layout.features.filter((f) => f.kind === 'wire')) {

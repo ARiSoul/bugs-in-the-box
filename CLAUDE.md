@@ -38,7 +38,7 @@ src/
     materials.ts        material ids and their colours (visual only)
     sdf.ts              SDF primitives + stamps (add/cut into a shape's bounding box)
     scenarios.ts        scenario list: generator + background/fog
-    generators/         one generator per scenario: insidePC (default), pcCase, speaker, fridge, microwave, desk, floatingIslands; parts.ts (shared fans, cables, ribbons, placement); types.ts (TerrainGenerator, SceneLayout)
+    generators/         one generator per scenario: insidePC (default), pcCase, speaker, fridge, microwave, desk, floatingIslands; parts.ts (shared fans, cables, ribbons, placement); keyboards.ts (key layouts and their relief); types.ts (TerrainGenerator, SceneLayout)
   game/               gameplay, SAME purity rule as terrain/ (no three.js, no DOM)
     bug.ts              Bug: sphere physics against the field, fixed 60 Hz tick, discrete input
     field.ts            TerrainField (what gameplay may see) + surfaceDistance
