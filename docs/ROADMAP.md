@@ -62,7 +62,8 @@ Goal now: a PC demo first, as a proof of concept. The phone items below are post
 - [x] Sound effects: every weapon, the bugs, the turns, both special attacks' scenes, an ambience and an echo per map; all computed in code (no audio files)
 - [x] Skill loader: special attacks load (by turn, damage done and taken) on a card per team
 - [x] Computer opponent (`game/brain.ts`): easy, normal, hard; either team, or both
-- [ ] Music; scenario elements that react to the beat
+- [x] Music: a theme per map, computed in code, in three layers that follow the match
+- [ ] Scenario elements that react to the beat (`MusicEngine.beat`)
 - [ ] Menus, team screen, settings
 - [ ] Acceptance tests on real browsers and devices
 

@@ -1,5 +1,6 @@
 import { KILL_Y, TICK_RATE } from '../game/bug';
 import type { Match, MatchEvent } from '../game/match';
+import type { MusicEngine, MusicMood } from './MusicEngine';
 import type { LoopSound, SoundEngine } from './SoundEngine';
 import { SOUNDS, type SoundId } from './sounds';
 
@@ -93,7 +94,10 @@ export class GameSounds {
   /** Where the small ants are, and how many of them are heard. */
   private readonly ants = { x: 0, y: 0, z: 0, level: 0 };
 
-  constructor(private readonly engine: SoundEngine) {
+  constructor(
+    private readonly engine: SoundEngine,
+    private readonly music: MusicEngine,
+  ) {
     this.charge = engine.loop('charge', false);
     this.flight = engine.loop('flight', true);
     this.dart = engine.loop('dart', true, 'scene');
@@ -115,6 +119,7 @@ export class GameSounds {
     this.lastTurn = match.turnNumber;
     this.ants.level = 0;
     this.scenario = scenario;
+    this.music.choose(scenario);
     this.engine.setEcho(...(ECHO[scenario] ?? [1, 3000, 0.15]));
   }
 
@@ -158,6 +163,7 @@ export class GameSounds {
       }
       case 'explosion':
         // (an ant column's has its own)
+        this.music.duck(e.radius < 4 ? 0.12 : 0.3);
         // (into the ground, or into a bug: what it hurt comes after it in the same tick)
         if (!scene) {
           const hit = match.events.some((q) => q.type === 'damage' || q.type === 'shell');
@@ -293,6 +299,8 @@ export class GameSounds {
     this.blackout.set(out ? (match.stance ? 1 : 0.7) : 0, 1);
     this.ambience();
 
+    this.playMusic(match, scale, scene, out);
+
     // ---- what goes on
     const unit = match.activeUnit;
     const b = unit.bug;
@@ -358,6 +366,22 @@ export class GameSounds {
     a.level += (want - a.level) * Math.min(1, dt * 6);
     if (want === 0 && a.level < 0.01) a.level = 0;
     this.swarm.set(a.level, rate, a.x, a.y, a.z);
+  }
+
+  private readonly mood: MusicMood = { base: 0, groove: 0, tension: 0, far: 0 };
+
+  /** What the music is like: the groove while a turn goes on, tension when time or a team runs out; far behind a scene. */
+  private playMusic(match: Match, scale: number, scene: boolean, blackout: boolean): void {
+    const m = this.mood;
+    const over = match.phase === 'over';
+    let least = 1;
+    match.teams.forEach((t, i) => (least = Math.min(least, match.teamHealth(i) / (t.size * t.species.health))));
+    const late = match.phase === 'aim' && !match.stance && match.turnTicks < 8 * TICK_RATE;
+    m.base = blackout ? 0 : over ? 0.5 : 1;
+    m.groove = blackout || over ? 0 : match.phase === 'settle' || match.phase === 'spin' ? 0.75 : 1;
+    m.tension = blackout || over ? 0 : late ? 1 : least < 0.3 ? 0.75 : 0;
+    m.far = scene ? (match.stance ? 0.6 : 0.8) : scale < 0.95 ? 0.7 : 0;
+    this.music.frame(m);
   }
 
   private cues(list: readonly Cue[], from: number, to: number, at: { x: number; y: number; z: number }): void {

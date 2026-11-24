@@ -23,6 +23,8 @@ export interface LoopSound {
 
 /** Distance within which a sound is at its full level; farther it falls with the distance. */
 const NEAR = 16;
+/** The music's level at its full volume. */
+const MUSIC = 1.4;
 const MAX_VOICES = 40;
 /** The same sound again within this (seconds) is one sound. */
 const AGAIN = 0.028;
@@ -31,6 +33,7 @@ const KEY = 'bugs-in-the-box.sound';
 interface Settings {
   volume: number;
   room: number;
+  music: number;
   muted: boolean;
 }
 
@@ -95,7 +98,7 @@ class Looped implements LoopSound {
  */
 export class SoundEngine {
   context: AudioContext | null = null;
-  readonly settings: Settings = { volume: 0.8, room: 0.8, muted: false };
+  readonly settings: Settings = { volume: 0.8, room: 0.8, music: 0.6, muted: false };
   /** What was played (scripted checks: `__debug.sound.log`), newest last. */
   readonly log: { id: string; at: number }[] = [];
   private readonly takes = new Map<SoundId, { raw: Samples[]; buffers: AudioBuffer[] }>();
@@ -109,6 +112,7 @@ export class SoundEngine {
   private scene!: GainNode;
   private room!: GainNode;
   private ui!: GainNode;
+  private music!: GainNode;
   private echo!: ConvolverNode;
   private echoIn!: GainNode;
   private echoKind = '';
@@ -166,6 +170,7 @@ export class SoundEngine {
     this.scene.connect(this.echoIn);
     this.room = gain(this.master);
     this.ui = gain(this.master);
+    this.music = gain(this.master);
     this.setEcho(...this.want);
     this.apply();
   }
@@ -178,10 +183,11 @@ export class SoundEngine {
       // (not kept, then)
     }
     if (!this.context) return;
-    const { volume, muted, room } = this.settings;
+    const { volume, muted, room, music } = this.settings;
     const now = this.context.currentTime;
     this.master.gain.setTargetAtTime(muted ? 0 : volume * volume, now, 0.03);
     this.room.gain.setTargetAtTime(room * room * this.roomLevel, now, 0.3);
+    this.music.gain.setTargetAtTime(music * music * MUSIC, now, 0.1);
   }
 
   private roomLevel = 1;
@@ -239,7 +245,7 @@ export class SoundEngine {
   }
 
   /** Where sounds go: the world's dull in slow motion, a scene's not, the room's has its own level. */
-  bus(name: 'world' | 'scene' | 'room' | 'ui'): GainNode {
+  bus(name: 'world' | 'scene' | 'room' | 'ui' | 'music'): GainNode {
     return this[name];
   }
 

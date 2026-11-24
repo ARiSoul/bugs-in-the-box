@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GameSounds } from './audio/GameSounds';
+import { MusicEngine } from './audio/MusicEngine';
 import { SoundEngine } from './audio/SoundEngine';
 import { runExplosionBenchmark } from './bench/explosions';
 import { applyPose, CameraPath, FlyCamera } from './debug/camera';
@@ -89,7 +90,8 @@ const follow = new FollowCamera(stage.camera, stage.controls);
 stage.controls.mouseButtons = { LEFT: null, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.ROTATE };
 const hud = new Hud();
 const sound = new SoundEngine();
-const gameSounds = new GameSounds(sound);
+const music = new MusicEngine(sound);
+const gameSounds = new GameSounds(sound, music);
 
 const state: HudState = {
   meshing: '',
@@ -966,6 +968,7 @@ const debugApi = {
   brood,
   follow,
   sound,
+  music,
   webViews,
   /** With the loop paused: play on for `seconds` at 60 frames a second (scripted reviews of moving scenes). */
   advance(seconds: number): void {

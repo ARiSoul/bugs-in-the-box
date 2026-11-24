@@ -4,6 +4,7 @@ import type { SoundEngine } from '../audio/SoundEngine';
 export function setupSoundMenu(engine: SoundEngine): () => void {
   const volume = document.getElementById('volume') as HTMLInputElement;
   const room = document.getElementById('roomVolume') as HTMLInputElement;
+  const music = document.getElementById('musicVolume') as HTMLInputElement;
   const mute = document.getElementById('mute') as HTMLButtonElement;
   const s = engine.settings;
   const show = (): void => {
@@ -12,7 +13,12 @@ export function setupSoundMenu(engine: SoundEngine): () => void {
   };
   volume.value = String(Math.round(s.volume * 100));
   room.value = String(Math.round(s.room * 100));
+  music.value = String(Math.round(s.music * 100));
   show();
+  music.addEventListener('input', () => {
+    s.music = Number(music.value) / 100;
+    engine.apply();
+  });
   volume.addEventListener('input', () => {
     s.volume = Number(volume.value) / 100;
     engine.apply();
@@ -22,7 +28,7 @@ export function setupSoundMenu(engine: SoundEngine): () => void {
     engine.apply();
   });
   // (the keys are the game's again, and a change of volume is heard)
-  for (const el of [volume, room])
+  for (const el of [volume, room, music])
     el.addEventListener('change', () => {
       el.blur();
       if (el === volume) engine.play('turn');
