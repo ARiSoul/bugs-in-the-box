@@ -272,6 +272,10 @@ export function blastShare(b: Bug, x: number, y: number, z: number, w: Weapon): 
 }
 
 export interface MatchOptions {
+  /** Seconds a turn lasts (default AIM_TICKS). */
+  turnSeconds?: number;
+  /** How strong the wind may blow, against WIND_MAX (default 1; 0: none). */
+  wind?: number;
   /** false: skip random placement (tests place the bugs themselves). Default true. */
   placeBugs?: boolean;
   /** Discard projectiles as soon as they leave the map box by its sides; at its top they stop and fall back. Default: a 20-unit margin, no top. */
@@ -1012,7 +1016,7 @@ export class Match {
         this.nextInTeam[t] = (members.indexOf(u) + 1) % members.length;
         this.active = this.units.indexOf(u);
         this.phase = 'aim';
-        this.turnTicks = AIM_TICKS;
+        this.turnTicks = this.options.turnSeconds === undefined ? AIM_TICKS : Math.round(this.options.turnSeconds * TICK_RATE);
         this.stance = false;
         this.lingerTicks = 0;
         this.column = null;
@@ -1023,8 +1027,9 @@ export class Match {
         this.retreatTicks = 0;
         this.charging = false;
         this.power = 0;
-        this.windX = (this.rng() * 2 - 1) * WIND_MAX;
-        this.windZ = (this.rng() * 2 - 1) * WIND_MAX;
+        const wind = WIND_MAX * (this.options.wind ?? 1);
+        this.windX = (this.rng() * 2 - 1) * wind;
+        this.windZ = (this.rng() * 2 - 1) * wind;
         this.turnNumber++;
         this.events.push({ type: 'turn', unit: u.id });
         this.load(u.team, SKILL_TURN);

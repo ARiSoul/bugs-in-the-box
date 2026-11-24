@@ -63,6 +63,8 @@ export class Controls {
   private clicked = false;
   /** True if the last `next()` carried a facing (from `face`). */
   faced = false;
+  /** False while a menu has the keyboard. */
+  enabled = true;
   /** Set while the menu waits for a key to bind: the next key press goes there instead of the game. */
   private capture: ((code: string) => void) | null = null;
   private readonly out: MatchInput = { move: 0, turn: 0, faceX: 0, faceZ: 0, jump: false, run: false, aim: 0, fire: false, weapon: -1 };
@@ -82,7 +84,7 @@ export class Controls {
         done(e.code);
         return;
       }
-      if (isTyping(e.target)) return;
+      if (!this.enabled || isTyping(e.target)) return;
       if (!this.handled.has(e.code)) {
         if (!e.repeat) this.onOtherKey(e.code);
         return;

@@ -166,6 +166,8 @@ export class BugView {
     if (species.shell) this.restY = -0.3 * r;
     this.torso.position.y = this.restY;
     const dark = this.material(species.accent, 0.6);
+    // (and limbs half in it: whose it is shows from every side)
+    if (teamColor !== undefined) dark.color.lerp(new THREE.Color(teamColor).multiplyScalar(0.7), 0.75);
     this.legSkin = dark;
     const eye = this.material(0x050505, 0.2);
     this.eyes = eye;

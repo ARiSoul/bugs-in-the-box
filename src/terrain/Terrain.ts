@@ -13,26 +13,32 @@ import { CHUNK, DENSITY_CLAMP } from './constants';
  * which is what lets the representation and the mesher change without touching gameplay.
  */
 export class Terrain {
-  readonly cx: number;
-  readonly cy: number;
-  readonly cz: number;
+  cx!: number;
+  cy!: number;
+  cz!: number;
   /** World size in cells. */
-  readonly W: number;
-  readonly H: number;
-  readonly D: number;
+  W!: number;
+  H!: number;
+  D!: number;
   /** Samples per axis (cells + 1). */
-  readonly sx: number;
-  readonly sy: number;
-  readonly sz: number;
-  readonly dens: Float32Array;
+  sx!: number;
+  sy!: number;
+  sz!: number;
+  dens!: Float32Array;
   /** Visual-only burn mark, 0..255 per sample. */
-  readonly scorch: Uint8Array;
+  scorch!: Uint8Array;
   /** Visual-only material id per sample (see `materials.ts`): what the surface near it is made of. */
-  readonly material: Uint8Array;
+  material!: Uint8Array;
   /** Ids of chunks whose mesh is out of date. */
   readonly dirty = new Set<number>();
 
   constructor(cx = 3, cy = 2, cz = 3) {
+    this.resize(cx, cy, cz);
+  }
+
+  /** Another size (in chunks), all air: a generator fills it next. */
+  resize(cx: number, cy: number, cz: number): void {
+    this.dirty.clear();
     this.cx = cx;
     this.cy = cy;
     this.cz = cz;

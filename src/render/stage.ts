@@ -46,6 +46,8 @@ export interface Stage {
     add(x: number, y: number, z: number, radius: number): void;
     addTunnel(x1: number, y1: number, z1: number, x2: number, y2: number, z2: number, radius: number): void;
   };
+  /** The menu's own layer over the picture (see `MenuLayer`). */
+  menu: import('./gpu/gpuStage').MenuLayer;
   /** What a special attack's scene does to the whole picture. */
   fx: import('./gpu/gpuStage').StageFx;
   /** Draw one frame. `seconds` is render time (render-only animation), `dt` the frame step. */

@@ -1,5 +1,5 @@
 import * as THREE from 'three/webgpu';
-import { abs, emissive, float, Fn, hash, If, Loop, max, mix, mrt, output, pass, renderOutput, screenUV, select, min, pow, smoothstep, sRGBTransferOETF, uniform, vec2, vec3, vec4 } from 'three/tsl';
+import { abs, emissive, float, Fn, floor, fract, hash, If, Loop, max, mix, mrt, output, pass, renderOutput, screenUV, select, min, pow, smoothstep, sRGBTransferOETF, step, uniform, vec2, vec3, vec4 } from 'three/tsl';
 import { bilateralBlur } from 'three/examples/jsm/tsl/display/BilateralBlurNode.js';
 import { fxaa } from 'three/examples/jsm/tsl/display/FXAANode.js';
 import { bloom } from 'three/examples/jsm/tsl/display/BloomNode.js';
@@ -51,6 +51,27 @@ export interface StageFx {
   spot: { value: THREE.Vector4 };
   /** How far away it is. */
   spotAt: { value: number };
+}
+
+/** The menus' layer: their own scene over the picture, which they tint in the teams' colours. Costs nothing while hidden. */
+export interface MenuLayer {
+  scene: THREE.Scene;
+  camera: THREE.PerspectiveCamera;
+  show(on: boolean): void;
+  /** Make the shaders of everything in its scene. */
+  warm(): Promise<void>;
+  /** How much the picture is tinted (0..1), and the colours left and right. */
+  amount: { value: number };
+  left: { value: THREE.Color };
+  right: { value: THREE.Color };
+  /** Where the seam between the two colours is (-0.5..0.5 of the width; beyond: off the picture), how bright, seconds. */
+  seam: { value: number };
+  /** How far the colours have opened from the seam, showing the picture (0: shut; 1.4: all open). */
+  open: { value: number };
+  glow: { value: number };
+  time: { value: number };
+  /** A charge runs along the seam (0..1). */
+  flare: { value: number };
 }
 
 /** Ray-march steps of the god rays (half resolution). */
@@ -194,10 +215,62 @@ export async function createGpuStage(canvas: HTMLCanvasElement, terrain: Terrain
     // labels last: over the display image, untouched by heat shimmer, bloom and FXAA (no crawl)
     const hudColor = pass(hud, camera).getTextureNode('output');
     const hudAlpha = hudColor.a;
-    p.outputNode = vec4(mix((shown as unknown as THREE.Node<'vec4'>).rgb, sRGBTransferOETF(hudColor.rgb.div(max(hudAlpha, 0.001))) as THREE.Node<'vec3'>, hudAlpha), 1);
+    plain = vec4(mix((shown as unknown as THREE.Node<'vec4'>).rgb, sRGBTransferOETF(hudColor.rgb.div(max(hudAlpha, 0.001))) as THREE.Node<'vec3'>, hudAlpha), 1) as THREE.Node<'vec4'>;
+    p.outputNode = menuOn ? withMenu(plain) : plain;
     return p;
   };
   const raysAmount = uniform(RAYS);
+  // ---- the menus' layer: a pass of its own, in the picture only while a menu is up
+  let menuOn = false;
+  let plain: THREE.Node<'vec4'> | null = null;
+  const menuScene = new THREE.Scene();
+  menuScene.environment = scene.environment;
+  menuScene.environmentIntensity = 0.55;
+  const menuCamera = new THREE.PerspectiveCamera(28, 1, 0.5, 60);
+  const menu = { amount: uniform(0), left: uniform(new THREE.Color(0xff6b5e)), right: uniform(new THREE.Color(0x5fb0ff)), seam: uniform(0), glow: uniform(0), time: uniform(0), open: uniform(1.4), flare: uniform(0), aspect: uniform(1.8) };
+  const menuPass = pass(menuScene, menuCamera, { samples: 4 });
+  const withMenu = (under: THREE.Node<'vec4'>): THREE.Node<'vec4'> => {
+    const aspect = menu.aspect;
+    const y = screenUV.y;
+    const d0 = screenUV.x.sub(0.5).sub(menu.seam).add(y.sub(0.5).mul(0.1));
+    // a jagged arc: it jumps to a new shape many times a second
+    const jag = (cells: number, rate: number, amount: number, seed: number): THREE.Node<'float'> => {
+      const k = y.mul(cells);
+      const beat = floor(menu.time.mul(rate)).mul(17).add(seed);
+      const at = (i: THREE.Node<'float'>): THREE.Node<'float'> => hash(floor(i).add(beat).add(1000)).sub(0.5) as unknown as THREE.Node<'float'>;
+      return mix(at(k as unknown as THREE.Node<'float'>), at(k.add(1) as unknown as THREE.Node<'float'>), fract(k)).mul(amount) as unknown as THREE.Node<'float'>;
+    };
+    const d = d0.add(jag(13, 11, 0.012, 0)).add(jag(41, 17, 0.005, 400));
+    const branch = d0.add(jag(9, 9, 0.05, 900)).add(jag(33, 14, 0.012, 1300));
+    const color = mix(menu.left, menu.right, smoothstep(-0.001, 0.001, d)) as unknown as THREE.Node<'vec3'>;
+    // (the map keeps its own light and much of its own colour; shadows take the team's, the bottom is darkest)
+    const grey = under.rgb.dot(vec3(0.3, 0.6, 0.1));
+    const low = smoothstep(0.3, 0.95, y);
+    const lift = under.rgb.mul(1.12).add(0.015);
+    const split = mix(lift, color.mul(grey.mul(1.15).add(0.035)), mix(float(0.5), float(0.26), smoothstep(0.1, 0.8, grey)));
+    const corner = smoothstep(0.45, 0.95, screenUV.sub(vec2(0.5, 0.42)).length());
+    const tinted = split.mul(mix(float(0.92), float(0.4), low)).mul(corner.mul(0.55).oneMinus());
+    // while it is shut: the team's colour, slanted bars running over it
+    const bars = step(0.5, fract(screenUV.x.mul(aspect).add(y.mul(0.35)).mul(9).sub(menu.time.mul(0.9).mul(select(d.greaterThan(0), float(1), float(-1))))));
+    const shut = color.mul(mix(float(0.2), float(0.27), bars));
+    const rip = abs(d).sub(menu.open.add(jag(23, 5, 0.03, 70)));
+    const under2 = mix(under.rgb, tinted, menu.amount);
+    const covered = step(0, rip);
+    const px = abs(d).mul(aspect).mul(1080);
+    const bpx = abs(branch).mul(aspect).mul(1080);
+    const pulse = y.mul(9).sub(menu.time.mul(5)).sin().mul(0.5).add(0.5).pow(3).mul(0.9).add(0.8).add(menu.flare.mul(1.6));
+    const below = smoothstep(0.17, 0.24, y);
+    const core = smoothstep(3.4, 1.4, px).mul(1.5);
+    const halo = px.mul(0.06).negate().exp().mul(0.75).add(px.mul(0.012).negate().exp().mul(0.16));
+    const thin = smoothstep(2.2, 0.6, bpx).mul(0.8).add(bpx.mul(0.12).negate().exp().mul(0.3)).mul(menu.flare.mul(1.6).add(0.12)).mul(y.mul(21).sub(menu.time.mul(3)).sin().mul(y.mul(8).add(menu.time.mul(1.3)).sin()).sub(0.15).max(0)).mul(1.6);
+    const arc = vec3(1, 0.97, 0.88).mul(core).add(vec3(1, 0.58, 0.16).mul(halo)).add(vec3(1, 0.75, 0.4).mul(thin)).mul(pulse).mul(menu.glow).mul(below);
+    const edge = vec3(1, 0.8, 0.45).mul(abs(rip).mul(90).negate().exp().mul(1.4)).mul(smoothstep(1.2, 0.8, menu.open)).mul(menu.glow.min(1));
+    const back = mix(under2, shut, covered).add(arc.mul(covered.max(menu.amount))).add(edge);
+    const front = menuPass.getTextureNode('output');
+    const a = front.a.min(1);
+    const drawn = renderOutput(vec4(front.rgb.div(max(a, 0.001)), 1)) as unknown as THREE.Node<'vec4'>;
+    return vec4(mix(back, drawn.rgb, a), 1) as THREE.Node<'vec4'>;
+  };
   const fx = { scene: fxScene, depthAt, dim: uniform(0), vignette: uniform(0), flash: uniform(0), focusBlur: uniform(0), fade: uniform(0), black: uniform(0), reveal: uniform(0), subject: uniform(10), spot: uniform(new THREE.Vector4(0, 0, 0.0001, 1)), spotAt: uniform(10) };
   const debugView = uniform(0);
   /** The shafts in the dust are warmer than the light itself (scattering in warm, dusty air). */
@@ -215,6 +288,9 @@ export async function createGpuStage(canvas: HTMLCanvasElement, terrain: Terrain
     renderer.setSize(w, h, false);
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
+    menuCamera.aspect = w / h;
+    menu.aspect.value = w / h;
+    menuCamera.updateProjectionMatrix();
     if (dust) dust.pixelAngle.value = (2 * Math.tan((camera.fov * Math.PI) / 360)) / (h * ratio);
   };
   resize();
@@ -249,6 +325,8 @@ export async function createGpuStage(canvas: HTMLCanvasElement, terrain: Terrain
     setTurntable: (turns: number) => microwaveParts.setTurns(turns),
     setScenario(sc: Scenario, layout: SceneLayout) {
       document.body.style.background = sc.sky.css;
+      // (the map may have another size now)
+      sun.target.position.set(terrain.W / 2, 0, terrain.D / 2);
       sunOffset.copy(SUN_OFFSET);
       if (sc.sun) sunOffset.set(...sc.sun);
       sun.color.setHex(sc.sunColor ?? 0xffb878);
@@ -303,6 +381,19 @@ export async function createGpuStage(canvas: HTMLCanvasElement, terrain: Terrain
           camera.layers.enable(POST_LAYER);
         }
       }
+    },
+    menu: {
+      scene: menuScene,
+      camera: menuCamera,
+      ...menu,
+      warm: () => menuPass.compileAsync(renderer),
+      show(on: boolean) {
+        if (on === menuOn) return;
+        menuOn = on;
+        if (!pipeline || !plain) return;
+        pipeline.outputNode = on ? withMenu(plain) : plain;
+        pipeline.needsUpdate = true;
+      },
     },
     fx,
     frameNumber: () => renderer.info.frame,

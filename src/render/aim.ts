@@ -31,6 +31,10 @@ export class AimView {
     scene.add(this.marker);
   }
 
+  hide(): void {
+    this.pointer.visible = this.marker.visible = false;
+  }
+
   /** `bugPosition`: interpolated render position of the active bug. */
   update(match: Match, bugPosition: THREE.Vector3, labelHeight: number, now: number): void {
     const unit = match.activeUnit;

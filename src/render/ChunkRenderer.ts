@@ -37,6 +37,16 @@ export class ChunkRenderer {
     return n;
   }
 
+  /** Drop every chunk (another map size: the ids mean other places). */
+  clear(): void {
+    for (const m of this.meshes.values()) {
+      m.geometry.dispose();
+      this.scene.remove(m);
+    }
+    this.meshes.clear();
+    this.tris.clear();
+  }
+
   /** Re-mesh every dirty chunk on this thread and clear the dirty set (fallback, and the CPU benchmark). */
   sync(terrain: Terrain): SyncResult {
     const t0 = performance.now();

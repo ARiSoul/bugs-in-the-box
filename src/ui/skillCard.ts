@@ -13,7 +13,7 @@ const EMBLEMS: Record<string, string> = {
     '<g stroke="none" fill="currentColor"><ellipse cx="17" cy="24" rx="5" ry="6.5"/><ellipse cx="31" cy="24" rx="5" ry="6.5"/><circle cx="6" cy="10" r="1.7"/><circle cx="11" cy="10" r="1.7"/><circle cx="34" cy="8" r="1.5"/><circle cx="38.5" cy="8" r="1.5"/><circle cx="40" cy="38" r="1.8"/><circle cx="45" cy="38" r="1.8"/><circle cx="7" cy="39" r="1.4"/><circle cx="11" cy="39" r="1.4"/><circle cx="22" cy="43" r="1.4"/><circle cx="26" cy="43" r="1.4"/><circle cx="20" cy="5" r="1.2"/><circle cx="24" cy="5" r="1.2"/></g>',
 };
 
-const art = (id: string): string => `<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${EMBLEMS[id] ?? '<circle cx="24" cy="24" r="14" stroke-width="3"/>'}</svg>`;
+export const art = (id: string): string => `<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${EMBLEMS[id] ?? '<circle cx="24" cy="24" r="14" stroke-width="3"/>'}</svg>`;
 
 /**
  * A special attack's card: it fills with colour clockwise behind a hand of light as its team loads it, and glows when

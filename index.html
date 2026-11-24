@@ -92,6 +92,129 @@
       #sight circle, #sight path { fill: none; stroke: #eafcff; stroke-width: 2; filter: drop-shadow(0 0 3px #1fa8ff); }
       #sight circle.pull { stroke: #58d8ff; stroke-width: 4; }
       body.special > *:not(canvas):not(script) { opacity: 0; pointer-events: none; transition: opacity 0.25s; }
+      /* ---- the setup screen and the end of a match */
+      body.menu .box, body.menu #fps, body.menu #sight { display: none !important; }
+      #panel:not([open]) { opacity: 0.75; } #fps { display: none; } body:has(#panel[open]) #fps { display: block; }
+      @media (hover: hover) and (pointer: fine) { #pad { display: none; } }
+      #setup[hidden], #ending[hidden] { display: none; }
+      #setup, #ending { position: fixed; inset: 0; z-index: 8; --red: #ff5a45; --blue: #5fb4ff; --amber: #ffb547; --ink: #f6efdf; --dim: #c2bbac; --px: 0; --py: 0; font-family: 'Bahnschrift', 'Segoe UI Variable Display', 'Segoe UI', system-ui, sans-serif; color: var(--ink); font-size: clamp(11px, 1.62vh, 18px); overflow: hidden; }
+      #setup { pointer-events: none; }
+      #setup button, #setup input, #setup .team-card, #setup .zone, #setup .marchers { pointer-events: auto; }
+      #setup button, #ending button { background: none; border: 0; border-radius: 3px; color: inherit; font: inherit; cursor: pointer; }
+      #setup button:focus-visible, #ending button:focus-visible, #setup input:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+      .letters { display: block; height: 100%; width: auto; overflow: visible; }
+      #setup .logo { position: absolute; left: 50%; top: 2.2vh; width: 0; margin: 0; transform: translate(calc(var(--px) * -5px), calc(var(--py) * -4px)); transition: transform 0.25s ease-out; }
+      #setup .logo span { position: absolute; display: block; }
+      #setup .logo .l1 { height: 15.5vh; right: -2.4vh; top: 3vh; }
+      #setup .logo .l3 { height: 15.5vh; left: 0.4vh; top: 3vh; }
+      #setup .logo .l2 { height: 5vh; left: 0; top: 0; transform: translate(-47%, 0) rotate(-5deg); z-index: 2; background: #130f0c; padding: 0.4vh 0.9vh; border-radius: 3px; animation: plate 0.4s 1.1s both cubic-bezier(0.2, 1.8, 0.4, 1); }
+      @keyframes plate { from { transform: translate(-47%, -14vh) rotate(24deg); opacity: 0; } }
+      .slam1 { transform-box: fill-box; transform-origin: 50% 60%; animation: slam1 0.34s both cubic-bezier(0.2, 1.7, 0.4, 1); animation-delay: calc(0.12s + var(--i) * 0.11s); }
+      #setup .l3 .slam1 { animation-delay: calc(0.58s + var(--i) * 0.11s); }
+      @keyframes slam1 { from { transform: translateY(-90px) scale(1.9) rotate(-12deg); opacity: 0; } 60% { opacity: 1; } }
+      #setup .feel { transform-box: fill-box; transform-origin: 50% 100%; animation: feel 1.9s 1.6s infinite ease-in-out; }
+      @keyframes feel { 0%, 100% { transform: rotate(-4deg); } 50% { transform: rotate(5deg) scaleY(1.08); } }
+      .fan { transform-origin: 40px 50px; animation: spin 1.1s linear infinite; }
+      #setup .versus { position: absolute; left: 52.3%; top: 27.5vh; width: 15vh; height: 11.5vh; margin: -5.75vh 0 0 -7.5vh; transform: rotate(-4deg) translate(calc(var(--px) * -9px), calc(var(--py) * -6px)); }
+      #setup .versus::before { content: ''; position: absolute; inset: 0; background: #130f0c; clip-path: polygon(50% 0, 62% 13%, 82% 5%, 82% 24%, 100% 34%, 88% 50%, 100% 66%, 82% 76%, 82% 95%, 62% 87%, 50% 100%, 38% 87%, 18% 95%, 18% 76%, 0 66%, 12% 50%, 0 34%, 18% 24%, 18% 5%, 38% 13%); animation: slam 0.4s 1.35s both cubic-bezier(0.2, 1.6, 0.4, 1), buzz 2.6s 2s infinite; }
+      #setup .versus .letters { position: absolute; height: 5.6vh; left: 50%; top: 50%; transform: translate(-50%, -50%); animation: vs 0.4s 1.45s both cubic-bezier(0.2, 1.6, 0.4, 1); }
+      @keyframes vs { from { transform: translate(-50%, -50%) scale(3.5); opacity: 0; } }
+      @keyframes buzz { 0%, 92%, 100% { transform: scale(1) rotate(0); } 94% { transform: scale(1.1) rotate(5deg); } 97% { transform: scale(1.06) rotate(-4deg); } }
+      @keyframes slam { from { transform: scale(3); opacity: 0; } }
+      #setup .called { position: absolute; left: 50%; top: 74vh; height: 10vh; opacity: 0; transform: translate(-50%, -50%); z-index: 4; }
+      #setup .called.on { animation: called 0.3s both, calling 1.1s 0.3s infinite alternate ease-in-out; will-change: transform; }
+      #setup .called.on.off { animation: gone 0.4s 0.35s both; }
+      @keyframes called { from { opacity: 0; transform: translate(-50%, -50%) scale(2.6) rotate(-6deg); } to { opacity: 1; transform: translate(-50%, -50%) scale(1) rotate(-2deg); } }
+      @keyframes calling { from { transform: translate(-50%, -50%) scale(1) rotate(-2deg); } to { transform: translate(-50%, -54%) scale(1.07) rotate(1deg); } }
+      @keyframes gone { from { opacity: 1; transform: translate(-50%, -50%) rotate(-2deg); } to { opacity: 0; transform: translate(-50%, -50%) scale(1.5) rotate(-2deg); } }
+      #setup .zone { position: absolute; top: 24vh; height: 56vh; width: 27vw; cursor: pointer; }
+      #setup .zone.side0 { left: 21.5vw; } #setup .zone.side1 { right: 21.5vw; }
+      #setup .team-card { position: absolute; top: 19vh; bottom: 15.5vh; width: 17.4vw; min-width: 210px; box-sizing: border-box; padding: 5vh 2.6vw 2vh 1.8vw; display: flex; flex-direction: column; justify-content: flex-start; gap: 1.6vh; isolation: isolate; transition: transform 0.4s cubic-bezier(0.5, 0, 0.9, 0.5); }
+      #setup .team-card::before { content: ''; position: absolute; inset: 0 0 0 -8vw; z-index: -1; background: linear-gradient(180deg, var(--t1), rgba(9, 7, 7, 0.86) 62%); backdrop-filter: blur(7px); border-right: 4px solid var(--c); transform: skewX(-4deg); }
+      #setup .team-card.side0 { left: 0; --c: var(--red); --t1: rgba(96, 18, 12, 0.82); animation: fromLeft 0.5s 0.5s both cubic-bezier(0.2, 1.1, 0.3, 1); }
+      #setup .team-card.side1 { right: 0; --c: var(--blue); --t1: rgba(10, 40, 92, 0.82); text-align: right; padding: 5vh 1.8vw 2vh 2.6vw; animation: fromRight 0.5s 0.5s both cubic-bezier(0.2, 1.1, 0.3, 1); }
+      #setup .team-card.side1::before { inset: 0 -8vw 0 0; border-right: 0; border-left: 4px solid var(--c); }
+      @keyframes fromLeft { from { transform: translateX(-110%); } } @keyframes fromRight { from { transform: translateX(110%); } }
+      #setup .chips { display: flex; gap: 0.5em; } #setup .side1 .chips { justify-content: flex-end; }
+      #setup .chips button { padding: 0.35em 0.55em; color: var(--dim); background: rgba(255, 255, 255, 0.08); transform: skewX(-8deg); transition: transform 0.15s cubic-bezier(0.2, 2, 0.4, 1), color 0.15s; }
+      #setup .chips svg { display: block; width: 3.5em; transform: skewX(8deg); } #setup .side1 .chips svg { transform: skewX(8deg) scaleX(-1); }
+      #setup .chips button:hover { color: var(--ink); transform: skewX(-8deg) translateY(-4px) scale(1.06); }
+      #setup .chips button.on { background: var(--c); color: #160d0a; }
+      #setup .name { height: 6.6vh; display: flex; margin-left: -0.5vh; } #setup .side1 .name { justify-content: flex-end; margin: 0 -1vh 0 0; }
+      #setup .name .letters { max-width: 100%; }
+      #setup .team-card p { margin: 0; font-size: 1.2em; }
+      #setup em { font-style: normal; color: var(--dim); font-size: 0.92em; }
+      #setup .stats > div { display: flex; align-items: center; gap: 0.8em; margin-bottom: 0.5em; } #setup .side1 .stats > div { flex-direction: row-reverse; }
+      #setup .stats em { width: 3.6em; } #setup .stats strong { width: 1.9em; text-align: right; } #setup .side1 .stats strong { text-align: left; }
+      #setup .stats i { display: block; flex: 1; height: 0.75em; background: rgba(255, 255, 255, 0.13); transform: skewX(-18deg); }
+      #setup .stats u { display: block; height: 100%; width: calc(var(--v) * 100%); background: repeating-linear-gradient(90deg, var(--c) 0 0.5em, transparent 0.5em 0.62em); transform-origin: 0 0; } #setup .side1 .stats u { margin-left: auto; transform-origin: 100% 0; }
+      #setup .fresh .stats u { animation: grow 0.7s both cubic-bezier(0.2, 1.4, 0.4, 1); }
+      #setup .fresh .name { animation: swap 0.35s both cubic-bezier(0.2, 1.6, 0.4, 1); }
+      @keyframes grow { from { transform: scaleX(0); } } @keyframes swap { from { transform: translateY(0.6em) scale(0.8); opacity: 0; } }
+      #setup .trait em, #setup .special em { color: var(--c); font-weight: 700; display: block; }
+      #setup .special { display: flex; gap: 0.9em; align-items: center; } #setup .side1 .special { flex-direction: row-reverse; }
+      #setup .emblem { width: 4.4em; height: 5.6em; flex: none; background: #2a1c0e; border: 1px solid rgba(255, 181, 71, 0.6); border-radius: 5px; display: grid; place-items: center; animation: ready 2.6s infinite ease-in-out; transition: transform 0.25s cubic-bezier(0.2, 2, 0.4, 1); }
+      #setup .special:hover .emblem { transform: rotate(-6deg) scale(1.15); }
+      #setup .emblem svg { width: 82%; }
+      #setup .special b { display: block; font-size: 1.3em; line-height: 1.15; } #setup .special div span { color: var(--dim); line-height: 1.25; display: block; }
+      #setup .who { display: flex; transform: skewX(-8deg); background: rgba(0, 0, 0, 0.55); }
+      #setup .who button { flex: 1; padding: 0.65em 0; color: var(--dim); transition: background 0.15s; border-radius: 0; }
+      #setup .who button:hover { background: rgba(255, 255, 255, 0.14); color: var(--ink); }
+      #setup .who button.on { background: var(--c); color: #14100c; font-weight: 700; }
+      #setup .bar { position: absolute; left: 0; right: 0; bottom: 0; height: 15.5vh; display: flex; align-items: center; gap: 2vw; padding: 0 2vw; background: rgba(13, 11, 10, 0.94); border-top: 3px solid var(--amber); box-sizing: border-box; animation: rise 0.5s 0.2s both cubic-bezier(0.2, 1.1, 0.3, 1); transition: transform 0.35s ease-in; pointer-events: auto; }
+      @keyframes rise { from { transform: translateY(100%); } }
+      #setup .marchers { position: absolute; left: 0; bottom: 100%; width: 100%; height: 34px; cursor: crosshair; }
+      #setup .shelf { display: flex; gap: 0.4vw; }
+      #setup .device { display: grid; justify-items: center; align-content: center; gap: 0.5em; width: 5.7vw; min-width: 64px; height: 12vh; color: var(--dim); background: rgba(255, 255, 255, 0.05); transition: transform 0.2s cubic-bezier(0.2, 1.8, 0.4, 1), background 0.2s; padding: 0; }
+      #setup .device svg { width: 6.2vh; overflow: visible; --a: color-mix(in srgb, var(--d) 62%, #3a352e); --b: #1d1916; }
+      #setup .device .a { fill: var(--a); } #setup .device .b { fill: var(--b); } #setup .device svg * { transition: fill 0.2s; }
+      #setup .device span { font-size: 0.78em; white-space: nowrap; }
+      #setup .device:hover { transform: translateY(-6px); color: var(--ink); } #setup .device:hover svg { --a: var(--d); }
+      #setup .device.on { transform: translateY(-11px); color: #14100c; background: var(--d); font-weight: 700; } #setup .device.on svg { --a: #16110c; --b: var(--d); }
+      #setup .device svg g, #setup .device svg path { transform-box: fill-box; transform-origin: center; }
+      #setup .device:hover .spin, #setup .device.on .spin { animation: spin 1.2s linear infinite; transform-origin: 24px 31.5px; transform-box: view-box; }
+      #setup .device:hover .thump, #setup .device.on .thump { animation: thump 0.5s ease-in-out infinite; }
+      #setup .device:hover .swing, #setup .device.on .swing { animation: nudge 0.8s ease-in-out infinite; }
+      #setup .device:hover .slide, #setup .device.on .slide { animation: slide 1.6s ease-in-out infinite; }
+      #setup .device:hover .blink, #setup .device.on .blink { animation: blink 0.9s steps(2) infinite; }
+      #setup .device:hover .needle, #setup .device.on .needle { animation: needle 1s ease-in-out infinite alternate; transform-origin: 100% 100%; }
+      @keyframes spin { to { transform: rotate(360deg); } } @keyframes thump { 50% { transform: scale(1.1); } } @keyframes nudge { 50% { transform: translateX(3px); } }
+      @keyframes slide { 50% { transform: scaleX(0.5); } } @keyframes blink { 50% { opacity: 0.2; } } @keyframes needle { to { transform: rotate(85deg); } }
+      #setup .place { flex: 1; min-width: 12.5em; } #setup .place b { display: block; white-space: nowrap; font-size: 1.6em; line-height: 1.1; } #setup .place span { color: var(--dim); }
+      #setup .rules { display: flex; gap: 1.2vw; }
+      #setup .rule { text-align: center; white-space: nowrap; } .row2 { display: flex; align-items: center; justify-content: center; }
+      #setup .rule strong { min-width: 3.4em; font-size: 1.2em; }
+      #setup .step { min-width: 32px; height: 34px; padding: 0; font-size: 1.7em; line-height: 1; color: var(--amber); display: grid; place-items: center; background: rgba(255, 181, 71, 0.13); transform: skewX(-8deg); }
+      #setup .step:hover { background: var(--amber); color: #1b1206; }
+      #setup .dice svg { width: 22px; fill: none; stroke: currentColor; stroke-width: 2; display: block; transition: transform 0.4s cubic-bezier(0.2, 1.6, 0.4, 1); } #setup .dice:hover svg { transform: rotate(180deg) scale(1.15); }
+      #setup input { width: 4.4em; text-align: center; font: inherit; font-weight: 700; font-size: 1.15em; color: inherit; background: rgba(255, 255, 255, 0.1); border: 0; border-radius: 3px; padding: 0.35em 0; }
+      #setup .play, #ending .play { position: relative; overflow: hidden; background: var(--amber); height: 10.6vh; width: 23vh; flex: none; padding: 0; display: grid; place-items: center; transition: transform 0.18s cubic-bezier(0.2, 2, 0.4, 1); animation: call 2.2s 2s infinite; clip-path: none; transform: skewX(-6deg); }
+      .play span { position: relative; z-index: 1; height: 5.2vh; display: block; transform: skewX(6deg); }
+      #setup .play:hover, #ending .play:hover { transform: skewX(-6deg) scale(1.08) rotate(-2deg); background: #ffd08a; }
+      #setup .play:active, #ending .play:active { transform: skewX(-6deg) scale(0.94); }
+      .play::after { content: ''; position: absolute; top: 0; bottom: 0; width: 26%; left: -60%; background: rgba(255, 255, 255, 0.55); transform: skewX(-18deg); animation: shine 2.8s 1.6s infinite; }
+      @keyframes shine { 0% { left: -40%; } 34%, 100% { left: 140%; } }
+      @keyframes call { 0% { box-shadow: 0 0 0 0 rgba(255, 181, 71, 0.6); } 60%, 100% { box-shadow: 0 0 0 16px rgba(255, 181, 71, 0); } }
+      #setup.leave .bar { transform: translateY(170%); animation: none; }
+      #setup.leave .team-card { animation: none; } #setup.leave .team-card.side0 { transform: translateX(-125%); } #setup.leave .team-card.side1 { transform: translateX(125%); }
+      #setup.leave .logo { transition: transform 0.3s ease-in; transform: translateY(-34vh); } #setup.leave .versus { display: none; }
+      #loading { position: fixed; inset: 0; z-index: 20; background: #0d0b0a; display: grid; place-content: center; justify-items: center; gap: 2.4vh; font: 600 18px 'Bahnschrift', 'Segoe UI', system-ui, sans-serif; color: #c2bbac; }
+      #loading i { width: 13vh; height: 13vh; border: 1.6vh solid #26201a; border-radius: 50%; background: conic-gradient(#ff5a45 0 14%, transparent 14% 33.3%, #ffb547 33.3% 47.3%, transparent 47.3% 66.6%, #5fb4ff 66.6% 80.6%, transparent 80.6%); animation: spin 1s linear infinite; will-change: transform; }
+      #flash { position: fixed; inset: 0; z-index: 9; background: radial-gradient(circle at 50% 58%, #fff3d8 0 30%, #ffdf9e 90%); opacity: 0; pointer-events: none; }
+      #flash.on { animation: flash 0.1s linear; }
+      @keyframes flash { 0%, 65% { opacity: 1; } 66%, 100% { opacity: 0; } }
+      #ending { pointer-events: none; display: flex; flex-direction: column; align-items: center; }
+      #ending button { pointer-events: auto; }
+      #ending .head { height: 14vh; margin-top: 4.5vh; max-width: 92vw; } #ending .head .letters { max-width: 92vw; }
+      #ending .slam1 { animation-delay: calc(var(--i) * 0.045s); }
+      #ending .counts { display: flex; gap: 2.4vw; margin-top: 2vh; margin-bottom: auto; background: rgba(9, 7, 7, 0.72); padding: 1vh 2.4vw; transform: skewX(-6deg); animation: swap 0.5s 0.45s both; }
+      #ending .counts div { text-align: center; } #ending .counts b { font-size: 2.6em; line-height: 1; display: block; } #ending .counts span { color: var(--dim); }
+      #ending .row2 { gap: 1.5em; margin-bottom: 5vh; animation: swap 0.5s 1s both; }
+      #ending .play { width: 30vh; }
+      #ending .ghost { font-size: 1.3em; padding: 0 1.4em; height: 10.6vh; background: rgba(9, 7, 7, 0.78); transform: skewX(-6deg); } #ending .ghost:hover { background: rgba(255, 255, 255, 0.2); }
+      @media (max-height: 640px) { #setup .trait, #setup .team-card p { display: none; } }
+      @media (max-width: 1100px) { #setup .place { display: none; } #setup .bar { flex-wrap: wrap; height: auto; padding: 1vh; } }
+      @media (prefers-reduced-motion: reduce) { #setup *, #ending * { animation-duration: 0.01s !important; animation-iteration-count: 1 !important; } }
     </style>
   </head>
   <body>
@@ -110,19 +233,13 @@
       <summary>menu</summary>
       <div id="stats"></div>
       <div class="row">
-        <select id="scenario" title="scenario"></select>
+        <button id="toSetup" title="choose the map, the teams and the rules">setup</button>
         <label>seed <input id="seed" type="number" /></label>
         <button id="regen">new match</button>
         <button id="rand">random</button>
         <button id="bench">benchmark</button>
         <button id="fly" title="fly freely round the map, just to look at it">free camera</button>
         <button id="cine" title="a film-like flight over the map, on its own">cinematic camera</button>
-      </div>
-      <div class="row">
-        <select id="team0" title="red team"></select>
-        <select id="player0" title="who plays the red team"></select>
-        <select id="team1" title="blue team"></select>
-        <select id="player1" title="who plays the blue team"></select>
       </div>
       <div class="row">
         <button id="mute"></button>
@@ -168,6 +285,8 @@
       <button class="fire" data-action="fire" title="hold to charge, release to fire">FIRE</button>
     </div>
 
+    <div id="loading"><i></i><span>warming up the box</span></div>
+    <div id="flash"></div>
     <div id="banner" class="box"></div>
 
     <script type="module" src="/src/main.ts"></script>

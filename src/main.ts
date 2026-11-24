@@ -28,12 +28,14 @@ import { CHASE_ELEVATION, FollowCamera } from './render/followCamera';
 import { MeshWorkers, type MeshBatch } from './render/MeshWorkers';
 import { FloatingTexts, UnitLabel } from './render/labels';
 import { ProjectileViews } from './render/projectiles';
+import { Heroes } from './render/gpu/heroes';
 import { createGpuStage } from './render/gpu/gpuStage';
 import type { Stage, StageOptions } from './render/stage';
 import { createLayout } from './terrain/generators/types';
-import { SCENARIOS, scenarioById, type Scenario } from './terrain/scenarios';
+import { scenarioById, type Scenario } from './terrain/scenarios';
 import { Terrain } from './terrain/Terrain';
 import { Hud, type HudState } from './ui/hud';
+import { EndScreen, SetupScreen, type SetupChoice } from './ui/setup';
 import { setupKeysMenu } from './ui/keys';
 import { setupSoundMenu } from './ui/sound';
 
@@ -45,9 +47,11 @@ const players = ['human', 'normal'];
 let brains: (Brain | null)[] = [null, null];
 /** The computer whose turn it is, if any. */
 const brain = (): Brain | null => brains[match.activeUnit.team];
+/** The rules: bugs per team, seconds per turn, how strong the wind is (`?size=3&turn=30&wind=1`). */
+const rules = { size: 3, seconds: 30, wind: 1 };
 const teams = (): TeamSpec[] => [
-  { name: `Red ${PLURAL[picked[0].id]}`, species: picked[0], color: 0xff6b5e, size: 3 },
-  { name: `Blue ${PLURAL[picked[1].id]}`, species: picked[1], color: 0x5fb0ff, size: 3 },
+  { name: `Red ${PLURAL[picked[0].id]}`, species: picked[0], color: 0xff6b5e, size: rules.size },
+  { name: `Blue ${PLURAL[picked[1].id]}`, species: picked[1], color: 0x5fb0ff, size: rules.size },
 ];
 
 const canvas = document.getElementById('c') as HTMLCanvasElement;
@@ -60,7 +64,14 @@ const hooks = readHooks(params);
 (params.get('players') ?? '').split(',').forEach((id, i) => {
   if (i < 2 && (id === 'human' || SKILLS.some((s) => s.id === id))) players[i] = id;
 });
-// Map size in chunks of 32, e.g. `?map=3x2x3` for the small map, until there is a setup screen. Without it, the
+const ruleOf = (name: string, least: number, most: number, otherwise: number): number => {
+  const v = params.get(name);
+  return v === null || !Number.isFinite(Number(v)) ? otherwise : Math.min(most, Math.max(least, Number(v)));
+};
+rules.size = Math.round(ruleOf('size', 1, 5, 3));
+rules.seconds = ruleOf('turn', 10, 120, 30);
+rules.wind = ruleOf('wind', 0, 2, 1);
+// Map size in chunks of 32, e.g. `?map=3x2x3` for the small map. Without it, the
 // scenario's own size (a scenario at a larger scale needs a larger map), else 5x3x5.
 const size = (params.get('map') ?? '').match(/^(\d+)x(\d+)x(\d+)$/);
 let seed = Number(params.get('seed') ?? 1234) | 0;
@@ -121,6 +132,7 @@ function onMeshBatch(b: MeshBatch): void {
   const now = performance.now();
   if (b.id === initialBatch) {
     state.initialMeshMs = now - b.startedAt;
+    menus.meshed = true;
   } else {
     state.lastExplosionMs = b.postMs + (now - t0);
     state.lastExplosionWorkerMs = b.workerMs;
@@ -141,6 +153,11 @@ let bugViews: { view: BugView; label: UnitLabel; height: number }[] = [];
 /** New map and new match from one number: the seed is all two players need to share. */
 function newMatch(s: number): void {
   const t0 = performance.now();
+  const chunksNow = mapSize(scenario);
+  if (chunksNow.join() !== [terrain.cx, terrain.cy, terrain.cz].join()) {
+    terrain.resize(...chunksNow);
+    chunks.clear();
+  }
   scenario.generate(terrain, s, layout);
   stage.setScenario(scenario, layout);
   chunks.setSharp(scenario.sharpEdges);
@@ -159,7 +176,12 @@ function newMatch(s: number): void {
   state.lastExplosionChunks = 0;
   state.bench = '';
 
-  match = new Match(terrain, teams(), s, { strictBounds: scenario.strictBounds, spawnLevels: scenario.spawnLevels === true, turntable: scenario.turntable?.(terrain.W, terrain.H, terrain.D), confine: scenario.confine?.(terrain.W, terrain.H, terrain.D) });
+  newTeams(s);
+}
+
+/** New teams on the map as it is. */
+function newTeams(s: number): void {
+  match = new Match(terrain, teams(), s, { turnSeconds: rules.seconds, wind: rules.wind, strictBounds: scenario.strictBounds, spawnLevels: scenario.spawnLevels === true, turntable: scenario.turntable?.(terrain.W, terrain.H, terrain.D), confine: scenario.confine?.(terrain.W, terrain.H, terrain.D) });
 
   brains = players.map((id, i) => {
     const s = SKILLS.find((q) => q.id === id);
@@ -177,6 +199,7 @@ function newMatch(s: number): void {
     stage.hud.add(label.sprite);
     return { view, label, height: u.bug.species.radius * 2.4 };
   });
+  bestHit = 0;
   webViews.clear();
   bow.clear();
   antColumn.clear();
@@ -299,6 +322,7 @@ function handleEvents(events: readonly MatchEvent[]): void {
         break;
       }
       case 'damage':
+        bestHit = Math.max(bestHit, e.amount);
         lookAtUnit(e.unit, e.amount);
         if (inScene()) {
           // (bite upon bite: one number in the end)
@@ -343,76 +367,14 @@ if (hooks.fly) {
     'Shift faster, Ctrl slower · scroll: speed · R: back to the start · "back to the game" leaves';
 }
 
-// The menu (seed, benchmark, key help) starts open where there is room for it.
-(document.getElementById('panel') as HTMLDetailsElement).open = hooks.fly || window.innerWidth > 1000;
+// The menu (seed, benchmark, key help) starts closed after the setup screen, open without it.
+(document.getElementById('panel') as HTMLDetailsElement).open = hooks.fly || params.get('play') === '1';
 hud.seed.value = String(seed);
-hud.scenario.replaceChildren(
-  ...SCENARIOS.map((sc) => {
-    const o = document.createElement('option');
-    o.value = sc.id;
-    o.textContent = sc.name;
-    return o;
-  }),
-);
-hud.scenario.value = scenario.id;
-hud.scenario.addEventListener('change', () => {
-  const next = scenarioById(hud.scenario.value);
-  params.set('scenario', next.id);
-  if (mapSize(next).join() !== mapSize(scenario).join()) {
-    // another map size needs another grid: reload with it
-    location.search = params.toString();
-    return;
-  }
-  scenario = next;
-  history.replaceState(null, '', `?${params.toString()}`);
-  newMatch(seed);
-  hud.scenario.blur();
-});
 /** Keep the seed in the address, so a reload (the free camera's switch) shows the same map. */
 const keepSeed = (): void => {
   params.set('seed', String(seed));
   history.replaceState(null, '', `?${params.toString()}`);
 };
-for (const i of [0, 1]) {
-  const pick = document.getElementById(`team${i}`) as HTMLSelectElement;
-  pick.replaceChildren(
-    ...SPECIES.map((q) => {
-      const o = document.createElement('option');
-      o.value = q.id;
-      o.textContent = `${i ? 'blue' : 'red'}: ${PLURAL[q.id].toLowerCase()}`;
-      return o;
-    }),
-  );
-  pick.value = picked[i].id;
-  pick.addEventListener('change', () => {
-    picked[i] = SPECIES.find((q) => q.id === pick.value) ?? ANT;
-    params.set('teams', picked.map((q) => q.id).join());
-    history.replaceState(null, '', `?${params.toString().replaceAll('%2C', ',')}`);
-    newMatch(seed);
-    pick.blur();
-  });
-}
-for (const i of [0, 1]) {
-  const pick = document.getElementById(`player${i}`) as HTMLSelectElement;
-  pick.replaceChildren(
-    ...[{ id: 'human', label: 'player' }, ...SKILLS].map((q) => {
-      const o = document.createElement('option');
-      o.value = q.id;
-      o.textContent = q.label;
-      return o;
-    }),
-  );
-  pick.value = players[i];
-  pick.addEventListener('change', () => {
-    players[i] = pick.value;
-    params.set('players', players.join());
-    history.replaceState(null, '', `?${params.toString().replaceAll('%2C', ',')}`);
-    // (from here on: the match goes on)
-    const s = SKILLS.find((q) => q.id === pick.value);
-    brains[i] = s ? new Brain(s, seed * 2 + i) : null;
-    pick.blur();
-  });
-}
 hud.regen.addEventListener('click', () => {
   seed = Number(hud.seed.value) | 0;
   keepSeed();
@@ -431,7 +393,10 @@ const flyButton = document.getElementById('fly') as HTMLButtonElement;
 flyButton.textContent = hooks.fly ? 'back to the game' : 'free camera';
 flyButton.addEventListener('click', () => {
   params.set('seed', String(seed));
-  if (hooks.fly) params.delete('fly');
+  if (hooks.fly) {
+    params.delete('fly');
+    params.set('play', '1');
+  }
   else params.set('fly', '1');
   params.delete('flythrough');
   location.search = params.toString();
@@ -443,7 +408,10 @@ const setCinematic = (on: boolean): void => {
   params.set('seed', String(seed));
   params.delete('fly');
   if (on) params.set('flythrough', '1');
-  else params.delete('flythrough');
+  else {
+    params.delete('flythrough');
+    params.set('play', '1');
+  }
   location.search = params.toString();
 };
 cineButton.addEventListener('click', () => setCinematic(true));
@@ -458,6 +426,242 @@ hud.bench.addEventListener('click', () => {
   refresh();
   hud.bench.blur();
 });
+
+// ---- the setup screen, and the end of a match ----
+/** The menu comes first, unless the address asks for something else (`?play=1`: straight into the match). */
+const menuAtStart = !usesDebugCamera(hooks) && !hooks.perf && params.get('play') !== '1';
+if (menuAtStart && params.get('seed') === null) seed = randomSeed();
+const menus = {
+  setup: false,
+  over: false,
+  time: 0,
+  overFor: 0,
+  starting: -1,
+  /** Closing over the old map (seconds left), and waiting for the new one's chunks. */
+  mapIn: -1,
+  meshed: true,
+  /** The colours rip open over the match that starts. */
+  ripping: false,
+  ended: -1,
+  flare: 2.5,
+};
+/** The hardest blow of the match, for its end. */
+let bestHit = 0;
+const menuAt = new THREE.Vector3();
+const heroes = new Heroes(stage.menu);
+const flashEl = document.getElementById('flash') as HTMLElement;
+const choice: SetupChoice = { scenario: scenario.id, species: [picked[0], picked[1]], players: [players[0], players[1]], size: rules.size, seconds: rules.seconds, wind: rules.wind, seed };
+const setup = new SetupScreen(choice, {
+  onMap: () => {
+    menus.mapIn = 0.42;
+    setup.call();
+    stage.menu.open.value = Math.min(stage.menu.open.value, 0.9);
+  },
+  onSpecies: (i) => {
+    heroes.set(i, choice.species[i]);
+  },
+  onPlay: () => {
+    menus.starting = 0;
+    heroes.charge();
+    sound.play('turn');
+  },
+  onHover: (i) => heroes.show(i),
+  onReady: (on) => {
+    heroes.ready = on;
+  },
+  onPick: (strong) => sound.play(strong ? 'select' : 'tick'),
+  random: randomSeed,
+});
+const ending = new EndScreen(
+  () => {
+    closeEnding();
+    seed = randomSeed();
+    keepSeed();
+    newMatch(seed);
+    flash();
+  },
+  () => {
+    closeEnding();
+    openSetup();
+  },
+);
+function randomSeed(): number {
+  return Math.floor(Math.random() * 99999); // UI only: never in generation/gameplay code
+}
+function flash(): void {
+  flashEl.classList.remove('on');
+  void flashEl.offsetWidth;
+  flashEl.classList.add('on');
+}
+/** The menu's view of the map: the whole device, swayed round slowly, higher in the picture than the board in front. */
+function menuView(t: number): void {
+  const { p, t: to } = views.start;
+  menuAt.set(p[0] - to[0], p[1] - to[1], p[2] - to[2]);
+  const a = Math.sin(t * 0.13) * 0.3 + heroes.pointer.x * 0.015;
+  const c = Math.cos(a);
+  const s = Math.sin(a);
+  const far = 0.84 + 0.07 * Math.cos(t * 0.11);
+  stage.camera.position.set(to[0] + (menuAt.x * c + menuAt.z * s) * far, to[1] + menuAt.y * far * (0.94 + 0.05 * Math.sin(t * 0.17)), to[2] + (menuAt.z * c - menuAt.x * s) * far);
+  const drop = menuAt.length() * far * 0.17;
+  stage.camera.lookAt(to[0], to[1] - drop, to[2]);
+}
+function openSetup(): void {
+  params.delete('play');
+  Object.assign(choice, { scenario: scenario.id, species: [picked[0], picked[1]], players: [players[0], players[1]], size: rules.size, seconds: rules.seconds, wind: rules.wind, seed });
+  menus.setup = true;
+  menus.starting = -1;
+  menus.mapIn = -1;
+  introT = -1;
+  controls.enabled = false;
+  document.body.classList.add('menu');
+  stage.hud.visible = false;
+  stage.menu.seam.value = 0;
+  stage.menu.open.value = 0;
+  stage.menu.amount.value = 1;
+  stage.menu.show(true);
+  menus.ripping = false;
+  menus.time = 0;
+  heroes.stage.setMap(scenario.id);
+  heroes.clear();
+  for (const i of [0, 1]) heroes.set(i, picked[i], 0.25 + i * 0.22);
+  setup.show();
+}
+/** The choice becomes the match. */
+function startMatch(): void {
+  picked[0] = choice.species[0];
+  picked[1] = choice.species[1];
+  players[0] = choice.players[0];
+  players[1] = choice.players[1];
+  rules.size = choice.size;
+  rules.seconds = choice.seconds;
+  rules.wind = choice.wind;
+  params.set('teams', picked.map((q) => q.id).join());
+  params.set('players', players.join());
+  params.set('size', String(rules.size));
+  params.set('turn', String(rules.seconds));
+  params.set('wind', String(rules.wind));
+  params.set('scenario', scenario.id);
+  hud.seed.value = String(seed);
+  keepSeed();
+  setup.hide();
+  heroes.clear();
+  // (the colours shut for an instant, then rip open over the match)
+  heroes.stage.root.visible = false;
+  stage.menu.amount.value = 0;
+  stage.menu.open.value = 0;
+  stage.menu.glow.value = 2;
+  menus.ripping = true;
+  controls.enabled = true;
+  menus.setup = false;
+  menus.starting = -1;
+  accumulator = 0;
+  newTeams(seed);
+  // (the flash gave way to the map: no long hold)
+  introT = INTRO_HOLD * 0.35;
+  flash();
+}
+/** The colours are open: the match has the picture. */
+function endRip(): void {
+  menus.ripping = false;
+  stage.menu.glow.value = 0;
+  stage.menu.open.value = 1.4;
+  stage.menu.show(false);
+  heroes.stage.root.visible = true;
+  document.body.classList.remove('menu');
+  stage.hud.visible = true;
+}
+function closeEnding(): void {
+  if (!menus.over) return;
+  menus.over = false;
+  ending.hide();
+  heroes.clear();
+  stage.menu.amount.value = stage.menu.glow.value = 0;
+  stage.menu.show(false);
+  document.body.classList.remove('menu');
+  stage.hud.visible = true;
+  controls.enabled = true;
+}
+function openEnding(): void {
+  menus.over = true;
+  menus.ended = 0;
+  controls.enabled = false;
+  document.body.classList.add('menu');
+  stage.hud.visible = false;
+  stage.menu.open.value = 1.4;
+  stage.menu.seam.value = match.winner < 0 ? 0 : match.winner ? -0.75 : 0.75;
+  stage.menu.show(true);
+  heroes.stage.setMap(scenario.id);
+  heroes.clear();
+  for (const i of [0, 1]) heroes.set(i, picked[i]);
+  if (match.winner >= 0) heroes.celebrate(match.winner);
+}
+function showEnding(): void {
+  const w = match.winner;
+  const left = w >= 0 ? match.teamAlive(w) : 0;
+  const numbers: [number, string][] = [[left, left === 1 ? 'survivor' : 'survivors'], [match.turnNumber, match.turnNumber === 1 ? 'turn' : 'turns'], [bestHit, 'best hit']];
+  if (w >= 0) ending.show(`${match.teams[w].name.replace('Cockroaches', 'Roaches')} win`, w ? '#8ccaff' : '#ff7a68', numbers);
+  else ending.show('Nobody left', '#ffb547', numbers);
+}
+heroes.onLand = () => sound.play('land');
+heroes.onShow = () => sound.play('tick');
+heroes.onMeet = () => {
+  sound.play('impact');
+  startMatch();
+};
+function updateMenus(dt: number): void {
+  const layer = stage.menu;
+  if (menus.ripping) {
+    layer.time.value += dt;
+    layer.open.value += dt * (0.5 + layer.open.value * 4.5);
+    layer.glow.value = Math.max(0, 2 * (1 - layer.open.value * 1.1));
+    if (layer.open.value > 1.2) endRip();
+    return;
+  }
+  if (!menus.setup && !menus.over) {
+    if (match.phase !== 'over' || debugCamera) menus.overFor = 0;
+    else if ((menus.overFor += dt) > 2.6 && !inScene()) openEnding();
+    return;
+  }
+  const ease = 1 - Math.exp(-dt * 4);
+  menus.time += dt;
+  layer.time.value += dt;
+  menus.flare -= dt;
+  if (menus.flare < 0) menus.flare = 2 + Math.random() * 2.2;
+  layer.flare.value = menus.flare < 0.35 || menus.starting >= 0 ? 1 : layer.flare.value * Math.exp(-dt * 5);
+  if (menus.setup) {
+    layer.amount.value += (1 - layer.amount.value) * ease;
+    layer.glow.value += ((menus.starting >= 0 ? 2.6 : 1) - layer.glow.value) * ease;
+    // another map: the colours shut over the old one, the map is made, they open on the new one
+    if (menus.mapIn >= 0) {
+      layer.open.value = Math.max(0, layer.open.value - dt * 4.2);
+      if ((menus.mapIn -= dt) <= 0) {
+        menus.mapIn = -1;
+        menus.meshed = workers === null;
+        scenario = scenarioById(choice.scenario);
+        seed = choice.seed;
+        hud.seed.value = String(seed);
+        newMatch(seed);
+        heroes.stage.setMap(scenario.id);
+        introT = -1;
+        menus.time = 0;
+      }
+    } else if (menus.meshed && layer.open.value < 1.4) {
+      if (layer.open.value === 0) setup.uncall();
+      layer.open.value += dt * (0.35 + layer.open.value * 3.4);
+    }
+  } else {
+    layer.amount.value += (1 - layer.amount.value) * ease;
+    if (menus.ended >= 0 && (menus.ended += dt) > 1) {
+      menus.ended = -1;
+      showEnding();
+    }
+  }
+  heroes.update(dt);
+}
+window.addEventListener('pointermove', (e) => {
+  heroes.pointer.set((e.clientX / window.innerWidth) * 2 - 1, 1 - (e.clientY / window.innerHeight) * 2);
+});
+(document.getElementById('toSetup') as HTMLButtonElement).addEventListener('click', () => openSetup());
 
 // Dev only: shift+click blows up the terrain under the pointer (handy to test falls and damage).
 if (import.meta.env.DEV) {
@@ -734,12 +938,13 @@ function frame(now: number): void {
   frameMs[frameCount++ % frameMs.length] = interval;
   lastFrame = now;
 
-  const intro = !debugCamera && updateIntro(dt);
+  const inMenu = menus.setup;
+  const intro = !debugCamera && !inMenu && updateIntro(dt);
   // while the player turns the view, the bug faces where it looks (aiming, or walking away after a shot)
   const steering = match.phase === 'aim' || (match.phase === 'flight' && match.retreatTicks > 0);
   const viewTurns = orbiting || orbitTail > 0;
   orbitTail = Math.max(0, orbitTail - dt);
-  stage.controls.enabled = !inScene() && !debugCamera;
+  stage.controls.enabled = !inScene() && !debugCamera && !inMenu && !menus.over;
   if (viewTurns && !inScene() && !debugCamera && !intro && !follow.gliding && steering && !brain() && match.activeUnit.bug.alive) {
     // the turn keys still turn the bug while the view is held: they turn the view (at the bug's turn
     // rate, with the same slow start for fine steps), and the bug faces where it looks
@@ -781,11 +986,11 @@ function frame(now: number): void {
   let faced = false;
   // (a special attack slows the match for a moment: the same ticks, later)
   const scaled = dt * Math.min(bow.timeScale, antColumn.timeScale, brood.timeScale);
-  accumulator += scaled;
+  if (!inMenu) accumulator += scaled;
   while (accumulator >= DT) {
     prevTurns = match.turntableTurns;
     // a debug camera (or the intro) owns the view: the match keeps running without input
-    if (debugCamera || intro) match.step(NO_INPUT);
+    if (debugCamera || intro || menus.over) match.step(NO_INPUT);
     else {
       // (while the computer plays, the player's keys go nowhere)
       const typed = controls.next();
@@ -840,9 +1045,13 @@ function frame(now: number): void {
   webViews.update(match, ground, (i, out) => out.copy(bugViews[i].view.root.position), now);
   const active = bugViews[match.active];
   aim.update(match, active.view.root.position, active.height, now);
+  if (inMenu || menus.over) {
+    aim.hide();
+    for (const v of bugViews) v.view.root.visible = false;
+  }
 
   // each turn starts behind the active bug, looking where it walks; while it aims, the view turns with it
-  if (!debugCamera && !intro && match.activeUnit.bug.alive) {
+  if (!debugCamera && !intro && !inMenu && match.activeUnit.bug.alive) {
     const b = match.activeUnit.bug;
     const yaw = Math.atan2(b.fx, b.fz);
     if (chasePending && match.phase === 'aim' && !inScene()) {
@@ -860,7 +1069,7 @@ function frame(now: number): void {
   }
 
   // follow the shot while it flies, then a bug that dies, otherwise the bug whose turn it is
-  if (!debugCamera && !intro && !inScene()) {
+  if (!debugCamera && !intro && !inMenu && !inScene()) {
     let tracking = true;
     if (match.projectiles.length > 0 && projectiles.first(target)) {
       // the shot
@@ -883,7 +1092,9 @@ function frame(now: number): void {
   if (debugCamera) {
     if (path) path.at(pathFrozenAt ?? (now - pathStart) / 1000, stage.camera, pathTarget);
     if (fly) fly.update(dt);
-  } else if (!intro && !inScene()) {
+  } else if (inMenu) menuView(menus.time);
+  else if (!intro && !inScene()) {
+    if (menus.over) follow.turnWith(dt * 0.12);
     if (wasSpecial) {
       // out of a special attack's scene: the game's lens, and a glide back to the active bug
       stage.camera.fov = bow.camera.fov;
@@ -908,6 +1119,7 @@ function frame(now: number): void {
   broodState.time = brood.sceneTime;
   gameSounds.frame(match, dt, Math.min(bow.timeScale, antColumn.timeScale, brood.timeScale), bowState, columnState, broodState);
   hear();
+  updateMenus(dt);
   flashes.update(now);
   lines.update(now);
   texts.update(now);
@@ -921,6 +1133,28 @@ function frame(now: number): void {
 }
 
 newMatch(seed);
+if (!menuAtStart) document.getElementById('loading')?.remove();
+else {
+  // (the fighters' shaders first: nothing stalls when they are picked)
+  heroes.warm(SPECIES, scenario.id);
+  await stage.menu.warm();
+  heroes.rest(scenario.id);
+  openSetup();
+  // (the first frames make the map's shaders: a sign stands before the menu until it runs smoothly, then it makes its entrance)
+  let last = performance.now();
+  let smooth = 0;
+  const until = last + 15000;
+  const settle = (now: number): void => {
+    smooth = now - last < 50 ? smooth + 1 : 0;
+    last = now;
+    if (smooth < 12 && now < until) requestAnimationFrame(settle);
+    else {
+      document.getElementById('loading')?.remove();
+      openSetup();
+    }
+  };
+  requestAnimationFrame(settle);
+}
 // the cinematic camera's own little bar: it hides while the mouse rests (and for good with `?hud=0`, as in the
 // scripted reviews and measurements)
 if (hooks.flythrough && params.get('hud') !== '0') {
@@ -998,6 +1232,9 @@ const debugApi = {
   chunks,
   controls,
   layout,
+  menus,
+  heroes,
+  setup: openSetup,
   match: () => match,
   newMatch,
   views: () => views,

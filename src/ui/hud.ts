@@ -37,7 +37,6 @@ function specialOf(match: Match, team: number): number {
 /** DOM HUD. Writes to the DOM only when a shown value changes. */
 export class Hud {
   readonly seed = el<HTMLInputElement>('seed');
-  readonly scenario = el<HTMLSelectElement>('scenario');
   readonly regen = el<HTMLButtonElement>('regen');
   readonly random = el<HTMLButtonElement>('rand');
   readonly bench = el<HTMLButtonElement>('bench');
@@ -196,14 +195,14 @@ export class Hud {
     this.set('aim', () => (this.aim.textContent = aim), aim);
 
     const banner =
-      match.phase !== 'over' ? '' : match.winner >= 0 ? `${match.teams[match.winner].name} win!` : 'Draw: nobody is left';
+      match.phase !== 'over' || document.body.classList.contains('menu') ? '' : match.winner >= 0 ? `${match.teams[match.winner].name} win!` : 'Draw: nobody is left';
     this.set('banner', () => {
       this.banner.style.display = banner ? 'block' : 'none';
       this.banner.replaceChildren();
       if (!banner) return;
       this.banner.append(banner);
       const small = document.createElement('small');
-      small.textContent = 'press N (or "new match") to play again';
+      small.textContent = 'that was the match';
       this.banner.append(small);
       if (match.winner >= 0) this.banner.style.color = hex(match.teams[match.winner].color);
     }, banner);

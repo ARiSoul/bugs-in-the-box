@@ -88,3 +88,15 @@ describe('terrain queries', () => {
     expect(analyze(meshAll(t)).openEdges).toBe(0);
   });
 });
+
+describe('resize', () => {
+  it('a terrain made larger and back is the terrain it was', () => {
+    const t = new Terrain(3, 2, 3);
+    t.resize(4, 2, 3);
+    expect([t.W, t.H, t.D]).toEqual([128, 64, 96]);
+    floatingIslands(t, SEED);
+    t.resize(3, 2, 3);
+    floatingIslands(t, SEED);
+    expect(t.dens).toEqual(make().dens);
+  });
+});

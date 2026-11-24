@@ -547,3 +547,15 @@ describe('what a shot did', () => {
     expect(m.tick - t0).toBeGreaterThanOrEqual(LOOK_DAMAGE_TICKS);
   });
 });
+
+describe('the rules of a match', () => {
+  it('a turn lasts as long as it is set to, and there is wind only where there is any', () => {
+    const still = new Match(flat(10), teams(1), 1, { turnSeconds: 15, wind: 0 });
+    expect(still.turnTicks).toBe(15 * TICK_RATE);
+    expect(Math.abs(still.windX) + Math.abs(still.windZ)).toBe(0);
+    const usual = new Match(flat(10), teams(1), 1);
+    const half = new Match(flat(10), teams(1), 1, { wind: 0.5 });
+    expect(usual.turnTicks).toBe(AIM_TICKS);
+    expect(half.windX).toBeCloseTo(usual.windX / 2, 9);
+  });
+});
