@@ -173,7 +173,8 @@ export async function createGpuStage(canvas: HTMLCanvasElement, terrain: Terrain
     const far = smoothstep(fx.subject.add(3.5), fx.subject.add(13), viewZ);
     // (a pale floor dims more, so the lights on it show; what shines of its own, the fighter and its bow, does not)
     const own = smoothstep(0.004, 0.03, sceneEmissive.sample(screenUV).rgb.dot(vec3(0.33)));
-    const pale = mix(0.3, 0.86, smoothstep(0.12, 0.5, world.dot(vec3(0.3, 0.6, 0.1))).mul(own.oneMinus()));
+    const bright = world.dot(vec3(0.3, 0.6, 0.1));
+    const pale = mix(0.3, 0.86, smoothstep(0.12, 0.5, bright).mul(own.oneMinus())).add(smoothstep(0.45, 1, bright).mul(own.oneMinus()).mul(0.1));
     // (the one it aims at keeps its light: a soft spot on the screen)
     const spot = smoothstep(fx.spot.z, 0, vec2(screenUV.x.sub(fx.spot.x).mul(fx.spot.w), screenUV.y.sub(fx.spot.y)).length()).mul(smoothstep(6, 1.5, abs(viewZ.sub(fx.spotAt))));
     const dimBy = spot.mul(0.8).oneMinus().mul(min(fx.dim.mul(mix(pale, 1.12, far)), 0.988));

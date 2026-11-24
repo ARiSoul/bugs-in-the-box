@@ -31,7 +31,7 @@ const SETTLE_MAX_TICKS = 10 * TICK_RATE;
 /** Holding fire fills the power bar in this many ticks; it fires by itself when full. */
 export const CHARGE_TICKS = 72;
 /** Projectiles leave at no less than this fraction of their full speed. */
-const MIN_POWER = 0.12;
+export const MIN_POWER = 0.12;
 /** Pitch rate of the aim, radians per second. */
 const AIM_RATE = 1.2;
 /**
@@ -248,6 +248,16 @@ function ramp(held: number): number {
   return held >= RAMP_TICKS ? 1 : RAMP_START + ((1 - RAMP_START) * held) / RAMP_TICKS;
 }
 
+/** How much of a blast's damage a bug takes (0..1): it falls off linearly to BLAST_REACH radii. */
+export function blastShare(b: Bug, x: number, y: number, z: number, w: Weapon): number {
+  const dx = b.x - x;
+  const dy = b.y - y;
+  const dz = b.z - z;
+  const d = Math.sqrt(dx * dx + dy * dy + dz * dz) - b.species.radius;
+  const reach = w.blastRadius * BLAST_REACH;
+  return d >= reach ? 0 : d <= 0 ? 1 : 1 - d / reach;
+}
+
 export interface MatchOptions {
   /** false: skip random placement (tests place the bugs themselves). Default true. */
   placeBugs?: boolean;
@@ -426,7 +436,8 @@ export class Match {
       if (!b.alive && !u.dead) this.announceDeath(u);
     }
     if (this.phase !== 'spin') this.keepApart();
-    if (this.phase === 'aim' && !unit.bug.alive) this.endAim();
+    // (whose turn it is now: it may just have passed on from one that died)
+    if (this.phase === 'aim' && !this.units[this.active].bug.alive) this.endAim();
 
     for (let i = 0; i < this.projectiles.length; i++) {
       const p = this.projectiles[i];
@@ -774,7 +785,10 @@ export class Match {
       c.swarm++;
       if (v.bug.alive && c.swarm % Math.floor(SWARM_TICKS / SWARM_BITES) === 0 && c.swarm < SWARM_TICKS) this.damage(v, SWARM_BITE);
       if (v.bug.alive && c.swarm < SWARM_TICKS) return;
-      if (v.bug.alive) this.collapse(c, v.bug.x - v.bug.nx * v.bug.species.radius, v.bug.y - v.bug.ny * v.bug.species.radius, v.bug.z - v.bug.nz * v.bug.species.radius);
+      // (under it: the nearest ground, which on an edge is not straight below)
+      const on = v.bug.alive ? this.toSurface(v.bug.x, v.bug.y, v.bug.z) : null;
+      if (on) this.collapse(c, on.x, on.y, on.z);
+      else if (v.bug.alive) this.collapse(c, v.bug.x - v.bug.nx * v.bug.species.radius, v.bug.y - v.bug.ny * v.bug.species.radius, v.bug.z - v.bug.nz * v.bug.species.radius);
       else this.collapse(c, h.x - h.nx * h.species.radius, h.y - h.ny * h.species.radius, h.z - h.nz * h.species.radius);
       return;
     }
@@ -1035,7 +1049,6 @@ export class Match {
       const near = w.blastRadius + s.radius * 0.5;
       if (sx * sx + sy * sy + sz * sz < near * near) this.removeWeb(s, true);
     }
-    const reach = w.blastRadius * BLAST_REACH;
     for (const u of this.units) {
       const b = u.bug;
       if (!b.alive) continue;
@@ -1043,9 +1056,8 @@ export class Match {
       const ey = b.y - y;
       const ez = b.z - z;
       const dist = Math.sqrt(ex * ex + ey * ey + ez * ez);
-      const d = dist - b.species.radius;
-      if (d >= reach) continue;
-      const f = d <= 0 ? 1 : 1 - d / reach;
+      const f = blastShare(b, x, y, z, w);
+      if (f <= 0) continue;
       this.damage(u, Math.round(w.damage * f));
       // thrown away from the blast, with an upward bias so it does not just slide
       let kx = 0;

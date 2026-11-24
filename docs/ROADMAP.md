@@ -60,6 +60,7 @@ Goal now: a PC demo first, as a proof of concept. The phone items below are post
 
 ## Phase 6 · Audio and polish
 - [x] Sound effects: every weapon, the bugs, the turns, both special attacks' scenes, an ambience and an echo per map; all computed in code (no audio files)
+- [x] Computer opponent (`game/brain.ts`): easy, normal, hard; either team, or both
 - [ ] Music; scenario elements that react to the beat
 - [ ] Menus, team screen, settings
 - [ ] Acceptance tests on real browsers and devices

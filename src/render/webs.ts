@@ -138,6 +138,7 @@ export class WebViews {
   private readonly bound = new THREE.MeshStandardMaterial({ color: 0xe9ebec, roughness: 0.6, emissive: 0x9fb4bd, emissiveIntensity: 0.35, fog: false });
   private readonly strand = new THREE.CylinderGeometry(1, 1, 1, 5, 1, true).translate(0, 0.5, 0);
   private used = 0;
+  private soon = { id: -1, frames: 0 };
   private readonly a = new THREE.Vector3();
   private readonly b = new THREE.Vector3();
   private static readonly UP = new THREE.Vector3(0, 1, 0);
@@ -164,7 +165,11 @@ export class WebViews {
   update(match: Match, ground: DrawnGround, at: (i: number, out: THREE.Vector3) => THREE.Vector3, now: number): void {
     const t = now / 1000;
     for (const w of match.webs) {
-      if (!this.views.has(w.id)) this.views.set(w.id, this.make(w, ground, t));
+      if (this.views.has(w.id)) continue;
+      // (a great web: a few frames after the hit, which has enough to do; nothing of it shows before)
+      if (w.grand && this.soon.id !== w.id) this.soon = { id: w.id, frames: 4 };
+      if (w.grand && this.soon.frames-- > 0) continue;
+      this.views.set(w.id, this.make(w, ground, t));
     }
     for (const [id, v] of this.views) {
       if (v.gone < 0 && !match.webs.includes(v.web)) v.gone = t;

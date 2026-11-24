@@ -63,6 +63,8 @@ export class BroodCamera {
   private tiltUp = 0.62;
   private zoom = 30;
   private ahead = 8;
+  private lean = 0;
+  private readonly ahead3 = new THREE.Vector3();
   private readonly tilted = new THREE.Vector3();
   private readonly across = new THREE.Vector3();
   private readonly point = new THREE.Vector3();
@@ -80,6 +82,7 @@ export class BroodCamera {
     this.tiltUp = 0.62;
     this.zoom = 30;
     this.ahead = 8;
+    this.lean = 0;
   }
 
   stop(): void {
@@ -135,14 +138,24 @@ export class BroodCamera {
       this.ahead = Math.min(PAN, Math.max(-PAN, this.ahead + x.pan * x.dt * 16));
       const an = Math.atan2(x.fwd.x, x.fwd.z) + this.yaw;
       this.d.set(Math.sin(an), 0, Math.cos(an));
+      this.ahead3.copy(this.d);
       this.s.copy(x.at).addScaledVector(this.d, this.ahead);
       // (from over the bug when what lies ahead of it is inside something)
       const t = x.ground.raycast(x.at.x, x.at.y + 1.5, x.at.z, this.d.x * Math.sign(this.ahead || 1), 0, this.d.z * Math.sign(this.ahead || 1), Math.abs(this.ahead) + 1);
       if (t >= 0) this.s.copy(x.at).addScaledVector(this.d, Math.sign(this.ahead) * Math.max(0, t - 1));
       this.s.y += 1.5;
-      this.want.copy(this.s).addScaledVector(this.d, -Math.cos(this.tiltUp) * this.zoom);
-      this.want.y += Math.sin(this.tiltUp) * this.zoom;
-      this.clear(this.s, this.want, x.ground);
+      // (with something close behind it: from steeper, or from lower, whatever leaves the most room)
+      let best = -1;
+      let lean = 0;
+      for (const off of [0, 0.3, 0.6, -0.3]) {
+        this.over(this.tiltUp + off, x);
+        const room = this.want.distanceTo(this.s) / this.zoom - Math.abs(off) * 0.35 + (!c && off === this.lean ? 0.12 : 0);
+        if (room <= best + 0.001) continue;
+        best = room;
+        lean = off;
+      }
+      this.lean = lean;
+      this.over(this.tiltUp + lean, x);
       this.place.lerp(this.want, c ? 1 : 1 - Math.exp(-x.dt * 9));
       this.look.lerp(this.s, c ? 1 : 1 - Math.exp(-x.dt * 11));
       fov = 55;
@@ -169,6 +182,14 @@ export class BroodCamera {
       camera.fov = fov;
       camera.updateProjectionMatrix();
     }
+  }
+
+  /** Where it sees the middle of the player's view from, this steep. */
+  private over(tilt: number, x: BroodShot): void {
+    const t = Math.min(1.4, Math.max(0.1, tilt));
+    this.want.copy(this.s).addScaledVector(this.ahead3, -Math.cos(t) * this.zoom);
+    this.want.y += Math.sin(t) * this.zoom;
+    this.clear(this.s, this.want, x.ground);
   }
 
   /** A place to see the spot from, `an` round it (the world's), `el` up. */

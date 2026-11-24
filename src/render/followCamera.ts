@@ -169,6 +169,7 @@ export class FollowCamera {
       if (this.placed > 0 && Math.abs(dist - this.placed) > 1e-3) this.wanted *= dist / this.placed; // player zoomed
       if (this.placedPhi >= 0 && Math.abs(this.sph.phi - this.placedPhi) > 1e-4) this.basePhi += this.sph.phi - this.placedPhi; // player orbited
     }
+    this.wanted = Math.min(this.controls.maxDistance, Math.max(MIN_DISTANCE, this.wanted));
     this.basePhi = Math.min(Math.PI - 0.05, Math.max(MIN_PHI, this.basePhi));
     const theta = this.sph.theta;
 
@@ -208,8 +209,10 @@ export class FollowCamera {
     this.sph.set(next, phi, theta);
     this.camera.position.setFromSpherical(this.sph).add(target);
     this.pushOut(obstacles);
-    this.placed = next;
-    this.placedPhi = phi;
+    // (where it really is: pushed out of a wall is not zoomed)
+    this.sph.setFromVector3(this.dir.copy(this.camera.position).sub(target));
+    this.placed = this.sph.radius;
+    this.placedPhi = this.sph.phi;
   }
 
   /** Softly push the camera out of solid terrain (a wall behind it), along the field's gradient. */

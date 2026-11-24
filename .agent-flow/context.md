@@ -42,8 +42,8 @@
 Inside a PC and the floating islands scenario were removed. An unknown id falls back to the first entry.
 
 ### Weapons and species
-- Species: ant, spider, cockroach (data in `species.ts`). Weapons are data in `weapons.ts`: Solder Blob, Capacitor, Short Circuit, Soldering Iron for all; Web Shot and Web Bow (special attack with a cinematic scene) for spiders only.
-- Next planned: the other species' abilities. An ant special, Ant Column (`ANT_COLUMN`, `columnScene.ts`, `columnCamera.ts`, `tests/column.test.ts`), was uncommitted work in the working tree when this was written.
+- Species: ant, spider, cockroach (data in `species.ts`). Weapons are data in `weapons.ts`: Solder Blob, Capacitor, Short Circuit, Soldering Iron for all; Web Shot and Web Bow (special attack with a cinematic scene) for spiders, Ant Column (special) for ants, Blackout Swarm (special) and Hard Shell for cockroaches. The menu picks each team's species and who plays it: a player or the computer (`src/game/brain.ts`, three skills). Sound is synthesized (`src/audio/`).
+- Next planned: music, a setup screen for the teams, balance, more specials (docs/IDEAS.md), online play (docs/ROADMAP.md).
 
 ### Build, run and test
 ```bash

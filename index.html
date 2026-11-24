@@ -38,7 +38,7 @@
 
       #weapons { left: 50%; bottom: 12px; transform: translateX(-50%); text-align: center; }
       #power { width: 100%; height: 8px; margin-bottom: 6px; }
-      #power > div { background: linear-gradient(90deg, #ffe066, #ff6a3d); }
+      #power > div { background: #ffb04a; }
 
       #teams { left: 12px; bottom: 12px; min-width: 170px; }
       .team { display: grid; grid-template-columns: 1fr auto auto; gap: 2px 8px; align-items: center; }
@@ -96,14 +96,18 @@
       <div id="stats"></div>
       <div class="row">
         <select id="scenario" title="scenario"></select>
-        <select id="team0" title="red team"></select>
-        <select id="team1" title="blue team"></select>
         <label>seed <input id="seed" type="number" /></label>
         <button id="regen">new match</button>
         <button id="rand">random</button>
         <button id="bench">benchmark</button>
         <button id="fly" title="fly freely round the map, just to look at it">free camera</button>
         <button id="cine" title="a film-like flight over the map, on its own">cinematic camera</button>
+      </div>
+      <div class="row">
+        <select id="team0" title="red team"></select>
+        <select id="player0" title="who plays the red team"></select>
+        <select id="team1" title="blue team"></select>
+        <select id="player1" title="who plays the blue team"></select>
       </div>
       <div class="row">
         <button id="mute"></button>

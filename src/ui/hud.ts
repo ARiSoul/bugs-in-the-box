@@ -116,13 +116,13 @@ export class Hud {
   }
 
   /** `windAngle`: screen angle of the wind in radians (0 = right, positive = clockwise). */
-  renderMatch(match: Match, windAngle: number): void {
+  renderMatch(match: Match, windAngle: number, computer = false): void {
     const u = match.activeUnit;
     const team = match.teams[u.team];
     this.set('who', () => {
-      this.who.textContent = `${team.name} · ${u.name}`;
+      this.who.textContent = `${team.name} · ${u.name}${computer ? ' (computer)' : ''}`;
       this.who.style.color = hex(team.color);
-    }, `${team.name}|${u.name}`);
+    }, `${team.name}|${u.name}|${computer}`);
 
     const timer =
       match.phase === 'aim'
@@ -167,7 +167,7 @@ export class Hud {
 
     // the aim angle above the horizon, in degrees, for fine aiming
     const brood = match.currentWeapon.kind === 'brood' && match.stance;
-    const aim = brood && !match.mark ? 'point at a spot nearer to it' : brood ? 'point at a spot, click (or the fire key) to call them · W/S move, right drag turns the view' : match.phase === 'aim' ? `aim ${((Math.atan2(u.aimV, u.aimH) * 180) / Math.PI).toFixed(1)}°` : '';
+    const aim = computer ? '' : brood && !match.mark ? 'point at a spot nearer to it' : brood ? 'point at a spot, click (or the fire key) to call them · W/S move, right drag turns the view' : match.phase === 'aim' ? `aim ${((Math.atan2(u.aimV, u.aimH) * 180) / Math.PI).toFixed(1)}°` : '';
     this.set('aim', () => (this.aim.textContent = aim), aim);
 
     const banner =

@@ -180,6 +180,31 @@ export class Bug {
     return true;
   }
 
+  /** Be where another bug is, as it is (to try a way in one's head). */
+  copy(o: Bug): void {
+    this.x = this.px = o.x;
+    this.y = this.py = o.y;
+    this.z = this.pz = o.z;
+    this.vx = o.vx;
+    this.vy = o.vy;
+    this.vz = o.vz;
+    this.fx = o.fx;
+    this.fz = o.fz;
+    this.hx = o.hx;
+    this.hy = o.hy;
+    this.hz = o.hz;
+    this.nx = o.nx;
+    this.ny = o.ny;
+    this.nz = o.nz;
+    this.grounded = o.grounded;
+    this.confine = o.confine;
+    this.slow = o.slow;
+    this.hung = o.hung;
+    this.airTicks = o.airTicks;
+    this.alive = o.alive;
+    this.health = o.health;
+  }
+
   /** Advance one tick (DT seconds). */
   step(field: TerrainField, input: Readonly<BugInput>): void {
     this.justLanded = false;

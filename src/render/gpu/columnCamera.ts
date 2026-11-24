@@ -50,6 +50,11 @@ const STANCE: [number, number, number, number][] = [
   [12.5, 7, -2.2, 9],
   [9, 12, 0, 5],
   [5, 15, 0, 2.5],
+  [8, 8, 7.5, 4],
+  [8, 8, -7.5, 4],
+  [1, 16, 0, 1.2],
+  [-3, 14, 4, 0.4],
+  [-3, 14, -4, 0.4],
 ];
 const CLEAR = 0.7;
 
@@ -69,6 +74,7 @@ export class ColumnCamera {
   private readonly place = new THREE.Vector3();
   private readonly look = new THREE.Vector3();
   private readonly want = new THREE.Vector3();
+  private readonly ant = new THREE.Vector3();
   private readonly aim = new THREE.Vector3();
   private readonly d = new THREE.Vector3();
   private readonly s = new THREE.Vector3();
@@ -181,7 +187,7 @@ export class ColumnCamera {
       let mode = 0;
       for (let i = 0; i < STANCE.length; i++) {
         this.stanceAt(i, x);
-        const score = this.want.distanceTo(this.aim) / x.radius - i * 0.8 + (!c && i === this.mode ? 2 : 0) - 2.5 * this.covered(this.aim, x.up, 1.6 * x.radius, this.want, x.ground);
+        const score = this.want.distanceTo(this.aim) / x.radius - i * 0.6 + (!c && i === this.mode ? 2 : 0) - 5 * this.covered(this.aim, x.up, 1.6 * x.radius, this.want, x.ground) - 4 * this.covered(this.ant.copy(x.at).addScaledVector(x.up, -0.4 * x.radius), x.up, 1.3 * x.radius, this.want, x.ground);
         if (score <= best) continue;
         best = score;
         mode = i;

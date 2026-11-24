@@ -7,6 +7,7 @@ import { captureCanvas } from './debug/capture';
 import { readHooks, usesDebugCamera } from './debug/hooks';
 import { PerfLog } from './debug/perf';
 import { viewsFor, type ScenarioViews } from './debug/views';
+import { Brain, SKILLS } from './game/brain';
 import { DT, GRAVITY, KILL_Y } from './game/bug';
 import { Match, NO_INPUT, type MatchEvent, type TeamSpec } from './game/match';
 import { ANT, SPECIES, SPIDER, type BugSpecies } from './game/species';
@@ -38,6 +39,11 @@ import { setupSoundMenu } from './ui/sound';
 /** The two teams, each of one species (chosen in the menu, kept in the address as `?teams=ant,spider`). */
 const PLURAL: Record<string, string> = { ant: 'Ants', spider: 'Spiders', cockroach: 'Cockroaches' };
 const picked: BugSpecies[] = [ANT, SPIDER];
+/** Who plays each team: a player here ('human'), or the computer (a skill's id); `?players=human,normal`. */
+const players = ['human', 'normal'];
+let brains: (Brain | null)[] = [null, null];
+/** The computer whose turn it is, if any. */
+const brain = (): Brain | null => brains[match.activeUnit.team];
 const teams = (): TeamSpec[] => [
   { name: `Red ${PLURAL[picked[0].id]}`, species: picked[0], color: 0xff6b5e, size: 3 },
   { name: `Blue ${PLURAL[picked[1].id]}`, species: picked[1], color: 0x5fb0ff, size: 3 },
@@ -49,6 +55,9 @@ const hooks = readHooks(params);
 (params.get('teams') ?? '').split(',').forEach((id, i) => {
   const s = SPECIES.find((q) => q.id === id);
   if (s && i < 2) picked[i] = s;
+});
+(params.get('players') ?? '').split(',').forEach((id, i) => {
+  if (i < 2 && (id === 'human' || SKILLS.some((s) => s.id === id))) players[i] = id;
 });
 // Map size in chunks of 32, e.g. `?map=3x2x3` for the small map, until there is a setup screen. Without it, the
 // scenario's own size (a scenario at a larger scale needs a larger map), else 5x3x5.
@@ -74,7 +83,7 @@ const brood = new BroodScene(stage.scene, stage.fx, bow.light);
 /** The special attack whose scene has the view now, if any. */
 const inScene = (): BowScene | ColumnScene | BroodScene | null => (bow.camera.active ? bow : antColumn.camera.active ? antColumn : brood.camera.active ? brood : null);
 /** The player marks a spot for a brood. */
-const marking = (): boolean => match.stance && match.phase === 'aim' && match.currentWeapon.kind === 'brood' && brood.camera.active;
+const marking = (): boolean => !brain() && match.stance && match.phase === 'aim' && match.currentWeapon.kind === 'brood' && brood.camera.active;
 const follow = new FollowCamera(stage.camera, stage.controls);
 // the right button turns the view (and the bug with it), the wheel zooms; the left button stays free
 stage.controls.mouseButtons = { LEFT: null, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.ROTATE };
@@ -150,6 +159,10 @@ function newMatch(s: number): void {
 
   match = new Match(terrain, teams(), s, { strictBounds: scenario.strictBounds, spawnLevels: scenario.spawnLevels === true, turntable: scenario.turntable?.(terrain.W, terrain.H, terrain.D), confine: scenario.confine?.(terrain.W, terrain.H, terrain.D) });
 
+  brains = players.map((id, i) => {
+    const s = SKILLS.find((q) => q.id === id);
+    return s ? new Brain(s, seed * 2 + i) : null;
+  });
   prevTurns = 0;
   for (const v of bugViews) {
     v.view.dispose();
@@ -372,6 +385,27 @@ for (const i of [0, 1]) {
     pick.blur();
   });
 }
+for (const i of [0, 1]) {
+  const pick = document.getElementById(`player${i}`) as HTMLSelectElement;
+  pick.replaceChildren(
+    ...[{ id: 'human', label: 'player' }, ...SKILLS].map((q) => {
+      const o = document.createElement('option');
+      o.value = q.id;
+      o.textContent = q.label;
+      return o;
+    }),
+  );
+  pick.value = players[i];
+  pick.addEventListener('change', () => {
+    players[i] = pick.value;
+    params.set('players', players.join());
+    history.replaceState(null, '', `?${params.toString().replaceAll('%2C', ',')}`);
+    // (from here on: the match goes on)
+    const s = SKILLS.find((q) => q.id === pick.value);
+    brains[i] = s ? new Brain(s, seed * 2 + i) : null;
+    pick.blur();
+  });
+}
 hud.regen.addEventListener('click', () => {
   seed = Number(hud.seed.value) | 0;
   keepSeed();
@@ -484,7 +518,7 @@ canvas.addEventListener('pointermove', (e) => {
     if ((e.buttons & 2) !== 0) brood.camera.turn(-e.movementX * 0.005, e.movementY * 0.004);
     return;
   }
-  if (!match.stance || match.phase !== 'aim' || (e.buttons & 3) === 0) return;
+  if (brain() || !match.stance || match.phase !== 'aim' || (e.buttons & 3) === 0) return;
   const slow = SIGHT_SPEED * (match.charging ? 0.6 : 1);
   const b = match.activeUnit.bug;
   const a = -e.movementX * slow;
@@ -657,7 +691,7 @@ function frame(now: number): void {
   const viewTurns = orbiting || orbitTail > 0;
   orbitTail = Math.max(0, orbitTail - dt);
   stage.controls.enabled = !inScene() && !debugCamera;
-  if (viewTurns && !inScene() && !debugCamera && !intro && !follow.gliding && steering && match.activeUnit.bug.alive) {
+  if (viewTurns && !inScene() && !debugCamera && !intro && !follow.gliding && steering && !brain() && match.activeUnit.bug.alive) {
     // the turn keys still turn the bug while the view is held: they turn the view (at the bug's turn
     // rate, with the same slow start for fine steps), and the bug faces where it looks
     const turn = controls.turnHeld;
@@ -704,8 +738,11 @@ function frame(now: number): void {
     // a debug camera (or the intro) owns the view: the match keeps running without input
     if (debugCamera || intro) match.step(NO_INPUT);
     else {
-      match.step(controls.next());
-      faced ||= controls.faced;
+      // (while the computer plays, the player's keys go nowhere)
+      const typed = controls.next();
+      const b = brain();
+      match.step(b ? b.next(match) : typed);
+      faced ||= !b && controls.faced;
     }
     handleEvents(match.events);
     gameSounds.tick(match, inScene() !== null);
@@ -791,7 +828,7 @@ function frame(now: number): void {
   const fz = camDir.z / fl;
   const right = match.windX * -fz + match.windZ * fx;
   const away = match.windX * fx + match.windZ * fz;
-  hud.renderMatch(match, Math.atan2(-away, right));
+  hud.renderMatch(match, Math.atan2(-away, right), brain() !== null);
 
   if (debugCamera) {
     if (path) path.at(pathFrozenAt ?? (now - pathStart) / 1000, stage.camera, pathTarget);
@@ -927,6 +964,7 @@ const debugApi = {
   bow,
   antColumn,
   brood,
+  follow,
   sound,
   webViews,
   /** With the loop paused: play on for `seconds` at 60 frames a second (scripted reviews of moving scenes). */
