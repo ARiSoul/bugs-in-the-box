@@ -17,7 +17,7 @@
       input[type=range] { width: 90px; padding: 0; vertical-align: middle; }
       .row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-top: 6px; }
 
-      #panel { left: 12px; top: 12px; max-width: min(460px, calc(100vw - 24px)); }
+      #panel { left: 12px; top: 13vh; max-width: min(460px, calc(100vw - 24px)); }
       #panel summary { cursor: pointer; opacity: 0.8; }
       #panel:not([open]) { padding: 4px 10px; }
       #stats { white-space: pre-wrap; color: #a9c1ff; font-size: 11px; }
@@ -26,18 +26,11 @@
       #keyList { display: grid; grid-template-columns: auto auto; gap: 3px 10px; align-items: center; margin-top: 4px; font-size: 12px; }
       #keyList button { min-width: 70px; }
       #keyList button.waiting { outline: 1px solid #ffe066; }
-      #fps { position: fixed; right: 12px; top: 12px; font-size: 12px; opacity: 0.7; }
+      #fps { position: fixed; right: 12px; top: 15.5vh; font-size: 12px; opacity: 0.7; }
 
-      #turn { left: 50%; top: 12px; transform: translateX(-50%); text-align: center; min-width: 220px; }
-      #who { font-size: 15px; font-weight: 700; }
-      #timer { font-size: 22px; font-weight: 800; }
-      #wind { display: flex; gap: 8px; align-items: center; justify-content: center; }
-      #windArrow { display: inline-block; font-size: 18px; transition: transform 0.1s linear; }
       .meter { width: 110px; height: 7px; background: rgba(255, 255, 255, 0.12); border-radius: 4px; overflow: hidden; }
       .meter > div { height: 100%; width: 0%; background: #8fe3ff; }
 
-      #weapons { left: 50%; bottom: 12px; transform: translateX(-50%); text-align: center; }
-      #weapons { display: flex; gap: 10px; align-items: center; }
       .skill { position: relative; overflow: hidden; border-radius: 7px; background: #1b2338; flex: none; border: 1px solid rgba(160, 185, 255, 0.3); box-sizing: content-box; }
       .skill.small { border-radius: 4px; grid-row: 1 / 3; }
       .skill .face { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; }
@@ -49,29 +42,15 @@
       .skill i { position: absolute; left: 5px; top: 1px; font-size: 10px; font-style: normal; }
       .skill .hand { position: absolute; left: calc(50% - 1px); bottom: 50%; width: 2px; height: 100%; background: #ffe9bd; transform-origin: 50% 100%; }
       .skill.ready { border-color: #ffd27a; animation: ready 1.4s ease-in-out infinite; }
-      #card .skill.ready { cursor: pointer; }
       @keyframes ready { 50% { outline: 3px solid rgba(255, 196, 107, 0.85); } 0%, 100% { outline: 3px solid rgba(255, 196, 107, 0.2); } }
-      #power { width: 100%; height: 8px; margin-bottom: 6px; }
-      #power > div { background: #ffb04a; }
-
-      #teams { left: 12px; bottom: 12px; min-width: 170px; }
-      .team { display: grid; grid-template-columns: auto 1fr auto auto; gap: 2px 8px; align-items: center; }
-      .team + .team { margin-top: 6px; }
-      .team .meter { grid-column: 2 / 5; width: 100%; }
-      .team .alive { letter-spacing: 1px; font-size: 11px; }
-      #aim { font-size: 12px; opacity: 0.85; margin-bottom: 4px; }
-
       #pad { right: 12px; bottom: 12px; display: grid; grid-template-columns: repeat(3, 48px); grid-auto-rows: 44px; gap: 6px; padding: 8px; }
       #pad button { padding: 0; font-size: 16px; }
       #pad .fire { grid-column: 1 / 4; font-weight: 800; letter-spacing: 1px; }
 
       @media (max-width: 1000px) {
-        #weapons { bottom: auto; top: 118px; }
-        #weaponList { display: grid; grid-template-columns: 1fr 1fr; }
         #panel { max-width: 46vw; }
         /* open, the menu covers the other boxes, so its numbers can be read in full on a phone */
         #panel[open] { max-width: calc(100vw - 24px); z-index: 10; background: rgba(12, 16, 28, 0.94); }
-        #turn { left: auto; right: 12px; transform: none; min-width: 0; }
         #fps { right: auto; left: 12px; top: 46px; font-size: 10px; max-width: calc(100vw - 250px); }
       }
       #cineBar { left: 50%; bottom: 18px; transform: translateX(-50%); display: none; gap: 10px; align-items: center; padding: 8px 14px; white-space: nowrap; transition: opacity 0.5s; }
@@ -80,8 +59,7 @@
       body.cinematic #cineBar { display: flex; }
       body.cinematic.quiet #cineBar { opacity: 0; pointer-events: none; }
       body.cinematic.quiet { cursor: none; }
-      #banner { left: 50%; top: 40%; transform: translate(-50%, -50%); font-size: 22px; font-weight: 800; padding: 16px 24px; text-align: center; display: none; }
-      #banner small { display: block; font-size: 12px; font-weight: 400; opacity: 0.8; margin-top: 6px; }
+      #banner { left: 50%; top: 30%; height: 12vh; transform: translate(-50%, -50%); display: none; background: none; border: 0; backdrop-filter: none; padding: 0; }
     /* a special attack's scene: the bars of a film, and nothing over the picture */
       body::before, body::after { content: ''; position: fixed; left: 0; right: 0; height: 0; background: #000; z-index: 5; transition: height 0.45s ease; pointer-events: none; }
       body::before { top: 0; }
@@ -92,9 +70,69 @@
       #sight circle, #sight path { fill: none; stroke: #eafcff; stroke-width: 2; filter: drop-shadow(0 0 3px #1fa8ff); }
       #sight circle.pull { stroke: #58d8ff; stroke-width: 4; }
       body.special > *:not(canvas):not(script) { opacity: 0; pointer-events: none; transition: opacity 0.25s; }
+      /* ---- the match: the duel above, the hand below */
+      #hud { position: fixed; inset: 0; z-index: 3; pointer-events: none; --red: #ff5a45; --blue: #5fb4ff; --amber: #ffb547; --ink: #f6efdf; --dim: #c2bbac; font-family: 'Bahnschrift', 'Segoe UI Variable Display', 'Segoe UI', system-ui, sans-serif; color: var(--ink); font-size: clamp(10px, 1.6vh, 18px); overflow: hidden; }
+      body.menu #hud, body.no-hud #hud, body.cinematic #hud { display: none; }
+      #hud button { font: inherit; color: inherit; border: 0; background: none; }
+      #hud .duel { position: absolute; top: 1.6vh; width: calc(50vw - 7.4vh - 1.4vw); --c: var(--red); transition: filter 0.3s, opacity 0.3s; }
+      #hud .side0 { left: 1.4vw; } #hud .side1 { right: 1.4vw; --c: var(--blue); }
+      #hud .duel:not(.on) { --c: #a4483d; } #hud .duel.side1:not(.on) { --c: #4d82b0; }
+      #hud::before { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 13vh; background: linear-gradient(180deg, rgba(8, 7, 6, 0.6), transparent); }
+      #hud .health { position: relative; height: 3.5vh; background: #1a1513; transform: skewX(-12deg); overflow: hidden; border: 0.35vh solid #130f0c; box-sizing: border-box; }
+      #hud .side1 .health { transform: skewX(12deg); }
+      #hud .health u, #hud .health s { position: absolute; top: 0; bottom: 0; right: 0; }
+      #hud .side1 .health u, #hud .side1 .health s { right: auto; left: 0; }
+      #hud .health u { background: linear-gradient(180deg, color-mix(in srgb, var(--c) 72%, #fff) 0 38%, var(--c) 38% 82%, color-mix(in srgb, var(--c) 78%, #000) 82%); transition: width 0.25s ease-out; }
+      #hud .health s { background: #fff3d8; transition: width 0.9s 0.55s cubic-bezier(0.6, 0, 0.4, 1); }
+      #hud .duel.on .health { box-shadow: 0 0 0 0.35vh var(--c); }
+      #hud .duel.hurt .health { animation: hurt 0.45s; }
+      @keyframes hurt { 20% { translate: 0.7vw 0.4vh; } 45% { translate: -0.6vw -0.3vh; } 70% { translate: 0.3vw 0.1vh; } }
+      #hud .total { position: absolute; top: 0.35vh; height: 2.8vh; line-height: 2.7vh; font-weight: 700; font-size: 1.4em; color: var(--ink); background: #130f0c; padding: 0 0.5em; min-width: 1.9em; text-align: center; transform: skewX(-12deg); } #hud .side1 .total { transform: skewX(12deg); }
+      #hud .side0 .total { left: 0.5em; } #hud .side1 .total { right: 0.5em; }
+      #hud .team-name { position: absolute; top: 4.4vh; height: 3.6vh; } #hud .side0 .team-name { left: 0; } #hud .side1 .team-name { right: 0; }
+      #hud .row3 { position: absolute; top: 4.5vh; display: flex; align-items: flex-start; gap: 0.5em; } #hud .row3 .skill { width: 4.6vh; height: 5.9vh; margin: 0 0.5em; background: #1b2338; border-color: #130f0c; } #hud .row3 .skill::after { content: ''; position: absolute; left: 0; bottom: 0; height: 0.6vh; width: calc(var(--load, 0) * 100%); background: var(--amber); } #hud .side0 .row3 { right: 0; flex-direction: row-reverse; } #hud .side1 .row3 { left: 0; }
+      #hud .chip { width: 4.4em; background: #1a1513; padding: 0.25em 0.35em 0.4em; color: var(--c); transform: skewX(-8deg); transition: transform 0.25s cubic-bezier(0.2, 1.8, 0.4, 1), background 0.2s; }
+      #hud .side1 .chip { transform: skewX(8deg); }
+      #hud .chip svg { display: block; width: 100%; } #hud .side1 .chip svg { transform: scaleX(-1); }
+      #hud .chip i { display: block; height: 0.36em; background: rgba(255, 255, 255, 0.18); margin-top: 0.15em; } #hud .chip u { display: block; height: 100%; background: currentColor; transition: width 0.3s; margin-left: auto; } #hud .side1 .chip u { margin-left: 0; }
+      #hud .chip.active { background: var(--c); color: #160d0a; transform: skewX(-8deg) translateY(0.35em) scale(1.12); } #hud .side1 .chip.active { transform: skewX(8deg) translateY(0.35em) scale(1.12); }
+      #hud .chip.dead { color: #6d675e; } #hud .chip.dead svg { transform: scaleY(-1); } #hud .side1 .chip.dead svg { transform: scale(-1, -1); } #hud .chip.dead i { visibility: hidden; }
+      #hud .clock { position: absolute; left: 50%; top: 0.9vh; width: 13vh; height: 9.4vh; margin-left: -6.5vh; display: grid; place-content: center; justify-items: center; background: var(--amber); clip-path: polygon(0 0, 100% 0, 88% 78%, 50% 100%, 12% 78%); transition: background 0.2s; }
+      #hud .clock .digits { height: 5.2vh; margin-top: -1vh; display: flex; gap: 0.6vh; align-items: center; } #hud .clock .digits b { width: 1.1vh; height: 1.1vh; background: #1b1206; animation: blink 1s steps(2) infinite; } #hud .clock .digits b:nth-child(2) { animation-delay: 0.2s; } #hud .clock .digits b:nth-child(3) { animation-delay: 0.4s; }
+      #hud .clock small { color: #1b1206; font-weight: 700; font-size: 0.8em; line-height: 1; position: absolute; left: 0; right: 0; bottom: 1.5vh; text-align: center; }
+      #hud .clock.retreat { background: #9fd6a0; } #hud .clock.urgent { background: #fff6e2; } #hud .clock.tick { animation: tock 0.4s cubic-bezier(0.2, 1.8, 0.4, 1); }
+      @keyframes tock { from { transform: scale(1.32); } 45% { transform: rotate(-5deg); } 70% { transform: rotate(4deg); } }
+      #hud .wind { position: absolute; left: 50%; top: 11.9vh; transform: translateX(-50%) skewX(-8deg); display: flex; align-items: center; gap: 0.6em; background: rgba(15, 12, 11, 0.8); padding: 0.3em 0.9em; }
+      #hud .wind span { color: var(--dim); font-size: 0.9em; } #hud .wind i { width: 1.8em; height: 1.2em; background: var(--ink); clip-path: polygon(0 34%, 55% 34%, 55% 0, 100% 50%, 55% 100%, 55% 66%, 0 66%); transition: transform 0.1s linear; }
+      #hud .force { display: flex; gap: 0.2em; } #hud .force u { width: 0.55em; height: 1em; background: rgba(255, 255, 255, 0.17); } #hud .force u.on { background: #8fe3ff; }
+      #hud .wind.calm i { opacity: 0.25; }
+      #hud .call { position: absolute; left: 26vw; top: 30vh; height: 8.5vh; transform: translateX(-50%); opacity: 0; display: grid; justify-items: center; }
+      #hud .call .letters { height: 8.5vh; } #hud .call span { background: #130f0c; padding: 0.2em 1em 0.3em; margin-top: -0.2em; transform: skewX(-8deg); font-weight: 600; white-space: nowrap; }
+      #hud .call.on { animation: callin 1.35s both; }
+      @keyframes callin { 0% { opacity: 0; transform: translateX(-50%) scale(2.2) rotate(-5deg); } 14% { opacity: 1; transform: translateX(-50%) scale(1) rotate(-2deg); } 80% { opacity: 1; transform: translateX(-50%) scale(1.03) rotate(-1deg); } 100% { opacity: 0; transform: translate(-50%, -3vh) scale(1) rotate(-1deg); } }
+      #hud .deck { position: absolute; left: 50%; bottom: 0; transform: translateX(-50%); display: grid; justify-items: center; transition: transform 0.45s cubic-bezier(0.3, 1.2, 0.4, 1); }
+      #hud .deck.away { transform: translate(-50%, 105%); } #hud .deck.spent { transform: translate(-50%, 15vh); }
+      #hud .aim { background: rgba(15, 12, 11, 0.82); padding: 0.25em 1em 0.35em; transform: skewX(-8deg); min-height: 1.3em; margin-bottom: 0.5em; white-space: nowrap; } #hud .aim:empty { visibility: hidden; } #hud .aim b { color: var(--amber); margin-right: 0.5em; }
+      #hud .power { position: relative; width: 46vh; height: 1.9vh; background: rgba(15, 12, 11, 0.86); border: 0.3vh solid #130f0c; transform: skewX(-18deg); overflow: hidden; margin-bottom: 5.4vh; opacity: 0; transition: opacity 0.2s, box-shadow 0.2s; }
+      #hud .power u { display: block; height: 100%; width: 0; background: var(--amber); } #hud .power s { position: absolute; inset: 0; background: repeating-linear-gradient(90deg, transparent 0 calc(10% - 2px), #130f0c calc(10% - 2px) 10%); }
+      #hud .power.on { opacity: 1; box-shadow: 0 0 0 0.3vh var(--amber); } #hud .power.hot u { background: #ff5a45; } #hud .power.hot { box-shadow: 0 0 0 0.4vh #ff5a45; animation: hurt 0.12s infinite; }
+      #hud .hand { display: flex; justify-content: center; height: 16vh; }
+      #hud .slot { width: 11.4vh; margin: 0 -2.4vh; transform-origin: 50% 62vh; transform: rotate(var(--a)); transition: transform 0.22s cubic-bezier(0.2, 1.7, 0.4, 1); pointer-events: auto; }
+      #hud .slot.on { transform: rotate(var(--a)) translateY(-4.2vh); z-index: 3; } #hud .slot:hover { transform: rotate(var(--a)) translateY(-2.4vh); z-index: 4; } #hud .slot.on:hover { transform: rotate(var(--a)) translateY(-4.6vh); }
+      #hud .deal .slot { animation: deal 0.42s both cubic-bezier(0.2, 1.3, 0.4, 1); animation-delay: calc(var(--i) * 0.05s); }
+      @keyframes deal { from { transform: rotate(0deg) translateY(22vh); } }
+      #hud .card { width: 100%; height: 17vh; padding: 0; border-radius: 0.9vh !important; background: #1c1815 !important; border: 0.35vh solid #130f0c !important; box-shadow: inset 0 0 0 0.3vh color-mix(in srgb, var(--w) 45%, #2b251f); display: grid; grid-template-rows: 1fr auto; justify-items: center; align-items: center; cursor: pointer; position: relative; overflow: hidden; --b: #1c1815; color: var(--w); touch-action: none; }
+      #hud .card::before { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 9.8vh; background: color-mix(in srgb, var(--w) 20%, #1c1815); clip-path: polygon(0 0, 100% 0, 100% 78%, 0 100%); }
+      #hud .card svg { position: relative; width: 6.6vh; margin-top: -3.4vh; color: var(--w); --b: #2b251f; } #hud .card em { position: absolute; left: 0.8vh; top: 0.5vh; font-style: normal; font-weight: 700; font-size: 1.05em; color: var(--ink); z-index: 1; }
+      #hud .facts { position: absolute; left: 0; right: 0; top: 12.6vh; display: grid; justify-items: center; gap: 0.2vh; } #hud .facts i { display: flex; gap: 0.3vh; } #hud .facts u { width: 0.9vh; height: 0.9vh; background: rgba(255, 255, 255, 0.16); transform: skewX(-12deg); } #hud .facts u.on { background: var(--w); } #hud .facts small { font-size: 0.8em; color: var(--dim); white-space: nowrap; } #hud .slot.on .facts u.on { background: #1b1206; } #hud .slot.on .facts u { background: rgba(27, 18, 6, 0.2); } #hud .slot.on .facts small { color: #4a3210; }
+      #hud .card span { position: absolute; top: 9.9vh; left: 0.5vh; right: 0.5vh; font-weight: 600; font-size: 0.95em; line-height: 1.05; color: var(--ink); text-align: center; }
+      #hud .slot.on .card { background: var(--amber) !important; box-shadow: inset 0 0 0 0.3vh #ffd89a, 0 0 0 0.45vh var(--c); } #hud .slot.on .card::before { background: #ffd08a; } #hud .slot.on .card svg { color: #1b1206; --b: #ffd08a; } #hud .slot.on .card span, #hud .slot.on .card em { color: #1b1206; }
+      #hud .special-slot .skill { width: 100% !important; height: 17vh !important; border-radius: 0.9vh; border: 0.35vh solid #130f0c; box-sizing: border-box; cursor: pointer; } #hud .special-slot .skill .face { justify-content: flex-start; padding-top: 2vh; gap: 0.6vh; } #hud .special-slot .skill svg { width: 6.6vh; } #hud .special-slot .skill b { font-size: 0.95em; color: var(--ink); position: relative; z-index: 2; } #hud .special-slot .skill .cold { color: #7d88a8; } #hud .special-slot .skill .hand { opacity: 0.6; } #hud .special-slot .skill.ready::after { content: 'READY'; position: absolute; left: 0; right: 0; top: 12.4vh; text-align: center; font-weight: 700; font-size: 1em; background: var(--amber); color: #1b1206; padding: 0.1em 0 0.2em; } #hud .special-slot .skill i { left: 0.8vh; top: 0.5vh; font-size: 1.05em; font-weight: 700; } #hud .special-slot .skill .hand { display: block; height: 100%; transform-origin: 50% 100%; }
+      #hud .special-slot.on .skill { box-shadow: 0 0 0 0.5vh #ffe9bd; }
+      @media (max-width: 1000px) { #hud .team-name { display: none; } #hud .wind { top: 12vh; } #hud .deck { transform-origin: 50% 100%; scale: 0.8; } }
       /* ---- the setup screen and the end of a match */
       body.menu .box, body.menu #fps, body.menu #sight { display: none !important; }
-      #panel:not([open]) { opacity: 0.75; } #fps { display: none; } body:has(#panel[open]) #fps { display: block; }
+      #panel:not([open]) { background: rgba(15, 12, 11, 0.82); border: 0; border-radius: 0; transform: skewX(-8deg); font-family: 'Bahnschrift', 'Segoe UI', sans-serif; } #fps { display: none; } body:has(#panel[open]) #fps { display: block; }
       @media (hover: hover) and (pointer: fine) { #pad { display: none; } }
       #setup[hidden], #ending[hidden] { display: none; }
       #setup, #ending { position: fixed; inset: 0; z-index: 8; --red: #ff5a45; --blue: #5fb4ff; --amber: #ffb547; --ink: #f6efdf; --dim: #c2bbac; --px: 0; --py: 0; font-family: 'Bahnschrift', 'Segoe UI Variable Display', 'Segoe UI', system-ui, sans-serif; color: var(--ink); font-size: clamp(11px, 1.62vh, 18px); overflow: hidden; }
@@ -255,22 +293,7 @@
       </details>
     </details>
 
-    <div id="turn" class="box">
-      <div id="who"></div>
-      <div id="timer"></div>
-      <div id="wind">wind <span id="windArrow">➜</span><div class="meter"><div id="windBar"></div></div></div>
-    </div>
-
-    <div id="weapons" class="box">
-      <div id="card"></div>
-      <div>
-      <div id="aim"></div>
-      <div id="power" class="meter"><div></div></div>
-      <div id="weaponList" class="row" style="margin-top: 0"></div>
-      </div>
-    </div>
-
-    <div id="teams" class="box"></div>
+    <div id="hud"></div>
 
     <div id="pad" class="box">
       <button data-action="aimUp" title="aim higher">⤴</button>

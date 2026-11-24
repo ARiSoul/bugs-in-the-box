@@ -34,8 +34,11 @@ export class SkillCard {
     private readonly named: boolean,
   ) {
     this.root.className = named ? 'skill' : 'skill small';
-    this.root.style.width = `${wide}px`;
-    this.root.style.height = `${high}px`;
+    // (0: its box decides, and is measured)
+    if (wide > 0) {
+      this.root.style.width = `${wide}px`;
+      this.root.style.height = `${high}px`;
+    }
     this.cold.className = 'face cold';
     this.hot.className = 'face hot';
     this.hand.className = 'hand';
@@ -62,12 +65,14 @@ export class SkillCard {
     this.root.title = full ? `${w.name}: ready` : `${w.name}: ${Math.floor(this.shown * 100)}%`;
     this.hand.style.opacity = full || this.shown < 0.004 ? '0' : '1';
     this.hand.style.transform = `rotate(${(this.shown * 360).toFixed(1)}deg)`;
+    this.root.style.setProperty('--load', this.shown.toFixed(3));
     this.hot.style.clipPath = full ? 'none' : this.wedge(this.shown);
   }
 
   /** The part of the card clockwise from twelve o'clock to `f` of the way round. */
   private wedge(f: number): string {
-    const { wide: w, high: h } = this;
+    const w = this.wide || this.root.clientWidth || 80;
+    const h = this.high || this.root.clientHeight || 130;
     const a = f * Math.PI * 2;
     const x = Math.sin(a);
     const y = -Math.cos(a);

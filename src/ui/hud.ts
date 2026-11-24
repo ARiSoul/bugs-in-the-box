@@ -1,9 +1,11 @@
 import { TICK_RATE } from '../game/bug';
 import { SKILL_FULL, WIND_MAX, type Match } from '../game/match';
 import { WEAPONS, type Weapon } from '../game/weapons';
-import type { Terrain } from '../terrain/Terrain';
-import { SkillCard } from './skillCard';
 import { CHUNK } from '../terrain/constants';
+import type { Terrain } from '../terrain/Terrain';
+import { ARMS, BUGS } from './emblems';
+import { letters } from './lettering';
+import { SkillCard } from './skillCard';
 
 const el = <T extends HTMLElement>(id: string): T => {
   const e = document.getElementById(id);
@@ -11,7 +13,20 @@ const el = <T extends HTMLElement>(id: string): T => {
   return e as T;
 };
 
+const make = (cls: string, html = ''): HTMLElement => {
+  const e = document.createElement('div');
+  e.className = cls;
+  e.innerHTML = html;
+  return e;
+};
+
 const hex = (c: number): string => `#${c.toString(16).padStart(6, '0')}`;
+/** The teams' colours in the lettering. */
+const TEAM = ['#ff7a68', '#8ccaff'];
+/** Seconds from which the clock is urgent. */
+const URGENT = 5;
+/** Degrees between two cards of the hand. */
+const FAN = 7;
 
 export interface HudState {
   /** Where meshing runs ("3 workers", "main thread"). */
@@ -34,7 +49,17 @@ function specialOf(match: Match, team: number): number {
   return WEAPONS.findIndex((w) => w.sceneTicks > 0 && w.species === match.teams[team].species.id);
 }
 
-/** DOM HUD. Writes to the DOM only when a shown value changes. */
+interface TeamView {
+  root: HTMLElement;
+  fill: HTMLElement;
+  trail: HTMLElement;
+  total: HTMLElement;
+  chips: { root: HTMLElement; bar: HTMLElement }[];
+  card: SkillCard;
+  max: number;
+}
+
+/** DOM HUD of a match: the duel (both teams' health, the clock between them), the hand of weapons. Writes only what changed. */
 export class Hud {
   readonly seed = el<HTMLInputElement>('seed');
   readonly regen = el<HTMLButtonElement>('regen');
@@ -43,25 +68,33 @@ export class Hud {
   readonly pad = el('pad');
   private readonly stats = el('stats');
   private readonly fps = el('fps');
-  private readonly who = el('who');
-  private readonly timer = el('timer');
-  private readonly windArrow = el('windArrow');
-  private readonly windBar = el('windBar');
-  private readonly power = el('power').firstElementChild as HTMLElement;
-  private readonly aim = el('aim');
-  private readonly weaponList = el('weaponList');
-  private readonly teams = el('teams');
   private readonly banner = el('banner');
-  /** The active team's special attack, and every team's, small. */
-  private readonly card = new SkillCard(66, 88, true);
-  private cards: SkillCard[] = [];
-  private cardWeapon = -1;
-  private cardKey = '';
-  private weaponButtons: HTMLButtonElement[] = [];
-  private teamRows: { alive: HTMLElement; hp: HTMLElement; bar: HTMLElement; max: number; size: number }[] = [];
+  private readonly root = el('hud');
+  private readonly clock = make('clock', '<div class="digits"></div><small></small>');
+  private readonly wind = make('wind', '<span>wind</span><i></i><div class="force"><u></u><u></u><u></u><u></u><u></u></div>');
+  private readonly call = make('call');
+  private readonly deck = make('deck');
+  private readonly hand = make('hand');
+  private readonly power = make('power', '<u></u><s></s>');
+  private readonly aim = make('aim');
+  private teams: TeamView[] = [];
+  private cards: { root: HTMLButtonElement; key: HTMLElement; index: number }[] = [];
+  /** The active team's special attack: a card of the hand that loads. */
+  private readonly skill = new SkillCard(0, 0, true);
+  private readonly skillHolder = make('slot special-slot');
+  private skillWeapon = -1;
+  private onWeapon: (index: number) => void = () => {};
   private readonly last = new Map<string, string>();
-
   private readonly sorted = new Float32Array(120);
+
+  constructor() {
+    this.deck.append(this.aim, this.power, this.hand);
+    this.root.append(this.clock, this.wind, this.call, this.deck);
+    this.skillHolder.append(this.skill.root);
+    this.skill.root.addEventListener('click', () => {
+      if (this.skillWeapon >= 0) this.onWeapon(this.skillWeapon);
+    });
+  }
 
   /** Frame rate and frame-time spread over the last `count` frame times (ms). */
   setFrames(frameMs: Float32Array, count: number): void {
@@ -87,46 +120,43 @@ export class Hud {
       (s.bench ? `\n${s.bench}` : '');
   }
 
-  /** Build the weapon buttons and team bars for a new match. */
+  /** Build the duel and the hand for a new match. */
   setupMatch(match: Match, weapons: readonly Weapon[], onWeapon: (index: number) => void): void {
-    this.weaponButtons = weapons.map((w, i) => {
+    this.onWeapon = onWeapon;
+    for (const t of this.teams) t.root.remove();
+    this.teams = match.teams.map((t, i) => {
+      const root = make(`duel side${i}`);
+      const bar = make('health', '<s></s><u></u>');
+      const total = make('total');
+      const row = make('row3');
+      const chips = match.units
+        .filter((u) => u.team === i)
+        .map((u) => {
+          const chip = make('chip', `<svg viewBox="0 0 100 60" aria-hidden="true">${BUGS[u.bug.species.id]}</svg><i><u></u></i>`);
+          chip.title = u.name;
+          row.append(chip);
+          return { root: chip, bar: chip.querySelector('u') as HTMLElement };
+        });
+      const card = new SkillCard(0, 0, false);
+      row.prepend(card.root);
+      const name = make('team-name', letters(t.name.replace('Cockroaches', 'Roaches'), { fill: TEAM[i], drop: 6, outline: 12 }));
+      root.append(bar, total, name, row);
+      this.root.append(root);
+      return { root, fill: bar.querySelector('u') as HTMLElement, trail: bar.querySelector('s') as HTMLElement, total, chips, card, max: Math.max(1, match.teamHealth(i)) };
+    });
+    this.cards = weapons.map((w, index) => {
       const b = document.createElement('button');
-      b.textContent = `${i + 1} ${w.name}`;
+      b.className = 'card';
+      b.style.setProperty('--w', hex(w.color));
+      const power = Math.min(5, Math.round((w.damage + w.arcDamage * 0.5) / 11));
+      b.innerHTML = `<em></em><svg viewBox="0 0 48 48" aria-hidden="true">${ARMS[w.id] ?? ''}</svg><span>${w.name}</span><div class="facts"><i title="damage">${'<u class="on"></u>'.repeat(power)}${'<u></u>'.repeat(5 - power)}</i><small>${w.kind === 'tunnel' ? 'digs' : w.kind === 'grenade' ? 'bounces' : w.kind === 'web' ? 'holds' : w.arcs ? 'arcs' : 'bursts'}${w.windFactor > 0.5 ? ' · wind' : ''}</small></div>`;
+      b.setAttribute('aria-label', w.name);
       b.addEventListener('click', () => {
-        onWeapon(i);
+        onWeapon(index);
         b.blur();
       });
-      return b;
+      return { root: b, key: b.firstElementChild as HTMLElement, index };
     });
-    this.weaponList.replaceChildren(...this.weaponButtons);
-    el('card').replaceChildren(this.card.root);
-    this.card.root.onclick = () => {
-      if (this.cardWeapon >= 0) onWeapon(this.cardWeapon);
-    };
-    this.cards = match.teams.map(() => new SkillCard(26, 34, false));
-
-    this.teamRows = [];
-    this.teams.replaceChildren(
-      ...match.teams.map((t, i) => {
-        const row = document.createElement('div');
-        row.className = 'team';
-        const name = document.createElement('span');
-        name.textContent = t.name;
-        name.style.color = hex(t.color);
-        const alive = document.createElement('span');
-        alive.className = 'alive';
-        alive.style.color = hex(t.color);
-        const hp = document.createElement('span');
-        const meter = document.createElement('div');
-        meter.className = 'meter';
-        const bar = document.createElement('div');
-        bar.style.background = hex(t.color);
-        meter.append(bar);
-        row.append(this.cards[i].root, name, alive, hp, meter);
-        this.teamRows.push({ alive, hp, bar, max: Math.max(1, match.teamHealth(i)), size: t.size });
-        return row;
-      }),
-    );
     this.last.clear();
   }
 
@@ -134,77 +164,121 @@ export class Hud {
   renderMatch(match: Match, windAngle: number, computer = false): void {
     const u = match.activeUnit;
     const team = match.teams[u.team];
-    this.set('who', () => {
-      this.who.textContent = `${team.name} · ${u.name}${computer ? ' (computer)' : ''}`;
-      this.who.style.color = hex(team.color);
-    }, `${team.name}|${u.name}|${computer}`);
 
-    const timer =
-      match.phase === 'aim'
-        ? String(Math.ceil(match.turnTicks / TICK_RATE))
-        : match.phase === 'flight' && match.retreatTicks > 0
-          ? `retreat ${Math.ceil(match.retreatTicks / TICK_RATE)}`
-          : match.phase === 'over'
-            ? 'over'
-            : '…';
-    this.set('timer', () => (this.timer.textContent = timer), timer);
+    const seconds = match.phase === 'aim' ? Math.ceil(match.turnTicks / TICK_RATE) : match.phase === 'flight' && match.retreatTicks > 0 ? Math.ceil(match.retreatTicks / TICK_RATE) : -1;
+    const what = match.phase === 'aim' ? '' : seconds >= 0 ? 'retreat' : '';
+    this.set('clock', () => {
+      const digits = this.clock.firstElementChild as HTMLElement;
+      digits.innerHTML = seconds >= 0 ? letters(String(seconds), { fill: '#1b1206', ink: 'none', shadow: 'none', outline: 0, drop: 0 }) : '<b></b><b></b><b></b>';
+      (this.clock.lastElementChild as HTMLElement).textContent = what;
+      const urgent = match.phase === 'aim' && seconds <= URGENT;
+      this.clock.classList.toggle('urgent', urgent);
+      this.clock.classList.toggle('retreat', what !== '');
+      if (urgent) {
+        this.clock.classList.remove('tick');
+        void this.clock.offsetWidth;
+        this.clock.classList.add('tick');
+      }
+    }, `${seconds}|${what}`);
 
     const strength = Math.min(1, Math.sqrt(match.windX * match.windX + match.windZ * match.windZ) / (WIND_MAX * Math.SQRT2));
-    this.windArrow.style.transform = `rotate(${windAngle}rad)`;
-    this.set('wind', () => (this.windBar.style.width = `${(strength * 100).toFixed(0)}%`), strength.toFixed(2));
+    (this.wind.children[1] as HTMLElement).style.transform = `rotate(${windAngle.toFixed(2)}rad)`;
+    this.set('wind', () => {
+      const n = strength < 0.02 ? 0 : Math.max(1, Math.round(strength * 5));
+      [...this.wind.children[2].children].forEach((k, i) => k.classList.toggle('on', i < n));
+      this.wind.classList.toggle('calm', n === 0);
+    }, strength.toFixed(2));
+
+    this.teams.forEach((t, i) => {
+      const h = match.teamHealth(i);
+      t.card.show(WEAPONS[specialOf(match, i)], match.skill[i] / SKILL_FULL, '');
+      this.set(`team${i}`, () => {
+        const f = `${((h / t.max) * 100).toFixed(1)}%`;
+        t.fill.style.width = f;
+        t.trail.style.width = f;
+        t.total.textContent = String(h);
+        if (this.last.get(`was${i}`) !== undefined && Number(this.last.get(`was${i}`)) > h) {
+          t.root.classList.remove('hurt');
+          void t.root.offsetWidth;
+          t.root.classList.add('hurt');
+        }
+        this.last.set(`was${i}`, String(h));
+      }, String(h));
+      this.set(`turn${i}`, () => t.root.classList.toggle('on', u.team === i && match.phase !== 'over'), `${u.team}|${match.phase === 'over'}`);
+      let k = 0;
+      for (const q of match.units) {
+        if (q.team !== i) continue;
+        const chip = t.chips[k++];
+        this.set(`unit${q.id}`, () => {
+          chip.bar.style.width = `${Math.max(0, (q.bug.health / q.bug.species.health) * 100).toFixed(0)}%`;
+          chip.root.classList.toggle('dead', !q.bug.alive);
+          chip.root.classList.toggle('active', q === u && q.bug.alive);
+        }, `${q.bug.health}|${q.bug.alive}|${q === u}`);
+      }
+    });
+
+    this.set('call', () => {
+      this.deck.classList.toggle('away', computer);
+      if (match.phase !== 'aim') return;
+      this.call.innerHTML = letters(u.name.toUpperCase(), { fill: TEAM[u.team] ?? '#f6efdf' }) + `<span>${computer ? 'the computer is up' : 'your turn'}</span>`;
+      this.call.classList.remove('on');
+      void this.call.offsetWidth;
+      this.call.classList.add('on');
+    }, `${match.turnNumber}|${computer}`);
+
+    // the hand (a weapon of another species is not in it; the special attack is the last card)
+    this.set('hand', () => {
+      const own = this.cards.filter((c) => match.has(u, c.index) && WEAPONS[c.index].sceneTicks === 0);
+      this.skillWeapon = this.cards.find((c) => match.has(u, c.index) && WEAPONS[c.index].sceneTicks > 0)?.index ?? -1;
+      const slots: HTMLElement[] = own.map((c, i) => {
+        const s = make('slot');
+        s.append(c.root);
+        c.key.textContent = String(i + 1);
+        return s;
+      });
+      if (this.skillWeapon >= 0) slots.push(this.skillHolder);
+      slots.forEach((s, i) => {
+        s.style.setProperty('--a', `${((i - (slots.length - 1) / 2) * FAN).toFixed(2)}deg`);
+        s.style.setProperty('--i', String(i));
+      });
+      this.hand.replaceChildren(...slots);
+      this.hand.classList.remove('deal');
+      void this.hand.offsetWidth;
+      this.hand.classList.add('deal');
+      this.hand.style.setProperty('--c', TEAM[u.team] ?? '#ffb547');
+    }, `${u.bug.species.id}|${u.team}|${match.turnNumber}`);
+    if (this.skillWeapon >= 0) this.skill.show(WEAPONS[this.skillWeapon], match.skill[u.team] / SKILL_FULL, String(this.hand.children.length));
+    this.set('weapon', () => {
+      for (const c of this.cards) c.root.parentElement?.classList.toggle('on', c.index === match.weapon);
+      this.skillHolder.classList.toggle('on', match.weapon === this.skillWeapon);
+    }, `${match.weapon}|${match.turnNumber}`);
+    this.set('spent', () => this.deck.classList.toggle('spent', match.phase !== 'aim' && match.phase !== 'special'), match.phase);
 
     const power = match.charging ? match.power : 0;
-    this.set('power', () => (this.power.style.width = `${(power * 100).toFixed(0)}%`), power.toFixed(2));
-
-    // (a weapon of another species is not on offer)
-    this.set('weapons', () => {
-      let key = 1;
-      this.weaponButtons.forEach((b, i) => {
-        const on = match.has(u, i);
-        // (a special attack is on its card)
-        const special = WEAPONS[i].sceneTicks > 0;
-        b.style.display = on && !special ? '' : 'none';
-        if (on && special) {
-          this.cardWeapon = i;
-          this.cardKey = String(key);
-        }
-        if (on) b.textContent = `${key++} ${WEAPONS[i].name}`;
-      });
-    }, u.bug.species.id);
-    this.card.root.parentElement?.classList.toggle('on', match.weapon === this.cardWeapon && match.stance);
-    this.card.show(WEAPONS[this.cardWeapon], match.skill[u.team] / SKILL_FULL, this.cardKey);
-    this.set('weapon', () => this.weaponButtons.forEach((b, i) => b.classList.toggle('on', i === match.weapon)), String(match.weapon));
-
-    match.teams.forEach((_t, i) => {
-      const h = match.teamHealth(i);
-      const n = match.teamAlive(i);
-      const row = this.teamRows[i];
-      this.cards[i].show(WEAPONS[specialOf(match, i)], match.skill[i] / SKILL_FULL, '');
-      this.set(`team${i}`, () => {
-        // one dot per bug: filled while it lives
-        row.alive.textContent = '●'.repeat(n) + '○'.repeat(Math.max(0, row.size - n));
-        row.alive.title = `${n} of ${row.size} bugs alive`;
-        row.hp.textContent = String(h);
-        row.bar.style.width = `${((h / row.max) * 100).toFixed(1)}%`;
-      }, `${h}|${n}`);
-    });
+    this.set('power', () => {
+      (this.power.firstElementChild as HTMLElement).style.width = `${(power * 100).toFixed(0)}%`;
+      this.power.classList.toggle('on', match.charging);
+      this.deck.classList.toggle('charging', match.charging);
+      this.power.classList.toggle('hot', power > 0.85);
+    }, `${power.toFixed(2)}|${match.charging}`);
 
     // the aim angle above the horizon, in degrees, for fine aiming
     const brood = match.currentWeapon.kind === 'brood' && match.stance;
-    const aim = computer ? '' : brood && !match.mark ? 'point at a spot nearer to it' : brood ? 'point at a spot, click (or the fire key) to call them · W/S move, right drag turns the view' : match.phase === 'aim' ? `aim ${((Math.atan2(u.aimV, u.aimH) * 180) / Math.PI).toFixed(1)}°` : '';
-    this.set('aim', () => (this.aim.textContent = aim), aim);
+    const aim = computer
+      ? ''
+      : brood && !match.mark
+        ? 'point at a spot nearer to it'
+        : brood
+          ? 'point at a spot, click (or the fire key) to call them · W/S move, right drag turns the view'
+          : match.phase === 'aim'
+            ? `<b>${match.currentWeapon.name}</b> aim ${((Math.atan2(u.aimV, u.aimH) * 180) / Math.PI).toFixed(1)}°`
+            : '';
+    this.set('aim', () => (this.aim.innerHTML = aim), aim);
 
-    const banner =
-      match.phase !== 'over' || document.body.classList.contains('menu') ? '' : match.winner >= 0 ? `${match.teams[match.winner].name} win!` : 'Draw: nobody is left';
+    const banner = match.phase !== 'over' || document.body.classList.contains('menu') ? '' : match.winner >= 0 ? `${team.name ? match.teams[match.winner].name : ''} win` : 'Nobody left';
     this.set('banner', () => {
       this.banner.style.display = banner ? 'block' : 'none';
-      this.banner.replaceChildren();
-      if (!banner) return;
-      this.banner.append(banner);
-      const small = document.createElement('small');
-      small.textContent = 'that was the match';
-      this.banner.append(small);
-      if (match.winner >= 0) this.banner.style.color = hex(match.teams[match.winner].color);
+      this.banner.innerHTML = banner ? letters(banner.replace('Cockroaches', 'Roaches'), { fill: TEAM[match.winner] ?? '#ffb547' }) : '';
     }, banner);
   }
 

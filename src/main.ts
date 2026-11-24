@@ -1059,7 +1059,7 @@ function frame(now: number): void {
   placeSight();
   webViews.update(match, ground, (i, out) => out.copy(bugViews[i].view.root.position), now);
   const active = bugViews[match.active];
-  aim.update(match, active.view.root.position, active.height, now);
+  aim.update(match, active.view.root.position, active.height, now, stage.camera.position.distanceTo(active.view.root.position));
   if (inMenu || menus.over) {
     aim.hide();
     for (const v of bugViews) v.view.root.visible = false;
@@ -1231,6 +1231,7 @@ requestAnimationFrame(loop);
  */
 function placeLabels(): void {
   stage.camera.updateMatrixWorld();
+  texts.clamp(stage.camera);
   match.units.forEach((u, i) => {
     const v = bugViews[i];
     const dist = stage.camera.position.distanceTo(v.view.root.position);

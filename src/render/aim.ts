@@ -36,7 +36,7 @@ export class AimView {
   }
 
   /** `bugPosition`: interpolated render position of the active bug. */
-  update(match: Match, bugPosition: THREE.Vector3, labelHeight: number, now: number): void {
+  update(match: Match, bugPosition: THREE.Vector3, labelHeight: number, now: number, cameraDistance: number): void {
     const unit = match.activeUnit;
     const aiming = match.phase === 'aim' && unit.bug.alive;
     // (a special attack has a view and a sight of its own)
@@ -45,7 +45,8 @@ export class AimView {
       return;
     }
     this.pointer.visible = aiming;
-    this.marker.visible = aiming;
+    // (near enough, it needs no mark)
+    this.marker.visible = aiming && cameraDistance > 24;
     if (!aiming) return;
 
     match.aimDirection(unit, this.dir);

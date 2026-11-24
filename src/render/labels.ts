@@ -2,6 +2,7 @@ import * as THREE from 'three';
 
 const hex = (c: number): string => `#${c.toString(16).padStart(6, '0')}`;
 
+const FONT = "Bahnschrift, 'Segoe UI', system-ui, sans-serif";
 /** Label height as a fraction of the view height (about 50 px at 1080p). */
 const LABEL_H = 0.046;
 
@@ -26,6 +27,7 @@ export class UnitLabel {
   private readonly ctx: CanvasRenderingContext2D;
   private readonly texture: THREE.CanvasTexture;
   private shown = -1;
+  private max = 1;
 
   constructor(
     private readonly name: string,
@@ -49,29 +51,37 @@ export class UnitLabel {
     this.sprite.visible = visible && (!hidden || active);
     if (!this.sprite.visible) return;
     this.sprite.material.opacity = hidden ? 0.45 : 1;
+    // (the active bug's lies under its feet: over it are its aim and its mark)
+    const under = active && cameraDistance < 45;
+    this.sprite.center.y = under ? 1 : 0;
     // a small gap over the top of the bug (`height` is from its centre), a little more from afar
-    this.sprite.position.set(position.x, position.y + height + 0.4 + cameraDistance * 0.008, position.z);
+    this.sprite.position.set(position.x, under ? position.y - height * 0.75 : position.y + height + 0.4 + cameraDistance * 0.008, position.z);
     if (health === this.shown) return;
     this.shown = health;
     const { ctx } = this;
     ctx.clearRect(0, 0, 256, 72);
-    // backing plate, so the text reads on bright and busy backgrounds
-    ctx.fillStyle = 'rgba(6, 8, 12, 0.55)';
-    ctx.beginPath();
-    ctx.roundRect(36, 2, 184, 68, 12);
-    ctx.fill();
-    ctx.font = '600 26px ui-monospace, Consolas, monospace';
-    ctx.textAlign = 'center';
-    ctx.lineWidth = 6;
-    ctx.strokeStyle = 'rgba(0,0,0,0.75)';
+    // a slanted plate with a bar of health along its foot
+    this.max = Math.max(this.max, health);
+    const slant = (x: number, y: number, w: number, h: number, color: string): void => {
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.moveTo(x + h * 0.16, y);
+      ctx.lineTo(x + w + h * 0.16, y);
+      ctx.lineTo(x + w, y + h);
+      ctx.lineTo(x, y + h);
+      ctx.fill();
+    };
+    slant(26, 4, 196, 64, 'rgba(15, 12, 11, 0.8)');
+    slant(38, 50, 172, 10, 'rgba(255, 255, 255, 0.2)');
+    slant(38, 50, 172 * Math.max(0, health / this.max), 10, hex(this.color));
+    ctx.font = `700 29px ${FONT}`;
+    ctx.textAlign = 'left';
     // the team colour lifted towards white, so dark team colours read on the plate
-    ctx.fillStyle = `color-mix(in srgb, ${hex(this.color)} 65%, white)`;
-    ctx.strokeText(this.name, 128, 28);
-    ctx.fillText(this.name, 128, 28);
-    ctx.font = '700 30px ui-monospace, Consolas, monospace';
-    ctx.fillStyle = '#ffffff';
-    ctx.strokeText(String(health), 128, 62);
-    ctx.fillText(String(health), 128, 62);
+    ctx.fillStyle = `color-mix(in srgb, ${hex(this.color)} 60%, white)`;
+    ctx.fillText(this.name, 44, 38, 112);
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#f6efdf';
+    ctx.fillText(String(health), 212, 38);
     this.texture.needsUpdate = true;
   }
 
@@ -83,6 +93,8 @@ export class UnitLabel {
     if (!this.sprite.visible) return;
     const p = SNAP.copy(this.sprite.position).project(camera);
     if (p.z > 1) return;
+    // (not under the strip at the top of the screen)
+    if (p.y < 1.2) p.y = Math.min(p.y, STRIP - LABEL_H * 2);
     p.x = ((Math.round(((p.x + 1) / 2) * width) + 0.5) / width) * 2 - 1;
     p.y = ((Math.round(((p.y + 1) / 2) * height) + 0.5) / height) * 2 - 1;
     this.sprite.position.copy(p.unproject(camera));
@@ -96,6 +108,8 @@ export class UnitLabel {
 }
 
 const SNAP = new THREE.Vector3();
+/** The foot of the HUD's strip at the top, in the picture's height (-1..1). */
+const STRIP = 0.71;
 
 interface Floating {
   sprite: THREE.Sprite;
@@ -113,19 +127,30 @@ export class FloatingTexts {
   constructor(private readonly scene: THREE.Scene) {}
 
   spawn(text: string, color: number, at: THREE.Vector3, life = 1): void {
-    const { sprite, ctx, texture } = textSprite(128, 64);
-    ctx.font = '800 44px ui-monospace, Consolas, monospace';
+    const wide = Math.max(128, 24 + text.length * 27);
+    const { sprite, ctx, texture } = textSprite(wide, 64);
+    ctx.font = `800 44px ${FONT}`;
     ctx.textAlign = 'center';
     ctx.lineWidth = 7;
     ctx.strokeStyle = 'rgba(0,0,0,0.8)';
     ctx.fillStyle = hex(color);
-    ctx.strokeText(text, 64, 48);
-    ctx.fillText(text, 64, 48);
+    ctx.strokeText(text, wide / 2, 48);
+    ctx.fillText(text, wide / 2, 48);
     // (sprites keep one screen size, whatever the distance)
-    sprite.scale.set(0.13, 0.065, 1);
+    sprite.scale.set((0.065 * wide) / 64, 0.065, 1);
     sprite.position.copy(at);
     this.scene.add(sprite);
     this.items.push({ sprite, texture, t0: performance.now(), life, y0: at.y });
+  }
+
+  /** Kept off the strip at the top of the screen. */
+  clamp(camera: THREE.Camera): void {
+    for (const f of this.items) {
+      const p = SNAP.copy(f.sprite.position).project(camera);
+      if (p.z > 1 || p.y > 1.2 || p.y < STRIP - 0.07) continue;
+      p.y = STRIP - 0.07;
+      f.sprite.position.copy(p.unproject(camera));
+    }
   }
 
   update(now: number): void {
