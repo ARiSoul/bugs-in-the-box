@@ -181,7 +181,7 @@ export type MatchEvent =
 export const MARCH_TICKS = 6 * TICK_RATE;
 export const SWARM_TICKS = Math.round(3.1 * TICK_RATE);
 const SWARM_BITES = 8;
-const SWARM_BITE = 5;
+const SWARM_BITE = 7;
 /** How near its head comes to an enemy before the column swarms it. */
 const SWARM_REACH = 1.5;
 /** Numbers per tick in a column's path: place, normal, heading. */
@@ -207,7 +207,7 @@ const BROOD_BITES = 6;
 const BROOD_BITE_TICKS = 14;
 export const BROOD_LIGHT = 216;
 /** The damage at the edge of what a brood covers, as a fraction of the full one; how it throws them as it flees. */
-const BROOD_EDGE = 0.45;
+const BROOD_EDGE = 0.4;
 const BROOD_THROW = 5;
 
 /** A place on a surface: where, and its normal. */
@@ -1172,7 +1172,7 @@ export class Match {
     }
     for (let t = 0; t < SPAWN_SETTLE_TICKS; t++) for (const b of this.bugs) b.step(this.field, IDLE);
     for (const b of this.bugs) {
-      b.health = 100;
+      b.health = b.species.health;
       b.lastImpact = 0;
     }
   }

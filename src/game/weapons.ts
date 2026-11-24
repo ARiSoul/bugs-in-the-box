@@ -87,7 +87,7 @@ export const SOLDER_BLOB: Weapon = {
   maxSpeed: 34,
   windFactor: 1,
   blastRadius: 5,
-  damage: 45,
+  damage: 42,
   color: 0xc8ccd4,
 };
 
@@ -100,8 +100,8 @@ export const CAPACITOR: Weapon = {
   maxSpeed: 26,
   fuseTicks: 180,
   bounce: 0.45,
-  blastRadius: 5.5,
-  damage: 50,
+  blastRadius: 6,
+  damage: 55,
   color: 0x2f6fd6,
 };
 
@@ -141,7 +141,7 @@ export const WEB_SHOT: Weapon = {
   species: 'spider',
   maxSpeed: 30,
   windFactor: 0.4,
-  damage: 5,
+  damage: 15,
   webRadius: 4.5,
   webTurns: 6,
   color: 0xf2f2ee,
@@ -160,7 +160,7 @@ export const WEB_BOW: Weapon = {
   maxSpeed: 62,
   windFactor: 0.15,
   gravityFactor: 0.5,
-  damage: 45,
+  damage: 58,
   webRadius: 5.5,
   webTurns: 6,
   sceneTicks: 264,
@@ -193,7 +193,7 @@ export const BLACKOUT_SWARM: Weapon = {
   name: 'Blackout Swarm',
   kind: 'brood',
   species: 'cockroach',
-  damage: 48,
+  damage: 44,
   markRange: 48,
   coverRadius: 6,
   sceneTicks: 264,

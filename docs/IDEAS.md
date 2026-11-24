@@ -43,6 +43,12 @@ Special skills as attacks, each with its own attack animation (a skill is a weap
 - **Last Nerve (cockroach):** it runs on without its head. The body runs blind, steered only in wide turns, and bursts at the end; the head stays behind and sees it all.
 - **Wing Storm (cockroach):** it opens its wings, takes off and beats up a gale: little damage, but it sweeps a whole cone of bugs away, off the map if they stand badly.
 - **Fallout Charge (cockroach):** it soaks up the device's energy, glows from inside and drops head first from high up: a huge crater, and it pays with its own health (goes well with Hard Shell).
+- **How special skills are earned (to come; today they are free, every turn):** a match should not open with them. Ways to get one, alone or together:
+  - a **skill loader**: a gauge that fills at some speed (by turn, by damage done or taken), and fires one special when full;
+  - **items** found on the map, which unlock or charge one;
+  - **levels**: bugs or squads gain experience and unlock skills;
+  - **boxes** bought with what is earned by playing.
+  - Balance is kept in two layers for this (`scripts/balance.ts`): the species are even with no specials at all, and the specials are even with each other. So a limit can be added without undoing the balance; the rarer they get, the stronger they may be.
 - **Unlocking and choosing skills:** more than one special per species; skills are unlocked by playing, and each squad chooses which ones it brings (a limit per squad, perhaps one per bug).
 - More of the same kind: an attack that comes from the creature's body or habits, not a borrowed weapon.
 

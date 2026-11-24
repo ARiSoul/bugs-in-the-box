@@ -24,6 +24,8 @@ function setup(t: Terrain, ant: [number, number], spider: [number, number], more
   m.units[1].bug.drop(t, ...spider);
   more.forEach((p, i) => m.units[2 + i].bug.drop(t, ...p));
   run(m, 60);
+  // (the rules, whatever health a species starts with)
+  for (const u of m.units) u.bug.health = 100;
   return m;
 }
 
@@ -72,7 +74,7 @@ describe('Ant Column', () => {
     expect(t.sample(40, 9, 32)).toBeGreaterThan(0);
     const hurt = 100 - m.units[1].bug.health;
     expect(hurt).toBeGreaterThan(30);
-    expect(hurt).toBeLessThan(60);
+    expect(hurt).toBeLessThan(70);
     expect(m.units[0].bug.health).toBe(100);
     let n = 0;
     for (; n < 2000 && m.active === 0; n++) run(m, 1);

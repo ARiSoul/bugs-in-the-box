@@ -59,7 +59,7 @@ src/
   bench/              benchmark shared between the in-browser button and scripts/bench.ts
   main.ts             glue: wires terrain, render, input and UI
 tests/                Vitest + helpers (meshIntegrity, worlds)
-scripts/bench.ts      Node benchmark
+scripts/bench.ts      Node benchmark; scripts/balance.ts: the computer plays itself, species and weapons compared (`npm run balance`)
 docs/                 ARCHITECTURE.md, ROADMAP.md, IDEAS.md
 ```
 

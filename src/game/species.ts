@@ -17,6 +17,8 @@ export interface BugSpecies {
   /** Forward take-off speed of a jump. */
   readonly jumpForward: number;
 
+  /** Health it starts with. */
+  readonly health: number;
   /** Spins silk: in the air it can hang on a thread (see Bug.thread), and no web holds it. */
   readonly silk?: boolean;
   /** Its shell takes the first blow that would kill it, once a match (see Match.damage). */
@@ -45,6 +47,7 @@ export const ANT: BugSpecies = {
   turnRate: 3,
   jumpSpeed: 9,
   jumpForward: 4,
+  health: 115,
   legs: 6,
   legLength: 1.25,
   bodyLength: 2.6,
@@ -62,6 +65,7 @@ export const SPIDER: BugSpecies = {
   turnRate: 3.4,
   jumpSpeed: 10,
   jumpForward: 5,
+  health: 110,
   silk: true,
   legs: 8,
   legLength: 1.7,
@@ -80,6 +84,7 @@ export const COCKROACH: BugSpecies = {
   turnRate: 2.6,
   jumpSpeed: 7.5,
   jumpForward: 4.5,
+  health: 70,
   shell: true,
   legs: 6,
   legLength: 1.12,

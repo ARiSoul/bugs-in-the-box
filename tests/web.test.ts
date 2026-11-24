@@ -22,6 +22,8 @@ function setup(spider: [number, number], ant: [number, number]): Match {
   m.units[0].bug.drop(t, ...spider);
   m.units[1].bug.drop(t, ...ant);
   run(m, 60);
+  // (the rules, whatever health a species starts with)
+  for (const u of m.units) u.bug.health = 100;
   return m;
 }
 

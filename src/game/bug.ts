@@ -136,11 +136,13 @@ export class Bug {
   lastImpact = 0;
   /** True only during the tick in which the bug landed (read it for fall damage). */
   justLanded = false;
-  health = 100;
+  health: number;
   /** Hanging under a ceiling (see `turnHeading`). */
   private hung = false;
 
-  constructor(readonly species: BugSpecies) {}
+  constructor(readonly species: BugSpecies) {
+    this.health = species.health;
+  }
 
   /**
    * Drop the bug from the top of the world (or from `fromY`) onto the first surface below (x, z), facing

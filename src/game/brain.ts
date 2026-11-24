@@ -266,6 +266,7 @@ export class Brain {
           if (!q.bug.alive || q.bug.species.silk || q.web >= 0) continue;
           const d2 = (q.bug.x - p.x) * (q.bug.x - p.x) + (q.bug.y - p.y) * (q.bug.y - p.y) + (q.bug.z - p.z) * (q.bug.z - p.z);
           if (d2 < w.webRadius * w.webRadius) s += q.team === u.team ? -14 : 9;
+          if (q !== u && d2 < (q.bug.species.radius + 0.8) * (q.bug.species.radius + 0.8)) s += this.harmScore(u, q, w.damage);
         }
         return s;
       }
@@ -327,7 +328,7 @@ export class Brain {
     for (const q of match.units) {
       if (q.team === u.team || !q.bug.alive) continue;
       const d = Math.max(0, Math.sqrt((q.bug.x - x) * (q.bug.x - x) + (q.bug.y - y) * (q.bug.y - y) + (q.bug.z - z) * (q.bug.z - z)) - q.bug.species.radius);
-      if (d < w.coverRadius) score += this.harmScore(u, q, Math.round(w.damage * (1 - (0.55 * d) / w.coverRadius)));
+      if (d < w.coverRadius) score += this.harmScore(u, q, Math.round(w.damage * (1 - (0.6 * d) / w.coverRadius)));
     }
     this.plans.push({ weapon: index, fx: u.bug.fx, fz: u.bug.fz, aimH: u.aimH, aimV: u.aimV, charge: 0, score: score * 0.9, target: e.id, mark: [x, y, z] });
   }
@@ -349,7 +350,7 @@ export class Brain {
       if (!h.alive || h.airTicks > 50) return;
       const r = e.bug.species.radius + 1.5;
       if ((h.x - e.bug.x) * (h.x - e.bug.x) + (h.y - e.bug.y) * (h.y - e.bug.y) + (h.z - e.bug.z) * (h.z - e.bug.z) > r * r) continue;
-      this.plans.push({ weapon: index, fx, fz, aimH: u.aimH, aimV: u.aimV, charge: CHARGE_TICKS, score: this.harmScore(u, e, 48) * 0.9, target: e.id, mark: null });
+      this.plans.push({ weapon: index, fx, fz, aimH: u.aimH, aimV: u.aimV, charge: CHARGE_TICKS, score: this.harmScore(u, e, 55) * 0.9, target: e.id, mark: null });
       return;
     }
   }
@@ -592,9 +593,9 @@ export class Brain {
       return;
     }
     const s = this.skill;
-    p.charge = Math.max(9, Math.min(CHARGE_TICKS, charge + Math.round(this.spread() * s.charge)));
     // (a sight to aim by: a steadier hand)
-    const hand = w.kind === 'arrow' ? 0.4 : 1;
+    const hand = w.kind === 'arrow' ? 0.12 : 1;
+    p.charge = Math.max(9, Math.min(CHARGE_TICKS, charge + Math.round(this.spread() * s.charge * hand)));
     rotate2(u.bug.fx, u.bug.fz, this.spread() * s.yaw * hand);
     const fx = rot[0];
     const fz = rot[1];

@@ -24,6 +24,8 @@ function setup(t: Terrain, at: [number, number][]): Match {
   }
   for (let n = 0; n < TICK_RATE * 2; n++) m.step(NO_INPUT);
   for (const u of m.units.slice(0, at.length)) expect(u.bug.grounded).toBe(true);
+  // (the rules, whatever health a species starts with)
+  for (const u of m.units) u.bug.health = 100;
   return m;
 }
 

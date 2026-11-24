@@ -22,6 +22,8 @@ function setup(roaches: [number, number][], ants: [number, number][]): Match {
     list.forEach((p, i) => units[i].bug.drop(t, ...p));
   }
   run(m, 60);
+  // (the rules, whatever health a species starts with)
+  for (const u of m.units) u.bug.health = 100;
   return m;
 }
 
