@@ -800,24 +800,25 @@ export class DeskParts {
 
   /**
    * A long-neck bottle in its box: one smooth lathed profile (a tall body, a gradual shoulder, a long tapered neck,
-   * a ringed lip, open), amber-brown glass, darker inside.
+   * a ringed lip, open), amber-brown glass.
    */
   private addBottle(f: Feature): void {
     const [x0, y0, z0, x1, y1] = f.box;
     const R = (x1 - x0) / 2;
     const H = y1 - y0;
     const outer: [number, number][] = [
-      [0, 0], [R * 0.9, 0], [R, 0.02], [R, 0.48], [R * 0.97, 0.53], [R * 0.86, 0.58], [R * 0.68, 0.63], [R * 0.52, 0.68],
+      // (the bottom is hollow: only its rim rests on the coaster)
+      [0, 0.014], [R * 0.8, 0.01], [R * 0.9, 0.001], [R, 0.02], [R, 0.48], [R * 0.97, 0.53], [R * 0.86, 0.58], [R * 0.68, 0.63], [R * 0.52, 0.68],
       [R * 0.43, 0.73], [R * 0.4, 0.8], [R * 0.38, 0.9], [R * 0.44, 0.91], [R * 0.47, 0.93], [R * 0.41, 0.945], [R * 0.47, 0.96],
       [R * 0.47, 0.985], [R * 0.42, 1], [R * 0.33, 1], [R * 0.31, 0.98],
     ];
     const geo = new THREE.LatheGeometry(outer.map(([rad, h]) => new THREE.Vector2(rad, h * H)), 64);
     // (real glass: the light through it turns amber, thicker towards its edges)
     const glass = new THREE.MeshPhysicalNodeMaterial({ color: 0xffffff, metalness: 0, roughness: 0.05, transmission: 1, thickness: R * 0.4, ior: 1.5, attenuationColor: new THREE.Color(0x6a3410), attenuationDistance: R * 0.5 });
-    const inner = new THREE.LatheGeometry(outer.slice(0, 11).map(([rad, h]) => new THREE.Vector2(Math.max(0, rad * 0.9 - 0.05), Math.max(0.02, h) * H)), 48);
+    // (its shadow from the faces that meet the light: from the others its bottom, flat on the coaster, flickers)
+    glass.shadowSide = THREE.FrontSide;
     const g = new THREE.Group();
     g.position.set((x0 + x1) / 2, y0, (z0 + f.box[5]) / 2);
-    void inner;
     const shell = new THREE.Mesh(geo, glass);
     shell.renderOrder = 2;
     shell.castShadow = true;
