@@ -28,6 +28,7 @@ import { CHASE_ELEVATION, FollowCamera } from './render/followCamera';
 import { MeshWorkers, type MeshBatch } from './render/MeshWorkers';
 import { FloatingTexts, UnitLabel } from './render/labels';
 import { ProjectileViews } from './render/projectiles';
+import { dress, type Face } from './render/gpu/heroDress';
 import { Heroes } from './render/gpu/heroes';
 import { createGpuStage } from './render/gpu/gpuStage';
 import type { Stage, StageOptions } from './render/stage';
@@ -148,7 +149,7 @@ let bowPending = false;
 /** The turntable's turn when the drawn ground was indexed. */
 let indexedTurns = 0;
 let views: ScenarioViews;
-let bugViews: { view: BugView; label: UnitLabel; height: number }[] = [];
+let bugViews: { view: BugView; face: Face; blink: number; label: UnitLabel; height: number }[] = [];
 
 /** New map and new match from one number: the seed is all two players need to share. */
 function newMatch(s: number): void {
@@ -193,11 +194,12 @@ function newTeams(s: number): void {
     v.label.dispose();
   }
   bugViews = match.units.map((u) => {
-    const view = new BugView(u.bug.species, match.teams[u.team].color);
+    const view = new BugView(u.bug.species);
+    const face = dress(view, u.team);
     const label = new UnitLabel(u.name, match.teams[u.team].color);
     stage.scene.add(view.root);
     stage.hud.add(label.sprite);
-    return { view, label, height: u.bug.species.radius * 2.4 };
+    return { view, face, blink: 1 + Math.random() * 4, label, height: u.bug.species.radius * 2.4 };
   });
   bestHit = 0;
   webViews.clear();
@@ -1027,6 +1029,11 @@ function frame(now: number): void {
     v.view.held = u.web >= 0 ? 1 : 0;
     v.view.cracked = u.bug.species.shell === true && !u.shell;
     v.view.update(u.bug, alpha, scaled, ground);
+    // (it blinks; dead, its lids are shut; about to shoot, its jaws open)
+    v.blink -= scaled;
+    if (v.blink < -0.16) v.blink = 1.5 + Math.random() * 4;
+    v.face.blink(!u.bug.alive || v.blink < 0 ? 1 : 0);
+    v.face.jaws(!u.bug.alive ? 0.3 : i === match.active && match.charging ? match.power : 0.12 + 0.1 * Math.sin(now * 0.002 + i * 2));
   });
   // (the small ants go on bugs posed for this frame)
   antColumn.late();
@@ -1218,6 +1225,7 @@ function placeLabels(): void {
     const v = bugViews[i];
     const dist = stage.camera.position.distanceTo(v.view.root.position);
     v.view.setCameraDistance(dist);
+    v.face.near(dist < 60);
     v.label.update(v.view.root.position, v.height * v.view.root.scale.y, u.bug.health, u.bug.alive, dist, u.bug.alive && occluded(v.view.root.position, dist), i === match.active);
     // (its own name is in the way of what it points at)
     if (i === match.active && antColumn.camera.active) v.label.sprite.visible = false;

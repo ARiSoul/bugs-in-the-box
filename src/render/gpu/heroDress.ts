@@ -1,14 +1,11 @@
 import * as THREE from 'three/webgpu';
-import { abs, bumpMap, float, fract, mix, mx_noise_float, normalView, positionLocal, positionViewDirection, smoothstep, uniform } from 'three/tsl';
+import { abs, bumpMap, float, fract, mix, mx_noise_float, normalView, positionLocal, positionViewDirection, smoothstep, uniform, vec3 } from 'three/tsl';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { BugView } from '../BugView';
 
 const UP = new THREE.Vector3(0, 1, 0);
 const HAIR = new THREE.ConeGeometry(1, 1, 5).translate(0, 0.5, 0);
 const BALL = new THREE.SphereGeometry(1, 24, 18);
-const EYE = new THREE.MeshStandardNodeMaterial({ color: 0x060505, roughness: 0.06 });
-const GLINT = new THREE.MeshBasicNodeMaterial({ color: 0xffffff });
-const BRISTLE = [0, 1].map(() => new THREE.MeshStandardNodeMaterial({ roughness: 0.5 }));
 /** A limb's spines, by species and proportions. */
 const SPINES = new Map<string, THREE.BufferGeometry>();
 type F = THREE.Node<'float'>;
@@ -18,6 +15,8 @@ type V3 = THREE.Node<'vec3'>;
 export interface Face {
   blink(shut: number): void;
   jaws(open: number): void;
+  /** Whether it is near enough for its hairs and spines. */
+  near(on: boolean): void;
 }
 
 /** Each team's colours on the fighters: the shell, its shadow side, the light on its edge, the limbs. */
@@ -36,6 +35,29 @@ interface Coat {
   /** Dark bands along a limb, and a glow at its joints. */
   limb?: boolean;
 }
+
+/** A number, or a colour, of the bug a mesh belongs to: the material is shared, this is not. */
+const ofBug = (o: THREE.Object3D | null): BugView | undefined => o?.userData.bug as BugView | undefined;
+function own(get: (v: BugView) => number): F {
+  return uniform(0).onObjectUpdate(({ object }) => {
+    const v = ofBug(object);
+    return v ? get(v) : 0;
+  }) as unknown as F;
+}
+const NONE = new THREE.Color(0);
+function ownColor(get: (v: BugView) => THREE.Color): V3 {
+  return uniform(new THREE.Color(0)).onObjectUpdate(({ object }, self) => {
+    const v = ofBug(object);
+    (self.value as unknown as THREE.Color).copy(v ? get(v) : NONE);
+  }) as unknown as V3;
+}
+
+const EYE = new THREE.MeshStandardNodeMaterial({ color: 0x060505, roughness: 0.06 });
+EYE.fog = false;
+EYE.emissiveNode = ownColor((v) => v.eyes.emissive);
+const GLINT = new THREE.MeshBasicNodeMaterial({ color: 0xffffff });
+const FANG = new THREE.MeshStandardNodeMaterial({ color: 0x060505, roughness: 0.12, fog: false });
+const BRISTLE = [0, 1].map(() => new THREE.MeshStandardNodeMaterial({ roughness: 0.5 }));
 
 /** The coats made so far: every fighter of a team shares them (a shader is slow to make). */
 const COATS = new Map<string, THREE.MeshPhysicalNodeMaterial>();
@@ -70,10 +92,13 @@ function coating(o: Coat): THREE.MeshPhysicalNodeMaterial {
     const joint = smoothstep(0.07, 0, positionLocal.y).add(smoothstep(0.95, 1, positionLocal.y)) as unknown as F;
     glow = glow.add(color(o.edge).mul(joint.mul(0.28))) as unknown as V3;
   }
-  m.colorNode = c;
+  // (what happens to this one bug: dead, it fades; a special attack lights it up)
+  const dull = own((v) => v.dull);
+  m.fog = false;
+  m.colorNode = mix(c, vec3(0.045, 0.04, 0.034), dull.mul(0.75));
   m.roughnessNode = (uniform(o.rough) as unknown as F).add(fine.mul(0.1));
   m.normalNode = bumpMap(bump, float(0.02));
-  m.emissiveNode = glow;
+  m.emissiveNode = glow.add(color(o.shell).mul(0.07)).mul(dull.oneMinus()).add(ownColor((v) => (o.limb ? v.legSkin : v.skin).emissive));
   return m;
 }
 
@@ -82,8 +107,10 @@ function fur(on: THREE.Mesh, count: number, long: number, thick: number, root: n
   const hue = (c: number): V3 => uniform(new THREE.Color(c)) as unknown as V3;
   const mat = new THREE.MeshStandardNodeMaterial({ roughness: 0.6 });
   mat.colorNode = mix(hue(root), hue(tip), smoothstep(0.1, 1, positionLocal.y));
+  mat.fog = false;
   mat.emissiveNode = hue(tip).mul(smoothstep(0.5, 1, positionLocal.y).mul(0.1));
   const f = new THREE.InstancedMesh(HAIR, mat, count);
+  f.userData.fine = true;
   const m = new THREE.Matrix4();
   const q = new THREE.Quaternion();
   const p = new THREE.Vector3();
@@ -206,7 +233,7 @@ export function dress(view: BugView, side: number): Face {
       base.scale.set(hd * 0.28, hd * 0.46, hd * 0.3);
       base.position.set(0, -hd * 0.16, hd * 0.07);
       g.add(base);
-      spike(eye, v(0, -hd * 0.45, hd * 0.2), v(-x * 0.2, -1, -0.1), hd * 0.62, hd * 0.13, g);
+      spike(FANG, v(0, -hd * 0.45, hd * 0.2), v(-x * 0.2, -1, -0.1), hd * 0.62, hd * 0.13, g);
       const limb = new THREE.Mesh(BALL, legs);
       limb.scale.set(hd * 0.15, hd * 0.15, hd * 0.62);
       limb.position.set(x * hd * 0.5, -hd * 0.15, hd * 0.32);
@@ -255,9 +282,22 @@ export function dress(view: BugView, side: number): Face {
       SPINES.set(key, g);
     }
     const f = new THREE.Mesh(g, bristle);
+    f.userData.fine = true;
     t.add(f);
   }
+  // (seen from afar its hairs and spines are not worth drawing)
+  const fine: THREE.Object3D[] = [];
+  view.root.traverse((o) => {
+    o.userData.bug = view;
+    if (o.userData.fine) fine.push(o);
+  });
+  let close = true;
   return {
+    near(on) {
+      if (on === close) return;
+      close = on;
+      for (const f of fine) f.visible = on;
+    },
     blink(shut) {
       for (const e of eyes) {
         // (shut, it is a lid in the shell's colour)

@@ -129,6 +129,8 @@ export class BugView {
   private readonly tints: { m: THREE.MeshStandardMaterial; color: THREE.Color; emissive: THREE.Color }[] = [];
   /** Seconds since death (-1: alive). */
   private deadT = -1;
+  /** How far a dead one has lost its colours (0..1). */
+  dull = 0;
   /** Fell out of the world: nothing left to show. */
   private gone = false;
   /** The body: centre at rest, falling speed, orientation at death, the side it rolls to. */
@@ -166,8 +168,6 @@ export class BugView {
     if (species.shell) this.restY = -0.3 * r;
     this.torso.position.y = this.restY;
     const dark = this.material(species.accent, 0.6);
-    // (and limbs half in it: whose it is shows from every side)
-    if (teamColor !== undefined) dark.color.lerp(new THREE.Color(teamColor).multiplyScalar(0.7), 0.75);
     this.legSkin = dark;
     const eye = this.material(0x050505, 0.2);
     this.eyes = eye;
@@ -321,6 +321,7 @@ export class BugView {
       return;
     }
     this.root.visible = true;
+    this.dull = 0;
     this.root.position.set(
       bug.px + (bug.x - bug.px) * alpha,
       bug.py + (bug.y - bug.py) * alpha,
@@ -634,6 +635,7 @@ export class BugView {
 
     // dull colours
     const f = Math.min(1, t / DEATH_FADE);
+    this.dull = f;
     for (const tint of this.tints) {
       tint.m.color.copy(tint.color).lerp(CORPSE_GREY, f * 0.6);
       tint.m.emissive.copy(tint.emissive).multiplyScalar(1 - f);
