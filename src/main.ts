@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { GameSounds } from './audio/GameSounds';
+import { SoundEngine } from './audio/SoundEngine';
 import { runExplosionBenchmark } from './bench/explosions';
 import { applyPose, CameraPath, FlyCamera } from './debug/camera';
 import { captureCanvas } from './debug/capture';
@@ -30,6 +32,7 @@ import { SCENARIOS, scenarioById, type Scenario } from './terrain/scenarios';
 import { Terrain } from './terrain/Terrain';
 import { Hud, type HudState } from './ui/hud';
 import { setupKeysMenu } from './ui/keys';
+import { setupSoundMenu } from './ui/sound';
 
 const TEAMS: TeamSpec[] = [
   { name: 'Red Ants', species: ANT, color: 0xff6b5e, size: 3 },
@@ -65,6 +68,8 @@ const follow = new FollowCamera(stage.camera, stage.controls);
 // the right button turns the view (and the bug with it), the wheel zooms; the left button stays free
 stage.controls.mouseButtons = { LEFT: null, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.ROTATE };
 const hud = new Hud();
+const sound = new SoundEngine();
+const gameSounds = new GameSounds(sound);
 
 const state: HudState = {
   meshing: '',
@@ -149,6 +154,7 @@ function newMatch(s: number): void {
   webViews.clear();
   bow.clear();
   antColumn.clear();
+  gameSounds.reset(match, scenario.id);
   indexedTurns = 0;
   ground.reset(stage.scene, bugViews.map((v) => v.view.root));
   hud.setupMatch(match, WEAPONS, (i) => controls.selectWeapon(i));
@@ -278,8 +284,10 @@ function syncTerrain(): void {
 }
 
 // ---- controls ----
+const toggleSound = setupSoundMenu(sound);
 const controls = new Controls(window, (code) => {
   if (code === 'KeyN') newMatch(seed);
+  else if (code === 'KeyM') toggleSound();
 });
 controls.weaponSlots = () => WEAPONS.map((_, i) => i).filter((i) => match.canUse(match.activeUnit, i));
 controls.bindButtons(hud.pad);
@@ -375,6 +383,7 @@ if (import.meta.env.DEV) {
     if (!p) return;
     match.explode(p.x, p.y, p.z, SOLDER_BLOB);
     handleEvents(match.events);
+    gameSounds.tick(match, false);
     syncTerrain();
   });
 }
@@ -559,6 +568,17 @@ function loop(now: number): void {
   frame(now);
 }
 
+/** The player hears from where the view is. */
+const hearUp = new THREE.Vector3();
+function hear(): void {
+  const c = stage.camera;
+  c.getWorldDirection(camDir);
+  hearUp.set(0, 1, 0).applyQuaternion(c.quaternion);
+  sound.listen(c.position.x, c.position.y, c.position.z, camDir.x, camDir.y, camDir.z, hearUp.x, hearUp.y, hearUp.z);
+}
+const bowState = { active: false, hitFor: -1, time: -1 };
+const columnState = { active: false, hitFor: -1, time: -1 };
+
 function frame(now: number): void {
   // after a stall, drop time instead of spiralling; never negative (the first frame's timestamp can be
   // older than `lastFrame`, which would end the intro before it starts)
@@ -597,6 +617,7 @@ function frame(now: number): void {
       faced ||= controls.faced;
     }
     handleEvents(match.events);
+    gameSounds.tick(match, inScene() !== null);
     accumulator -= DT;
   }
   syncTerrain();
@@ -695,6 +716,14 @@ function frame(now: number): void {
     follow.avoid(terrain, dt);
   }
   wasSpecial = inScene() !== null;
+  bowState.active = bow.camera.active;
+  bowState.hitFor = bow.hitFor;
+  columnState.active = antColumn.camera.active;
+  columnState.hitFor = antColumn.hitFor;
+  bowState.time = bow.sceneTime;
+  columnState.time = antColumn.sceneTime;
+  gameSounds.frame(match, dt, Math.min(bow.timeScale, antColumn.timeScale), bowState, columnState);
+  hear();
   flashes.update(now);
   lines.update(now);
   texts.update(now);
@@ -800,6 +829,7 @@ const debugApi = {
   },
   bow,
   antColumn,
+  sound,
   webViews,
   /** With the loop paused: play on for `seconds` at 60 frames a second (scripted reviews of moving scenes). */
   advance(seconds: number): void {

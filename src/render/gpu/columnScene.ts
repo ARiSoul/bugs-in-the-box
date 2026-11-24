@@ -66,6 +66,8 @@ interface Spot {
 export class ColumnScene {
   readonly camera = new ColumnCamera();
   timeScale = 1;
+  /** Seconds into the scene that plays before the aim, by its own clock (-1: it does not play). */
+  sceneTime = -1;
 
   private readonly root = new THREE.Group();
   private readonly lights = new THREE.Group();
@@ -392,6 +394,7 @@ export class ColumnScene {
     }
     const total = match.currentWeapon.sceneTicks / 60;
     const t = special ? Math.max(0, (READY * Math.min(total, total - (match.specialTicks - alpha) / 60)) / total) : READY;
+    this.sceneTime = special ? t : -1;
     const b = u.bug;
     const r = b.species.radius;
     this.up.set(b.nx, b.ny, b.nz);
@@ -571,6 +574,7 @@ export class ColumnScene {
   }
 
   private end(): void {
+    this.sceneTime = -1;
     if (this.victimView) this.victimView.struggle = this.victimView.tumble = 0;
     this.victimView = null;
     this.targetLight.intensity = 0;

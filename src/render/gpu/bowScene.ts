@@ -88,6 +88,8 @@ export class BowScene {
   readonly camera: BowCamera;
   /** How fast the loop should run now. */
   timeScale = 1;
+  /** Seconds into the scene that plays before the aim, by its own clock (-1: it does not play). */
+  sceneTime = -1;
 
   private readonly root = new THREE.Group();
   /** What only shines: drawn in a pass of its own. */
@@ -441,6 +443,7 @@ export class BowScene {
     // (the scene's own clock is the match's, so every frame of it is a frame of the match)
     const run = special ? Math.max(0, Math.min(1, 1 - (match.specialTicks - alpha) / 60 / total)) : 1;
     const t = run < TIE_SHARE ? (run / TIE_SHARE) * TIED : TIED + ((run - TIE_SHARE) / (1 - TIE_SHARE)) * (READY - TIED);
+    this.sceneTime = special ? t : -1;
     if (special && !this.wasSpecial) {
       this.erupted = false;
       this.camera.start(x.camera, match.units[this.shooter].bug, view, x.ground);
@@ -718,6 +721,7 @@ export class BowScene {
   private shooterView: BugView | null = null;
 
   private end(): void {
+    this.sceneTime = -1;
     this.shooter = -1;
     this.shotT = this.hitT = -1;
     this.wasSpecial = false;

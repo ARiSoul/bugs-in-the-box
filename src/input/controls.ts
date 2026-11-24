@@ -33,7 +33,7 @@ export const DEFAULT_KEYS: Readonly<Record<Action, readonly string[]>> = {
 };
 
 /** Keys the game keeps for itself: weapons and a new match. */
-const RESERVED = new Set(['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'KeyN', 'Escape']);
+const RESERVED = new Set(['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'KeyN', 'KeyM', 'Escape']);
 const WEAPON_KEYS = ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6'];
 const STORAGE = 'bugs-in-the-box.keys';
 
