@@ -14,6 +14,7 @@ import { pickTerrain } from './input/picking';
 import { AimView } from './render/aim';
 import { BugView } from './render/BugView';
 import { BowScene } from './render/gpu/bowScene';
+import { ColumnScene } from './render/gpu/columnScene';
 import { WebViews } from './render/webs';
 import { DrawnGround } from './render/drawnGround';
 import { ChunkRenderer } from './render/ChunkRenderer';
@@ -57,6 +58,9 @@ const projectiles = new ProjectileViews(stage.scene);
 const aim = new AimView(stage.scene);
 const webViews = new WebViews(stage.scene);
 const bow = new BowScene(stage.scene, stage.fx);
+const antColumn = new ColumnScene(stage.scene, stage.fx, bow.light, bow.targetLight);
+/** The special attack whose scene has the view now, if any. */
+const inScene = (): BowScene | ColumnScene | null => (bow.camera.active ? bow : antColumn.camera.active ? antColumn : null);
 const follow = new FollowCamera(stage.camera, stage.controls);
 // the right button turns the view (and the bug with it), the wheel zooms; the left button stays free
 stage.controls.mouseButtons = { LEFT: null, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.ROTATE };
@@ -144,6 +148,7 @@ function newMatch(s: number): void {
   });
   webViews.clear();
   bow.clear();
+  antColumn.clear();
   indexedTurns = 0;
   ground.reset(stage.scene, bugViews.map((v) => v.view.root));
   hud.setupMatch(match, WEAPONS, (i) => controls.selectWeapon(i));
@@ -157,7 +162,7 @@ function newMatch(s: number): void {
 const heldDamage: { unit: number; amount: number }[] = [];
 function showDamage(unit: number, amount: number, long: boolean): void {
   const u = match.units[unit];
-  texts.spawn(`-${amount}`, match.teams[u.team].color, at.set(u.bug.x, u.bug.y + bugViews[unit].height + 1, u.bug.z), long ? 2.6 : 1);
+  texts.spawn(`-${amount}`, match.teams[u.team].color, at.set(u.bug.x, u.bug.y + bugViews[unit].height + (long ? 1.9 : 1), u.bug.z), long ? 2.6 : 1);
 }
 
 /** The sight of a special attack: where its dart points, and how far the string is drawn. */
@@ -196,7 +201,8 @@ function handleEvents(events: readonly MatchEvent[]): void {
   for (const e of events) {
     switch (e.type) {
       case 'explosion':
-        flashes.spawn(at.set(e.x, e.y, e.z), e.radius);
+        // (an ant column digs: no fireball)
+        if (!antColumn.camera.active) flashes.spawn(at.set(e.x, e.y, e.z), e.radius);
         stage.craters.add(e.x, e.y, e.z, e.radius);
         ground.addCrater(e.x, e.y, e.z, e.radius);
         ground.dropLoose(e.x, e.y, e.z, e.radius);
@@ -221,10 +227,17 @@ function handleEvents(events: readonly MatchEvent[]): void {
         break;
       }
       case 'special':
-        bowPending = true;
+        bowPending = match.currentWeapon.kind === 'arrow';
         break;
       case 'fire':
-        if (match.currentWeapon.sceneTicks > 0) bow.onFire();
+        if (match.currentWeapon.kind === 'arrow') bow.onFire();
+        else if (match.currentWeapon.kind === 'column') antColumn.onFire();
+        break;
+      case 'swarm':
+        antColumn.onSwarm();
+        break;
+      case 'collapse':
+        antColumn.onCollapse(e.x, e.y, e.z);
         break;
       case 'arrow':
         // (a bug it hits: in the middle of it)
@@ -237,7 +250,12 @@ function handleEvents(events: readonly MatchEvent[]): void {
         break;
       }
       case 'damage':
-        if (bow.camera.active) heldDamage.push({ unit: e.unit, amount: e.amount });
+        if (inScene()) {
+          // (bite upon bite: one number in the end)
+          const held = heldDamage.find((h) => h.unit === e.unit);
+          if (held) held.amount += e.amount;
+          else heldDamage.push({ unit: e.unit, amount: e.amount });
+        }
         else showDamage(e.unit, e.amount, false);
         break;
       default:
@@ -263,6 +281,7 @@ function syncTerrain(): void {
 const controls = new Controls(window, (code) => {
   if (code === 'KeyN') newMatch(seed);
 });
+controls.weaponSlots = () => WEAPONS.map((_, i) => i).filter((i) => match.canUse(match.activeUnit, i));
 controls.bindButtons(hud.pad);
 setupKeysMenu(controls);
 if (hooks.fly) {
@@ -377,6 +396,11 @@ let orbitTail = 0;
 /** How long the turn keys have been held while the view is held (seconds), and which way. */
 let turnHold = 0;
 let turnDir = 0;
+// (the right button turns the view or the aim: no browser menu over the game. The orbit controls only
+// block it while they are enabled, and a special attack turns them off. Text fields keep theirs, to paste a seed)
+window.addEventListener('contextmenu', (e) => {
+  if (!(e.target instanceof HTMLInputElement)) e.preventDefault();
+});
 canvas.addEventListener('pointerdown', (e) => {
   if (e.button === 2) orbiting = true;
 });
@@ -548,8 +572,8 @@ function frame(now: number): void {
   const steering = match.phase === 'aim' || (match.phase === 'flight' && match.retreatTicks > 0);
   const viewTurns = orbiting || orbitTail > 0;
   orbitTail = Math.max(0, orbitTail - dt);
-  stage.controls.enabled = !bow.camera.active && !debugCamera;
-  if (viewTurns && !bow.camera.active && !debugCamera && !intro && !follow.gliding && steering && match.activeUnit.bug.alive) {
+  stage.controls.enabled = !inScene() && !debugCamera;
+  if (viewTurns && !inScene() && !debugCamera && !intro && !follow.gliding && steering && match.activeUnit.bug.alive) {
     // the turn keys still turn the bug while the view is held: they turn the view (at the bug's turn
     // rate, with the same slow start for fine steps), and the bug faces where it looks
     const turn = controls.turnHeld;
@@ -562,7 +586,7 @@ function frame(now: number): void {
   }
   let faced = false;
   // (a special attack slows the match for a moment: the same ticks, later)
-  const scaled = dt * bow.timeScale;
+  const scaled = dt * Math.min(bow.timeScale, antColumn.timeScale);
   accumulator += scaled;
   while (accumulator >= DT) {
     prevTurns = match.turntableTurns;
@@ -592,17 +616,21 @@ function frame(now: number): void {
     bow.prepare(bugViews[match.active].view, at.set(u.bug.nx, u.bug.ny, u.bug.nz).clone(), ground);
   }
   bow.update({ match, view: bugViews[match.active].view, views: bugViews.map((v) => v.view), ground, camera: stage.camera, alpha, dt: scaled });
+  antColumn.update({ match, view: bugViews[match.active].view, views: bugViews.map((v) => v.view), ground, camera: stage.camera, alpha, dt: scaled });
+  const sceneNow = inScene();
   match.units.forEach((u, i) => {
     const v = bugViews[i];
     v.view.held = u.web >= 0 ? 1 : 0;
     v.view.update(u.bug, alpha, scaled, ground);
   });
+  // (the small ants go on bugs posed for this frame)
+  antColumn.late();
   projectiles.sync(match.projectiles, alpha, ground);
   // (the bars of a film, and no names: while it stands and aims, and once the hit is seen, the names are back)
-  document.body.classList.toggle('special', bow.camera.active && !match.stance && !debugCamera);
-  if (bow.camera.active) stage.hud.visible = match.stance || bow.hitFor > 0.5;
+  document.body.classList.toggle('special', sceneNow !== null && !match.stance && !debugCamera);
+  if (sceneNow) stage.hud.visible = match.stance || (sceneNow.hitFor > 0.5 && sceneNow.names) || (sceneNow === antColumn && antColumn.swarming && antColumn.names);
   else if (wasSpecial) stage.hud.visible = true;
-  if (bow.hitFor > 0.8 || !bow.camera.active) {
+  if (!sceneNow || sceneNow.hitFor > 0.8) {
     // (the damage of a special attack shows when its flash is over)
     for (const e of heldDamage) showDamage(e.unit, e.amount, true);
     heldDamage.length = 0;
@@ -616,10 +644,10 @@ function frame(now: number): void {
   if (!debugCamera && !intro && match.activeUnit.bug.alive) {
     const b = match.activeUnit.bug;
     const yaw = Math.atan2(b.fx, b.fz);
-    if (chasePending && match.phase === 'aim' && !bow.camera.active) {
+    if (chasePending && match.phase === 'aim' && !inScene()) {
       chasePending = false;
       follow.chase(terrain, active.view.root.position, b.fx, b.fz, 0.9);
-    } else if (chaseUnit === match.active && match.phase === 'aim' && !follow.gliding && !faced && !viewTurns && !bow.camera.active) {
+    } else if (chaseUnit === match.active && match.phase === 'aim' && !follow.gliding && !faced && !viewTurns && !inScene()) {
       // (when the view turned the bug, the view is already where it should be)
       let d = yaw - chaseYaw;
       if (d > Math.PI) d -= Math.PI * 2;
@@ -631,7 +659,7 @@ function frame(now: number): void {
   }
 
   // follow the shot while it flies, then a bug that dies, otherwise the bug whose turn it is
-  if (!debugCamera && !intro && !bow.camera.active) {
+  if (!debugCamera && !intro && !inScene()) {
     let tracking = true;
     if (match.projectiles.length > 0 && projectiles.first(target)) {
       // the shot
@@ -653,10 +681,11 @@ function frame(now: number): void {
   if (debugCamera) {
     if (path) path.at(pathFrozenAt ?? (now - pathStart) / 1000, stage.camera, pathTarget);
     if (fly) fly.update(dt);
-  } else if (!intro && !bow.camera.active) {
+  } else if (!intro && !inScene()) {
     if (wasSpecial) {
       // out of a special attack's scene: the game's lens, and a glide back to the active bug
       stage.camera.fov = bow.camera.fov;
+      stage.camera.up.set(0, 1, 0);
       stage.camera.updateProjectionMatrix();
       const b = match.activeUnit.bug;
       stage.controls.target.copy(active.view.root.position);
@@ -665,7 +694,7 @@ function frame(now: number): void {
     stage.controls.update();
     follow.avoid(terrain, dt);
   }
-  wasSpecial = bow.camera.active;
+  wasSpecial = inScene() !== null;
   flashes.update(now);
   lines.update(now);
   texts.update(now);
@@ -743,6 +772,8 @@ function placeLabels(): void {
     const dist = stage.camera.position.distanceTo(v.view.root.position);
     v.view.setCameraDistance(dist);
     v.label.update(v.view.root.position, v.height * v.view.root.scale.y, u.bug.health, u.bug.alive, dist, u.bug.alive && occluded(v.view.root.position, dist), i === match.active);
+    // (its own name is in the way of what it points at)
+    if (i === match.active && antColumn.camera.active) v.label.sprite.visible = false;
     v.label.snap(stage.camera, canvas.width, canvas.height);
   });
 }
@@ -768,6 +799,7 @@ const debugApi = {
     advancing = false;
   },
   bow,
+  antColumn,
   webViews,
   /** With the loop paused: play on for `seconds` at 60 frames a second (scripted reviews of moving scenes). */
   advance(seconds: number): void {

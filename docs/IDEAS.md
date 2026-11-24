@@ -32,6 +32,11 @@ Special abilities per species (for when each bug gets its proper treatment; to t
 Special skills as attacks, each with its own attack animation (a skill is a weapon only that species has):
 
 - **Spider web bow (in the game, as Web Bow):** the spider spins a web between two points and uses it as a bow: it pulls back and shoots, like an arrow. Aimed and charged like the other shots.
+- **Ant Column (in the game):** the ant calls its nest: a column of small ants charges over the terrain, steered by the player, swarms the first enemy it meets and digs the ground away under it.
+- **Titan Lift (ant):** it tears a block out of the terrain, fifty times its weight, lifts it over its head and throws it. A hole where it stood, a crush where it lands.
+- **Acid Charge (ant):** it bends its abdomen forward and shoots a jet of acid that eats the terrain for two turns and hurts whoever stands in it.
+- **Lightning Mandible (ant):** time stops, the mandibles open, and the ant itself is the shot: one straight dash that ends on the first bug and throws it far.
+- **Unlocking and choosing skills:** more than one special per species; skills are unlocked by playing, and each squad chooses which ones it brings (a limit per squad, perhaps one per bug).
 - More of the same kind: an attack that comes from the creature's body or habits, not a borrowed weapon.
 
 Technically these fit the existing data: a species already holds its physics numbers, so an ability would be one more field, with any new action sent as a turn event like a shot.

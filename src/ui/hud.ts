@@ -1,6 +1,6 @@
 import { TICK_RATE } from '../game/bug';
 import { WIND_MAX, type Match } from '../game/match';
-import type { Weapon } from '../game/weapons';
+import { WEAPONS, type Weapon } from '../game/weapons';
 import type { Terrain } from '../terrain/Terrain';
 import { CHUNK } from '../terrain/constants';
 
@@ -142,7 +142,14 @@ export class Hud {
     this.set('power', () => (this.power.style.width = `${(power * 100).toFixed(0)}%`), power.toFixed(2));
 
     // (a weapon of another species is not on offer)
-    this.set('weapons', () => this.weaponButtons.forEach((b, i) => (b.style.display = match.canUse(u, i) ? '' : 'none')), u.bug.species.id);
+    this.set('weapons', () => {
+      let key = 1;
+      this.weaponButtons.forEach((b, i) => {
+        const on = match.canUse(u, i);
+        b.style.display = on ? '' : 'none';
+        if (on) b.textContent = `${key++} ${WEAPONS[i].name}`;
+      });
+    }, u.bug.species.id);
     this.set('weapon', () => this.weaponButtons.forEach((b, i) => b.classList.toggle('on', i === match.weapon)), String(match.weapon));
 
     match.teams.forEach((_t, i) => {

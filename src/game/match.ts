@@ -4,7 +4,7 @@ import { surfaceDistance, type TerrainField } from './field';
 import { rot, rotate2 } from './math';
 import { Projectile } from './projectile';
 import { dropNear } from './spawn';
-import type { BugSpecies } from './species';
+import { MARCHER, type BugSpecies } from './species';
 import { hasWeapon, WEAPONS, type Weapon } from './weapons';
 
 /**
@@ -159,12 +159,38 @@ export type MatchEvent =
   | { type: 'arc'; x1: number; y1: number; z1: number; x2: number; y2: number; z2: number }
   | { type: 'dig'; x1: number; y1: number; z1: number; x2: number; y2: number; z2: number; radius: number }
   | { type: 'arrow'; x: number; y: number; z: number; dx: number; dy: number; dz: number; unit: number }
+  | { type: 'swarm'; unit: number }
+  | { type: 'collapse'; x: number; y: number; z: number; unit: number }
   | { type: 'web'; id: number }
   | { type: 'stuck'; unit: number }
   | { type: 'webGone'; id: number; torn: boolean }
   | { type: 'damage'; unit: number; amount: number }
   | { type: 'death'; unit: number }
   | { type: 'over'; winner: number };
+
+/** An ant column marches this long at full power, swarms a bug this long, biting this many times this hard. */
+export const MARCH_TICKS = 6 * TICK_RATE;
+export const SWARM_TICKS = Math.round(3.1 * TICK_RATE);
+const SWARM_BITES = 8;
+const SWARM_BITE = 5;
+/** How near its head comes to an enemy before the column swarms it. */
+const SWARM_REACH = 1.5;
+/** Numbers per tick in a column's path: place, normal, heading. */
+export const PATH_STEP = 9;
+
+/** An ant column on its way (Ant Column). */
+export interface Column {
+  /** What leads it. */
+  readonly head: Bug;
+  /** Every tick of the head so far: x, y, z, its normal, its heading. */
+  readonly path: number[];
+  /** Ticks of march left; ticks into the swarm; ticks without getting on. */
+  left: number;
+  swarm: number;
+  still: number;
+  /** The unit it swarms (-1: none yet). */
+  victim: number;
+}
 
 /** How long a special attack's hit is looked at before the turn goes on. */
 export const LINGER_TICKS = Math.round(4.5 * TICK_RATE);
@@ -205,6 +231,8 @@ export class Match {
   readonly units: Unit[] = [];
   readonly projectiles: Projectile[] = [];
   readonly webs: Web[] = [];
+  /** The ant column on its way, if any. */
+  column: Column | null = null;
   /** What happened during the last `step` (cleared at the start of every step). */
   readonly events: MatchEvent[] = [];
   phase: Phase = 'aim';
@@ -321,7 +349,8 @@ export class Match {
         this.retreatTicks--;
         move = this.movement(input);
       }
-      if (this.lingerTicks > 0) {
+      if (this.column) this.columnTick(this.column, unit, input);
+      else if (this.lingerTicks > 0) {
         // (a special attack's hit is looked at first; then the shooter may walk away)
         if (--this.lingerTicks === 0) this.retreatTicks = RETREAT_TICKS;
       } else if (this.projectiles.length === 0 && this.retreatTicks === 0) this.startSettle();
@@ -612,10 +641,85 @@ export class Match {
     this.charging = false;
     this.events.push({ type: 'fire', unit: unit.id, weapon: w.id });
     if (w.kind === 'tunnel') this.dig(unit, w);
-    else this.projectiles.push(this.makeProjectile(unit, w, this.power));
+    else if (w.kind === 'column') {
+      const power = this.power < MIN_POWER ? MIN_POWER : this.power;
+      this.column = { head: this.columnHead(unit), path: [], left: Math.round(MARCH_TICKS * power), swarm: 0, still: 0, victim: -1 };
+    } else this.projectiles.push(this.makeProjectile(unit, w, this.power));
     this.phase = 'flight';
     this.retreatTicks = w.sceneTicks > 0 ? 0 : RETREAT_TICKS;
     this.stance = false;
+  }
+
+  /** What leads a column of this unit's, where it would set out now. */
+  columnHead(u: Unit): Bug {
+    const b = u.bug;
+    const h = new Bug(MARCHER);
+    h.confine = b.confine;
+    h.x = h.px = b.x;
+    h.y = h.py = b.y;
+    h.z = h.pz = b.z;
+    h.nx = b.nx;
+    h.ny = b.ny;
+    h.nz = b.nz;
+    h.fx = b.fx;
+    h.fz = b.fz;
+    h.hx = b.hx;
+    h.hy = b.hy;
+    h.hz = b.hz;
+    h.grounded = true;
+    return h;
+  }
+
+  /** One tick of the column: it marches (the player turns it), or swarms what it met, or goes under. */
+  private columnTick(c: Column, owner: Unit, input: Readonly<MatchInput>): void {
+    const h = c.head;
+    if (c.victim >= 0) {
+      const v = this.units[c.victim];
+      c.swarm++;
+      if (v.bug.alive && c.swarm % Math.floor(SWARM_TICKS / SWARM_BITES) === 0 && c.swarm < SWARM_TICKS) this.damage(v, SWARM_BITE);
+      if (v.bug.alive && c.swarm < SWARM_TICKS) return;
+      if (v.bug.alive) this.collapse(c, v.bug.x - v.bug.nx * v.bug.species.radius, v.bug.y - v.bug.ny * v.bug.species.radius, v.bug.z - v.bug.nz * v.bug.species.radius);
+      else this.collapse(c, h.x - h.nx * h.species.radius, h.y - h.ny * h.species.radius, h.z - h.nz * h.species.radius);
+      return;
+    }
+    bugInput.move = 1;
+    bugInput.turn = input.turn * ramp(this.turnHeld);
+    bugInput.faceX = 0;
+    bugInput.faceZ = 0;
+    bugInput.jump = false;
+    bugInput.run = false;
+    h.step(this.field, bugInput);
+    c.path.push(h.x, h.y, h.z, h.nx, h.ny, h.nz, h.hx, h.hy, h.hz);
+    c.left--;
+    const mx = h.x - h.px;
+    const my = h.y - h.py;
+    const mz = h.z - h.pz;
+    c.still = mx * mx + my * my + mz * mz < 0.0016 ? c.still + 1 : 0;
+    for (const u of this.units) {
+      const b = u.bug;
+      if (!b.alive || u.team === owner.team) continue;
+      const dx = b.x - h.x;
+      const dy = b.y - h.y;
+      const dz = b.z - h.z;
+      const reach = b.species.radius + SWARM_REACH;
+      if (dx * dx + dy * dy + dz * dz > reach * reach) continue;
+      c.victim = u.id;
+      this.events.push({ type: 'swarm', unit: u.id });
+      return;
+    }
+    if (!h.alive || h.airTicks > 60) {
+      // (it fell off: lost)
+      this.column = null;
+      this.retreatTicks = RETREAT_TICKS;
+    } else if (c.left <= 0 || c.still > 20) this.collapse(c, h.x - h.nx * h.species.radius, h.y - h.ny * h.species.radius, h.z - h.nz * h.species.radius);
+  }
+
+  /** The column digs the ground away, and goes under. */
+  private collapse(c: Column, x: number, y: number, z: number): void {
+    this.column = null;
+    this.events.push({ type: 'collapse', x, y, z, unit: c.victim });
+    this.explode(x, y, z, this.currentWeapon);
+    this.lingerTicks = LINGER_TICKS;
   }
 
   /** Time ran out, or the active bug got hurt or died: no more aiming this turn. */
@@ -767,6 +871,7 @@ export class Match {
         this.turnTicks = AIM_TICKS;
         this.stance = false;
         this.lingerTicks = 0;
+        this.column = null;
         if (!this.canUse(u, this.weapon) || this.currentWeapon.sceneTicks > 0) this.weapon = 0;
         for (let q = this.webs.length - 1; q >= 0; q--) if (--this.webs[q].turns < 0) this.removeWeb(this.webs[q], false);
         this.retreatTicks = 0;

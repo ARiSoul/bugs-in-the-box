@@ -88,4 +88,7 @@ export const COCKROACH: BugSpecies = {
   accent: 0xd9a066,
 };
 
+/** The head of an ant column: what leads it crawls like any bug, small and fast. Not a species one plays. */
+export const MARCHER: BugSpecies = { ...ANT, id: 'marcher', radius: 0.7, walkSpeed: 12, turnRate: 1.7 };
+
 export const SPECIES: readonly BugSpecies[] = [ANT, SPIDER, COCKROACH];

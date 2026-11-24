@@ -51,7 +51,7 @@ Goal now: a PC demo first, as a proof of concept. The phone items below are post
 - [x] Desk (`?scenario=desk`): the owner's real desk from photos (an L-shaped standing desk, three curved monitors and two laptops with pictures on them, keyboards, vertical mice, two studio speakers, a bottle, small things, cables), at twice the scale on its own 10×3×5 map (`Scenario.mapSize`) so the bugs keep their size; visual critic to "none", detail critic (macro close-ups against the owner's photos) to "accept"
 - [x] Car Dashboard (`?scenario=car`): the owner's car from photos and a video, door to door, ignition on (lit instruments, flashing hazard button, the radio behind its cracked glass, a phone with a map), the steering wheel, the open glove box with its papers, on its own map (10x4x5)
 - [x] Cinematic camera in the menu, for every map (the scripted flight, with pause, skip and restart)
-- [ ] Abilities per species: spider done (Web Shot, the thread, Web Bow); the ant's and the cockroach's to come
+- [ ] Abilities per species: spider done (Web Shot, the thread, Web Bow), the ant's first done (Ant Column; three more and an unlock system in IDEAS); the cockroach's to come
 
 ## Phase 5 · Multiplayer
 - [ ] Deterministic simulation validated across clients (same seed + same events = same map)

@@ -132,12 +132,13 @@ export class BowScene {
   private readonly halo: THREE.Mesh;
   private readonly eyeHalos: THREE.Mesh[] = [];
   private readonly eyeLevel = uniform(0);
-  private readonly targetLight = new THREE.PointLight(0xcfe8ff, 0, 16, 1.5);
+  readonly targetLight = new THREE.PointLight(0xcfe8ff, 0, 16, 1.5);
   private readonly trail: THREE.Mesh;
   private readonly trailAt: THREE.Vector3[] = [];
   private readonly streaks: THREE.InstancedMesh;
   private readonly rings: Ring[] = [];
-  private readonly light = new THREE.PointLight(0x9fe8ff, 0, 34, 1.6);
+  /** (shared by the other special attacks: a light of their own would cost every material) */
+  readonly light = new THREE.PointLight(0x9fe8ff, 0, 34, 1.6);
   private readonly scarf = new THREE.Group();
   private readonly band: THREE.Mesh;
   private readonly tails: THREE.Mesh[] = [];
@@ -427,8 +428,8 @@ export class BowScene {
       }
     }
     const u = match.activeUnit;
-    const bow = match.currentWeapon.sceneTicks > 0;
-    const special = match.phase === 'special';
+    const bow = match.currentWeapon.kind === 'arrow';
+    const special = match.phase === 'special' && bow;
     const stance = match.stance && bow && u.bug.alive;
     const charging = stance && match.charging;
     if ((special || stance) && this.shooter !== u.id) this.begin(u.id, view);
@@ -498,6 +499,7 @@ export class BowScene {
     // ---- the body
     const pose = view.pose;
     pose.weight = this.rise;
+    pose.tie = 0;
     pose.look = Math.asin(Math.max(-1, Math.min(1, this.aimLocal.y))) + 0.35 * erupt * (1 - ss(1.0, 1.4, t)) * k;
     pose.lean = draw * 0.14 - Math.max(-0.3, Math.min(0.5, Math.asin(Math.max(-1, Math.min(1, this.aimLocal.y))))) * 0.35 + erupt * (1 - ss(1.0, 1.5, t)) * 0.3 * k;
     // (before there is a bow its legs reach up and out to call it)
@@ -530,7 +532,7 @@ export class BowScene {
     // ---- the bow and the dart, then the view of them: whatever faces the view comes after it
     this.placeHeld(view, r, special && q < 0.86 ? ss(0.02, 0.12, q) : 0, ss(0.3, 0.62, q));
     this.placeBow(view, r, k ? grow : 0, draw, gone, focus);
-    this.placeDart(match.projectiles.find((p) => p.weapon.sceneTicks > 0), view, r, dartIn, draw, focus, alpha);
+    this.placeDart(match.projectiles.find((p) => p.weapon.kind === 'arrow'), view, r, dartIn, draw, focus, alpha);
     this.camera.update(x.camera, {
       t: special ? t : total,
       shotT: this.shotT,
@@ -701,6 +703,7 @@ export class BowScene {
   // ---------------------------------------------------------------- beginning and end
 
   private begin(id: number, view: BugView): void {
+    this.light.color.setHex(0x9fe8ff);
     if (this.shooter >= 0) this.end();
     this.shooter = id;
     this.shotT = this.hitT = -1;
@@ -742,6 +745,7 @@ export class BowScene {
   private hideAll(): void {
     for (const o of [...this.root.children, ...this.lights.children]) o.visible = false;
     this.light.intensity = 0;
+    this.light.color.setHex(0x9fe8ff);
     this.targetLight.intensity = 0;
     this.targetLight.visible = true;
     this.fx.spot.value.z = 0.0001;
@@ -1304,6 +1308,9 @@ export class BowScene {
     const twist = smoothstep(0.16, 0, abs(u.x.sub(0.5).sub(sin(u.y.mul(60).add(this.time.mul(30))).mul(0.3)))).add(smoothstep(0.16, 0, abs(u.x.sub(0.5).add(sin(u.y.mul(60).add(this.time.mul(30))).mul(0.3)))));
     return mix(vec3(SILK.r, SILK.g, SILK.b), vec3(CORE.r, CORE.g, CORE.b), pow(across, 4)).mul(core.add(halo).add(twist.mul(0.55).mul(smoothstep(0, 0.4, across)))).mul(fade).mul(this.trailLevel);
   }
+
+  /** The bugs' names may show. */
+  readonly names = true;
 
   /** The dart has hit, this many seconds ago (-1: not yet). */
   get hitFor(): number {

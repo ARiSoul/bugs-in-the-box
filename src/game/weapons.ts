@@ -13,7 +13,9 @@ export type WeaponKind =
   /** Projectile that spreads a sticky web where it lands (no blast, the terrain stays). */
   | 'web'
   /** Projectile that hurts only the bug it hits, the more the faster it flies, and opens a web where it ends. */
-  | 'arrow';
+  | 'arrow'
+  /** A column of small ants that charges over the surfaces, steered, and swarms the first enemy it meets. */
+  | 'column';
 
 export interface Weapon {
   readonly id: string;
@@ -158,7 +160,23 @@ export const WEB_BOW: Weapon = {
   color: 0xf4f4ee,
 };
 
-export const WEAPONS: readonly Weapon[] = [SOLDER_BLOB, CAPACITOR, SHORT_CIRCUIT, SOLDERING_IRON, WEB_SHOT, WEB_BOW];
+/**
+ * Ants only, their special attack: it calls its nest. A column of small ants charges over the terrain, up walls too,
+ * and the player steers it (turn keys); it swarms the first enemy it meets and digs the ground away under it.
+ */
+export const ANT_COLUMN: Weapon = {
+  ...BASE,
+  id: 'ant-column',
+  name: 'Ant Column',
+  kind: 'column',
+  species: 'ant',
+  blastRadius: 3.6,
+  damage: 8,
+  sceneTicks: 270,
+  color: 0xffb03a,
+};
+
+export const WEAPONS: readonly Weapon[] = [SOLDER_BLOB, CAPACITOR, SHORT_CIRCUIT, SOLDERING_IRON, WEB_SHOT, WEB_BOW, ANT_COLUMN];
 
 /** Whether a bug of this species has the weapon. */
 export function hasWeapon(species: string, w: Weapon): boolean {

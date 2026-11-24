@@ -92,6 +92,12 @@ export class BugView {
   /** The head (eyes, antennae) and the abdomen turn on their own in a stance. */
   readonly head = new THREE.Group();
   private readonly abdomen = new THREE.Group();
+  /** The three lumps of its body (abdomen, thorax, head): unit spheres, scaled. */
+  readonly lumps: THREE.Mesh[] = [];
+  /** It fights off a swarm, sinking under it (0..1); it tumbles, its legs thrown up (0..1). */
+  struggle = 0;
+  tumble = 0;
+  private fight = 0;
   /** Held down by a web (0..1, eased): it crouches and pulls. */
   held = 0;
   private heldNow = 0;
@@ -154,15 +160,15 @@ export class BugView {
     const len = species.bodyLength * r;
 
     const thoraxR = 0.3 * r;
-    this.part(body, 0, -0.05 * r, 0, thoraxR * 1.1, thoraxR, thoraxR * 1.3);
+    const thorax = this.part(body, 0, -0.05 * r, 0, thoraxR * 1.1, thoraxR, thoraxR * 1.3);
     const ab = species.abdomen * r;
     // (it hangs from the waist, just behind the thorax)
     this.abdomen.position.set(0, 0, -thoraxR * 0.8);
-    this.part(body, 0, 0.08 * r, -(thoraxR * 0.2 + ab * 0.85), ab * 0.8, ab * 0.68, ab, this.abdomen);
+    const abdomen = this.part(body, 0, 0.08 * r, -(thoraxR * 0.2 + ab * 0.85), ab * 0.8, ab * 0.68, ab, this.abdomen);
     const hd = species.head * r;
     const headZ = thoraxR * 1.2 + hd * 0.8;
     this.head.position.set(0, 0.02 * r, headZ);
-    this.part(body, 0, 0, 0, hd, hd * 0.9, hd, this.head);
+    this.lumps.push(abdomen, thorax, this.part(body, 0, 0, 0, hd, hd * 0.9, hd, this.head));
     this.headAt.set(0, 0.02 * r, headZ);
     this.headRadius = hd;
     for (const s of [-1, 1]) {
@@ -232,8 +238,15 @@ export class BugView {
     }
     this.heldNow += (this.held - this.heldNow) * (1 - Math.exp(-dt * 9));
     if (this.heldNow > 0.01) lift -= this.species.radius * (0.42 + 0.035 * Math.sin(this.phase * 3 + performance.now() * 0.021)) * this.heldNow;
+    this.fight += dt;
+    lift -= this.species.radius * 0.38 * this.struggle;
     this.lift += (lift - this.lift) * (1 - Math.exp(-dt * 14));
     this.root.position.addScaledVector(this.up, this.lift);
+    if (this.struggle > 0.01) {
+      const a = 0.07 * this.species.radius * this.struggle;
+      this.root.position.x += Math.sin(this.fight * 57) * a;
+      this.root.position.z += Math.sin(this.fight * 49 + 1) * a;
+    }
     this.groundY = this.root.position.y;
 
     // Walk cycle driven by the actual speed along the surface (up a wall too); legs tuck in while airborne.
@@ -251,8 +264,40 @@ export class BugView {
       leg.bend += (bend - leg.bend) * (1 - Math.exp(-dt * 25));
       leg.pivot.rotation.z = leg.side * (leg.bend + (bug.grounded ? Math.max(0, Math.cos(a)) * swingAmp * 0.5 : 0.35));
     }
+    if (this.struggle > 0.01) {
+      // two legs at a time are torn loose, and stamped down again
+      this.legs.forEach((leg, i) => {
+        const beat = Math.sin(this.fight * 13 + (i % 4) * 1.6 + Math.floor(i / 4));
+        leg.pivot.rotation.z += leg.side * Math.max(0, beat) * 0.42 * this.struggle;
+        leg.pivot.rotation.y += Math.max(0, beat) * 0.3 * this.struggle * (i % 2 ? 1 : -1);
+      });
+      this.roll.setFromEuler(this.wild.set(Math.sin(this.fight * 31) * 0.07 * this.struggle, 0, Math.sin(this.fight * 37 + 2) * 0.09 * this.struggle));
+      this.root.quaternion.multiply(this.roll);
+    }
+    if (this.tumble > 0.01) {
+      this.roll.setFromEuler(this.wild.set(0.42 * this.tumble * Math.sin(this.fight * 5), 0.5 * this.tumble, 0.5 * this.tumble * Math.cos(this.fight * 4)));
+      this.root.quaternion.multiply(this.roll);
+      for (const leg of this.legs) leg.pivot.rotation.z += leg.side * (0.75 + 0.3 * Math.sin(this.fight * 21 + leg.offset)) * this.tumble;
+    }
     if (this.pose.weight > 0.001) this.stand(ground);
     else if (this.posed) this.unpose();
+  }
+
+  private readonly wild = new THREE.Euler();
+
+  /** A place on leg `i`, `f` from its foot (0) to its hip (1), in the world, and the way along it. */
+  legPoint(i: number, f: number, p: THREE.Vector3, along: THREE.Vector3): void {
+    const leg = this.legs[i % this.legs.length];
+    leg.pivot.updateWorldMatrix(true, true);
+    const low = f < 0.6;
+    const m = low ? leg.lower : leg.upper;
+    const y = low ? 1 - f / 0.6 : 1 - (f - 0.6) / 0.4;
+    p.set(0, y, 0).applyMatrix4(m.matrixWorld);
+    along.set(0, y - 0.1, 0).applyMatrix4(m.matrixWorld).sub(p).normalize();
+  }
+
+  get legCount(): number {
+    return this.legs.length;
   }
 
   /** The stance: the body upright over the hind legs, the front two at the bow, the others spread. */
@@ -295,7 +340,7 @@ export class BugView {
         if (s > 0) pole.set(0.8, -0.5, -0.2);
         else pole.set(-1, 0.2, -0.6);
         // (its elbows out to the sides, the same on both)
-        pole.lerp(this.foot.set(s * 1.2, 0.15, 0.25), this.pose.tie);
+        pole.lerp(this.foot.set(s * 1.2, 0.05, 0.1), this.pose.tie);
       } else if (pair === 1 && s > 0) {
         // (a second hand on the bow, under the first)
         goal.copy(grip).multiplyScalar(r);

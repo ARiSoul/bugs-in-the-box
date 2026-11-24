@@ -40,6 +40,8 @@ export interface StageFx {
   vignette: { value: number };
   flash: { value: number };
   focusBlur: { value: number };
+  /** The whole picture towards black. */
+  fade: { value: number };
   /** How far away the one the picture is about is. */
   subject: { value: number };
   /** A place on the screen that does not dim: its middle (u, v down), its radius, the picture's aspect. */
@@ -174,7 +176,7 @@ export async function createGpuStage(canvas: HTMLCanvasElement, terrain: Terrain
     const dimBy = spot.mul(0.8).oneMinus().mul(min(fx.dim.mul(mix(pale, 1.12, far)), 0.988));
     const dimmed = world.mul(dimBy.oneMinus());
     const edge = smoothstep(0.35, 0.85, away.length());
-    const final = dimmed.mul(edge.mul(fx.vignette).oneMinus()).add(fxColor.sample(screenUV).rgb).add(bloomPass.rgb.mul(fx.dim.mul(0.25).add(1))).add(vec3(0.25, 0.8, 1).mul(fx.flash).mul(smoothstep(0.34, 0.0, away.length())).mul(1.5));
+    const final = dimmed.mul(edge.mul(fx.vignette).oneMinus()).add(fxColor.sample(screenUV).rgb).add(bloomPass.rgb.mul(fx.dim.mul(0.25).add(1))).add(vec3(0.25, 0.8, 1).mul(fx.flash).mul(smoothstep(0.34, 0.0, away.length())).mul(1.5)).mul(fx.fade.oneMinus());
     // debug views: 1 = god rays only, 2 = bloom only, 3 = emissive buffer
     const raysView = mix(base.rgb.mul(0.15), sunColor, raysTex.sample(screenUV).r);
     const viewN = select(debugView.lessThan(2.5), bloomPass.rgb, sceneEmissive.sample(screenUV).rgb);
@@ -188,7 +190,7 @@ export async function createGpuStage(canvas: HTMLCanvasElement, terrain: Terrain
     return p;
   };
   const raysAmount = uniform(RAYS);
-  const fx = { scene: fxScene, depthAt, dim: uniform(0), vignette: uniform(0), flash: uniform(0), focusBlur: uniform(0), subject: uniform(10), spot: uniform(new THREE.Vector4(0, 0, 0.0001, 1)), spotAt: uniform(10) };
+  const fx = { scene: fxScene, depthAt, dim: uniform(0), vignette: uniform(0), flash: uniform(0), focusBlur: uniform(0), fade: uniform(0), subject: uniform(10), spot: uniform(new THREE.Vector4(0, 0, 0.0001, 1)), spotAt: uniform(10) };
   const debugView = uniform(0);
   /** The shafts in the dust are warmer than the light itself (scattering in warm, dusty air). */
   const sunColor = uniform(new THREE.Color(0xffb36b));

@@ -171,6 +171,9 @@ export class Controls {
     this.pitch = Math.round((this.pitch + a) * 4096) / 4096;
   }
 
+  /** The weapons on offer, in the order of the number keys (set by the game). */
+  weaponSlots: () => readonly number[] = () => [0, 1, 2, 3, 4, 5];
+
   selectWeapon(index: number): void {
     this.weaponQueued = index;
   }
@@ -179,7 +182,7 @@ export class Controls {
     this.held.add(code);
     if (this.keys.jump.includes(code)) this.jumpQueued = true;
     const w = WEAPON_KEYS.indexOf(code);
-    if (w >= 0) this.weaponQueued = w;
+    if (w >= 0) this.weaponQueued = this.weaponSlots()[w] ?? -1;
   }
 
   release(code: string): void {
