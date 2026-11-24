@@ -109,7 +109,7 @@ export class UnitLabel {
 
 const SNAP = new THREE.Vector3();
 /** The foot of the HUD's strip at the top, in the picture's height (-1..1). */
-const STRIP = 0.71;
+const STRIP = 0.85;
 
 interface Floating {
   sprite: THREE.Sprite;

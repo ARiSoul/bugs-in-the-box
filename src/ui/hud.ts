@@ -139,8 +139,8 @@ export class Hud {
         });
       const card = new SkillCard(0, 0, false);
       row.prepend(card.root);
-      const name = make('team-name', letters(t.name.replace('Cockroaches', 'Roaches'), { fill: TEAM[i], drop: 6, outline: 12 }));
-      root.append(bar, total, name, row);
+      root.title = t.name;
+      root.append(bar, total, row);
       this.root.append(root);
       return { root, fill: bar.querySelector('u') as HTMLElement, trail: bar.querySelector('s') as HTMLElement, total, chips, card, max: Math.max(1, match.teamHealth(i)) };
     });
