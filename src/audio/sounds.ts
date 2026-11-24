@@ -278,7 +278,7 @@ const RECIPES = {
   },
   death: {
     variants: 2,
-    level: 0.5,
+    level: 0.58,
     make: (r) => {
       const a = saw();
       const b = bandpass();
@@ -288,7 +288,7 @@ const RECIPES = {
       const f = 480 + 80 * r();
       // (a cry that falls, then a thump)
       const out = render(1.2, (t) => {
-        const cry = b(a(f * Math.exp(-t * 2.4) * (1 + 0.08 * Math.sin(t * 70))), 1500 * Math.exp(-t * 2), 3) * 2 * strike(t, 0.01, 0.22);
+        const cry = b(a(f * Math.exp(-t * 2.4) * (1 + 0.08 * Math.sin(t * 70))), 1500 * Math.exp(-t * 2), 3) * 2.5 * strike(t, 0.01, 0.22);
         const p = t - 0.46;
         return cry + (s(70 + 130 * Math.exp(-Math.max(0, p) * 26)) * 1.1 + lp(n(), 1600) * 0.7) * strike(p, 0.003, 0.09);
       });

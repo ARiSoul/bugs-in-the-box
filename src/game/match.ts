@@ -28,6 +28,9 @@ export const RETREAT_TICKS = 3 * TICK_RATE;
 const SETTLE_HOLD_TICKS = 20;
 /** ...unless it takes longer than this (e.g. a bug sliding forever). */
 const SETTLE_MAX_TICKS = 10 * TICK_RATE;
+/** What a shot did stays in view this long before the next turn: after damage, after a blast that hurt nobody. */
+export const LOOK_DAMAGE_TICKS = Math.round(1.8 * TICK_RATE);
+export const LOOK_BLAST_TICKS = TICK_RATE;
 /** Holding fire fills the power bar in this many ticks; it fires by itself when full. */
 export const CHARGE_TICKS = 72;
 /** Projectiles leave at no less than this fraction of their full speed. */
@@ -325,6 +328,8 @@ export class Match {
   private readonly nextInTeam: number[];
   private settleTicks = 0;
   private stillTicks = 0;
+  /** Ticks left to look at what the shot did. */
+  private lookTicks = 0;
   /** Ticks left of the pause after deaths (-1: none). */
   private deathTicks = -1;
   /** Quarter turns the turntable has made, and the ticks into the current one. */
@@ -403,6 +408,8 @@ export class Match {
     this.turnDir = input.turn;
     this.aimHeld = input.aim !== 0 && input.aim === this.aimDir ? this.aimHeld + 1 : 0;
     this.aimDir = input.aim;
+
+    if (this.lookTicks > 0) this.lookTicks--;
 
     let move: Readonly<BugInput> = IDLE;
     if (this.phase === 'aim') {
@@ -886,7 +893,7 @@ export class Match {
     let still = this.projectiles.length === 0;
     for (const b of this.bugs) if (!b.settled) still = false;
     this.stillTicks = still ? this.stillTicks + 1 : 0;
-    if (this.stillTicks < SETTLE_HOLD_TICKS && this.settleTicks < SETTLE_MAX_TICKS) return;
+    if ((this.stillTicks < SETTLE_HOLD_TICKS || this.lookTicks > 0) && this.settleTicks < SETTLE_MAX_TICKS) return;
     let died = false;
     for (const u of this.units)
       if (u.bug.alive && u.bug.health <= 0) {
@@ -1067,6 +1074,7 @@ export class Match {
   /** Carve the crater, hurt and throw every bug in reach, then let a Short Circuit arc jump on. */
   explode(x: number, y: number, z: number, w: Weapon): void {
     this.field.carve(x, y, z, w.blastRadius);
+    this.lookTicks = Math.max(this.lookTicks, LOOK_BLAST_TICKS);
     this.events.push({ type: 'explosion', x, y, z, radius: w.blastRadius });
     // (a web whose surface is blown away goes with it)
     for (let q = this.webs.length - 1; q >= 0; q--) {
@@ -1152,6 +1160,7 @@ export class Match {
       this.events.push({ type: 'shell', unit: u.id });
     } else b.health = b.health > amount ? b.health - amount : 0;
     if (amount <= 0) return this.hurtOwnTurn(u);
+    this.lookTicks = LOOK_DAMAGE_TICKS;
     this.events.push({ type: 'damage', unit: u.id, amount });
     const by = this.units[this.active].team;
     this.load(u.team, amount * SKILL_TAKEN);

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { TICK_RATE } from '../src/game/bug';
-import { AIM_TICKS, DEATH_HOLD_TICKS, Match, NO_INPUT, type MatchEvent, type MatchInput } from '../src/game/match';
+import { AIM_TICKS, DEATH_HOLD_TICKS, LOOK_DAMAGE_TICKS, Match, NO_INPUT, type MatchEvent, type MatchInput } from '../src/game/match';
 import { ANT, SPIDER } from '../src/game/species';
 import { CAPACITOR, SHORT_CIRCUIT, SOLDER_BLOB, WEAPONS } from '../src/game/weapons';
 import { floatingIslands } from './helpers/floatingIslands';
@@ -523,5 +523,27 @@ describe('determinism', () => {
     expect(Buffer.from(a.dens.buffer).equals(Buffer.from(fresh.dens.buffer))).toBe(false);
     expect(Buffer.from(a.trace.buffer).equals(Buffer.from(b.trace.buffer))).toBe(true);
     expect(Buffer.from(a.dens.buffer).equals(Buffer.from(b.dens.buffer))).toBe(true);
+  });
+});
+
+describe('what a shot did', () => {
+  it('stays in view before the next turn, however late the shot lands', () => {
+    const m = setup(flat(10), [
+      [20, 32],
+      [44, 32],
+    ]);
+    const internals = m as unknown as { explode(x: number, y: number, z: number, w: typeof CAPACITOR): void };
+    press(m, { fire: true }, 3);
+    press(m, {}, 1);
+    runUntil(m, (x) => x.phase === 'settle', TICK_RATE * 20);
+    const turn = m.turnNumber;
+    const b = m.units[1].bug;
+    internals.explode(b.x, b.y, b.z + 2, CAPACITOR);
+    const health = b.health;
+    expect(health).toBeLessThan(100);
+    const t0 = m.tick;
+    runUntil(m, (x) => x.turnNumber !== turn, TICK_RATE * 12);
+    expect(m.turnNumber).toBe(turn + 1);
+    expect(m.tick - t0).toBeGreaterThanOrEqual(LOOK_DAMAGE_TICKS);
   });
 });

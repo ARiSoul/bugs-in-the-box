@@ -9,7 +9,7 @@ import { readHooks, usesDebugCamera } from './debug/hooks';
 import { PerfLog } from './debug/perf';
 import { viewsFor, type ScenarioViews } from './debug/views';
 import { Brain, SKILLS } from './game/brain';
-import { DT, GRAVITY, KILL_Y } from './game/bug';
+import { DT, GRAVITY, KILL_Y, TICK_RATE } from './game/bug';
 import { Match, NO_INPUT, type MatchEvent, type TeamSpec } from './game/match';
 import { ANT, SPECIES, SPIDER, type BugSpecies } from './game/species';
 import { SOLDER_BLOB, WEAPONS } from './game/weapons';
@@ -238,6 +238,7 @@ function handleEvents(events: readonly MatchEvent[]): void {
         if (!antColumn.camera.active) flashes.spawn(at.set(e.x, e.y, e.z), e.radius);
         stage.craters.add(e.x, e.y, e.z, e.radius);
         ground.addCrater(e.x, e.y, e.z, e.radius);
+        lookAtSpot(e.x, e.y, e.z);
         ground.dropLoose(e.x, e.y, e.z, e.radius);
         break;
       case 'arc':
@@ -252,6 +253,7 @@ function handleEvents(events: readonly MatchEvent[]): void {
       case 'turn':
         chasePending = true;
         deathFocus = -1;
+        hit.on = false;
         break;
       case 'death': {
         // a bug that fell out of the world is just gone; any other dies on screen, and the camera looks
@@ -263,6 +265,7 @@ function handleEvents(events: readonly MatchEvent[]): void {
         bowPending = match.currentWeapon.kind === 'arrow';
         break;
       case 'fire':
+        hit.on = false;
         if (match.currentWeapon.kind === 'arrow') bow.onFire();
         else if (match.currentWeapon.kind === 'column') antColumn.onFire();
         else if (match.currentWeapon.kind === 'brood') brood.onFire(match, ground);
@@ -291,10 +294,12 @@ function handleEvents(events: readonly MatchEvent[]): void {
         break;
       case 'stuck': {
         const u = match.units[e.unit];
+        lookAtUnit(e.unit, 1);
         texts.spawn('stuck!', 0xf2f2ee, at.set(u.bug.x, u.bug.y + bugViews[e.unit].height + 1, u.bug.z));
         break;
       }
       case 'damage':
+        lookAtUnit(e.unit, e.amount);
         if (inScene()) {
           // (bite upon bite: one number in the end)
           const held = heldDamage.find((h) => h.unit === e.unit);
@@ -476,6 +481,47 @@ let introT = -1;
 let chasePending = false;
 /** A bug dying at the end of a turn: the camera looks at it until the next turn (-1: none). */
 let deathFocus = -1;
+/** What the shot hit: the camera stays on it (the bug it hurt most, or the spot) after the shot is gone. */
+const hit = { on: false, unit: -1, amount: 0, until: 0, at: new THREE.Vector3() };
+/** The computer's hits stay in view until the next turn; a player gets back to the shooter sooner, or at once by walking. */
+const HIT_TICKS = Math.round(1.6 * TICK_RATE);
+function lookAtSpot(x: number, y: number, z: number): void {
+  if (match.phase !== 'flight' || inScene() || (hit.on && hit.unit >= 0)) return;
+  hit.on = true;
+  hit.unit = -1;
+  hit.amount = 0;
+  hit.until = match.tick + TICK_RATE;
+  hit.at.set(x, y, z);
+}
+function lookAtUnit(unit: number, amount: number): void {
+  if ((match.phase !== 'flight' && match.phase !== 'settle') || inScene()) return;
+  if (!hit.on) hit.unit = -1;
+  if (hit.unit < 0) hit.amount = 0;
+  hit.on = true;
+  hit.until = match.tick + HIT_TICKS;
+  // (the shooter hurts itself as well: the one it shot at is what to look at)
+  const own = unit === match.active && hit.unit >= 0 && hit.unit !== unit;
+  const other = unit !== match.active && hit.unit === match.active;
+  if (own || (!other && hit.unit !== unit && amount <= hit.amount)) return;
+  hit.amount = hit.unit === unit ? hit.amount + amount : amount;
+  hit.unit = unit;
+  const b = match.units[unit].bug;
+  hit.at.set(b.x, b.y, b.z);
+}
+function looksAtHit(): boolean {
+  if (!hit.on || (match.phase !== 'flight' && match.phase !== 'settle' && match.phase !== 'spin')) return false;
+  if (deathFocus >= 0) return false;
+  if (!brain() && match.phase === 'flight' && (match.tick > hit.until || (match.retreatTicks > 0 && controls.moveHeld !== 0))) {
+    hit.on = false;
+    return false;
+  }
+  if (hit.unit >= 0) {
+    // (one knocked off the map: the camera stays where it went)
+    const b = match.units[hit.unit].bug;
+    if (b.alive && b.y > 0) hit.at.copy(bugViews[hit.unit].view.root.position);
+  }
+  return true;
+}
 /** The player is turning the view with the right button: the active bug faces where the view looks. */
 let orbiting = false;
 /** Seconds the bug keeps facing the view after the button is released (the orbit damping still turns it). */
@@ -601,6 +647,7 @@ function updateIntro(dt: number): boolean {
   introT = -1;
   follow.focus(stage.controls.target, stage.camera.position.distanceTo(stage.controls.target));
   chasePending = false;
+  hit.on = false;
   chaseUnit = match.active;
   chaseYaw = Math.atan2(match.activeUnit.bug.fx, match.activeUnit.bug.fz);
   return false;
@@ -817,7 +864,8 @@ function frame(now: number): void {
     let tracking = true;
     if (match.projectiles.length > 0 && projectiles.first(target)) {
       // the shot
-    } else if (deathFocus >= 0 && match.phase === 'settle') target.copy(bugViews[deathFocus].view.root.position);
+    } else if (looksAtHit()) target.copy(hit.at);
+    else if (deathFocus >= 0 && match.phase === 'settle') target.copy(bugViews[deathFocus].view.root.position);
     else if (match.activeUnit.bug.alive) target.copy(active.view.root.position);
     else tracking = false;
     if (tracking) follow.update(target, dt);
