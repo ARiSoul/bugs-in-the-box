@@ -370,6 +370,7 @@ export class Heroes {
     t.head.rotation.y = rush ? 0 : to * 0.8 + Math.sin(this.time * 1.3 + side) * 0.08;
     t.head.rotation.x = -this.look.y * 0.25 + Math.max(0, Math.sin(this.time * 0.9 + side * 3)) * 0.07 + 0.2 * g;
     t.head.rotation.z = Math.sin(this.time * 7.3 + side * 2) * 0.015;
+    t.carryLegs();
     f.blink -= dt;
     if (f.blink < -0.2) f.blink = 1.6 + Math.random() * 3.5;
     const squint = g > 0.3 ? 0.35 : crouch * 0.45;

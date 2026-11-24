@@ -227,6 +227,7 @@ export function dress(view: BugView, side: number): Face {
     view.head.scale.setScalar(1.42);
     view.head.position.y += 0.2 * r;
     view.head.position.z += 0.08 * r;
+    view.headAt.copy(view.head.position);
     fur(view.lumps[0], 3200, 0.2 * r, 0.017 * r, paint.deep, new THREE.Color(paint.shell).lerp(new THREE.Color(paint.edge), side ? 0.3 : 0.08).getHex());
     fur(view.lumps[1], 700, 0.11 * r, 0.012 * r, paint.deep, paint.shell);
     fur(view.lumps[2], 560, 0.08 * r, 0.01 * r, paint.deep, paint.edge);

@@ -209,10 +209,12 @@ export class BugView {
       const z = perSide === 1 ? 0 : (0.5 - i / (perSide - 1)) * Math.min(len * 0.35, thoraxR * 2.4);
       for (const s of [1, -1]) {
         const pivot = new THREE.Object3D();
-        pivot.position.set(s * thoraxR * 0.8, -0.1 * r + this.restY, z);
+        // (the hips lie close together, inside the thorax; the feet stand apart)
+        const inset = z * 0.5;
+        pivot.position.set(s * thoraxR * 0.72, -0.1 * r + this.restY, z - inset);
         const splay = (z / (thoraxR * 1.2)) * 0.6 * reach;
-        const knee = new THREE.Vector3(s * reach * 0.5, 0.35 * r, splay * 0.5);
-        const foot = new THREE.Vector3(s * reach, -0.9 * r - this.restY, splay);
+        const knee = new THREE.Vector3(s * reach * 0.5, 0.35 * r, splay * 0.5 + inset * 0.5);
+        const foot = new THREE.Vector3(s * reach, -0.9 * r - this.restY, splay + inset);
         const upper = this.limb(dark, new THREE.Vector3(), knee, (species.shell ? 0.085 : 0.06) * r);
         const lower = this.limb(dark, knee, foot, 0.045 * r);
         pivot.add(upper, lower);
@@ -474,6 +476,22 @@ export class BugView {
       leg.pivot.visible = !(this.pose.fold > 0.5 && s < 0 && pair !== 0 && pair !== back);
       leg.pivot.rotation.set(0, 0, 0);
       this.bendTo(leg, goal.sub(hip), pole);
+    }
+  }
+
+  /** After the body was moved by hand (`torso`, once `update` is done): the hips stay on it, the feet where they are. */
+  carryLegs(): void {
+    this.posed = true;
+    this.torso.updateMatrix();
+    for (const leg of this.legs) {
+      const to = this.t2.copy(leg.foot).applyQuaternion(leg.pivot.quaternion).add(leg.home);
+      const pole = this.t3.copy(leg.knee).applyQuaternion(leg.pivot.quaternion);
+      const hip = this.t4.copy(leg.home);
+      hip.y -= this.restY;
+      hip.applyMatrix4(this.torso.matrix);
+      leg.pivot.position.copy(hip);
+      leg.pivot.rotation.set(0, 0, 0);
+      this.bendTo(leg, to.sub(hip), pole);
     }
   }
 
