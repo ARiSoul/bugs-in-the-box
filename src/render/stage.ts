@@ -52,6 +52,8 @@ export interface Stage {
   fx: import('./gpu/gpuStage').StageFx;
   /** Draw one frame. `seconds` is render time (render-only animation), `dt` the frame step. */
   render(seconds: number, dt: number): void;
+  /** Make the shaders of everything in the scene; until they are there, `render` draws nothing (the last picture stays). */
+  warm(): Promise<void>;
   /** The renderer's frame counter (matches the GPU timer's frame numbers). */
   frameNumber(): number;
   /** The turntable's turn so far (quarter turns). */

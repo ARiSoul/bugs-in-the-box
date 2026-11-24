@@ -63,6 +63,29 @@ const run = (steps: readonly number[], each: number, level = 1): Note[] => steps
 const REST = -99;
 
 export const THEMES: Readonly<Record<string, Theme>> = {
+  // the menu: two fighters circle each other, a strutting bass, a hook that asks and answers
+  menu: {
+    bpm: 106,
+    root: 33,
+    scale: MINOR,
+    chords: [0, 0, 3, 4, 0, 0, 5, 6],
+    swing: 0.12,
+    pad: { instrument: 'reed', level: 0.18 },
+    base: [
+      { instrument: 'synthBass', notes: [[0, 0, 0.7], [0.75, 0, 0.2, 0.6], [1.5, 7, 0.4, 0.7], [2, 0, 0.7, 0.9], [2.75, 4, 0.2, 0.6], [3.5, 6, 0.45, 0.8]], bars: 1, octave: 0, level: 0.62, pan: 0 },
+      { instrument: 'pluck', notes: [[0.5, 7, 0.3], [1, 9, 0.3, 0.7], [2.5, 7, 0.3], [3, 11, 0.4, 0.7]], bars: 1, octave: 1, level: 0.3, pan: -0.35 },
+    ],
+    groove: [
+      { instrument: 'lead', notes: [[0, 0, 0.5], [0.5, 2, 0.5], [1, 4, 1], [2.5, 4, 0.4], [3, 3, 0.9], [4, 2, 0.5], [4.5, 3, 0.5], [5, 0, 2], [8, 4, 0.5], [8.5, 6, 0.5], [9, 7, 1], [10.5, 7, 0.4], [11, 6, 0.9], [12, 4, 0.5], [12.5, 6, 0.5], [13, 4, 2.4]], bars: 4, octave: 2, level: 0.2, pan: 0.18, fixed: true },
+      { instrument: 'marimba', notes: [[1.75, 7, 0.2], [3.25, 9, 0.2, 0.7], [3.75, 11, 0.2, 0.6]], bars: 1, octave: 2, level: 0.24, pan: 0.5, second: true },
+    ],
+    tension: [{ instrument: 'bass', notes: run([0, 0, 7, 0, 0, 6, 0, 4], 0.5, 0.9), bars: 1, octave: 1, level: 0.3, pan: 0 }],
+    drums: { kick: 'x.....x.x..x....', snare: '....x.......x..o', hat: 'x.oox.o.x.oox.oo', rim: '..o.......o..o..' },
+    tensionDrums: { kick: 'x...x...x...x...', hat: 'xoxoxoxoxoxoxoxo', tom: '............o.oo' },
+    drumLevel: 0.62,
+    wet: 0.24,
+    echo: 0.75,
+  },
   // the tower case: a clear night of machines, an arpeggio that turns like the fans
   'pc-case': {
     bpm: 98,

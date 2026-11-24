@@ -442,6 +442,7 @@ const menus = {
   /** Closing over the old map (seconds left), and waiting for the new one's chunks. */
   mapIn: -1,
   meshed: true,
+  warm: true,
   /** The colours rip open over the match that starts. */
   ripping: false,
   ended: -1,
@@ -522,6 +523,7 @@ function openSetup(): void {
   stage.menu.amount.value = 1;
   stage.menu.show(true);
   menus.ripping = false;
+  music.choose('menu');
   menus.time = 0;
   heroes.stage.setMap(scenario.id);
   heroes.clear();
@@ -557,6 +559,7 @@ function startMatch(): void {
   menus.setup = false;
   menus.starting = -1;
   accumulator = 0;
+  music.choose(scenario.id);
   newTeams(seed);
   // (the flash gave way to the map: no long hold)
   introT = INTRO_HOLD * 0.35;
@@ -643,11 +646,16 @@ function updateMenus(dt: number): void {
         seed = choice.seed;
         hud.seed.value = String(seed);
         newMatch(seed);
+        music.choose('menu');
+        menus.warm = false;
+        void stage.warm().then(() => {
+          menus.warm = true;
+        });
         heroes.stage.setMap(scenario.id);
         introT = -1;
         menus.time = 0;
       }
-    } else if (menus.meshed && layer.open.value < 1.4) {
+    } else if (menus.meshed && menus.warm && layer.open.value < 1.4) {
       if (layer.open.value === 0) setup.uncall();
       layer.open.value += dt * (0.35 + layer.open.value * 3.4);
     }
@@ -1140,6 +1148,8 @@ function frame(now: number): void {
 }
 
 newMatch(seed);
+// (the map's shaders, side by side on the GPU's own threads, before anything is drawn)
+await stage.warm();
 if (!menuAtStart) document.getElementById('loading')?.remove();
 else {
   // (the fighters' shaders first: nothing stalls when they are picked)

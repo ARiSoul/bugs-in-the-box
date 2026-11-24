@@ -93,7 +93,7 @@ class Looped implements LoopSound {
 }
 
 /**
- * Plays the game's sounds (Web Audio). They are computed on a worker as the page loads; the context is made at the
+ * Plays the game's sounds (Web Audio). They are computed on a worker as the page loads; the context sounds from the
  * player's first click or key (browsers want that). Nothing here may stop the game: without Web Audio it is silent.
  */
 export class SoundEngine {
@@ -129,6 +129,10 @@ export class SoundEngine {
     if (typeof AudioContext === 'undefined') return;
     const worker = new Worker(new URL('./sound.worker.ts', import.meta.url), { type: 'module' });
     worker.onmessage = (e: MessageEvent<SoundReply>) => this.takes.set(e.data.id, { raw: e.data.takes, buffers: [] });
+    // (making the context takes some 50 ms: while the page loads, not at the first click, which only lets it sound)
+    setTimeout(() => {
+      if (!this.context) this.open();
+    }, 0);
     const unlock = (): void => {
       if (!this.context) this.open();
       void this.context?.resume();

@@ -48,6 +48,9 @@ const WALKS = 4;
 /** How long a tried shot flies at most; how long it walks at most (ticks, in three steps). */
 const FLIGHT = 260;
 const WALK_STEP = 40;
+/** How often a spider would rather hold one than hurt it; falling faster than this (units a second) it takes its thread. */
+const WEB_MOOD = 0.22;
+const FALLS = 12;
 /** It turns this fast (radians a tick). */
 const TURN = 0.045;
 const COS45 = 0.7071067811865476;
@@ -101,6 +104,8 @@ export class Brain {
   private nearest = 0;
   private readonly end = new Float64Array(3);
   private specials = false;
+  /** What holding an enemy in a web is worth to it this turn. */
+  private webWorth = 0;
 
   constructor(
     readonly skill: Skill,
@@ -119,6 +124,8 @@ export class Brain {
     if (match.turnNumber !== this.turn) this.reset(match);
     const u = match.activeUnit;
     if (!u.bug.alive) return o;
+    // (a spider that falls takes hold of its thread)
+    if (u.bug.species.silk && !u.bug.grounded && !u.bug.thread && u.bug.vy < -FALLS && u.bug.airTicks % 12 === 0) o.jump = true;
     if (match.phase === 'flight') {
       if (match.column) this.steer(match, match.column, u);
       else if (match.retreatTicks > 0) this.hide(match, u);
@@ -159,6 +166,7 @@ export class Brain {
     this.hidden = null;
     this.hiding = false;
     this.specials = this.rng() < this.skill.special;
+    this.webWorth = this.rng() < WEB_MOOD ? 24 : 12;
   }
 
   private work(): void {
@@ -265,7 +273,7 @@ export class Brain {
         for (const q of match.units) {
           if (!q.bug.alive || q.bug.species.silk || q.web >= 0) continue;
           const d2 = (q.bug.x - p.x) * (q.bug.x - p.x) + (q.bug.y - p.y) * (q.bug.y - p.y) + (q.bug.z - p.z) * (q.bug.z - p.z);
-          if (d2 < w.webRadius * w.webRadius) s += q.team === u.team ? -14 : 9;
+          if (d2 < w.webRadius * w.webRadius) s += q.team === u.team ? -20 : this.webWorth;
           if (q !== u && d2 < (q.bug.species.radius + 0.8) * (q.bug.species.radius + 0.8)) s += this.harmScore(u, q, w.damage);
         }
         return s;
@@ -350,7 +358,7 @@ export class Brain {
       if (!h.alive || h.airTicks > 50) return;
       const r = e.bug.species.radius + 1.5;
       if ((h.x - e.bug.x) * (h.x - e.bug.x) + (h.y - e.bug.y) * (h.y - e.bug.y) + (h.z - e.bug.z) * (h.z - e.bug.z) > r * r) continue;
-      this.plans.push({ weapon: index, fx, fz, aimH: u.aimH, aimV: u.aimV, charge: CHARGE_TICKS, score: this.harmScore(u, e, 55) * 0.9, target: e.id, mark: null });
+      this.plans.push({ weapon: index, fx, fz, aimH: u.aimH, aimV: u.aimV, charge: CHARGE_TICKS, score: this.harmScore(u, e, 75) * 0.9, target: e.id, mark: null });
       return;
     }
   }

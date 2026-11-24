@@ -28,6 +28,8 @@ import { createTerrainMaterial } from './terrainMaterial';
 const SUN_OFFSET = new THREE.Vector3(-60, 150, 36);
 /** Strength of the god rays added to the image. */
 const RAYS = 0.5;
+/** A layer for one thing drawn alone. */
+const BIT_LAYER = 30;
 /** Bloom strength (the same at every hue). */
 const BLOOM = 0.3;
 /** Uniforms a special attack's scene drives: the world dims, the edges close in, a flash, a blur towards the edges. */
@@ -155,7 +157,6 @@ export async function createGpuStage(canvas: HTMLCanvasElement, terrain: Terrain
   const fxScene = new THREE.Scene();
   const fxPass = pass(fxScene, camera, { samples: 4 });
   let pipeline: THREE.RenderPipeline | null = null;
-  let frames = 0;
   let bloomRef: ReturnType<typeof bloom> | null = null;
   const buildPipeline = (): THREE.RenderPipeline => {
     const rays = godrays(sceneDepth, camera, sun);
@@ -219,9 +220,25 @@ export async function createGpuStage(canvas: HTMLCanvasElement, terrain: Terrain
     p.outputNode = menuOn ? withMenu(plain) : plain;
     return p;
   };
+  /** The pipeline, once the key light has its shadow map: one small lit thing is drawn for that, alone (the map itself would be compiled twice). */
+  const firstPipeline = (): THREE.RenderPipeline => {
+    const bit = new THREE.Mesh(new THREE.PlaneGeometry(0.01, 0.01), new THREE.MeshStandardNodeMaterial());
+    bit.layers.set(BIT_LAYER);
+    bit.receiveShadow = true;
+    bit.frustumCulled = false;
+    scene.add(bit);
+    const view = camera.clone();
+    view.layers.set(BIT_LAYER);
+    renderer.render(scene, view);
+    scene.remove(bit);
+    pipeline = buildPipeline();
+    camera.layers.enable(POST_LAYER);
+    return pipeline;
+  };
   const raysAmount = uniform(RAYS);
   // ---- the menus' layer: a pass of its own, in the picture only while a menu is up
   let menuOn = false;
+  let holding = false;
   let plain: THREE.Node<'vec4'> | null = null;
   const menuScene = new THREE.Scene();
   menuScene.environment = scene.environment;
@@ -358,29 +375,21 @@ export async function createGpuStage(canvas: HTMLCanvasElement, terrain: Terrain
       dust?.setTop(top);
       fitShadow(sun, layout, top);
     },
+    async warm() {
+      holding = true;
+      if (!pipeline) firstPipeline();
+      await scenePass.compileAsync(renderer);
+      holding = false;
+    },
     render(seconds: number, dt: number) {
-      // compile every material in the scene ahead of use (also those still out of view), so the first
-      // look at something new does not stall a frame on a shader compile
-      // (without the post-only layer: outside the MRT pass those materials have nothing to write)
-      if (++frames === 30 || frames === 240) {
-        const view = camera.clone();
-        view.layers.disable(POST_LAYER);
-        void renderer.compileAsync(scene, view);
-      }
+      if (holding) return;
       glow.update(seconds);
       heat.update(camera, seconds);
       leds.update(seconds);
       heroes.update(seconds);
       carParts.update(seconds);
       dust?.update(dt);
-      if (pipeline) pipeline.render();
-      else {
-        renderer.render(scene, camera);
-        if (sun.shadow.map) {
-          pipeline = buildPipeline();
-          camera.layers.enable(POST_LAYER);
-        }
-      }
+      (pipeline ?? firstPipeline()).render();
     },
     menu: {
       scene: menuScene,

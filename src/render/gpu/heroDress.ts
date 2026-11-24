@@ -181,6 +181,13 @@ export function dress(view: BugView, side: number): Face {
   }
   const pair = [eyes[0].ball, eyes[1].ball];
   const hd = view.headRadius;
+  if (s.shell) {
+    // (its feelers sweep back: they do not poke at whoever stands before it)
+    const sweep = new THREE.Group();
+    sweep.rotation.x = -1.05;
+    view.head.add(sweep);
+    for (const m of view.head.children.filter((c) => (c as THREE.Mesh).material === legs)) sweep.add(m);
+  }
   const spike = (mat: THREE.Material, at: THREE.Vector3, dir: THREE.Vector3, long: number, thick: number, to: THREE.Object3D): void => {
     const c = new THREE.Mesh(HAIR, mat);
     c.position.copy(at);
