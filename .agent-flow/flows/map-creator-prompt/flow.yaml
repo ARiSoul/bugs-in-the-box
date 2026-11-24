@@ -29,8 +29,8 @@ inputs:
       4. Bundle size
   target_os: {label: Target OS, default: Windows 11}
   target_browser: {label: Target browser, default: Chrome stable}
-  target_gpu: {label: Target GPU, default: 'TODO: your GPU'}
-  target_cpu: {label: Target CPU, default: 'TODO: your CPU'}
+  target_gpu: {label: Target GPU, default: NVIDIA GeForce RTX 4070}
+  target_cpu: {label: Target CPU, default: AMD Ryzen 7 7700X 8-Core}
   target_hz:
     type: integer
     label: Monitor refresh (Hz)
@@ -103,7 +103,7 @@ agents:
     description: 'Run first and again after every human reply at approve_scene: interviews the human (brief
       + reference files) and proposes the SCENE values until the human approves them.'
     prompt_file: prompts/scene_designer.md
-    tools: [io.read_file, workspace.read]
+    tools: [io.read_file, io.view_image, io.view_video]
     inputs:
       brief: {from: input.brief, type: markdown}
       references: {from: input.references, type: file, required: false}
@@ -120,9 +120,9 @@ agents:
         required: false
       scene:
         type: json
-        description: Object with keys MAP_NAME, MAP_PITCH, MEDIUM, DEPTH_GRADIENT, LIGHT_FX, BOUNDARY_SURFACE,
-          HERO_VEGETATION, TERRAIN, GROUND_AND_FLORA, LIFE, SET_PIECES, WORLD_BOUNDS, START_AREA, BOUNDARY_RULE
-          (all strings; 'TBD' while still open)
+        description: Object with keys MAP_NAME, SCENARIO_ID, MAP_PITCH, MEDIUM, DEPTH_GRADIENT, LIGHT_FX,
+          BOUNDARY_SURFACE, HERO_VEGETATION, TERRAIN, GROUND_AND_FLORA, LIFE, SET_PIECES, WORLD_BOUNDS,
+          START_AREA, BOUNDARY_RULE (all strings; 'TBD' while still open)
       scene_review:
         type: markdown
         description: Current proposal as a table with rationale and evidence_ref, plus decisions taken

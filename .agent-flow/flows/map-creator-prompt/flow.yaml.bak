@@ -3,17 +3,22 @@
 version: 1
 name: map-creator-prompt
 title: Bugs in the Box - Map Creator Prompt
-description: 'Turns a short map idea into a complete, ready-to-use prompt (from the Bugs in the Box map
-  template) for building a procedural WebGPU map. Read-only: the result is a .md draft for human review.'
+description: 'Interviews the human about a new map (text brief plus reference images/photos/videos) until
+  the scene is approved, then composes the map prompt from the Bugs in the Box template and iterates until
+  it is approved. Read-only: the result is a .md draft that the map-building flow takes as input.'
 inputs:
-  map_idea:
-    label: Map idea (short pitch)
-    description: E.g. bioluminescent coral reef inside a glass box
-  scene_notes:
+  brief:
     type: markdown
-    label: Extra scene notes (optional)
-    description: Anything the scene must or must not have
+    label: What you want (description)
+    description: 'Describe the map: idea, mood, what it must or must not have, anything you already know.
+      Can be short: the interviewer will ask for the rest.'
+  references:
+    type: file
+    label: References (images, photos, videos)
+    description: 'Optional visual references: mood boards, photos, screenshots, short videos.'
     required: false
+    multiple: true
+    accept: [.png, .jpg, .jpeg, .webp, .gif, .mp4, .webm, .mov, .pdf, .md, .txt]
   priorities:
     type: markdown
     label: Priorities (in order)
@@ -76,64 +81,72 @@ inputs:
     label: Critic passes when nothing above
     default: minor
     options: [blocker, major, minor]
-task: 'Create the prompt for a new Bugs in the Box map from the idea: {map_idea}. Run id: {run_id}.'
+task: 'Define a new Bugs in the Box map with the human and produce its approved build prompt. Brief: {brief}.
+  Run id: {run_id}.'
 orchestrator:
   prompt: |-
-    You coordinate the creation of a map prompt for Bugs in the Box, a browser game POC with procedural WebGPU maps.
+    You coordinate the definition of a new Bugs in the Box map with a human, up to an approved build prompt. The map itself is built later by another flow that takes this flow's final prompt as input.
 
     Rules:
     - Read-only: no agent changes the repository or any external system. The final prompt is a .md draft for human review.
-    - Follow the graph. At the scene approval gate, if the human asks for changes, send their feedback verbatim to scene_designer and run it again; do not edit the scene values yourself.
-    - Every conclusion needs evidence (evidence_ref: a repo path, an input name or a scene key). Do not invent data; if something is missing, say what is missing.
-    - At the end, show the final prompt and the fill report's list of missing/TODO values.
+    - Follow the graph. It has two human loops:
+      1. Scene interview: after each scene_designer run, show the human its `questions` (if any) and `scene_review`. Send the human's reply verbatim to scene_designer (with its previous `scene`) and run it again. Go on to prompt_composer only when the human approves AND scene_designer.status is `ready_for_approval`; if the human approves while questions are still open, remind them of the open points and ask them to answer or confirm.
+      2. Prompt review: show the human the `final_prompt` and the `fill_report`'s missing/TODO list. If they ask for changes, send their feedback verbatim to prompt_composer (with its previous `final_prompt`) and run it again, until they approve.
+    - Never edit scene values or the prompt yourself; the agents do it.
+    - Every conclusion needs evidence (evidence_ref: an input name, a reference file, a human answer or a scene key). Do not invent data; if something is missing, say what is missing.
+    - At the end, show the approved final prompt.
 
-start: repo_context
+start: scene_designer
 
 agents:
-  repo_context:
-    description: 'Run first: reads the Bugs in the Box repository (read only) to find existing maps, their
-      style, shared code (seed, URL hooks, camera) and conventions the new map should reuse.'
-    prompt_file: prompts/repo_context.md
-    tools: [workspace.read, workspace.grep, workspace.glob]
-    inputs:
-      focus:
-        from: input.map_idea
-        type: text
-        description: The new map idea; look for existing maps, shaders and shared code related to it
-        required: false
-    outputs:
-      overview:
-        type: markdown
-        description: Structure, technologies, entry points, how to build and test
-      main_language: {}
-    icon: search
-    origin: {agent: repo_explorer, hash: bd92582bae1a07ba}
   scene_designer:
-    description: 'After the repo context (and again when the human asks for changes): turns the short
-      map idea into concrete, coherent values for every SCENE field of the map template.'
+    description: 'Run first and again after every human reply at approve_scene: interviews the human (brief
+      + reference files) and proposes the SCENE values until the human approves them.'
     prompt_file: prompts/scene_designer.md
+    tools: [io.read_file, io.view_image, io.view_video]
     inputs:
-      map_idea: {from: input.map_idea, type: text}
-      scene_notes: {from: input.scene_notes, type: markdown, required: false}
+      brief: {from: input.brief, type: markdown}
+      references: {from: input.references, type: file, required: false}
       priorities: {from: input.priorities, type: markdown}
-      repo_overview: {from: repo_context.overview, type: markdown}
     outputs:
+      status:
+        type: choice
+        description: needs_answers while important questions are still open; ready_for_approval when every
+          SCENE field is defined
+        options: [needs_answers, ready_for_approval]
+      questions:
+        type: markdown
+        description: Numbered questions for the human (empty when status is ready_for_approval)
+        required: false
       scene:
         type: json
-        description: Object with keys MAP_NAME, MAP_PITCH, MEDIUM, DEPTH_GRADIENT, LIGHT_FX, BOUNDARY_SURFACE,
-          HERO_VEGETATION, TERRAIN, GROUND_AND_FLORA, LIFE, SET_PIECES, WORLD_BOUNDS, START_AREA, BOUNDARY_RULE
-          (all strings)
+        description: Object with keys MAP_NAME, SCENARIO_ID, MAP_PITCH, MEDIUM, DEPTH_GRADIENT, LIGHT_FX,
+          BOUNDARY_SURFACE, HERO_VEGETATION, TERRAIN, GROUND_AND_FLORA, LIFE, SET_PIECES, WORLD_BOUNDS,
+          START_AREA, BOUNDARY_RULE (all strings; 'TBD' while still open)
       scene_review:
         type: markdown
-        description: Human-readable table of the proposed values, with rationale and evidence_ref
+        description: Current proposal as a table with rationale and evidence_ref, plus decisions taken
+          so far and open points
         draft: true
-    icon: palette
+      reference_notes:
+        type: markdown
+        description: 'One entry per reference: file name, whether it was seen, what to take from it, what
+          to ignore, which SCENE fields it guides'
+        required: false
+      reference_files:
+        type: file
+        description: The original reference files, unchanged, for the map-building flow and its critics
+        required: false
+        multiple: true
+    icon: message-circle
   prompt_composer:
-    description: 'After the scene is approved: fills the map template with the approved scene values and
-      the form''s fixed parameters and returns the final prompt as a .md draft.'
+    description: 'After the scene is approved, and again after every change request at review_prompt:
+      fills the map template with the approved scene and the form''s parameters and returns the final
+      prompt as a .md draft.'
     prompt_file: prompts/prompt_composer.md
     inputs:
       scene: {from: scene_designer.scene, type: json}
+      reference_notes: {from: scene_designer.reference_notes, type: markdown, required: false}
       priorities: {from: input.priorities, type: markdown}
       target_os: {from: input.target_os, type: text}
       target_browser: {from: input.target_browser, type: text}
@@ -160,24 +173,39 @@ agents:
     icon: file-text
 
 gates:
-  approve_scene: {kind: human, label: Approve the scene values (or ask for changes)}
-  review_prompt: {kind: human, label: Review the final map prompt}
+  approve_scene: {kind: human, label: 'Answer the questions, ask for changes, or approve the scene'}
+  review_prompt: {kind: human, label: Approve the final map prompt (or ask for changes)}
+  done:
+    kind: stop
+    label: Prompt approved
+    message: 'Map prompt approved: {scene_designer.scene.MAP_NAME}. Give the map-building flow prompt_composer.final_prompt
+      and, if there are references, scene_designer.reference_files.'
 
 edges:
-- {from: repo_context, to: scene_designer}
 - {from: scene_designer, to: approve_scene}
-- {from: approve_scene, to: prompt_composer, when: the human approved the scene values, label: approved}
-- {from: approve_scene, to: scene_designer, when: the human asked for changes (pass their feedback to
-    scene_designer), label: changes}
+- from: approve_scene
+  to: prompt_composer
+  when: the human approved the scene values
+  if: scene_designer.status == "ready_for_approval"
+  label: approved
+- from: approve_scene
+  to: scene_designer
+  when: the human answered the questions or asked for changes (pass their reply verbatim to scene_designer)
+  label: answers / changes
 - {from: prompt_composer, to: review_prompt}
+- {from: review_prompt, to: done, when: the human approved the final prompt, label: approved}
+- from: review_prompt
+  to: prompt_composer
+  when: the human asked for changes to the prompt (pass their feedback verbatim to prompt_composer)
+  label: changes
 workspace: {path: 'G:\repos\bugs-in-the-box'}
 
 layout:
-  repo_context: {x: -318, y: 8}
-  scene_designer: {x: 38, y: 51}
-  prompt_composer: {x: 363, y: 299}
-  approve_scene: {x: 332, y: 142}
+  scene_designer: {x: -110, y: 50}
+  prompt_composer: {x: 249, y: 209}
+  approve_scene: {x: 266, y: 97}
   review_prompt:
-    x: -113
-    y: 669
+    x: -109
+    y: 435
     compact: {w: 200, h: 35}
+  done: {x: -95, y: 595}
