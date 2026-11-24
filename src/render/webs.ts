@@ -165,6 +165,8 @@ export class WebViews {
   update(match: Match, ground: DrawnGround, at: (i: number, out: THREE.Vector3) => THREE.Vector3, now: number): void {
     const t = now / 1000;
     for (const w of match.webs) {
+      // (paste is not silk: see ItemViews)
+      if (w.paste >= 0) continue;
       if (this.views.has(w.id)) continue;
       // (a great web: a few frames after the hit, which has enough to do; nothing of it shows before)
       if (w.grand && this.soon.id !== w.id) this.soon = { id: w.id, frames: 4 };

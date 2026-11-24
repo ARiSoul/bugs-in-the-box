@@ -1,3 +1,4 @@
+import type { Item } from './items';
 import { createRng } from '../terrain/noise';
 import { Bug, GRAVITY, type BugInput } from './bug';
 import { blastShare, CHARGE_TICKS, MIN_POWER, NO_INPUT, type Column, type Match, type MatchInput, type Unit } from './match';
@@ -49,6 +50,9 @@ const WALKS = 4;
 const FLIGHT = 260;
 const WALK_STEP = 40;
 /** How often a spider would rather hold one than hurt it; falling faster than this (units a second) it takes its thread. */
+/** How far it goes for a box (ticks), and with how much of its turn left (ticks). */
+const FETCH = 330;
+const FETCH_TIME = 14 * 60;
 const WEB_MOOD = 0.22;
 const FALLS = 12;
 /** It turns this fast (radians a tick). */
@@ -78,7 +82,7 @@ interface Spot {
   best: number;
 }
 
-type State = 'look' | 'think' | 'spots' | 'walk' | 'aim' | 'charge' | 'done';
+type State = 'look' | 'fetch' | 'think' | 'spots' | 'walk' | 'aim' | 'charge' | 'done';
 
 const dir = new Float64Array(3);
 const vel = new Float64Array(3);
@@ -131,10 +135,13 @@ export class Brain {
       else if (match.retreatTicks > 0) this.hide(match, u);
       return o;
     }
-    if (match.phase !== 'aim' || (!u.bug.grounded && this.state !== 'walk')) return o;
+    if (match.phase !== 'aim' || (!u.bug.grounded && this.state !== 'walk' && this.state !== 'fetch')) return o;
     switch (this.state) {
       case 'look':
-        if (--this.timer <= 0) this.think(match, u);
+        if (--this.timer <= 0 && !this.seekBox(match, u)) this.think(match, u);
+        break;
+      case 'fetch':
+        this.fetch(match, u);
         break;
       case 'think':
       case 'spots':
@@ -187,7 +194,7 @@ export class Brain {
     const enemies = this.enemies(match, u);
     WEAPONS.forEach((w, index) => {
       if (!match.canUse(u, index) || (w.sceneTicks > 0 && !this.specials)) return;
-      if (w.kind === 'tunnel') return;
+      if (w.kind === 'tunnel' || w.kind === 'trap') return;
       if (w.kind === 'brood') {
         for (const e of enemies) this.queue.push(() => this.tryMark(match, u, w, index, e));
       } else if (w.kind === 'column') {
@@ -513,10 +520,86 @@ export class Brain {
       this.think(match, u);
       return;
     }
+    // (it turns first, and then walks)
+    if (!this.turnTo(u.bug, s.wx, s.wz)) {
+      this.timer++;
+      return;
+    }
     this.out.move = 1;
     this.out.run = true;
     this.out.faceX = s.wx;
     this.out.faceZ = s.wz;
+  }
+
+  /** Turn a little at a time towards (x, z) (unit); true: it faces there. */
+  private turnTo(b: Bug, x: number, z: number): boolean {
+    const dot = b.fx * x + b.fz * z;
+    if (dot >= 1 - 0.5 * TURN * TURN) return true;
+    rotate2(b.fx, b.fz, b.fx * z - b.fz * x >= 0 ? TURN : -TURN);
+    this.out.faceX = rot[0];
+    this.out.faceZ = rot[1];
+    return false;
+  }
+
+  // ---------------------------------------------------------------- boxes
+
+  private box: Item | null = null;
+
+  /** A box it can walk to in good time: it goes for it. */
+  private seekBox(match: Match, u: Unit): boolean {
+    if (match.turnTicks < FETCH_TIME || u.web >= 0 || u.bug.ny < 0.3) return false;
+    let best = 1e9;
+    this.box = null;
+    for (const it of match.items.list) {
+      if (it.due > 0 || !it.resting) continue;
+      const d = Math.sqrt((it.x - u.bug.x) * (it.x - u.bug.x) + (it.z - u.bug.z) * (it.z - u.bug.z));
+      if (d > 38 || d >= best || !this.reaches(match, u, it)) continue;
+      best = d;
+      this.box = it;
+    }
+    if (!this.box) return false;
+    this.state = 'fetch';
+    this.timer = FETCH + 60;
+    return true;
+  }
+
+  private reaches(match: Match, u: Unit, it: Item): boolean {
+    const b = new Bug(u.bug.species);
+    b.copy(u.bug);
+    for (let n = 0; n < FETCH; n++) {
+      const dx = it.x - b.x;
+      const dz = it.z - b.z;
+      const l = Math.sqrt(dx * dx + dz * dz);
+      const dy = it.y - b.y;
+      if (l * l + dy * dy < 3.2) return true;
+      if (l < 0.3) return false;
+      step.move = 1;
+      step.turn = 0;
+      step.jump = false;
+      step.run = true;
+      step.faceX = dx / l;
+      step.faceZ = dz / l;
+      b.step(match.field, step);
+      if (!b.alive || b.airTicks > 22 || (b.justLanded && b.lastImpact > 12)) return false;
+    }
+    return false;
+  }
+
+  private fetch(match: Match, u: Unit): void {
+    const it = this.box;
+    if (!it || !match.items.list.includes(it) || --this.timer < 0 || match.turnTicks < HURRY) {
+      this.box = null;
+      if (u.bug.grounded) this.think(match, u);
+      return;
+    }
+    const dx = it.x - u.bug.x;
+    const dz = it.z - u.bug.z;
+    const l = Math.sqrt(dx * dx + dz * dz);
+    if (l < 0.3 || !this.turnTo(u.bug, dx / l, dz / l)) return;
+    this.out.move = 1;
+    this.out.run = true;
+    this.out.faceX = dx / l;
+    this.out.faceZ = dz / l;
   }
 
   // ---------------------------------------------------------------- aiming
@@ -679,7 +762,9 @@ export class Brain {
           this.timer = s.ticks;
         }
     }
-    if (!this.hidden || --this.timer < 0) return;
+    if (!this.hidden) return;
+    if (!this.turnTo(u.bug, this.hidden.wx, this.hidden.wz)) return;
+    if (--this.timer < 0) return;
     this.out.move = 1;
     this.out.run = true;
     this.out.faceX = this.hidden.wx;

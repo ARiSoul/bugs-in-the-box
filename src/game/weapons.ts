@@ -17,7 +17,9 @@ export type WeaponKind =
   /** A column of small ants that charges over the surfaces, steered, and swarms the first enemy it meets. */
   | 'column'
   /** A swarm called in the dark, from everywhere, onto a marked spot: it covers every enemy near it. */
-  | 'brood';
+  | 'brood'
+  /** Laid where the bug stands: it holds whoever of the other teams steps on it. */
+  | 'trap';
 
 export interface Weapon {
   readonly id: string;
@@ -54,6 +56,8 @@ export interface Weapon {
   readonly sceneTicks: number;
   /** The only species that has it (none: every bug). */
   readonly species?: string;
+  /** Only from a box on the map, a use at a time (see Match.stock). */
+  readonly found?: boolean;
   /** Render only. */
   readonly color: number;
 }
@@ -200,9 +204,24 @@ export const BLACKOUT_SWARM: Weapon = {
   color: 0xffc46b,
 };
 
-export const WEAPONS: readonly Weapon[] = [SOLDER_BLOB, CAPACITOR, SHORT_CIRCUIT, SOLDERING_IRON, WEB_SHOT, WEB_BOW, ANT_COLUMN, BLACKOUT_SWARM];
+/** From a box: thermal paste, smeared where the bug stands. Whoever of another team steps on it sticks. */
+export const THERMAL_PASTE: Weapon = {
+  ...BASE,
+  id: 'thermal-paste',
+  name: 'Thermal Paste',
+  kind: 'trap',
+  found: true,
+  webRadius: 3.2,
+  webTurns: 10,
+  color: 0xb9c2cf,
+};
+
+/** What a box's dud does. */
+export const DUD: Weapon = { ...BASE, id: 'dud', name: 'Dud', kind: 'shell', blastRadius: 3, damage: 24, color: 0xff7a2f };
+
+export const WEAPONS: readonly Weapon[] = [SOLDER_BLOB, CAPACITOR, SHORT_CIRCUIT, SOLDERING_IRON, WEB_SHOT, WEB_BOW, ANT_COLUMN, BLACKOUT_SWARM, THERMAL_PASTE];
 
 /** Whether a bug of this species has the weapon. */
 export function hasWeapon(species: string, w: Weapon): boolean {
-  return w.species === undefined || w.species === species;
+  return !w.found && (w.species === undefined || w.species === species);
 }

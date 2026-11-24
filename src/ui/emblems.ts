@@ -15,6 +15,8 @@ export const ARMS: Record<string, string> = {
   'short-circuit': '<path fill="currentColor" d="M29 3 10 27h10l-5 18 22-27H25z"/><circle cx="7" cy="9" r="3.400" fill="currentColor"/><circle cx="41" cy="39" r="3.400" fill="currentColor"/>',
   // a soldering iron, hot at its tip
   'soldering-iron': '<path fill="currentColor" d="m27 14 7 7-4 4-7-7zM33 5l10 10-7 7-10-10z"/><path stroke="currentColor" stroke-width="4" stroke-linecap="round" d="M25 23 12 36"/><path fill="currentColor" d="M12 33 5 43l10-7z"/><path fill="none" stroke="currentColor" stroke-width="2.400" stroke-linecap="round" d="M6 33c-3-3 0-5-2-8M13 43c3 2 5 0 8 2"/>',
+  // a smear
+  'thermal-paste': '<path fill="currentColor" d="M5 37c2-9 8-8 9-15S20 9 27 12s3 9 8 11 9 4 8 14z"/><path fill="none" stroke="var(--b)" stroke-width="2.600" d="M13 32c6-5 14 3 22-3M20 23c4-3 7 0 10-2"/>',
   // a web
   'web-shot': '<path fill="none" stroke="currentColor" stroke-width="2.600" d="M24 4v40M4 24h40M10 10l28 28M38 10 10 38"/><path fill="none" stroke="currentColor" stroke-width="2.600" d="M24 12 33 15 36 24 33 33 24 36 15 33 12 24 15 15z"/><circle cx="24" cy="24" r="4.500" fill="currentColor"/>',
 };

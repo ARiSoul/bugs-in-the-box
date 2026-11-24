@@ -115,6 +115,8 @@ export class Bug {
   confine: ((x: number, y: number, z: number) => boolean) | null = null;
   /** Walking speed factor (below 1: held by a web). */
   slow = 1;
+  /** Jump speed factor (above 1: on a spring). */
+  leap = 1;
   /**
    * Hanging on its thread (species with `silk`): it left it on the last surface it stood on (tx, ty, tz), and
    * comes down slowly. A jump in the air takes hold of it or lets it go; a push, or its surface blown away, cuts it.
@@ -201,6 +203,7 @@ export class Bug {
     this.grounded = o.grounded;
     this.confine = o.confine;
     this.slow = o.slow;
+    this.leap = o.leap;
     this.hung = o.hung;
     this.airTicks = o.airTicks;
     this.alive = o.alive;
@@ -239,11 +242,11 @@ export class Bug {
     if (this.grounded && input.jump) {
       if (this.ny >= WALKABLE_NY) {
         this.vx = this.fx * sp.jumpForward;
-        this.vy = sp.jumpSpeed;
+        this.vy = sp.jumpSpeed * this.leap;
         this.vz = this.fz * sp.jumpForward;
       } else {
         // off a wall: away from it and up (off a ceiling: just down)
-        const up = this.ny > -0.2 ? sp.jumpSpeed * 0.7 : 0;
+        const up = this.ny > -0.2 ? sp.jumpSpeed * 0.7 * this.leap : 0;
         this.vx = this.nx * sp.jumpForward;
         this.vy = this.ny * sp.jumpForward + up;
         this.vz = this.nz * sp.jumpForward;

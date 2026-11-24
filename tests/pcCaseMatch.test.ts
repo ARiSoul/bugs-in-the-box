@@ -75,7 +75,7 @@ describe('Tower Case (pc-case): a played match', () => {
       expect(turns >= 11 || over).toBe(true);
       const fired = new Set(events.filter((e): e is Extract<MatchEvent, { type: 'fire' }> => e.type === 'fire').map((e) => e.weapon));
       // (the web is the spiders' own, and may not come up)
-      if (!over) expect(fired.size).toBeGreaterThanOrEqual(WEAPONS.filter((w) => !w.species).length);
+      if (!over) expect(fired.size).toBeGreaterThanOrEqual(WEAPONS.filter((w) => !w.species && !w.found).length);
       expect(events.some((e) => e.type === 'explosion' || e.type === 'dig')).toBe(true);
       expect(solidCount(terrain)).toBeLessThan(solidBefore);
       expect(events.some((e) => e.type === 'damage')).toBe(true);

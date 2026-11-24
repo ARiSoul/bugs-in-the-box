@@ -109,6 +109,12 @@
       #hud .call .letters { height: 8.5vh; } #hud .call span { background: #130f0c; padding: 0.2em 1em 0.3em; margin-top: -0.2em; transform: skewX(-8deg); font-weight: 600; white-space: nowrap; }
       #hud .call.on { animation: callin 1.35s both; }
       @keyframes callin { 0% { opacity: 0; transform: translateX(-50%) scale(2.2) rotate(-5deg); } 14% { opacity: 1; transform: translateX(-50%) scale(1) rotate(-2deg); } 80% { opacity: 1; transform: translateX(-50%) scale(1.03) rotate(-1deg); } 100% { opacity: 0; transform: translate(-50%, -3vh) scale(1) rotate(-1deg); } }
+      #hud .news { position: absolute; right: 1.4vw; top: 12vh; display: grid; justify-items: end; gap: 0.5em; }
+      #hud .line { display: flex; align-items: center; gap: 0.6em; background: rgba(15, 12, 11, 0.82); border-right: 0.3em solid var(--k); padding: 0.35em 0.9em; transform: skewX(-8deg); animation: newsin 3.6s both; }
+      #hud .line svg { width: 2em; color: var(--k); } #hud .line b { color: var(--k); font-size: 1.15em; } #hud .line span { color: var(--ink); }
+      @keyframes newsin { 0% { opacity: 0; transform: translateX(40%) skewX(-8deg); } 8% { opacity: 1; transform: translateX(0) skewX(-8deg); } 88% { opacity: 1; } 100% { opacity: 0; } }
+      #hud .chip.fused { box-shadow: 0 0 0 0.18em #6db4ff; } #hud .chip.boosted { box-shadow: 0 0 0 0.18em #ff8a4c; } #hud .chip.fused.boosted { box-shadow: 0 0 0 0.18em #6db4ff, 0 0 0 0.34em #ff8a4c; }
+      #hud .card[data-left]:not([data-left=''])::after { content: attr(data-left); position: absolute; right: 0.8vh; top: 0.5vh; font-weight: 700; color: var(--ink); }
       #hud .deck { position: absolute; left: 50%; bottom: 0; transform: translateX(-50%); display: grid; justify-items: center; transition: transform 0.45s cubic-bezier(0.3, 1.2, 0.4, 1); }
       #hud .deck.away { transform: translate(-50%, 105%); } #hud .deck.spent { transform: translate(-50%, 15vh); }
       #hud .aim { background: rgba(15, 12, 11, 0.82); padding: 0.25em 1em 0.35em; transform: skewX(-8deg); min-height: 1.3em; margin-bottom: 0.5em; white-space: nowrap; } #hud .aim:empty { visibility: hidden; } #hud .aim b { color: var(--amber); margin-right: 0.5em; }

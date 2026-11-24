@@ -1,5 +1,6 @@
 import { TICK_RATE } from '../game/bug';
 import { SKILL_FULL, WIND_MAX, type Match } from '../game/match';
+import type { ItemKind } from '../game/items';
 import { WEAPONS, type Weapon } from '../game/weapons';
 import { CHUNK } from '../terrain/constants';
 import type { Terrain } from '../terrain/Terrain';
@@ -23,6 +24,8 @@ const make = (cls: string, html = ''): HTMLElement => {
 const hex = (c: number): string => `#${c.toString(16).padStart(6, '0')}`;
 /** The teams' colours in the lettering. */
 const TEAM = ['#ff7a68', '#8ccaff'];
+/** What each box does, in a few words. */
+const WHAT: Record<ItemKind, string> = { battery: 'the special loads', patch: 'patched up', fuse: 'the next blow hurts half', overclock: 'the next shot hits harder', spring: 'jumps high for a while', paste: 'a trap to lay', crystal: '15 seconds more', magnet: 'come here!', scrap: 'a found weapon, twice', dud: 'that one was a dud' };
 /** Seconds from which the clock is urgent. */
 const URGENT = 5;
 /** Degrees between two cards of the hand. */
@@ -73,6 +76,8 @@ export class Hud {
   private readonly clock = make('clock', '<div class="digits"></div><small></small>');
   private readonly wind = make('wind', '<span>wind</span><i></i><div class="force"><u></u><u></u><u></u><u></u><u></u></div>');
   private readonly call = make('call');
+  /** What turned up, or was found, on the map. */
+  private readonly news = make('news');
   private readonly deck = make('deck');
   private readonly hand = make('hand');
   private readonly power = make('power', '<u></u><s></s>');
@@ -89,7 +94,7 @@ export class Hud {
 
   constructor() {
     this.deck.append(this.aim, this.power, this.hand);
-    this.root.append(this.clock, this.wind, this.call, this.deck);
+    this.root.append(this.clock, this.wind, this.call, this.news, this.deck);
     this.skillHolder.append(this.skill.root);
     this.skill.root.addEventListener('click', () => {
       if (this.skillWeapon >= 0) this.onWeapon(this.skillWeapon);
@@ -149,7 +154,7 @@ export class Hud {
       b.className = 'card';
       b.style.setProperty('--w', hex(w.color));
       const power = Math.min(5, Math.round((w.damage + w.arcDamage * 0.5) / 11));
-      b.innerHTML = `<em></em><svg viewBox="0 0 48 48" aria-hidden="true">${ARMS[w.id] ?? ''}</svg><span>${w.name}</span><div class="facts"><i title="damage">${'<u class="on"></u>'.repeat(power)}${'<u></u>'.repeat(5 - power)}</i><small>${w.kind === 'tunnel' ? 'digs' : w.kind === 'grenade' ? 'bounces' : w.kind === 'web' ? 'holds' : w.arcs ? 'arcs' : 'bursts'}${w.windFactor > 0.5 ? ' · wind' : ''}</small></div>`;
+      b.innerHTML = `<em></em><svg viewBox="0 0 48 48" aria-hidden="true">${ARMS[w.id] ?? ''}</svg><span>${w.name}</span><div class="facts"><i title="damage">${'<u class="on"></u>'.repeat(power)}${'<u></u>'.repeat(5 - power)}</i><small>${w.kind === 'tunnel' ? 'digs' : w.kind === 'grenade' ? 'bounces' : w.kind === 'web' || w.kind === 'trap' ? 'holds' : w.arcs ? 'arcs' : 'bursts'}${w.windFactor > 0.5 ? ' · wind' : ''}</small></div>`;
       b.setAttribute('aria-label', w.name);
       b.addEventListener('click', () => {
         onWeapon(index);
@@ -158,6 +163,24 @@ export class Hud {
       return { root: b, key: b.firstElementChild as HTMLElement, index };
     });
     this.last.clear();
+  }
+
+  private tell(html: string, color: string): void {
+    const line = make('line', html);
+    line.style.setProperty('--k', color);
+    this.news.append(line);
+    while (this.news.children.length > 3) this.news.firstElementChild?.remove();
+    setTimeout(() => line.remove(), 3600);
+  }
+
+  /** A box sets out. */
+  box(by: 'ants' | 'bee'): void {
+    this.tell(`<span>${by === 'bee' ? 'a bee brings a box' : 'ants carry in a box'}</span>`, '#ffb547');
+  }
+
+  /** A bug opened a box. */
+  found(match: Match, unit: number, kind: ItemKind, look: { color: string; name: string; path: string }): void {
+    this.tell(`<svg viewBox="0 0 48 48" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="${look.path}"/></svg><b>${look.name}</b><span>${match.units[unit].name}: ${WHAT[kind]}</span>`, look.color);
   }
 
   /** `windAngle`: screen angle of the wind in radians (0 = right, positive = clockwise). */
@@ -209,6 +232,10 @@ export class Hud {
       for (const q of match.units) {
         if (q.team !== i) continue;
         const chip = t.chips[k++];
+        this.set(`gift${q.id}`, () => {
+          chip.root.classList.toggle('fused', q.fuse);
+          chip.root.classList.toggle('boosted', q.boost);
+        }, `${q.fuse}|${q.boost}`);
         this.set(`unit${q.id}`, () => {
           chip.bar.style.width = `${Math.max(0, (q.bug.health / q.bug.species.health) * 100).toFixed(0)}%`;
           chip.root.classList.toggle('dead', !q.bug.alive);
@@ -234,6 +261,7 @@ export class Hud {
         const s = make('slot');
         s.append(c.root);
         c.key.textContent = String(i + 1);
+        c.root.dataset.left = match.stock[u.team][c.index] > 0 ? `×${match.stock[u.team][c.index]}` : '';
         return s;
       });
       if (this.skillWeapon >= 0) slots.push(this.skillHolder);
@@ -246,12 +274,12 @@ export class Hud {
       void this.hand.offsetWidth;
       this.hand.classList.add('deal');
       this.hand.style.setProperty('--c', TEAM[u.team] ?? '#ffb547');
-    }, `${u.bug.species.id}|${u.team}|${match.turnNumber}`);
+    }, `${u.bug.species.id}|${u.team}|${match.turnNumber}|${match.stock[u.team].join()}`);
     if (this.skillWeapon >= 0) this.skill.show(WEAPONS[this.skillWeapon], match.skill[u.team] / SKILL_FULL, String(this.hand.children.length));
     this.set('weapon', () => {
       for (const c of this.cards) c.root.parentElement?.classList.toggle('on', c.index === match.weapon);
       this.skillHolder.classList.toggle('on', match.weapon === this.skillWeapon);
-    }, `${match.weapon}|${match.turnNumber}`);
+    }, `${match.weapon}|${match.turnNumber}|${match.stock[u.team].join()}`);
     this.set('spent', () => this.deck.classList.toggle('spent', match.phase !== 'aim' && match.phase !== 'special'), match.phase);
 
     const power = match.charging ? match.power : 0;

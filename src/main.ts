@@ -29,6 +29,7 @@ import { MeshWorkers, type MeshBatch } from './render/MeshWorkers';
 import { FloatingTexts, UnitLabel } from './render/labels';
 import { ProjectileViews } from './render/projectiles';
 import { dress, type Face } from './render/gpu/heroDress';
+import { ITEM_LOOKS, ItemViews } from './render/gpu/itemViews';
 import { Heroes } from './render/gpu/heroes';
 import { createGpuStage } from './render/gpu/gpuStage';
 import type { Stage, StageOptions } from './render/stage';
@@ -90,6 +91,7 @@ const texts = new FloatingTexts(stage.hud);
 const projectiles = new ProjectileViews(stage.scene);
 const aim = new AimView(stage.scene);
 const webViews = new WebViews(stage.scene);
+const itemViews = new ItemViews(stage.scene);
 const bow = new BowScene(stage.scene, stage.fx);
 const antColumn = new ColumnScene(stage.scene, stage.fx, bow.light, bow.targetLight);
 const brood = new BroodScene(stage.scene, stage.fx, bow.light);
@@ -203,6 +205,7 @@ function newTeams(s: number): void {
   });
   bestHit = 0;
   webViews.clear();
+  itemViews.clear();
   bow.clear();
   antColumn.clear();
   brood.clear();
@@ -257,7 +260,23 @@ const at = new THREE.Vector3();
 const at2 = new THREE.Vector3();
 function handleEvents(events: readonly MatchEvent[]): void {
   for (const e of events) {
+    itemViews.on(e);
     switch (e.type) {
+      case 'open': {
+        const look = ITEM_LOOKS[e.kind];
+        const what = e.kind === 'patch' ? `+${e.gain}` : look.name;
+        texts.spawn(what, parseInt(look.color.slice(1), 16), at.set(e.x, e.y + 2.2, e.z), 1.5);
+        hud.found(match, e.unit, e.kind, look);
+        if (e.kind === 'dud') break;
+        flashes.spawn(at.set(e.x, e.y, e.z), 0.9);
+        break;
+      }
+      case 'fuse':
+        texts.spawn('fuse blown', 0x8ccaff, at.set(match.units[e.unit].bug.x, match.units[e.unit].bug.y + 3.2, match.units[e.unit].bug.z));
+        break;
+      case 'box':
+        hud.box(match.items.list.find((q) => q.id === e.id)?.by ?? 'bee');
+        break;
       case 'explosion':
         // (an ant column digs: no fireball)
         if (!antColumn.camera.active) flashes.spawn(at.set(e.x, e.y, e.z), e.radius);
@@ -1057,6 +1076,7 @@ function frame(now: number): void {
     heldDamage.length = 0;
   }
   placeSight();
+  itemViews.update(match, scaled, now / 1000);
   webViews.update(match, ground, (i, out) => out.copy(bugViews[i].view.root.position), now);
   const active = bugViews[match.active];
   aim.update(match, active.view.root.position, active.height, now, stage.camera.position.distanceTo(active.view.root.position));
@@ -1149,7 +1169,9 @@ function frame(now: number): void {
 
 newMatch(seed);
 // (the map's shaders, side by side on the GPU's own threads, before anything is drawn)
+const takeAway = itemViews.samples();
 await stage.warm();
+takeAway();
 if (!menuAtStart) document.getElementById('loading')?.remove();
 else {
   // (the fighters' shaders first: nothing stalls when they are picked)
@@ -1274,6 +1296,7 @@ const debugApi = {
   sound,
   music,
   webViews,
+  items: itemViews,
   /** With the loop paused: play on for `seconds` at 60 frames a second (scripted reviews of moving scenes). */
   advance(seconds: number): void {
     advancing = true;

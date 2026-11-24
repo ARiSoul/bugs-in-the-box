@@ -54,6 +54,30 @@ Special skills as attacks, each with its own attack animation (a skill is a weap
 
 Technically these fit the existing data: a species already holds its physics numbers, so an ability would be one more field, with any new action sent as a turn event like a shot.
 
+## Items on the map (in the game)
+
+Boxes turn up nearly every turn: small ants carry one in, or a bee lets one fall. Whoever touches a box opens it: battery (loads the special), flux patch (heals), fuse (halves the next blow), overclock (next shot hits harder), springs, thermal paste (a trap to lay), spare crystal (more time), magnet (pulls the nearest enemy), scrap (found weapons), dud (bursts). Later: boxes as loot that stays between matches.
+
+## More species
+
+Bees and flies (they **fly**: a new way of moving, with a limit so the ground still matters, e.g. a fuel of wing beats per turn, and landing on walls), geckos (a large one: few bugs, much health, sticks and drops its tail), and more (scorpion, beetle, moth, mite...). Each with a trait, a special and its own balance. The bee that brings boxes is the first sketch of the model.
+
+## Building and hiding
+
+Bugs that make the ground theirs, as an action instead of a shot, or with a limit per match:
+
+- **Spider:** weaves an extra strong web as a barrier: it stops shots and bugs until it is torn.
+- **Ant:** digs a hole and hides in it (out of sight, less damage), or builds a mound.
+- **Cockroach:** to be defined (squeezes into cracks, where nothing reaches it).
+- **Every bug:** walls and barriers of what the map is made of (solder, crumbs, thermal paste), small bridges.
+
+## Modes and players
+
+- **More players in a match:** the rules already take any number of teams (tested with four); the menu, the HUD and the camera show two. A match of many players with **one bug each**.
+- **Online:** turn-based first (the simulation is deterministic: only the inputs travel), with **parties** (a group of friends that goes from match to match), invitations by link, rooms.
+- **Real time, with a server behind it** (a later mode, if it proves possible): the turn-based game stays as a mode of its own. The server would run the same simulation; what is open is how to hide the delay, and the cost of carving the terrain for many at once.
+- **Maps:** the menu's shelf holds six; with more, it slides sideways, as it is now.
+
 ## Music-driven mechanics
 
 Use the project's musical DNA: parts of the scenario that pulse to the beat of a track (the speaker cone vibrating, VU meters going up and down, a fan speeding up in the chorus). Each scenario can have its own music and its own hazard rhythms.

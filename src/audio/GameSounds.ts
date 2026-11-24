@@ -226,6 +226,18 @@ export class GameSounds {
         else if (!scene) engine.play('hurt', { at, level: 0.7 + Math.min(0.5, e.amount / 60) });
         break;
       }
+      case 'open':
+        engine.play(e.kind === 'dud' ? 'fuse' : 'skillReady', { at: e, level: 0.9 });
+        break;
+      case 'box':
+        engine.play('tick', { level: 1.2 });
+        break;
+      case 'boxGone':
+        engine.play('bounce', { at: e });
+        break;
+      case 'fuse':
+        engine.play('spark', { at: match.units[e.unit].bug });
+        break;
       case 'death': {
         const b = match.units[e.unit].bug;
         if (b.y > KILL_Y) engine.play('death', { at: b });

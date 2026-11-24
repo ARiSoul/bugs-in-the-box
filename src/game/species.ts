@@ -84,7 +84,7 @@ export const COCKROACH: BugSpecies = {
   turnRate: 2.6,
   jumpSpeed: 7.5,
   jumpForward: 4.5,
-  health: 70,
+  health: 62,
   shell: true,
   legs: 6,
   legLength: 1.12,
