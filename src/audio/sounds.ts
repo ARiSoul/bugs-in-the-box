@@ -44,6 +44,17 @@ function blast(r: Rng, seconds: number, low: number, rubble: number): Samples {
   return finish(out, 0.95, seconds * 0.25);
 }
 
+/** A blast into the ground: muffled, no crack, a thud and a long fall of earth and crumbs. */
+function groundBlast(r: Rng, seconds: number, low: number, rubble: number): Samples {
+  const n = white(r);
+  const lp = lowpass();
+  const body = sine();
+  const w = wander(r, 18);
+  const out = render(seconds, (t) => drive(body(low * (1 + 1.6 * Math.exp(-t * 26))) * strike(t, 0.004, seconds * 0.11) * 1.4 + lp(n(), 130 + 900 * Math.exp(-t * 16), 0.8) * strike(t, 0.006, seconds * 0.14) * (1 + 0.4 * w(t)) * 1.9, 1.3));
+  scatter(out, r, rubble, 0.12, seconds * 0.95, 1.2, (u) => 0.3 * (1 - u), knock(380, 0.014));
+  return finish(out, 0.92, seconds * 0.25);
+}
+
 /** Air going past: its pitch goes from `f0` to `f1` to `f2` Hz. */
 function whoosh(r: Rng, seconds: number, f0: number, f1: number, f2: number, q: number, peakAt = 0.4): Samples {
   const n = white(r);
@@ -349,6 +360,41 @@ const RECIPES = {
   },
   fuse: { level: 0.2, make: () => finish(render(0.09, (t) => Math.sin(6.283 * 1760 * t) * strike(t, 0.002, 0.018))) },
   blast: { variants: 3, level: 0.95, make: (r) => blast(r, 2, 46, 46) },
+  // (a blast that hurts nobody: into the ground, dull, and what it threw up comes down)
+  blastMiss: {
+    variants: 3,
+    level: 0.72,
+    make: (r) => groundBlast(r, 1.7, 40, 44),
+  },
+  blastMissSmall: { variants: 2, level: 0.55, make: (r) => groundBlast(r, 1.1, 58, 34) },
+  // (one that hits a bug: a crunch of shell, a bright ring over it)
+  impact: {
+    variants: 3,
+    level: 1.15,
+    make: (r) => {
+      const f = 980 + 120 * r();
+      const ring = modes([[f, 0.6, 0.26], [f * 1.5, 0.45, 0.2], [f * 2.02, 0.25, 0.12]]);
+      const s = sine();
+      const n = white(r);
+      const b = bandpass();
+      const out = render(0.8, (t) => drive(s(95 + 240 * Math.exp(-t * 45)) * strike(t, 0.001, 0.06) * 1.4 + b(n(), 1900, 1.2) * strike(t, 0.0005, 0.03) * 2.6, 1.5) + ring(t - 0.02) * 0.6);
+      scatter(out, r, 16, 0.004, 0.16, 1.4, (u) => 0.75 * (1 - u), snap);
+      return finish(out, 0.95, 0.15);
+    },
+  },
+  // (the last blow)
+  impactKill: {
+    level: 1.3,
+    make: (r) => {
+      const ring = modes([[523, 0.5, 0.34], [784, 0.45, 0.3], [1046, 0.35, 0.24], [1568, 0.2, 0.16]]);
+      const s = sine();
+      const n = white(r);
+      const b = bandpass();
+      const out = render(1.2, (t) => drive(s(62 + 230 * Math.exp(-t * 30)) * strike(t, 0.001, 0.12) * 1.5 + b(n(), 1500, 1) * strike(t, 0.0005, 0.045) * 2.6, 1.6) + ring(t - 0.03) * 0.6);
+      scatter(out, r, 34, 0.004, 0.35, 1.5, (u) => 0.8 * (1 - u), snap);
+      return finish(out, 0.95, 0.25);
+    },
+  },
   blastSmall: { variants: 2, level: 0.7, make: (r) => blast(r, 1.2, 70, 22) },
   zap: {
     variants: 3,
@@ -531,6 +577,18 @@ const RECIPES = {
       const out = render(2.4, (t) => drive(s(42 + 110 * Math.exp(-t * 18)) * strike(t, 0.002, 0.28) * 1.3 + lp(n(), 250 + 7000 * Math.exp(-t * 12)) * strike(t, 0.001, 0.09) * 1.2, 1.4) + ring(t - 0.05) * 0.4);
       scatter(out, r, 40, 0.06, 1.2, 1.5, (u) => 0.2 * (1 - u), plucks(600, 2400, 0.06));
       return finish(out, 0.95, 0.4);
+    },
+  },
+
+  // (the dart into the ground: a thud, and its shaft quivers)
+  bowMiss: {
+    level: 0.6,
+    make: (r) => {
+      const s = sine();
+      const n = white(r);
+      const lp = lowpass();
+      const q = sine();
+      return finish(render(0.9, (t) => drive(s(70 + 120 * Math.exp(-t * 40)) * strike(t, 0.001, 0.07) * 1.3 + lp(n(), 900) * strike(t, 0.0006, 0.02) * 1.6, 1.3) + q(148 + 5 * Math.sin(t * 230)) * strike(t - 0.02, 0.004, 0.16) * (0.5 + 0.5 * Math.sin(6.283 * 31 * t)) * 0.7), 0.9, 0.15);
     },
   },
 

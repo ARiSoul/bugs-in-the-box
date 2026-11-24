@@ -158,7 +158,13 @@ export class GameSounds {
       }
       case 'explosion':
         // (an ant column's has its own)
-        if (!scene) engine.play(e.radius < 4 ? 'blastSmall' : 'blast', { at: e });
+        // (into the ground, or into a bug: what it hurt comes after it in the same tick)
+        if (!scene) {
+          const hit = match.events.some((q) => q.type === 'damage' || q.type === 'shell');
+          const small = e.radius < 4;
+          engine.play(hit ? (small ? 'blastSmall' : 'blast') : small ? 'blastMissSmall' : 'blastMiss', { at: e, level: hit ? 0.8 : 1 });
+          if (hit) this.impact(match);
+        }
         break;
       case 'arc':
         engine.play('zap', { at: { x: e.x2, y: e.y2, z: e.z2 } });
@@ -167,12 +173,18 @@ export class GameSounds {
         engine.play('drill', { at: { x: e.x1, y: e.y1, z: e.z1 } });
         break;
       case 'arrow':
-        engine.play('bowHit', { at: e, scene: true });
+        if (e.unit < 0) engine.play('bowMiss', { at: e, scene: true });
+        else {
+          engine.play('bowHit', { at: e, scene: true });
+          this.impact(match, true);
+        }
         this.hitTime = -1;
         break;
       case 'web':
         {
           const w = match.webs.find((q) => q.id === e.id);
+          // (a ball of silk that hits a bug)
+          if (w && !scene && match.events.some((q) => q.type === 'damage')) this.impact(match);
           if (w) engine.play('webOpen', { at: w, rate: scene ? 0.8 : 1, scene });
         }
         break;
@@ -219,6 +231,18 @@ export class GameSounds {
         break;
       default:
         break;
+    }
+  }
+
+  /** What was hurt this tick: a blow for each, harder the more it lost; the last blow rings out. */
+  private impact(match: Match, scene = false): void {
+    for (const e of match.events) {
+      if (e.type !== 'damage') continue;
+      const u = match.units[e.unit];
+      const dead = u.bug.health <= 0;
+      // (its own side: lower, it is no success)
+      const own = u.team === match.activeUnit.team;
+      this.engine.play(dead && !own ? 'impactKill' : 'impact', { at: u.bug, scene, level: 0.55 + Math.min(0.6, e.amount / 60), rate: own ? 0.62 : 1, vary: 0.03 });
     }
   }
 
