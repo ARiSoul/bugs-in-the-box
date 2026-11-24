@@ -166,7 +166,8 @@ export class Hud {
     });
 
     // the aim angle above the horizon, in degrees, for fine aiming
-    const aim = match.phase === 'aim' ? `aim ${((Math.atan2(u.aimV, u.aimH) * 180) / Math.PI).toFixed(1)}°` : '';
+    const brood = match.currentWeapon.kind === 'brood' && match.stance;
+    const aim = brood && !match.mark ? 'point at a spot nearer to it' : brood ? 'point at a spot, click (or the fire key) to call them · W/S move, right drag turns the view' : match.phase === 'aim' ? `aim ${((Math.atan2(u.aimV, u.aimH) * 180) / Math.PI).toFixed(1)}°` : '';
     this.set('aim', () => (this.aim.textContent = aim), aim);
 
     const banner =

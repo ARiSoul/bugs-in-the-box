@@ -9,13 +9,14 @@ import { PerfLog } from './debug/perf';
 import { viewsFor, type ScenarioViews } from './debug/views';
 import { DT, GRAVITY, KILL_Y } from './game/bug';
 import { Match, NO_INPUT, type MatchEvent, type TeamSpec } from './game/match';
-import { ANT, SPIDER } from './game/species';
+import { ANT, SPECIES, SPIDER, type BugSpecies } from './game/species';
 import { SOLDER_BLOB, WEAPONS } from './game/weapons';
 import { Controls } from './input/controls';
 import { pickTerrain } from './input/picking';
 import { AimView } from './render/aim';
 import { BugView } from './render/BugView';
 import { BowScene } from './render/gpu/bowScene';
+import { BroodScene } from './render/gpu/broodScene';
 import { ColumnScene } from './render/gpu/columnScene';
 import { WebViews } from './render/webs';
 import { DrawnGround } from './render/drawnGround';
@@ -34,14 +35,21 @@ import { Hud, type HudState } from './ui/hud';
 import { setupKeysMenu } from './ui/keys';
 import { setupSoundMenu } from './ui/sound';
 
-const TEAMS: TeamSpec[] = [
-  { name: 'Red Ants', species: ANT, color: 0xff6b5e, size: 3 },
-  { name: 'Blue Spiders', species: SPIDER, color: 0x5fb0ff, size: 3 },
+/** The two teams, each of one species (chosen in the menu, kept in the address as `?teams=ant,spider`). */
+const PLURAL: Record<string, string> = { ant: 'Ants', spider: 'Spiders', cockroach: 'Cockroaches' };
+const picked: BugSpecies[] = [ANT, SPIDER];
+const teams = (): TeamSpec[] => [
+  { name: `Red ${PLURAL[picked[0].id]}`, species: picked[0], color: 0xff6b5e, size: 3 },
+  { name: `Blue ${PLURAL[picked[1].id]}`, species: picked[1], color: 0x5fb0ff, size: 3 },
 ];
 
 const canvas = document.getElementById('c') as HTMLCanvasElement;
 const params = new URLSearchParams(location.search);
 const hooks = readHooks(params);
+(params.get('teams') ?? '').split(',').forEach((id, i) => {
+  const s = SPECIES.find((q) => q.id === id);
+  if (s && i < 2) picked[i] = s;
+});
 // Map size in chunks of 32, e.g. `?map=3x2x3` for the small map, until there is a setup screen. Without it, the
 // scenario's own size (a scenario at a larger scale needs a larger map), else 5x3x5.
 const size = (params.get('map') ?? '').match(/^(\d+)x(\d+)x(\d+)$/);
@@ -62,8 +70,11 @@ const aim = new AimView(stage.scene);
 const webViews = new WebViews(stage.scene);
 const bow = new BowScene(stage.scene, stage.fx);
 const antColumn = new ColumnScene(stage.scene, stage.fx, bow.light, bow.targetLight);
+const brood = new BroodScene(stage.scene, stage.fx, bow.light);
 /** The special attack whose scene has the view now, if any. */
-const inScene = (): BowScene | ColumnScene | null => (bow.camera.active ? bow : antColumn.camera.active ? antColumn : null);
+const inScene = (): BowScene | ColumnScene | BroodScene | null => (bow.camera.active ? bow : antColumn.camera.active ? antColumn : brood.camera.active ? brood : null);
+/** The player marks a spot for a brood. */
+const marking = (): boolean => match.stance && match.phase === 'aim' && match.currentWeapon.kind === 'brood' && brood.camera.active;
 const follow = new FollowCamera(stage.camera, stage.controls);
 // the right button turns the view (and the bug with it), the wheel zooms; the left button stays free
 stage.controls.mouseButtons = { LEFT: null, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.ROTATE };
@@ -137,7 +148,7 @@ function newMatch(s: number): void {
   state.lastExplosionChunks = 0;
   state.bench = '';
 
-  match = new Match(terrain, TEAMS, s, { strictBounds: scenario.strictBounds, spawnLevels: scenario.spawnLevels === true, turntable: scenario.turntable?.(terrain.W, terrain.H, terrain.D), confine: scenario.confine?.(terrain.W, terrain.H, terrain.D) });
+  match = new Match(terrain, teams(), s, { strictBounds: scenario.strictBounds, spawnLevels: scenario.spawnLevels === true, turntable: scenario.turntable?.(terrain.W, terrain.H, terrain.D), confine: scenario.confine?.(terrain.W, terrain.H, terrain.D) });
 
   prevTurns = 0;
   for (const v of bugViews) {
@@ -154,6 +165,7 @@ function newMatch(s: number): void {
   webViews.clear();
   bow.clear();
   antColumn.clear();
+  brood.clear();
   gameSounds.reset(match, scenario.id);
   indexedTurns = 0;
   ground.reset(stage.scene, bugViews.map((v) => v.view.root));
@@ -238,7 +250,19 @@ function handleEvents(events: readonly MatchEvent[]): void {
       case 'fire':
         if (match.currentWeapon.kind === 'arrow') bow.onFire();
         else if (match.currentWeapon.kind === 'column') antColumn.onFire();
+        else if (match.currentWeapon.kind === 'brood') brood.onFire(match, ground);
         break;
+      case 'cover':
+        brood.onCover(e.units, bugViews.map((v) => v.view));
+        break;
+      case 'lights':
+        brood.onLights();
+        break;
+      case 'shell': {
+        const u = match.units[e.unit];
+        texts.spawn('shell cracked!', 0xffd9a0, at.set(u.bug.x, u.bug.y + bugViews[e.unit].height + 2.2, u.bug.z));
+        break;
+      }
       case 'swarm':
         antColumn.onSwarm();
         break;
@@ -329,6 +353,25 @@ const keepSeed = (): void => {
   params.set('seed', String(seed));
   history.replaceState(null, '', `?${params.toString()}`);
 };
+for (const i of [0, 1]) {
+  const pick = document.getElementById(`team${i}`) as HTMLSelectElement;
+  pick.replaceChildren(
+    ...SPECIES.map((q) => {
+      const o = document.createElement('option');
+      o.value = q.id;
+      o.textContent = `${i ? 'blue' : 'red'}: ${PLURAL[q.id].toLowerCase()}`;
+      return o;
+    }),
+  );
+  pick.value = picked[i].id;
+  pick.addEventListener('change', () => {
+    picked[i] = SPECIES.find((q) => q.id === pick.value) ?? ANT;
+    params.set('teams', picked.map((q) => q.id).join());
+    history.replaceState(null, '', `?${params.toString().replaceAll('%2C', ',')}`);
+    newMatch(seed);
+    pick.blur();
+  });
+}
 hud.regen.addEventListener('click', () => {
   seed = Number(hud.seed.value) | 0;
   keepSeed();
@@ -411,6 +454,11 @@ window.addEventListener('contextmenu', (e) => {
   if (!(e.target instanceof HTMLInputElement)) e.preventDefault();
 });
 canvas.addEventListener('pointerdown', (e) => {
+  // (marking a spot: the left button calls the swarm, the right one turns the view over it)
+  if (marking()) {
+    if (e.button === 0) controls.click();
+    return;
+  }
   if (e.button === 2) orbiting = true;
 });
 window.addEventListener('pointerup', (e) => {
@@ -420,7 +468,22 @@ window.addEventListener('pointerup', (e) => {
 });
 /** In a stance the mouse aims (the right button held): turns the bug and raises its aim. */
 const SIGHT_SPEED = 0.0022;
+/** Where the pointer is, for the spot it marks. */
+const pointer = { clientX: -1, clientY: -1 };
+canvas.addEventListener(
+  'wheel',
+  (e) => {
+    if (marking()) brood.camera.zoomBy(Math.exp(e.deltaY * 0.001));
+  },
+  { passive: true },
+);
 canvas.addEventListener('pointermove', (e) => {
+  pointer.clientX = e.clientX;
+  pointer.clientY = e.clientY;
+  if (marking()) {
+    if ((e.buttons & 2) !== 0) brood.camera.turn(-e.movementX * 0.005, e.movementY * 0.004);
+    return;
+  }
   if (!match.stance || match.phase !== 'aim' || (e.buttons & 3) === 0) return;
   const slow = SIGHT_SPEED * (match.charging ? 0.6 : 1);
   const b = match.activeUnit.bug;
@@ -578,6 +641,7 @@ function hear(): void {
 }
 const bowState = { active: false, hitFor: -1, time: -1 };
 const columnState = { active: false, hitFor: -1, time: -1 };
+const broodState = { active: false, hitFor: -1, time: -1 };
 
 function frame(now: number): void {
   // after a stall, drop time instead of spiralling; never negative (the first frame's timestamp can be
@@ -604,9 +668,36 @@ function frame(now: number): void {
     const t = stage.controls.target;
     controls.face(t.x - c.x, t.z - c.z);
   }
+  if (marking()) {
+    // (no pointer yet: the middle of the view)
+    if (pointer.clientX < 0) {
+      const box = canvas.getBoundingClientRect();
+      pointer.clientX = box.left + box.width / 2;
+      pointer.clientY = box.top + box.height / 2;
+    }
+    const p = pickTerrain(pointer, canvas, stage.camera, terrain);
+    // (a bug under the pointer: where it stands, not what lies behind it)
+    if (p) {
+      const eye = stage.camera.position;
+      at.copy(p).sub(eye);
+      let far = at.length();
+      at.divideScalar(far);
+      for (const u of match.units) {
+        if (!u.bug.alive || u === match.activeUnit) continue;
+        const b = u.bug;
+        const t = at2.set(b.x, b.y, b.z).sub(eye).dot(at);
+        if (t < 0 || t > far || at2.addScaledVector(at, -t).length() > b.species.radius + 0.3) continue;
+        far = t;
+        p.set(b.x, b.y, b.z);
+        if (b.grounded) p.addScaledVector(at2.set(b.nx, b.ny, b.nz), -b.species.radius);
+      }
+    }
+    if (p) controls.markAt(p.x, p.y, p.z);
+  }
+  brood.pan = marking() ? controls.moveHeld : 0;
   let faced = false;
   // (a special attack slows the match for a moment: the same ticks, later)
-  const scaled = dt * Math.min(bow.timeScale, antColumn.timeScale);
+  const scaled = dt * Math.min(bow.timeScale, antColumn.timeScale, brood.timeScale);
   accumulator += scaled;
   while (accumulator >= DT) {
     prevTurns = match.turntableTurns;
@@ -638,18 +729,21 @@ function frame(now: number): void {
   }
   bow.update({ match, view: bugViews[match.active].view, views: bugViews.map((v) => v.view), ground, camera: stage.camera, alpha, dt: scaled });
   antColumn.update({ match, view: bugViews[match.active].view, views: bugViews.map((v) => v.view), ground, camera: stage.camera, alpha, dt: scaled });
+  brood.update({ match, view: bugViews[match.active].view, views: bugViews.map((v) => v.view), ground, camera: stage.camera, alpha, dt: scaled });
   const sceneNow = inScene();
   match.units.forEach((u, i) => {
     const v = bugViews[i];
     v.view.held = u.web >= 0 ? 1 : 0;
+    v.view.cracked = u.bug.species.shell === true && !u.shell;
     v.view.update(u.bug, alpha, scaled, ground);
   });
   // (the small ants go on bugs posed for this frame)
   antColumn.late();
+  brood.late();
   projectiles.sync(match.projectiles, alpha, ground);
   // (the bars of a film, and no names: while it stands and aims, and once the hit is seen, the names are back)
   document.body.classList.toggle('special', sceneNow !== null && !match.stance && !debugCamera);
-  if (sceneNow) stage.hud.visible = match.stance || (sceneNow.hitFor > 0.5 && sceneNow.names) || (sceneNow === antColumn && antColumn.swarming && antColumn.names);
+  if (sceneNow) stage.hud.visible = (match.stance && sceneNow !== brood) || (sceneNow.hitFor > 0.5 && sceneNow.names) || (sceneNow === antColumn && antColumn.swarming && antColumn.names);
   else if (wasSpecial) stage.hud.visible = true;
   if (!sceneNow || sceneNow.hitFor > 0.8) {
     // (the damage of a special attack shows when its flash is over)
@@ -722,7 +816,10 @@ function frame(now: number): void {
   columnState.hitFor = antColumn.hitFor;
   bowState.time = bow.sceneTime;
   columnState.time = antColumn.sceneTime;
-  gameSounds.frame(match, dt, Math.min(bow.timeScale, antColumn.timeScale), bowState, columnState);
+  broodState.active = brood.camera.active;
+  broodState.hitFor = brood.hitFor;
+  broodState.time = brood.sceneTime;
+  gameSounds.frame(match, dt, Math.min(bow.timeScale, antColumn.timeScale, brood.timeScale), bowState, columnState, broodState);
   hear();
   flashes.update(now);
   lines.update(now);
@@ -829,6 +926,7 @@ const debugApi = {
   },
   bow,
   antColumn,
+  brood,
   sound,
   webViews,
   /** With the loop paused: play on for `seconds` at 60 frames a second (scripted reviews of moving scenes). */

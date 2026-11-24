@@ -27,7 +27,10 @@ Special abilities per species (for when each bug gets its proper treatment; to t
 
 - **Spider:** spins webs. A web can trap enemies, or let the spider lower itself safely from a tall drop on a thread instead of falling (no fall damage).
 - **Ant:** to be defined (climbing walls is now every bug's: they all crawl on any surface).
-- **Cockroach and others:** to be defined, each with an ability of its own.
+- **Cockroach, Hard Shell (in the game):** the first blow that would kill it leaves it at 1 health, once a match, and cracks its shell. Leaving the map still kills it.
+- **Cockroach, Glide:** it opens its wings in the air and glides: no fall damage, and the wind carries it.
+- **Cockroach, Flatten:** it presses itself against the surface until its next turn: half damage, and blasts do not throw it.
+- **Others:** to be defined, each with an ability of its own.
 
 Special skills as attacks, each with its own attack animation (a skill is a weapon only that species has):
 
@@ -36,6 +39,10 @@ Special skills as attacks, each with its own attack animation (a skill is a weap
 - **Titan Lift (ant):** it tears a block out of the terrain, fifty times its weight, lifts it over its head and throws it. A hole where it stood, a crush where it lands.
 - **Acid Charge (ant):** it bends its abdomen forward and shoots a jet of acid that eats the terrain for two turns and hurts whoever stands in it.
 - **Lightning Mandible (ant):** time stops, the mandibles open, and the ant itself is the shot: one straight dash that ends on the first bug and throws it far.
+- **Blackout Swarm (cockroach, in the game):** it rubs its wings and the lights of the map fail; only eyes glow. The player marks a spot, cockroaches come from everywhere in the dark, and the light comes back on whoever they cover. Hurts every enemy in the area, hardly any crater.
+- **Last Nerve (cockroach):** it runs on without its head. The body runs blind, steered only in wide turns, and bursts at the end; the head stays behind and sees it all.
+- **Wing Storm (cockroach):** it opens its wings, takes off and beats up a gale: little damage, but it sweeps a whole cone of bugs away, off the map if they stand badly.
+- **Fallout Charge (cockroach):** it soaks up the device's energy, glows from inside and drops head first from high up: a huge crater, and it pays with its own health (goes well with Hard Shell).
 - **Unlocking and choosing skills:** more than one special per species; skills are unlocked by playing, and each squad chooses which ones it brings (a limit per squad, perhaps one per bug).
 - More of the same kind: an attack that comes from the creature's body or habits, not a borrowed weapon.
 

@@ -125,6 +125,10 @@ export interface Unit {
   dead: boolean;
   /** Held by a web (its id; -1: free). */
   web: number;
+  /** Its shell is whole: it takes the next blow that would kill it... */
+  shell: boolean;
+  /** ...and nothing more hurts it in that turn (its number; -1: never yet). */
+  shellTurn: number;
 }
 
 export interface MatchInput {
@@ -147,6 +151,8 @@ export interface MatchInput {
   weapon: number;
   /** In a stance: raise the aim by this much (radians; the view's, while the player turns it). */
   pitch?: number;
+  /** In a brood's stance: the spot under the player's pointer. */
+  mark?: readonly [number, number, number] | null;
 }
 
 export const NO_INPUT: Readonly<MatchInput> = Object.freeze({ move: 0, turn: 0, faceX: 0, faceZ: 0, jump: false, run: false, aim: 0, fire: false, weapon: -1 });
@@ -161,6 +167,9 @@ export type MatchEvent =
   | { type: 'arrow'; x: number; y: number; z: number; dx: number; dy: number; dz: number; unit: number }
   | { type: 'swarm'; unit: number }
   | { type: 'collapse'; x: number; y: number; z: number; unit: number }
+  | { type: 'cover'; x: number; y: number; z: number; units: readonly number[] }
+  | { type: 'lights'; x: number; y: number; z: number; units: readonly number[] }
+  | { type: 'shell'; unit: number }
   | { type: 'web'; id: number }
   | { type: 'stuck'; unit: number }
   | { type: 'webGone'; id: number; torn: boolean }
@@ -190,6 +199,34 @@ export interface Column {
   still: number;
   /** The unit it swarms (-1: none yet). */
   victim: number;
+}
+
+/** A brood called in the dark: ticks until it covers the mark, between bites, until the light is back; its bites. */
+export const BROOD_COVER = 108;
+const BROOD_BITES = 6;
+const BROOD_BITE_TICKS = 14;
+export const BROOD_LIGHT = 216;
+/** The damage at the edge of what a brood covers, as a fraction of the full one; how it throws them as it flees. */
+const BROOD_EDGE = 0.45;
+const BROOD_THROW = 5;
+
+/** A place on a surface: where, and its normal. */
+export interface Mark {
+  x: number;
+  y: number;
+  z: number;
+  nx: number;
+  ny: number;
+  nz: number;
+}
+
+/** A brood on its way to the mark, and over it (Blackout Swarm). */
+export interface Brood {
+  readonly at: Mark;
+  ticks: number;
+  /** The units it covers, and each one's damage in all (set when it arrives). */
+  readonly units: number[];
+  readonly harm: number[];
 }
 
 /** How long a special attack's hit is looked at before the turn goes on. */
@@ -233,6 +270,9 @@ export class Match {
   readonly webs: Web[] = [];
   /** The ant column on its way, if any. */
   column: Column | null = null;
+  /** The brood on its way, if any, and the spot marked for one. */
+  brood: Brood | null = null;
+  mark: Mark | null = null;
   /** What happened during the last `step` (cleared at the start of every step). */
   readonly events: MatchEvent[] = [];
   phase: Phase = 'aim';
@@ -299,7 +339,7 @@ export class Match {
         if (i >= teams[t].size) continue;
         const bug = new Bug(teams[t].species);
         bug.confine = options.confine ?? null;
-        this.units.push({ id: id++, team: t, name: `${teams[t].species.id} ${i + 1}`, bug, aimH: COS45, aimV: COS45, dead: false, web: -1 });
+        this.units.push({ id: id++, team: t, name: `${teams[t].species.id} ${i + 1}`, bug, aimH: COS45, aimV: COS45, dead: false, web: -1, shell: teams[t].species.shell === true, shellTurn: -1 });
         this.bugs.push(bug);
       }
     this.nextInTeam = teams.map(() => 0);
@@ -350,6 +390,7 @@ export class Match {
         move = this.movement(input);
       }
       if (this.column) this.columnTick(this.column, unit, input);
+      else if (this.brood) this.broodTick(this.brood, unit);
       else if (this.lingerTicks > 0) {
         // (a special attack's hit is looked at first; then the shooter may walk away)
         if (--this.lingerTicks === 0) this.retreatTicks = RETREAT_TICKS;
@@ -481,6 +522,7 @@ export class Match {
     if (input.aim !== 0) this.tilt(unit, input.aim * AIM_RATE * ramp(this.aimHeld) * DT * (this.stance ? STANCE_RATE : 1));
     this.turnTicks--;
     const w = this.currentWeapon;
+    if (this.stance && w.kind === 'brood' && input.mark) this.setMark(unit, input.mark, w);
     if (this.charging) {
       if (input.fire) this.power += 1 / CHARGE_TICKS;
       if (!input.fire || this.power >= 1) {
@@ -490,8 +532,8 @@ export class Match {
       return this.stance ? this.onTheSpot(input) : IDLE;
     }
     if (fireDown && unit.bug.grounded) {
-      if (w.kind === 'tunnel') this.fire(unit, w);
-      else {
+      if (w.kind === 'tunnel' || (w.kind === 'brood' && this.mark)) this.fire(unit, w);
+      else if (w.kind !== 'brood') {
         this.charging = true;
         this.power = 0;
       }
@@ -611,7 +653,16 @@ export class Match {
 
   /** A web on the surface nearest (x, y, z), if there is one near. */
   private openWeb(x: number, y: number, z: number, w: Weapon, grand: boolean): void {
-    // onto the surface: a few steps along the way to the nearest point
+    // (nothing near to hold on to: a bug hit in the air)
+    const on = this.toSurface(x, y, z);
+    if (!on) return;
+    const id = this.nextWebId++;
+    this.webs.push({ id, ...on, radius: w.webRadius, turns: w.webTurns, strength: WEB_TEAR_TICKS, grand });
+    this.events.push({ type: 'web', id });
+  }
+
+  /** The place on the surface nearest (x, y, z), if there is one near: a few steps along the way to it. */
+  private toSurface(x: number, y: number, z: number): Mark | null {
     for (let k = 0; k < 4; k++) {
       const d = surfaceDistance(this.field, x, y, z, aimed);
       x -= aimed[0] * d;
@@ -620,11 +671,55 @@ export class Match {
     }
     const d = surfaceDistance(this.field, x, y, z, aimed);
     const l = Math.sqrt(aimed[0] * aimed[0] + aimed[1] * aimed[1] + aimed[2] * aimed[2]);
-    // (nothing near to hold on to: a bug hit in the air)
-    if (d > 1 || d < -1 || l < 0.5) return;
-    const id = this.nextWebId++;
-    this.webs.push({ id, x, y, z, nx: aimed[0] / l, ny: aimed[1] / l, nz: aimed[2] / l, radius: w.webRadius, turns: w.webTurns, strength: WEB_TEAR_TICKS, grand });
-    this.events.push({ type: 'web', id });
+    if (d > 1 || d < -1 || l < 0.5) return null;
+    return { x, y, z, nx: aimed[0] / l, ny: aimed[1] / l, nz: aimed[2] / l };
+  }
+
+  /** The player points at a spot: the mark, if it is on a surface and near enough. */
+  private setMark(unit: Unit, p: readonly [number, number, number], w: Weapon): void {
+    const b = unit.bug;
+    const dx = p[0] - b.x;
+    const dy = p[1] - b.y;
+    const dz = p[2] - b.z;
+    if (!(dx * dx + dy * dy + dz * dz <= w.markRange * w.markRange)) return;
+    const m = this.toSurface(p[0], p[1], p[2]);
+    // (a spot in the air is none)
+    if (m && (m.x - p[0]) * (m.x - p[0]) + (m.y - p[1]) * (m.y - p[1]) + (m.z - p[2]) * (m.z - p[2]) < 9) this.mark = m;
+  }
+
+  /** One tick of a brood: it comes, covers every enemy near the mark and bites, and flees from the light. */
+  private broodTick(c: Brood, owner: Unit): void {
+    const w = this.currentWeapon;
+    c.ticks++;
+    if (c.ticks === BROOD_COVER) {
+      for (const u of this.units) {
+        const b = u.bug;
+        if (!b.alive || u.team === owner.team) continue;
+        const dx = b.x - c.at.x;
+        const dy = b.y - c.at.y;
+        const dz = b.z - c.at.z;
+        let d = Math.sqrt(dx * dx + dy * dy + dz * dz) - b.species.radius;
+        if (d < 0) d = 0;
+        if (d > w.coverRadius) continue;
+        c.units.push(u.id);
+        c.harm.push(Math.round(w.damage * (1 - ((1 - BROOD_EDGE) * d) / w.coverRadius)));
+      }
+      this.events.push({ type: 'cover', x: c.at.x, y: c.at.y, z: c.at.z, units: c.units });
+    }
+    const since = c.ticks - BROOD_COVER;
+    if (since > 0 && since % BROOD_BITE_TICKS === 0 && since <= BROOD_BITES * BROOD_BITE_TICKS) {
+      const k = since / BROOD_BITE_TICKS;
+      for (let i = 0; i < c.units.length; i++)
+        this.damage(this.units[c.units[i]], Math.floor((c.harm[i] * k) / BROOD_BITES) - Math.floor((c.harm[i] * (k - 1)) / BROOD_BITES));
+    }
+    if (c.ticks < BROOD_LIGHT) return;
+    for (const id of c.units) {
+      const b = this.units[id].bug;
+      if (b.alive) b.push(b.nx * BROOD_THROW, b.ny * BROOD_THROW, b.nz * BROOD_THROW);
+    }
+    this.brood = null;
+    this.events.push({ type: 'lights', x: c.at.x, y: c.at.y, z: c.at.z, units: c.units });
+    this.lingerTicks = LINGER_TICKS;
   }
 
   private movement(input: Readonly<MatchInput>): Readonly<BugInput> {
@@ -644,7 +739,8 @@ export class Match {
     else if (w.kind === 'column') {
       const power = this.power < MIN_POWER ? MIN_POWER : this.power;
       this.column = { head: this.columnHead(unit), path: [], left: Math.round(MARCH_TICKS * power), swarm: 0, still: 0, victim: -1 };
-    } else this.projectiles.push(this.makeProjectile(unit, w, this.power));
+    } else if (w.kind === 'brood' && this.mark) this.brood = { at: this.mark, ticks: 0, units: [], harm: [] };
+    else this.projectiles.push(this.makeProjectile(unit, w, this.power));
     this.phase = 'flight';
     this.retreatTicks = w.sceneTicks > 0 ? 0 : RETREAT_TICKS;
     this.stance = false;
@@ -872,6 +968,8 @@ export class Match {
         this.stance = false;
         this.lingerTicks = 0;
         this.column = null;
+        this.brood = null;
+        this.mark = null;
         if (!this.canUse(u, this.weapon) || this.currentWeapon.sceneTicks > 0) this.weapon = 0;
         for (let q = this.webs.length - 1; q >= 0; q--) if (--this.webs[q].turns < 0) this.removeWeb(this.webs[q], false);
         this.retreatTicks = 0;
@@ -1004,8 +1102,16 @@ export class Match {
   private damage(u: Unit, amount: number): void {
     if (amount <= 0 || !u.bug.alive) return;
     const b = u.bug;
-    b.health = b.health > amount ? b.health - amount : 0;
-    this.events.push({ type: 'damage', unit: u.id, amount });
+    // (its shell just took a blow that would have killed it: nothing more gets through this turn)
+    if (u.shellTurn === this.turnNumber) return;
+    if (u.shell && b.health > 0 && b.health <= amount) {
+      u.shell = false;
+      u.shellTurn = this.turnNumber;
+      amount = b.health - 1;
+      b.health = 1;
+      this.events.push({ type: 'shell', unit: u.id });
+    } else b.health = b.health > amount ? b.health - amount : 0;
+    if (amount > 0) this.events.push({ type: 'damage', unit: u.id, amount });
     // getting hurt on your own turn ends it (no more aiming)
     if (this.phase === 'aim' && u === this.units[this.active]) this.endAim();
   }

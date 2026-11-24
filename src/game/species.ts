@@ -19,6 +19,8 @@ export interface BugSpecies {
 
   /** Spins silk: in the air it can hang on a thread (see Bug.thread), and no web holds it. */
   readonly silk?: boolean;
+  /** Its shell takes the first blow that would kill it, once a match (see Match.damage). */
+  readonly shell?: boolean;
 
   // ---- looks (render only) ----
   readonly legs: number;
@@ -78,14 +80,15 @@ export const COCKROACH: BugSpecies = {
   turnRate: 2.6,
   jumpSpeed: 7.5,
   jumpForward: 4.5,
+  shell: true,
   legs: 6,
-  legLength: 1.15,
+  legLength: 1.12,
   bodyLength: 2.9,
   abdomen: 0.72,
   head: 0.32,
   antennae: 1.6,
-  color: 0x6b3f1d,
-  accent: 0xd9a066,
+  color: 0x5c2c10,
+  accent: 0x43230e,
 };
 
 /** The head of an ant column: what leads it crawls like any bug, small and fast. Not a species one plays. */

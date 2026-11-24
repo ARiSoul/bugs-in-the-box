@@ -59,6 +59,8 @@ export class Controls {
   private faceX = 0;
   private faceZ = 0;
   private pitch = 0;
+  private marked: readonly [number, number, number] | null = null;
+  private clicked = false;
   /** True if the last `next()` carried a facing (from `face`). */
   faced = false;
   /** Set while the menu waits for a key to bind: the next key press goes there instead of the game. */
@@ -171,6 +173,21 @@ export class Controls {
     this.pitch = Math.round((this.pitch + a) * 4096) / 4096;
   }
 
+  /** The spot under the pointer for the next tick (in a brood's stance; null: none), rounded like `face`. */
+  markAt(x: number, y: number, z: number): void {
+    this.marked = [Math.round(x * 64) / 64, Math.round(y * 64) / 64, Math.round(z * 64) / 64];
+  }
+
+  /** Fire on the next tick (a click, in a brood's stance). */
+  click(): void {
+    this.clicked = true;
+  }
+
+  /** -1, 0 or +1: the walk keys held right now. */
+  get moveHeld(): -1 | 0 | 1 {
+    return this.any('forward') ? 1 : this.any('back') ? -1 : 0;
+  }
+
   /** The weapons on offer, in the order of the number keys (set by the game). */
   weaponSlots: () => readonly number[] = () => [0, 1, 2, 3, 4, 5];
 
@@ -195,7 +212,8 @@ export class Controls {
     this.out.turn = this.turnHeld;
     this.out.run = this.any('run');
     this.out.aim = this.any('aimUp') ? 1 : this.any('aimDown') ? -1 : 0;
-    this.out.fire = this.any('fire');
+    this.out.fire = this.any('fire') || this.clicked;
+    this.clicked = false;
     this.out.jump = this.jumpQueued;
     this.out.weapon = this.weaponQueued;
     this.out.faceX = this.faceX;
@@ -207,6 +225,8 @@ export class Controls {
     this.faceZ = 0;
     this.out.pitch = this.pitch;
     this.pitch = 0;
+    this.out.mark = this.marked;
+    this.marked = null;
     return this.out;
   }
 

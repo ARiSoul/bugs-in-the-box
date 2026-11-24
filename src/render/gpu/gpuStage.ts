@@ -1,5 +1,5 @@
 import * as THREE from 'three/webgpu';
-import { abs, emissive, float, Fn, hash, If, Loop, max, mix, mrt, output, pass, renderOutput, screenUV, select, min, smoothstep, sRGBTransferOETF, uniform, vec2, vec3, vec4 } from 'three/tsl';
+import { abs, emissive, float, Fn, hash, If, Loop, max, mix, mrt, output, pass, renderOutput, screenUV, select, min, pow, smoothstep, sRGBTransferOETF, uniform, vec2, vec3, vec4 } from 'three/tsl';
 import { bilateralBlur } from 'three/examples/jsm/tsl/display/BilateralBlurNode.js';
 import { fxaa } from 'three/examples/jsm/tsl/display/FXAANode.js';
 import { bloom } from 'three/examples/jsm/tsl/display/BloomNode.js';
@@ -42,6 +42,9 @@ export interface StageFx {
   focusBlur: { value: number };
   /** The whole picture towards black. */
   fade: { value: number };
+  /** A blackout: the world goes dark and cold, its lights out (0..1), and how much of it shows in the spot. */
+  black: { value: number };
+  reveal: { value: number };
   /** How far away the one the picture is about is. */
   subject: { value: number };
   /** A place on the screen that does not dim: its middle (u, v down), its radius, the picture's aspect. */
@@ -142,7 +145,7 @@ export async function createGpuStage(canvas: HTMLCanvasElement, terrain: Terrain
     const raysBlur = bilateralBlur(rays.getTextureNode());
     const raysTex = raysBlur.getTextureNode();
     const fxColor = fxPass.getTextureNode('output');
-    const bloomPass = bloom(sceneEmissive.mul(fx.dim.mul(0.9).oneMinus()).add(fxColor), BLOOM, 0.22, 0.25);
+    const bloomPass = bloom(sceneEmissive.mul(fx.dim.mul(0.9).oneMinus()).mul(fx.black.oneMinus()).add(fxColor), BLOOM, 0.22, 0.25);
     bloomRef = bloomPass;
     const base = sceneColor.sample(heat.uv(screenUV));
     // a little warm veil where the air is lit, and the shafts on top of it
@@ -174,7 +177,11 @@ export async function createGpuStage(canvas: HTMLCanvasElement, terrain: Terrain
     // (the one it aims at keeps its light: a soft spot on the screen)
     const spot = smoothstep(fx.spot.z, 0, vec2(screenUV.x.sub(fx.spot.x).mul(fx.spot.w), screenUV.y.sub(fx.spot.y)).length()).mul(smoothstep(6, 1.5, abs(viewZ.sub(fx.spotAt))));
     const dimBy = spot.mul(0.8).oneMinus().mul(min(fx.dim.mul(mix(pale, 1.12, far)), 0.988));
-    const dimmed = world.mul(dimBy.oneMinus());
+    const lit = world.mul(dimBy.oneMinus());
+    // (a blackout: what is left is moonlight)
+    const lum = world.dot(vec3(0.3, 0.6, 0.1)).mul(own.mul(0.85).oneMinus());
+    const night = vec3(0.42, 0.58, 1).mul(pow(max(lum, 0), 0.7).div(lum.mul(2).add(1))).mul(0.15);
+    const dimmed = mix(lit, night.add(world.mul(spot).mul(fx.reveal)), fx.black);
     const edge = smoothstep(0.35, 0.85, away.length());
     const final = dimmed.mul(edge.mul(fx.vignette).oneMinus()).add(fxColor.sample(screenUV).rgb).add(bloomPass.rgb.mul(fx.dim.mul(0.25).add(1))).add(vec3(0.25, 0.8, 1).mul(fx.flash).mul(smoothstep(0.34, 0.0, away.length())).mul(1.5)).mul(fx.fade.oneMinus());
     // debug views: 1 = god rays only, 2 = bloom only, 3 = emissive buffer
@@ -190,7 +197,7 @@ export async function createGpuStage(canvas: HTMLCanvasElement, terrain: Terrain
     return p;
   };
   const raysAmount = uniform(RAYS);
-  const fx = { scene: fxScene, depthAt, dim: uniform(0), vignette: uniform(0), flash: uniform(0), focusBlur: uniform(0), fade: uniform(0), subject: uniform(10), spot: uniform(new THREE.Vector4(0, 0, 0.0001, 1)), spotAt: uniform(10) };
+  const fx = { scene: fxScene, depthAt, dim: uniform(0), vignette: uniform(0), flash: uniform(0), focusBlur: uniform(0), fade: uniform(0), black: uniform(0), reveal: uniform(0), subject: uniform(10), spot: uniform(new THREE.Vector4(0, 0, 0.0001, 1)), spotAt: uniform(10) };
   const debugView = uniform(0);
   /** The shafts in the dust are warmer than the light itself (scattering in warm, dusty air). */
   const sunColor = uniform(new THREE.Color(0xffb36b));

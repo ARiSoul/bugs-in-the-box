@@ -16,9 +16,10 @@ npm run dev
 Open the address that Vite prints.
 
 - **W / S**: walk (hold **shift** to run) · **A / D** or **← / →**: turn · **↑ / ↓**: aim higher / lower
-- **Space**: jump · **hold Q** to charge, release to fire · **1–6**: weapon (the last ones are the species' own: 5, Ant Column, for ants; 5 and 6, Web Shot and Web Bow, for spiders) · **N**: new match · **M**: sound on/off (volume in the menu)
+- **Space**: jump · **hold Q** to charge, release to fire · **1–6**: weapon (the last ones are the species' own: 5, Ant Column, for ants; 5 and 6, Web Shot and Web Bow, for spiders; 5, Blackout Swarm, for cockroaches) · **N**: new match · **M**: sound on/off (volume in the menu)
 - Bugs crawl on anything: walk into a wall to go up it, face away from it (or walk back) to go down, over edges and under ledges. A jump lets go; so does an explosion.
 - **Ants** call their nest. **Ant Column** (5), their special attack, plays a short scene, then the ant aims on the spot (**A / D**; another weapon calls it off); hold fire, release to send the column (a longer hold, a longer march). Steer it with **A / D**; it climbs what it meets, swarms the first enemy it reaches and digs the ground away under it.
+- **Cockroaches** are hard to kill: **Hard Shell** takes the first blow that would kill one, once a match. **Blackout Swarm** (5), their special attack, puts the lights out. Only eyes show: point at a spot, click (or the fire key) to call the swarm (**W / S** move the view, right drag turns it, scroll zooms). It covers every enemy in the ring. Pick each team's species in the menu.
 - **Spiders** spin silk. **Web Shot** (5) opens a web that holds any other bug: it can aim and fire, and 4 s of pulling tears it. **Web Bow** (6), its special attack, plays a short scene, then it stands and aims on the spot (**A / D**, **↑ / ↓**, or drag with the mouse; another weapon calls it off); hold fire to draw the string, release to shoot a fast, flat dart that hurts only what it hits and bursts into a great web. In the air, **jump** again to hang on a thread and come down slowly, unhurt; again to let go.
 - **Right drag** to turn the view (the active bug turns with it, for fine aiming); **A / D** keep turning it while the button is held · **scroll** to zoom
 - The **keys** section of the menu changes the keys (saved in the browser); **default keys** brings them back.

@@ -98,6 +98,16 @@ export class BugView {
   struggle = 0;
   tumble = 0;
   private fight = 0;
+  /** Where its body rides when it stands on all its legs (a cockroach is low). */
+  readonly restY: number = 0;
+  /** A cockroach's wing cases: how far they are open, whether they rub (0..1); its shell is cracked. */
+  wings = 0;
+  rub = 0;
+  cracked = false;
+  private readonly cases: THREE.Group[] = [];
+  private readonly cracks: THREE.Object3D[] = [];
+  private readonly flakes: { mesh: THREE.Mesh; v: THREE.Vector3 }[] = [];
+  private crackT = -1;
   /** Held down by a web (0..1, eased): it crouches and pulls. */
   held = 0;
   private heldNow = 0;
@@ -152,7 +162,9 @@ export class BugView {
     const body = this.material(species.color, 0.45);
     this.skin = body;
     // a faint glow in the team colour: the bug reads from far away and in the dark
-    if (teamColor !== undefined) body.emissive.setHex(teamColor).multiplyScalar(0.22);
+    if (teamColor !== undefined) body.emissive.setHex(teamColor).multiplyScalar(species.shell ? 0.07 : 0.22);
+    if (species.shell) this.restY = -0.3 * r;
+    this.torso.position.y = this.restY;
     const dark = this.material(species.accent, 0.6);
     this.legSkin = dark;
     const eye = this.material(0x050505, 0.2);
@@ -164,21 +176,30 @@ export class BugView {
     const ab = species.abdomen * r;
     // (it hangs from the waist, just behind the thorax)
     this.abdomen.position.set(0, 0, -thoraxR * 0.8);
-    const abdomen = this.part(body, 0, 0.08 * r, -(thoraxR * 0.2 + ab * 0.85), ab * 0.8, ab * 0.68, ab, this.abdomen);
+    const abdomen = this.part(body, 0, 0.08 * r, -(thoraxR * 0.2 + ab * 0.85), ab * (species.shell ? 0.88 : 0.8), ab * (species.shell ? 0.4 : 0.68), ab * (species.shell ? 1.12 : 1), this.abdomen);
     const hd = species.head * r;
-    const headZ = thoraxR * 1.2 + hd * 0.8;
-    this.head.position.set(0, 0.02 * r, headZ);
+    // (a cockroach's is tucked under its shield)
+    const headZ = thoraxR * 1.2 + hd * (species.shell ? 0.75 : 0.8);
+    const headY = (species.shell ? -0.06 : 0.02) * r;
+    this.head.position.set(0, headY, headZ);
     this.lumps.push(abdomen, thorax, this.part(body, 0, 0, 0, hd, hd * 0.9, hd, this.head));
-    this.headAt.set(0, 0.02 * r, headZ);
+    this.headAt.set(0, headY, headZ);
     this.headRadius = hd;
     for (const s of [-1, 1]) {
       this.part(eye, s * hd * 0.55, 0.15 * hd - 0.02 * r, hd * 0.6, hd * 0.28, hd * 0.28, hd * 0.28, this.head);
       if (species.antennae > 0) {
         const base = new THREE.Vector3(s * hd * 0.35, hd * 0.6, hd * 0.5);
         const tip = base.clone().add(new THREE.Vector3(s * 0.35, 0.55, 0.75).normalize().multiplyScalar(species.antennae * r));
-        this.head.add(this.limb(dark, base, tip, 0.035 * r));
+        if (species.shell) {
+          // (long, swept forward and out)
+          const mid = base.clone().add(new THREE.Vector3(s * 0.5, 0.42, 0.75).normalize().multiplyScalar(species.antennae * 0.5 * r));
+          const end = mid.clone().add(new THREE.Vector3(s * 0.75, 0.12, 0.65).normalize().multiplyScalar(species.antennae * 0.65 * r));
+          this.head.add(this.limb(dark, base, mid, 0.026 * r), this.limb(dark, mid, end, 0.018 * r));
+        } else this.head.add(this.limb(dark, base, tip, 0.035 * r));
       }
     }
+
+    if (species.shell) this.armour(body, ab, thoraxR, hd, r);
 
     const perSide = Math.max(1, Math.floor(species.legs / 2));
     const reach = species.legLength * r;
@@ -186,16 +207,103 @@ export class BugView {
       const z = perSide === 1 ? 0 : (0.5 - i / (perSide - 1)) * Math.min(len * 0.35, thoraxR * 2.4);
       for (const s of [1, -1]) {
         const pivot = new THREE.Object3D();
-        pivot.position.set(s * thoraxR * 0.8, -0.1 * r, z);
+        pivot.position.set(s * thoraxR * 0.8, -0.1 * r + this.restY, z);
         const splay = (z / (thoraxR * 1.2)) * 0.6 * reach;
         const knee = new THREE.Vector3(s * reach * 0.5, 0.35 * r, splay * 0.5);
-        const foot = new THREE.Vector3(s * reach, -0.9 * r, splay);
-        const upper = this.limb(dark, new THREE.Vector3(), knee, 0.06 * r);
+        const foot = new THREE.Vector3(s * reach, -0.9 * r - this.restY, splay);
+        const upper = this.limb(dark, new THREE.Vector3(), knee, (species.shell ? 0.085 : 0.06) * r);
         const lower = this.limb(dark, knee, foot, 0.045 * r);
         pivot.add(upper, lower);
         this.root.add(pivot);
         this.legs.push({ upper, lower, knee, l1: knee.length(), l2: knee.distanceTo(foot), home: pivot.position.clone(), pivot, side: s, offset: (i + (s > 0 ? 0 : 1)) % 2 ? Math.PI : 0, foot, bend: 0 });
       }
+    }
+  }
+
+  /** A cockroach's armour: a shield over its neck, two wing cases that open and rub, the cracks of a broken shell. */
+  private armour(body: THREE.MeshStandardMaterial, ab: number, thoraxR: number, hd: number, r: number): void {
+    const pale = this.material(0xc98a4a, 0.4);
+    const glaze = this.material(this.species.color, 0.28);
+    glaze.emissive.copy(body.emissive);
+    const wing = this.material(0xd8a868, 0.5);
+    wing.transparent = true;
+    wing.opacity = 0.5;
+    wing.side = THREE.DoubleSide;
+    const scar = this.material(0xffe2b0, 0.8);
+    scar.emissive.setHex(0x3a2410);
+    // (the shield: a pale rim, a dark plate on it)
+    this.part(pale, 0, 0.15 * r, thoraxR * 1.15, hd * 1.95, hd * 0.55, hd * 1.4);
+    this.part(glaze, 0, 0.2 * r, thoraxR * 1.1, hd * 1.5, hd * 0.52, hd * 1.05);
+    const long = ab * 1.36;
+    for (const s of [1, -1]) {
+      const g = new THREE.Group();
+      g.position.set(s * 0.05 * r, 0.16 * r, 0.24 * r);
+      this.abdomen.add(g);
+      this.cases.push(g);
+      const shell = this.part(glaze, s * ab * 0.36, 0.03 * r, -long * 0.82, ab * 0.58, ab * 0.34, long, g);
+      const film = this.part(wing, s * ab * 0.44, -0.06 * r, -long * 0.82, ab * 0.62, 0.012 * r, long * 1.05, g);
+      film.castShadow = false;
+      // the cracks lie on the case: short straight pieces from point to point of it
+      const crack = new THREE.Group();
+      const on = (a: number, z: number): THREE.Vector3 => {
+        const c = Math.sqrt(Math.max(0, 1 - z * z));
+        return new THREE.Vector3(Math.sin(a) * c * shell.scale.x, Math.cos(a) * c * shell.scale.y, z * shell.scale.z).multiplyScalar(1.01).add(shell.position);
+      };
+      const lines: [number, number][][] =
+        s > 0
+          ? [[[-0.9, 0.55], [-0.3, 0.42], [-0.1, 0.2], [0.45, 0.12], [0.6, -0.15], [1.2, -0.2]], [[-0.1, 0.2], [-0.35, -0.05], [-0.1, -0.3], [-0.3, -0.5]], [[0.45, 0.12], [0.75, 0.4], [1.2, 0.42]]]
+          : [[[0.9, 0.3], [0.4, 0.2], [0.2, -0.05], [-0.3, -0.1], [-0.6, -0.35]], [[0.2, -0.05], [0.35, -0.3], [0.1, -0.55]], [[-0.3, -0.1], [-0.6, 0.15], [-1.1, 0.12]]];
+      for (const line of lines)
+        for (let k = 0; k + 1 < line.length; k++) {
+          // (bent over the case in a few steps)
+          for (let j = 0; j < 3; j++) {
+            const at = (f: number): THREE.Vector3 => on(line[k][0] + (line[k + 1][0] - line[k][0]) * f, line[k][1] + (line[k + 1][1] - line[k][1]) * f);
+            crack.add(this.limb(scar, at(j / 3), at((j + 1) / 3), 0.022 * r));
+          }
+        }
+      crack.visible = false;
+      g.add(crack);
+      this.cracks.push(crack);
+    }
+    // (bits of it that fly when it breaks)
+    for (let k = 0; k < 14; k++) {
+      const mesh = new THREE.Mesh(new THREE.TetrahedronGeometry((0.07 + 0.07 * ((k * 0.618) % 1)) * r, 0), k % 3 ? glaze : pale);
+      mesh.visible = false;
+      mesh.castShadow = true;
+      this.root.add(mesh);
+      this.flakes.push({ mesh, v: new THREE.Vector3() });
+    }
+    // (what climbs on it climbs on the cases)
+    const cover = this.part(body, 0, 0.14 * r, -ab * 0.95, ab * 0.95, ab * 0.5, ab * 1.35, this.abdomen);
+    cover.visible = false;
+    this.lumps[0] = cover;
+  }
+
+  private moveArmour(dt: number): void {
+    const shake = this.rub * Math.sin(performance.now() * 0.055) * 0.11;
+    this.cases.forEach((g, i) => {
+      const s = i ? -1 : 1;
+      g.rotation.set(0.34 * this.wings + shake * 0.5 * s, -s * (0.5 * this.wings) + shake, s * 0.24 * this.wings);
+    });
+    for (const c of this.cracks) c.visible = this.cracked;
+    if (this.cracked && this.crackT < 0) {
+      this.crackT = 0;
+      this.flakes.forEach((f, k) => {
+        const an = k * 2.4;
+        f.mesh.position.set(Math.cos(an) * 0.4, 0.55, Math.sin(an) * 0.6 - 0.5).multiplyScalar(this.species.radius);
+        f.v.set(Math.cos(an) * (2 + (k % 4)), 4 + (k % 5), Math.sin(an) * (2 + (k % 3)));
+      });
+    } else if (!this.cracked) this.crackT = -1;
+    if (this.crackT < 0) return;
+    this.crackT += dt;
+    for (const f of this.flakes) {
+      f.mesh.visible = this.crackT < 0.9;
+      if (!f.mesh.visible) continue;
+      f.v.y -= 18 * dt;
+      f.mesh.position.addScaledVector(f.v, dt);
+      f.mesh.rotation.x += dt * 13;
+      f.mesh.rotation.y += dt * 9;
+      f.mesh.scale.setScalar(Math.min(1, (0.9 - this.crackT) * 4));
     }
   }
 
@@ -279,6 +387,7 @@ export class BugView {
       this.root.quaternion.multiply(this.roll);
       for (const leg of this.legs) leg.pivot.rotation.z += leg.side * (0.75 + 0.3 * Math.sin(this.fight * 21 + leg.offset)) * this.tumble;
     }
+    if (this.cases.length > 0) this.moveArmour(dt);
     if (this.pose.weight > 0.001) this.stand(ground);
     else if (this.posed) this.unpose();
   }
@@ -394,7 +503,7 @@ export class BugView {
     this.head.rotation.set(0, 0, 0);
     this.head.position.copy(this.headAt);
     this.abdomen.rotation.set(0, 0, 0);
-    this.torso.position.set(0, 0, 0);
+    this.torso.position.set(0, this.restY, 0);
     for (const leg of this.legs) {
       leg.pivot.position.copy(leg.home);
       leg.pivot.visible = true;
@@ -445,6 +554,7 @@ export class BugView {
   private updateDead(bug: Bug, dt: number, ground?: RestGround): void {
     const r = this.species.radius;
     if (this.posed) this.unpose();
+    for (const f of this.flakes) f.mesh.visible = false;
     if (this.deadT < 0) {
       this.deadT = 0;
       this.gone = bug.y <= KILL_Y;

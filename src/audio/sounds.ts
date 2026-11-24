@@ -641,6 +641,107 @@ const RECIPES = {
     },
   },
 
+  // ---- the Blackout Swarm
+  wings: {
+    variants: 2,
+    level: 0.5,
+    make: (r) => {
+      // (a file drawn over a comb, again and again)
+      const n = white(r);
+      const b = bandpass();
+      const b2 = bandpass();
+      const a = saw(r());
+      const w = wander(r, 11);
+      return finish(
+        render(1.1, (t) => {
+          const u = (t * 5.5) % 1;
+          const stroke = smooth(0, 0.15, u) * (1 - smooth(0.6, 0.95, u));
+          const x = n() * 0.6 + a(168 + 14 * w(t)) * 0.8;
+          return (b(x, 2900 + 900 * u, 5) * 2 + b2(x, 5200, 4)) * stroke * (0.55 + 0.45 * Math.sin(6.283 * 84 * t)) * smooth(0, 0.1, t) * (1 - smooth(0.8, 1.1, t));
+        }),
+        0.9,
+        0.1,
+      );
+    },
+  },
+  powerFail: {
+    level: 0.75,
+    make: (r) => {
+      // (contacts that spit, then everything runs down)
+      const a = saw();
+      const s = sine();
+      const lp = lowpass();
+      const n = white(r);
+      const h = highpass();
+      const down = sine();
+      const spits = [0, 0.17, 0.24, 0.39, 0.51, 0.63];
+      const out = render(2, (t) => {
+        let sp = 0;
+        for (const at of spits) sp += strike(t - at, 0.0008, 0.025);
+        const run = Math.exp(-Math.max(0, t - 0.6) * 2.2);
+        const on = t < 0.85 ? (Math.sin(6.283 * 11 * t) > -0.3 ? 1 : 0.25) : 1;
+        return h(n(), 2600) * sp * 0.8 + (lp(a(100 * run), 700 * run + 60) * 0.7 + s(50 * run) * 0.5) * on * (1 - smooth(1.2, 1.9, t)) + down(52 * Math.exp(-Math.max(0, t - 0.8) * 1.2)) * strike(t - 0.8, 0.01, 0.4) * 1.1;
+      });
+      return finish(out, 0.95, 0.3);
+    },
+  },
+  eyesOpen: {
+    variants: 2,
+    level: 0.4,
+    make: (r) => {
+      const out = render(1.4, () => 0);
+      scatter(out, r, 26, 0, 1.1, 1, () => 0.5, plucks(1300, 3800, 0.03));
+      scatter(out, r, 30, 0, 1.2, 0.9, () => 0.4, chirr);
+      return finish(out, 0.9, 0.2);
+    },
+  },
+  blackout: {
+    loop: true,
+    level: 0.2,
+    make: (r) => {
+      const v = [0.5, 0.75, 1.01, 1.5].map((k) => ({ k, s: sine(r()), w: wander(r, 0.6) }));
+      const n = white(r);
+      const lp = lowpass();
+      const out = render(7, (t) => {
+        let s = lp(n(), 130) * 0.6;
+        for (const o of v) s += (o.s(82 * o.k) / (0.6 + o.k)) * (0.6 + 0.4 * o.w(t));
+        return s;
+      });
+      scatter(out, r, 34, 0, 6.8, 1, () => 0.12, chirr);
+      return loop(out, 1);
+    },
+  },
+  powerOn: {
+    level: 0.85,
+    make: (r) => {
+      const s = sine();
+      const n = white(r);
+      const h = highpass();
+      const a = saw();
+      const lp = lowpass();
+      const tube = modes([[1870, 0.3, 0.03], [2950, 0.25, 0.03], [4100, 0.2, 0.02]]);
+      return finish(
+        render(1.5, (t) => {
+          let v = s(46 + 90 * Math.exp(-t * 18)) * strike(t, 0.002, 0.22) * 1.2;
+          for (const at of [0, 0.09, 0.2]) v += tube(t - at) + h(n(), 3000) * strike(t - at, 0.0005, 0.02) * 0.5;
+          return v + lp(a(100), 600) * 0.35 * strike(t - 0.2, 0.05, 0.4);
+        }),
+        0.95,
+        0.3,
+      );
+    },
+  },
+  shellCrack: {
+    level: 0.75,
+    make: (r) => {
+      const m = modes([[620, 0.8, 0.03], [1130, 0.6, 0.025], [1890, 0.4, 0.02], [210, 1, 0.05]]);
+      const n = white(r);
+      const out = render(0.8, (t) => m(t) + n() * strike(t, 0.0004, 0.006));
+      scatter(out, r, 30, 0.01, 0.5, 1.6, (u) => 0.7 * (1 - u), snap);
+      return finish(out, 0.95, 0.1);
+    },
+  },
+
   // ---- the maps
   turntable: {
     loop: true,

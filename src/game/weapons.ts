@@ -15,7 +15,9 @@ export type WeaponKind =
   /** Projectile that hurts only the bug it hits, the more the faster it flies, and opens a web where it ends. */
   | 'arrow'
   /** A column of small ants that charges over the surfaces, steered, and swarms the first enemy it meets. */
-  | 'column';
+  | 'column'
+  /** A swarm called in the dark, from everywhere, onto a marked spot: it covers every enemy near it. */
+  | 'brood';
 
 export interface Weapon {
   readonly id: string;
@@ -42,6 +44,9 @@ export interface Weapon {
   /** Tunnel: length and radius. */
   readonly tunnelLength: number;
   readonly tunnelRadius: number;
+  /** Brood: how far from the caller it can be marked, and how far round the mark it covers (it hurts less at the edge). */
+  readonly markRange: number;
+  readonly coverRadius: number;
   /** Web: its radius, and how many turns it lasts. */
   readonly webRadius: number;
   readonly webTurns: number;
@@ -66,6 +71,8 @@ const BASE = {
   arcDamage: 0,
   tunnelLength: 0,
   tunnelRadius: 0,
+  markRange: 0,
+  coverRadius: 0,
   webRadius: 0,
   webTurns: 0,
   sceneTicks: 0,
@@ -176,7 +183,24 @@ export const ANT_COLUMN: Weapon = {
   color: 0xffb03a,
 };
 
-export const WEAPONS: readonly Weapon[] = [SOLDER_BLOB, CAPACITOR, SHORT_CIRCUIT, SOLDERING_IRON, WEB_SHOT, WEB_BOW, ANT_COLUMN];
+/**
+ * Cockroaches only, their special attack: it rubs its wings and the lights fail. In the dark the player marks a spot
+ * (only eyes show), cockroaches come to it from everywhere, and the light comes back on whoever they cover. No crater.
+ */
+export const BLACKOUT_SWARM: Weapon = {
+  ...BASE,
+  id: 'blackout-swarm',
+  name: 'Blackout Swarm',
+  kind: 'brood',
+  species: 'cockroach',
+  damage: 48,
+  markRange: 48,
+  coverRadius: 6,
+  sceneTicks: 264,
+  color: 0xffc46b,
+};
+
+export const WEAPONS: readonly Weapon[] = [SOLDER_BLOB, CAPACITOR, SHORT_CIRCUIT, SOLDERING_IRON, WEB_SHOT, WEB_BOW, ANT_COLUMN, BLACKOUT_SWARM];
 
 /** Whether a bug of this species has the weapon. */
 export function hasWeapon(species: string, w: Weapon): boolean {

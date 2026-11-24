@@ -33,8 +33,17 @@ const COLUMN_SCENE: readonly Cue[] = [
   [2.7, 'pour', 0.8, 1.1],
   [3.45, 'ranks'],
 ];
+const BROOD_SCENE: readonly Cue[] = [
+  [0.2, 'wings'],
+  [1.05, 'wings', 0.9, 1.12],
+  [1.3, 'powerFail'],
+  [2.5, 'eyes', 0.8, 0.6],
+  [3.25, 'eyesOpen'],
+  [3.6, 'eyesOpen', 0.7, 1.2],
+];
 /** ...and from when its hit is seen. */
 const COLUMN_END: readonly Cue[] = [[3.52, 'finale']];
+const BROOD_END: readonly Cue[] = [[0.45, 'pour', 0.9, 1.3], [3.42, 'finale']];
 /** Into the swarm (ticks), the ground starts to split. */
 const SPLIT = 130;
 
@@ -71,6 +80,7 @@ export class GameSounds {
   private readonly draw: LoopSound;
   private readonly hum: LoopSound;
   private readonly swarm: LoopSound;
+  private readonly blackout: LoopSound;
   private readonly turntable: LoopSound;
   private readonly rooms = new Map<string, LoopSound>();
   private scenario = '';
@@ -90,6 +100,7 @@ export class GameSounds {
     this.draw = engine.loop('bowDraw', false, 'scene');
     this.hum = engine.loop('bowHum', false, 'scene', 0.25);
     this.swarm = engine.loop('swarm', true, 'scene', 0.15);
+    this.blackout = engine.loop('blackout', false, 'scene', 0.4);
     this.turntable = engine.loop('turntable', true, 'world', 0.2);
   }
 
@@ -137,6 +148,9 @@ export class GameSounds {
         else if (kind === 'column') {
           engine.play('command', { at, scene: true });
           engine.play('pour', { at, scene: true, rate: 1.2 });
+        } else if (kind === 'brood') {
+          engine.play('wings', { at, scene: true, rate: 1.25 });
+          engine.play('pour', { at, scene: true, rate: 0.8 });
         } else if (kind === 'web') engine.play('spit', { at });
         else if (e.weapon === 'short-circuit') engine.play('spark', { at });
         else if (kind !== 'tunnel') engine.play('lob', { at, rate: kind === 'grenade' ? 0.85 : 1 });
@@ -176,9 +190,18 @@ export class GameSounds {
         engine.play('collapse', { at: e, scene: true });
         engine.play('cracks', { at: e, scene: true });
         break;
+      case 'cover':
+        engine.play('pour', { at: e, scene: true, rate: 1.3 });
+        break;
+      case 'lights':
+        engine.play('powerOn', { at: e, scene: true });
+        break;
+      case 'shell':
+        engine.play('shellCrack', { at: match.units[e.unit].bug, scene });
+        break;
       case 'damage': {
         const at = match.units[e.unit].bug;
-        if (match.column) engine.play('bite', { at, scene: true });
+        if (match.column || match.brood) engine.play('bite', { at, scene: true });
         else if (!scene) engine.play('hurt', { at, level: 0.7 + Math.min(0.5, e.amount / 60) });
         break;
       }
@@ -233,11 +256,14 @@ export class GameSounds {
   }
 
   /** Every frame. `scale`: how fast time runs. */
-  frame(match: Match, dt: number, scale: number, bow: SceneState, column: SceneState): void {
+  frame(match: Match, dt: number, scale: number, bow: SceneState, column: SceneState, brood: SceneState): void {
     const { engine } = this;
     engine.setTimeScale(scale);
-    const scene = bow.active || column.active;
-    engine.setRoomLevel(scene ? 0.3 : 1);
+    const scene = bow.active || column.active || brood.active;
+    // (in a blackout the place goes silent)
+    const out = brood.active && brood.hitFor < 0 && (brood.time < 0 || brood.time > 2.1);
+    engine.setRoomLevel(out ? 0 : scene ? 0.3 : 1);
+    this.blackout.set(out ? (match.stance ? 1 : 0.7) : 0, 1);
     this.ambience();
 
     // ---- what goes on
@@ -257,9 +283,9 @@ export class GameSounds {
     this.turntable.set(match.phase === 'spin' ? 1 : 0, 1, match.field.W / 2, match.field.H / 3, match.field.D / 2);
 
     // ---- a special attack's scene, by its own clock (slowed with it)
-    const t = Math.max(bow.time, column.time);
+    const t = Math.max(bow.time, column.time, brood.time);
     if (t >= 0) {
-      this.cues(bow.time >= 0 ? BOW_SCENE : COLUMN_SCENE, this.sceneTime, t, b);
+      this.cues(bow.time >= 0 ? BOW_SCENE : column.time >= 0 ? COLUMN_SCENE : BROOD_SCENE, this.sceneTime, t, b);
       this.sceneTime = t;
     } else if (this.sceneTime >= 0) {
       this.sceneTime = -1;
@@ -268,6 +294,9 @@ export class GameSounds {
     if (column.active && column.hitFor >= 0) {
       this.cues(COLUMN_END, this.hitTime, column.hitFor, b);
       this.hitTime = column.hitFor;
+    } else if (brood.active && brood.hitFor >= 0) {
+      this.cues(BROOD_END, this.hitTime, brood.hitFor, b);
+      this.hitTime = brood.hitFor;
     } else this.hitTime = -1;
     if (this.wasStance && !match.stance && match.phase === 'aim') engine.stopScene();
     this.wasStance = match.stance;
@@ -289,6 +318,15 @@ export class GameSounds {
       a.z = b.z;
       want = match.stance ? 0.3 : 0.6;
       rate = 0.85;
+    } else if (match.brood) {
+      a.x = match.brood.at.x;
+      a.y = match.brood.at.y;
+      a.z = match.brood.at.z;
+      want = Math.min(1.3, 0.35 + match.brood.ticks / 110);
+      rate = match.brood.units.length > 0 ? 0.95 : 0.85;
+    } else if (brood.active && brood.hitFor >= 0) {
+      want = brood.hitFor < 0.42 ? 0 : Math.max(0, 1.1 - (brood.hitFor - 0.42) * 0.8);
+      rate = 1.2;
     } else if (column.active && column.hitFor >= 0) want = Math.max(0, 0.9 - column.hitFor * 0.32);
     a.level += (want - a.level) * Math.min(1, dt * 6);
     if (want === 0 && a.level < 0.01) a.level = 0;
