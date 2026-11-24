@@ -1,6 +1,6 @@
 /**
  * Balance: the computer plays itself, every pair of species, both ways round, on every map.
- * npx tsx scripts/balance.ts [seeds] [special chance 0..1, default the skill's] [skill] [scenario]
+ * npx tsx scripts/balance.ts [seeds] [chance to use a loaded special, 0..1, default the skill's] [skill] [scenario]
  */
 import { Brain, SKILLS } from '../src/game/brain';
 import { Match } from '../src/game/match';

@@ -1,7 +1,8 @@
 import { TICK_RATE } from '../game/bug';
-import { WIND_MAX, type Match } from '../game/match';
+import { SKILL_FULL, WIND_MAX, type Match } from '../game/match';
 import { WEAPONS, type Weapon } from '../game/weapons';
 import type { Terrain } from '../terrain/Terrain';
+import { SkillCard } from './skillCard';
 import { CHUNK } from '../terrain/constants';
 
 const el = <T extends HTMLElement>(id: string): T => {
@@ -28,6 +29,11 @@ export interface HudState {
   bench: string;
 }
 
+/** The special attack of a team's species. */
+function specialOf(match: Match, team: number): number {
+  return WEAPONS.findIndex((w) => w.sceneTicks > 0 && w.species === match.teams[team].species.id);
+}
+
 /** DOM HUD. Writes to the DOM only when a shown value changes. */
 export class Hud {
   readonly seed = el<HTMLInputElement>('seed');
@@ -47,6 +53,11 @@ export class Hud {
   private readonly weaponList = el('weaponList');
   private readonly teams = el('teams');
   private readonly banner = el('banner');
+  /** The active team's special attack, and every team's, small. */
+  private readonly card = new SkillCard(66, 88, true);
+  private cards: SkillCard[] = [];
+  private cardWeapon = -1;
+  private cardKey = '';
   private weaponButtons: HTMLButtonElement[] = [];
   private teamRows: { alive: HTMLElement; hp: HTMLElement; bar: HTMLElement; max: number; size: number }[] = [];
   private readonly last = new Map<string, string>();
@@ -89,6 +100,11 @@ export class Hud {
       return b;
     });
     this.weaponList.replaceChildren(...this.weaponButtons);
+    el('card').replaceChildren(this.card.root);
+    this.card.root.onclick = () => {
+      if (this.cardWeapon >= 0) onWeapon(this.cardWeapon);
+    };
+    this.cards = match.teams.map(() => new SkillCard(26, 34, false));
 
     this.teamRows = [];
     this.teams.replaceChildren(
@@ -107,7 +123,7 @@ export class Hud {
         const bar = document.createElement('div');
         bar.style.background = hex(t.color);
         meter.append(bar);
-        row.append(name, alive, hp, meter);
+        row.append(this.cards[i].root, name, alive, hp, meter);
         this.teamRows.push({ alive, hp, bar, max: Math.max(1, match.teamHealth(i)), size: t.size });
         return row;
       }),
@@ -145,17 +161,26 @@ export class Hud {
     this.set('weapons', () => {
       let key = 1;
       this.weaponButtons.forEach((b, i) => {
-        const on = match.canUse(u, i);
-        b.style.display = on ? '' : 'none';
+        const on = match.has(u, i);
+        // (a special attack is on its card)
+        const special = WEAPONS[i].sceneTicks > 0;
+        b.style.display = on && !special ? '' : 'none';
+        if (on && special) {
+          this.cardWeapon = i;
+          this.cardKey = String(key);
+        }
         if (on) b.textContent = `${key++} ${WEAPONS[i].name}`;
       });
     }, u.bug.species.id);
+    this.card.root.parentElement?.classList.toggle('on', match.weapon === this.cardWeapon && match.stance);
+    this.card.show(WEAPONS[this.cardWeapon], match.skill[u.team] / SKILL_FULL, this.cardKey);
     this.set('weapon', () => this.weaponButtons.forEach((b, i) => b.classList.toggle('on', i === match.weapon)), String(match.weapon));
 
     match.teams.forEach((_t, i) => {
       const h = match.teamHealth(i);
       const n = match.teamAlive(i);
       const row = this.teamRows[i];
+      this.cards[i].show(WEAPONS[specialOf(match, i)], match.skill[i] / SKILL_FULL, '');
       this.set(`team${i}`, () => {
         // one dot per bug: filled while it lives
         row.alive.textContent = '●'.repeat(n) + '○'.repeat(Math.max(0, row.size - n));

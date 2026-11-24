@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BROOD_LIGHT, LINGER_TICKS, Match, NO_INPUT, type MatchEvent, type MatchInput } from '../src/game/match';
+import { BROOD_LIGHT, LINGER_TICKS, Match, NO_INPUT, type MatchEvent, type MatchInput, SKILL_FULL } from '../src/game/match';
 import { ANT, COCKROACH } from '../src/game/species';
 import { BLACKOUT_SWARM, SOLDER_BLOB, WEAPONS } from '../src/game/weapons';
 import { flat } from './helpers/worlds';
@@ -24,6 +24,7 @@ function setup(roaches: [number, number][], ants: [number, number][]): Match {
   run(m, 60);
   // (the rules, whatever health a species starts with)
   for (const u of m.units) u.bug.health = 100;
+  m.skill.fill(SKILL_FULL);
   return m;
 }
 
@@ -129,5 +130,51 @@ describe('Hard Shell', () => {
     u.bug.health = 20;
     m.explode(u.bug.x, u.bug.y, u.bug.z, SOLDER_BLOB);
     expect(u.bug.health).toBe(0);
+  });
+});
+
+describe('skill loader', () => {
+  it('a special attack must be loaded, and using it empties it; calling it off does not', () => {
+    const m = setup([[20, 32]], [[40, 32]]);
+    m.skill[0] = SKILL_FULL - 1;
+    expect(m.has(m.units[0], BROOD)).toBe(true);
+    expect(m.canUse(m.units[0], BROOD)).toBe(false);
+    run(m, 2, { weapon: BROOD });
+    expect(m.phase).toBe('aim');
+    expect(m.weapon).not.toBe(BROOD);
+    m.skill[0] = SKILL_FULL;
+    run(m, 5, { weapon: BROOD });
+    expect(m.phase).toBe('special');
+    run(m, 2, { weapon: 0 });
+    expect(m.skill[0]).toBe(SKILL_FULL);
+    call(m, [40, 10, 32]);
+    expect(m.skill[0]).toBe(0);
+    // (what the special itself does loads only the other team)
+    run(m, BROOD_LIGHT + 1);
+    expect(m.skill[0]).toBe(0);
+  });
+
+  it('loads at every turn, and with the damage done and taken', () => {
+    const m = setup([[20, 32]], [[40, 32]]);
+    m.skill.fill(0);
+    const ant = m.units[1];
+    m.explode(ant.bug.x, ant.bug.y, ant.bug.z, SOLDER_BLOB);
+    expect(m.skill[0]).toBeCloseTo(SOLDER_BLOB.damage * 2.5, 6);
+    expect(m.skill[1]).toBeCloseTo(SOLDER_BLOB.damage * 1.8, 6);
+    const before = m.skill[1];
+    const events = run(m, 60 * 45);
+    expect(events.some((e) => e.type === 'turn' && m.units[e.unit].team === 1)).toBe(true);
+    expect(m.skill[1]).toBeGreaterThanOrEqual(before + 200);
+  });
+
+  it('is told once, when it is full', () => {
+    const m = setup([[20, 32]], [[40, 32]]);
+    m.skill.fill(0);
+    m.skill[0] = SKILL_FULL - 5;
+    const ant = m.units[1];
+    m.events.length = 0;
+    m.explode(ant.bug.x, ant.bug.y, ant.bug.z, SOLDER_BLOB);
+    expect(m.events.filter((e) => e.type === 'skill')).toEqual([{ type: 'skill', team: 0 }]);
+    expect(m.skill[0]).toBe(SKILL_FULL);
   });
 });

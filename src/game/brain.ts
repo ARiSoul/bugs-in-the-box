@@ -20,7 +20,7 @@ export interface Skill {
   readonly pitch: number;
   readonly charge: number;
   readonly mark: number;
-  /** How often it thinks of its special attack (0..1), and of its other choices than the best one it found. */
+  /** How often it thinks of its special attack when it is loaded (0..1), and of its other choices than the best one it found. */
   readonly special: number;
   readonly whim: number;
   /** Arcs tried per target. */
@@ -28,9 +28,9 @@ export interface Skill {
 }
 
 export const SKILLS: readonly Skill[] = [
-  { id: 'easy', label: 'computer, easy', yaw: 0.16, pitch: 0.11, charge: 8, mark: 9, special: 0.12, whim: 0.45, arcs: 8 },
-  { id: 'normal', label: 'computer, normal', yaw: 0.07, pitch: 0.05, charge: 3, mark: 5, special: 0.25, whim: 0.2, arcs: 14 },
-  { id: 'hard', label: 'computer, hard', yaw: 0.008, pitch: 0.006, charge: 0, mark: 1.5, special: 0.4, whim: 0, arcs: 24 },
+  { id: 'easy', label: 'computer, easy', yaw: 0.16, pitch: 0.11, charge: 8, mark: 9, special: 0.3, whim: 0.45, arcs: 8 },
+  { id: 'normal', label: 'computer, normal', yaw: 0.07, pitch: 0.05, charge: 3, mark: 5, special: 0.6, whim: 0.2, arcs: 14 },
+  { id: 'hard', label: 'computer, hard', yaw: 0.008, pitch: 0.006, charge: 0, mark: 1.5, special: 0.9, whim: 0, arcs: 24 },
 ];
 
 /** Tried shots and paths per tick; ticks it looks round before it thinks, and at its aim before it lets go. */

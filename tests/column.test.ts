@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { TICK_RATE } from '../src/game/bug';
-import { LINGER_TICKS, Match, NO_INPUT, type MatchEvent, type MatchInput } from '../src/game/match';
+import { LINGER_TICKS, Match, NO_INPUT, type MatchEvent, type MatchInput, SKILL_FULL } from '../src/game/match';
 import { ANT, SPIDER } from '../src/game/species';
 import { ANT_COLUMN, WEAPONS } from '../src/game/weapons';
 import type { Terrain } from '../src/terrain/Terrain';
@@ -26,6 +26,7 @@ function setup(t: Terrain, ant: [number, number], spider: [number, number], more
   run(m, 60);
   // (the rules, whatever health a species starts with)
   for (const u of m.units) u.bug.health = 100;
+  m.skill.fill(SKILL_FULL);
   return m;
 }
 

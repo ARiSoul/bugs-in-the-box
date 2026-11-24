@@ -326,7 +326,7 @@ const controls = new Controls(window, (code) => {
   if (code === 'KeyN') newMatch(seed);
   else if (code === 'KeyM') toggleSound();
 });
-controls.weaponSlots = () => WEAPONS.map((_, i) => i).filter((i) => match.canUse(match.activeUnit, i));
+controls.weaponSlots = () => WEAPONS.map((_, i) => i).filter((i) => match.has(match.activeUnit, i));
 controls.bindButtons(hud.pad);
 setupKeysMenu(controls);
 if (hooks.fly) {

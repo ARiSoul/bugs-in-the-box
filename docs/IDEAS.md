@@ -43,8 +43,8 @@ Special skills as attacks, each with its own attack animation (a skill is a weap
 - **Last Nerve (cockroach):** it runs on without its head. The body runs blind, steered only in wide turns, and bursts at the end; the head stays behind and sees it all.
 - **Wing Storm (cockroach):** it opens its wings, takes off and beats up a gale: little damage, but it sweeps a whole cone of bugs away, off the map if they stand badly.
 - **Fallout Charge (cockroach):** it soaks up the device's energy, glows from inside and drops head first from high up: a huge crater, and it pays with its own health (goes well with Hard Shell).
-- **How special skills are earned (to come; today they are free, every turn):** a match should not open with them. Ways to get one, alone or together:
-  - a **skill loader**: a gauge that fills at some speed (by turn, by damage done or taken), and fires one special when full;
+- **How special skills are earned (the skill loader is in the game; the others to come):** a match should not open with them. Ways to get one, alone or together:
+  - the **skill loader** (in the game): a card per team that fills by turn and by damage done and taken, and gives one special when full;
   - **items** found on the map, which unlock or charge one;
   - **levels**: bugs or squads gain experience and unlock skills;
   - **boxes** bought with what is earned by playing.

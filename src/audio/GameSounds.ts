@@ -190,6 +190,9 @@ export class GameSounds {
         engine.play('collapse', { at: e, scene: true });
         engine.play('cracks', { at: e, scene: true });
         break;
+      case 'skill':
+        engine.play('skillReady', { rate: e.team === 0 ? 1 : 1.122 });
+        break;
       case 'cover':
         engine.play('pour', { at: e, scene: true, rate: 1.3 });
         break;

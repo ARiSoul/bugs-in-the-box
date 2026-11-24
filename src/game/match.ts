@@ -170,6 +170,7 @@ export type MatchEvent =
   | { type: 'cover'; x: number; y: number; z: number; units: readonly number[] }
   | { type: 'lights'; x: number; y: number; z: number; units: readonly number[] }
   | { type: 'shell'; unit: number }
+  | { type: 'skill'; team: number }
   | { type: 'web'; id: number }
   | { type: 'stuck'; unit: number }
   | { type: 'webGone'; id: number; torn: boolean }
@@ -209,6 +210,15 @@ export const BROOD_LIGHT = 216;
 /** The damage at the edge of what a brood covers, as a fraction of the full one; how it throws them as it flees. */
 const BROOD_EDGE = 0.4;
 const BROOD_THROW = 5;
+
+/**
+ * The skill loader: a team's special attack must be loaded (to SKILL_FULL) before it can be used, and using it empties
+ * it. It loads at every turn of the team, with the damage it does (not by the special itself) and takes.
+ */
+export const SKILL_FULL = 1000;
+const SKILL_TURN = 200;
+const SKILL_DONE = 2.5;
+const SKILL_TAKEN = 1.8;
 
 /** A place on a surface: where, and its normal. */
 export interface Mark {
@@ -283,6 +293,8 @@ export class Match {
   /** The brood on its way, if any, and the spot marked for one. */
   brood: Brood | null = null;
   mark: Mark | null = null;
+  /** How far each team's special attack is loaded (0..SKILL_FULL). */
+  readonly skill: number[];
   /** What happened during the last `step` (cleared at the start of every step). */
   readonly events: MatchEvent[] = [];
   phase: Phase = 'aim';
@@ -353,6 +365,7 @@ export class Match {
         this.bugs.push(bug);
       }
     this.nextInTeam = teams.map(() => 0);
+    this.skill = teams.map(() => 0);
     if (options.placeBugs !== false) this.placeBugs();
     this.beginTurn(0);
   }
@@ -583,9 +596,22 @@ export class Match {
     if (this.currentWeapon.sceneTicks > 0) this.weapon = 0;
   }
 
-  /** Whether the unit has weapon `index`. */
-  canUse(u: Unit, index: number): boolean {
+  /** Whether the unit has weapon `index` (a special attack may still have to load). */
+  has(u: Unit, index: number): boolean {
     return hasWeapon(u.bug.species.id, WEAPONS[index]);
+  }
+
+  /** Whether the unit can use weapon `index` now. */
+  canUse(u: Unit, index: number): boolean {
+    return this.has(u, index) && (WEAPONS[index].sceneTicks === 0 || this.skill[u.team] >= SKILL_FULL);
+  }
+
+  /** Load a team's special attack. */
+  private load(team: number, by: number): void {
+    const was = this.skill[team];
+    if (was >= SKILL_FULL) return;
+    this.skill[team] = was + by < SKILL_FULL ? was + by : SKILL_FULL;
+    if (this.skill[team] >= SKILL_FULL) this.events.push({ type: 'skill', team });
   }
 
   /** Which bugs the webs hold now; the active one pulls at its web while it tries to walk or jump. */
@@ -746,6 +772,7 @@ export class Match {
   private fire(unit: Unit, w: Weapon): void {
     this.charging = false;
     this.events.push({ type: 'fire', unit: unit.id, weapon: w.id });
+    if (w.sceneTicks > 0) this.skill[unit.team] = 0;
     if (w.kind === 'tunnel') this.dig(unit, w);
     else if (w.kind === 'column') {
       const power = this.power < MIN_POWER ? MIN_POWER : this.power;
@@ -993,6 +1020,7 @@ export class Match {
         this.windZ = (this.rng() * 2 - 1) * WIND_MAX;
         this.turnNumber++;
         this.events.push({ type: 'turn', unit: u.id });
+        this.load(u.team, SKILL_TURN);
         return;
       }
     }
@@ -1123,7 +1151,15 @@ export class Match {
       b.health = 1;
       this.events.push({ type: 'shell', unit: u.id });
     } else b.health = b.health > amount ? b.health - amount : 0;
-    if (amount > 0) this.events.push({ type: 'damage', unit: u.id, amount });
+    if (amount <= 0) return this.hurtOwnTurn(u);
+    this.events.push({ type: 'damage', unit: u.id, amount });
+    const by = this.units[this.active].team;
+    this.load(u.team, amount * SKILL_TAKEN);
+    if (by !== u.team && this.currentWeapon.sceneTicks === 0) this.load(by, amount * SKILL_DONE);
+    this.hurtOwnTurn(u);
+  }
+
+  private hurtOwnTurn(u: Unit): void {
     // getting hurt on your own turn ends it (no more aiming)
     if (this.phase === 'aim' && u === this.units[this.active]) this.endAim();
   }

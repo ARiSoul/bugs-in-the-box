@@ -37,12 +37,27 @@
       .meter > div { height: 100%; width: 0%; background: #8fe3ff; }
 
       #weapons { left: 50%; bottom: 12px; transform: translateX(-50%); text-align: center; }
+      #weapons { display: flex; gap: 10px; align-items: center; }
+      .skill { position: relative; overflow: hidden; border-radius: 7px; background: #1b2338; flex: none; border: 1px solid rgba(160, 185, 255, 0.3); box-sizing: content-box; }
+      .skill.small { border-radius: 4px; grid-row: 1 / 3; }
+      .skill .face { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; }
+      .skill .cold { color: #66718f; }
+      .skill .hot { background: #4a2c12; }
+      .skill svg { width: 62%; }
+      .skill.small svg { width: 78%; }
+      .skill b { font-size: 9.5px; line-height: 1.1; font-weight: 600; width: 94%; }
+      .skill i { position: absolute; left: 5px; top: 1px; font-size: 10px; font-style: normal; }
+      .skill .hand { position: absolute; left: calc(50% - 1px); bottom: 50%; width: 2px; height: 100%; background: #ffe9bd; transform-origin: 50% 100%; }
+      .skill.ready { border-color: #ffd27a; animation: ready 1.4s ease-in-out infinite; }
+      #card .skill.ready { cursor: pointer; }
+      @keyframes ready { 50% { outline: 3px solid rgba(255, 196, 107, 0.85); } 0%, 100% { outline: 3px solid rgba(255, 196, 107, 0.2); } }
       #power { width: 100%; height: 8px; margin-bottom: 6px; }
       #power > div { background: #ffb04a; }
 
       #teams { left: 12px; bottom: 12px; min-width: 170px; }
-      .team { display: grid; grid-template-columns: 1fr auto auto; gap: 2px 8px; align-items: center; }
-      .team .meter { grid-column: 1 / 4; width: 100%; }
+      .team { display: grid; grid-template-columns: auto 1fr auto auto; gap: 2px 8px; align-items: center; }
+      .team + .team { margin-top: 6px; }
+      .team .meter { grid-column: 2 / 5; width: 100%; }
       .team .alive { letter-spacing: 1px; font-size: 11px; }
       #aim { font-size: 12px; opacity: 0.85; margin-bottom: 4px; }
 
@@ -129,9 +144,12 @@
     </div>
 
     <div id="weapons" class="box">
+      <div id="card"></div>
+      <div>
       <div id="aim"></div>
       <div id="power" class="meter"><div></div></div>
       <div id="weaponList" class="row" style="margin-top: 0"></div>
+      </div>
     </div>
 
     <div id="teams" class="box"></div>
