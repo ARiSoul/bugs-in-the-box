@@ -19,6 +19,14 @@ export class Minimap {
   private wait = 0;
   private w = 0;
   private d = 0;
+  /** Opened large over the view (M): the whole map, names on the bugs. */
+  big = false;
+
+  toggle(on = !this.big): void {
+    this.big = on;
+    this.root.classList.toggle('big', on);
+  }
+
   /** Whether a unit shows on the map of the team whose turn it is. */
   shows: (match: Match, unit: number) => boolean = () => true;
 
@@ -88,19 +96,22 @@ export class Minimap {
     g.setTransform(1, 0, 0, 1, 0, 0);
     g.clearRect(0, 0, size, size);
     const u = match.activeUnit.bug;
-    // (round the active bug, turned so that the view looks up the map)
-    const span = Math.max(t.sx, t.sz) * 0.62;
+    // (round the active bug, turned so that the view looks up the map; large, the whole of it round its middle)
+    const span = this.big ? Math.hypot(t.sx, t.sz) * 1.02 : Math.max(t.sx, t.sz) * 0.62;
+    const cx = this.big ? t.sx / 2 : u.x;
+    const cz = this.big ? t.sz / 2 : u.z;
     const k = size / span;
     g.save();
     g.beginPath();
-    g.arc(size / 2, size / 2, size / 2 - 2, 0, Math.PI * 2);
+    if (this.big) g.rect(0, 0, size, size);
+    else g.arc(size / 2, size / 2, size / 2 - 2, 0, Math.PI * 2);
     g.clip();
     g.fillStyle = 'rgba(10, 8, 7, 0.82)';
     g.fillRect(0, 0, size, size);
     g.translate(size / 2, size / 2);
     g.rotate(yaw + Math.PI);
     g.scale(k, k);
-    g.translate(-u.x, -u.z);
+    g.translate(-cx, -cz);
     g.imageSmoothingEnabled = true;
     g.drawImage(this.ground, 0, 0, this.w * STEP, this.d * STEP);
     // the camera's view
@@ -110,7 +121,7 @@ export class Minimap {
     g.lineTo(eye.x + Math.sin(yaw - 0.55) * span, eye.z + Math.cos(yaw - 0.55) * span);
     g.lineTo(eye.x + Math.sin(yaw + 0.55) * span, eye.z + Math.cos(yaw + 0.55) * span);
     g.fill();
-    const px = 1 / k;
+    const px = (1 / k) * (this.big ? 1.6 : 1);
     g.fillStyle = '#ffc040';
     for (const it of match.items.list) if (it.due === 0) g.fillRect(it.x - 2.2 * px, it.z - 2.2 * px, 4.4 * px, 4.4 * px);
     const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 160);
@@ -132,6 +143,26 @@ export class Minimap {
       g.stroke();
     });
     g.restore();
+    if (this.big) {
+      // (names and health, upright)
+      const c = Math.cos(yaw + Math.PI);
+      const s = Math.sin(yaw + Math.PI);
+      g.font = `600 ${Math.round(size * 0.022)}px Bahnschrift, 'Segoe UI', sans-serif`;
+      g.textAlign = 'center';
+      match.units.forEach((q, n) => {
+        if (!q.bug.alive || !this.shows(match, n)) return;
+        const dx = (q.bug.x - cx) * k;
+        const dz = (q.bug.z - cz) * k;
+        const x = size / 2 + dx * c - dz * s;
+        const y = size / 2 + dx * s + dz * c - size * 0.03;
+        g.fillStyle = 'rgba(10, 8, 7, 0.8)';
+        g.fillRect(x - size * 0.045, y - size * 0.026, size * 0.09, size * 0.036);
+        g.fillStyle = TEAMS[q.team] ?? '#fff';
+        g.fillText(q.name, x, y - size * 0.002);
+        g.fillRect(x - size * 0.04, y + size * 0.004, size * 0.08 * Math.max(0, q.bug.health / q.bug.species.health), size * 0.004);
+      });
+      return;
+    }
     g.strokeStyle = 'rgba(255, 181, 71, 0.85)';
     g.lineWidth = Math.max(2, size * 0.012);
     g.beginPath();

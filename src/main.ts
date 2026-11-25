@@ -471,7 +471,9 @@ function syncTerrain(): void {
 const soundMenu = new SoundMenu(sound);
 const controls = new Controls(window, (code) => {
   if (code === 'KeyN') newMatch(seed);
-  else if (code === 'KeyM') soundMenu.toggle();
+  // (M is the map in a match; the sound is K, as it is M in the menus)
+  else if (code === 'KeyM') minimap.toggle();
+  else if (code === 'KeyK') soundMenu.toggle();
   else if (code === 'KeyI' || code === 'KeyP') inventory.toggle();
   else if (code === 'KeyV') setCamera(!follow.stays);
 });
@@ -1266,13 +1268,14 @@ function frame(now: number): void {
     reading.turn = READ_TURN;
   }
   const team = match.activeUnit.team;
-  reading.on = inventory.isOpen && !brain() && !inMenu && !menus.over && match.phase === 'aim' && !inScene() && reading.turn > 0 && reading.match[team] > 0;
+  if (minimap.big && (brain() || match.phase === 'over' || inMenu || menus.over)) minimap.toggle(false);
+  reading.on = (inventory.isOpen || minimap.big) && !brain() && !inMenu && !menus.over && match.phase === 'aim' && !inScene() && reading.turn > 0 && reading.match[team] > 0;
   if (reading.on) {
     reading.turn -= dt;
     reading.match[team] -= dt;
   }
   controls.frozen = inventory.locked = reading.on;
-  hud.reading(reading.on ? Math.min(reading.turn, reading.match[team]) : -1, inventory.isOpen && match.phase === 'aim' && !brain() && !reading.on);
+  hud.reading(reading.on ? Math.min(reading.turn, reading.match[team]) : -1, (inventory.isOpen || minimap.big) && match.phase === 'aim' && !brain() && !reading.on);
   if (!inMenu && !reading.on) accumulator += scaled;
   while (accumulator >= DT) {
     prevTurns = match.turntableTurns;

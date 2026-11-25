@@ -40,7 +40,7 @@ export class SoundMenu {
     const root = document.createElement('div');
     root.className = 'audio';
     root.innerHTML =
-      '<button class="audio-open" aria-label="Sound settings" aria-expanded="false" title="sound (M: on / off)"><svg viewBox="0 0 48 48" aria-hidden="true"><path d="M6 18h8l12-10v32L14 30H6z"/><g class="waves"><path d="M32 17q6 7 0 14"/><path d="M37 11q11 13 0 26"/></g><path class="cross" d="M32 18l11 12M43 18 32 30"/></svg></button>' +
+      '<button class="audio-open" aria-label="Sound settings" aria-expanded="false" title="sound (M in the menus, K in a match: on / off)"><svg viewBox="0 0 48 48" aria-hidden="true"><path d="M6 18h8l12-10v32L14 30H6z"/><g class="waves"><path d="M32 17q6 7 0 14"/><path d="M37 11q11 13 0 26"/></g><path class="cross" d="M32 18l11 12M43 18 32 30"/></svg></button>' +
       '<div class="audio-panel" hidden><h3>Sound</h3></div>';
     const open = root.firstElementChild as HTMLButtonElement;
     const box = root.lastElementChild as HTMLElement;
