@@ -52,7 +52,7 @@ const FLOCK_SCENE: readonly Cue[] = [
 /** ...and from when its hit is seen. */
 const COLUMN_END: readonly Cue[] = [[3.52, 'finale']];
 const BROOD_END: readonly Cue[] = [[0.45, 'pour', 0.9, 1.3], [3.42, 'finale']];
-const FLOCK_END: readonly Cue[] = [[2.9, 'beesOut', 0.5, 1.2], [4.0, 'crown', 0.6, 1.0]];
+const FLOCK_END: readonly Cue[] = [[2.55, 'beesOut', 0.5, 1.2], [3.65, 'crown', 0.6, 1.0]];
 /** Into the swarm (ticks), the ground starts to split. */
 const SPLIT = 130;
 

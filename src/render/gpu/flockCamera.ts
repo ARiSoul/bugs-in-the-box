@@ -20,6 +20,8 @@ export interface FlockShot {
   dir: THREE.Vector3;
   /** A ring was just taken (1, dying away). */
   boost: number;
+  /** On its last leg (0..1). */
+  dive: number;
   /** Where the first ring is (none: null), and which way what it struck faces (radians; NaN: nothing). */
   ring: THREE.Vector3 | null;
   /** How large it dances (0..1). */
@@ -81,9 +83,9 @@ const ss = (a: number, b: number, x: number): number => {
   return t * t * (3 - 2 * t);
 };
 /** Seconds at the start: it goes past the view. */
-export const PAST = 0.5;
+export const PAST = 0.6;
 /** After the hit: the view goes back to the bee. */
-export const HOME = 3.1;
+export const HOME = 2.75;
 
 /** The Queen's Flight's camera: cuts round the dance, behind it while it aims, behind the swarm, round what it struck. */
 export class FlockCamera {
@@ -154,7 +156,7 @@ export class FlockCamera {
       // (something in the way: back round)
       this.orbit(this.angle + t * 0.16 + 0.3, 0.3, 8, x);
       if (this.want.distanceTo(this.s) < 6) this.angle -= x.dt * 1.1;
-      this.orbit(this.angle + t * 0.16, 0.32 + 0.06 * Math.min(1, t / 2), 10.2 + 1.6 * ss(0.5, 1.8, t), x);
+      this.orbit(this.angle + t * 0.16, 0.32 + 0.06 * Math.min(1, t / 2), 10.2 + 1.6 * ss(0.5, 1.4, t) - 3.6 * ss(1.4, 2.7, t), x);
       this.place.lerp(this.want, 1 - Math.exp(-x.dt * 7));
       // (the two of them in the picture, side by side)
       this.d.set(1, 0, 0).applyQuaternion(camera.quaternion);
@@ -204,7 +206,7 @@ export class FlockCamera {
       this.clear(this.aim, this.want, x.ground);
       this.place.lerp(this.want, c ? 1 : 1 - Math.exp(-x.dt * 13));
       this.look.lerp(this.s.copy(x.head).addScaledVector(x.dir, 9).addScaledVector(x.up, 0.75), c ? 1 : 1 - Math.exp(-x.dt * 13));
-      fov = 66 + 8 * x.boost;
+      fov = 66 + 8 * x.boost + 11 * x.dive;
       this.kick(0.035);
     } else if (x.stance) {
       const c = cut(1);

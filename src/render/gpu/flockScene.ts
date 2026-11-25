@@ -31,7 +31,7 @@ const WAKE = 64;
 const WIDE = 3.1;
 const DEEP = 3;
 /** After the hit: the scene is over. */
-const AFTER = 5.6;
+const AFTER = 5.25;
 
 const ss = (a: number, b: number, x: number): number => {
   const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
@@ -195,6 +195,7 @@ export class FlockScene {
   private victim: BugView | null = null;
   private room = 1;
   private boost = 0;
+  private dive = 0;
   private rise = 0;
   private bank = 0;
   private readonly base = new THREE.Vector3();
@@ -587,6 +588,8 @@ export class FlockScene {
     this.at.set(b.px + (b.x - b.px) * alpha, b.py + (b.y - b.py) * alpha, b.pz + (b.z - b.pz) * alpha);
     this.homeAt.copy(this.at);
     if ((special || this.hitT > HOME) && this.started) this.at.add(this.place);
+    // (it hovers as it aims)
+    if (stance) this.at.y += 1.2;
     this.base.copy(this.at).addScaledVector(this.up, -r);
     if (this.floating && (special || this.hitT > HOME)) {
       this.level();
@@ -610,6 +613,8 @@ export class FlockScene {
 
     // ---- the swarm's head
     const f = match.flock;
+    const last = f !== null && this.shotT > PAST && !f.rings.some((q, i) => !q.taken && !f.rings.some((p, k) => k > i && p.taken));
+    this.dive += ((last ? 1 : 0) - this.dive) * (1 - Math.exp(-dt * 2.5));
     if (f) {
       this.head.set(f.px + (f.x - f.px) * alpha, f.py + (f.y - f.py) * alpha, f.pz + (f.z - f.pz) * alpha);
       this.dir.set(f.dx, f.v, f.dz);
@@ -621,7 +626,7 @@ export class FlockScene {
     // ---- how it holds itself
     this.poseOf(special, t, stance);
 
-    this.camera.update(x.camera, { t, shotT: this.shotT, hitT: this.hitT, stance, at: this.at, up: this.up, fwd: this.fwd, aim: this.aim, radius: r, head: this.head, dir: this.dir, boost: this.boost, room: this.room, hit: this.hit, ring: match.rings.length > 0 ? this.ringAt.set(match.rings[0].x, match.rings[0].y, match.rings[0].z) : null, facing: this.victim ? this.faces(this.victim) : NaN, dt, ground: x.ground });
+    this.camera.update(x.camera, { t, shotT: this.shotT, hitT: this.hitT, stance, at: this.at, up: this.up, fwd: this.fwd, aim: this.aim, radius: r, head: this.head, dir: this.dir, boost: this.boost, dive: this.dive, room: this.room, hit: this.hit, ring: match.rings.length > 0 ? this.ringAt.set(match.rings[0].x, match.rings[0].y, match.rings[0].z) : null, facing: this.victim ? this.faces(this.victim) : NaN, dt, ground: x.ground });
     x.camera.updateMatrixWorld();
     this.lateX = x;
     this.lateT = t;
@@ -723,7 +728,7 @@ export class FlockScene {
     this.started = false;
     this.shotT = this.hitT = -1;
     this.victim = null;
-    this.boost = this.bank = this.rise = 0;
+    this.dive = this.boost = this.bank = this.rise = 0;
     this.swarm = FIRST;
     this.historyCount = 0;
     for (const o of this.ones) o.size = 0;
@@ -884,13 +889,13 @@ export class FlockScene {
     const dancing = special && t > DANCE && t < DANCED;
     const proud = special ? ss(RISE + 0.1, CROWN, t) : stance ? 0.35 : this.hitT > HOME ? 0.5 * ss(HOME + 0.9, HOME + 1.2, this.hitT) : 0;
     this.rise += (proud - this.rise) * 0.25;
-    this.wing = flying || (this.hitT > HOME && this.hitT < HOME + 0.85) ? 1 : dancing ? 0.55 : special ? ss(0.05, 0.3, t) * 0.5 + 0.5 * ss(BURST - 0.15, BURST + 0.1, t) : stance ? 0.8 : 0;
+    this.wing = flying || (this.hitT > HOME && this.hitT < HOME + 0.85) ? 1 : dancing ? 0.55 : special ? ss(0.05, 0.3, t) * 0.5 + 0.5 * ss(BURST - 0.15, BURST + 0.1, t) : stance ? 1 : 0;
     this.glad = special ? t > RISE + 0.3 && t < BURST + 0.15 : this.hitT > HOME + 1.0;
     v.torso.rotation.x = -0.34 * this.rise;
     v.torso.position.y = v.restY + 0.16 * this.rise;
     v.pace = dancing ? 9 : 0;
     v.trail = this.shotT >= 0 && this.hitT < 0 ? 1 : 0;
-    v.hover = (special && t > BURST + 0.05 && t < READY - 0.15) || flying || (this.hitT > HOME && this.hitT < HOME + 0.8);
+    v.hover = stance || (special && t > BURST + 0.05 && t < READY - 0.15) || flying || (this.hitT > HOME && this.hitT < HOME + 0.8);
   }
 
   private lean = 0;
@@ -935,6 +940,7 @@ export class FlockScene {
       root.position.addScaledVector(this.up, (0.95 + 0.06 * Math.sin(this.clock * 5)) * ss(BURST, BURST + 0.4, t) * (1 - ss(READY - 0.2, READY, t)));
       return;
     }
+    if (this.shotT < 0 && this.sceneTime < 0) root.position.copy(this.at).addScaledVector(this.up, 0.08 * Math.sin(this.clock * 4));
     if (this.shotT >= 0 && this.hitT < HOME) {
       let out = this.head;
       if (this.hitT >= 0) {
@@ -1240,10 +1246,10 @@ export class FlockScene {
           const lane = i % 4;
           this.b.copy(x.camera.position).sub(this.hit).setY(0).normalize();
           const behind = Math.atan2(-this.b.x, -this.b.z);
-          const u = ((i >> 2) / Math.ceil(this.swarm / 4) + k * (0.11 - 0.015 * lane) * (lane % 2 ? -1 : 1) + 4) % 1;
+          const u = ((i >> 2) / Math.ceil(this.swarm / 4) + 0.013 * lane * lane + 0.02 * (r0 - 0.5) + k * (0.11 - 0.015 * lane) * (lane % 2 ? -1 : 1) + 4) % 1;
           const round = behind + (u - 0.5) * Math.PI * 2 * (0.42 + 0.3 * ss(0.3, 0.9, k));
-          const wide = (2.9 + 0.5 * lane) * (1 + 0.5 * open) + 0.8 * ss(0.4, 0, k);
-          goal.set(Math.sin(round) * wide, 0.25 + 0.5 * lane + 0.25 * Math.sin(round * 3 + i) + 8 * ss(2.2, 3.1, k), Math.cos(round) * wide);
+          const wide = (2.9 + 0.5 * lane + 0.8 * (r0 - 0.5)) * (1 + 0.5 * open) + 0.8 * ss(0.4, 0, k);
+          goal.set(Math.sin(round) * wide, 0.25 + 0.5 * lane + 0.7 * (r1 - 0.5) + 0.25 * Math.sin(round * 3 + i) + 8 * ss(2.2, 3.1, k), Math.cos(round) * wide);
           // (lower before it, higher behind)
           goal.y -= 0.3 * (goal.x * this.b.x + goal.z * this.b.z);
           scale *= ss(0, 0.07, u) * ss(1, 0.93, u);
@@ -1280,7 +1286,7 @@ export class FlockScene {
         this.b.crossVectors(this.dir, this.s.set(0, 1, 0)).normalize();
         this.c.crossVectors(this.b, this.dir);
         const sway = 0.22 * Math.sin(this.clock * 3.1 * w + i * 1.7);
-        goal.addScaledVector(this.b, s * (1.5 + 0.28 * row + 0.45 * layer) + sway).addScaledVector(this.c, (-0.75 + 0.62 * ((layer * 2) % 5) * 0.8) * ss(0.2, 0.9, this.shotT) - 0.7 * ss(0.9, 0.3, this.shotT) + 0.25 * Math.cos(this.clock * 3.7 + i * 2.3));
+        goal.addScaledVector(this.b, (s * (1.5 + 0.28 * row + 0.45 * layer) + sway) * (1 - 0.42 * this.dive)).addScaledVector(this.c, (-0.75 + 0.62 * ((layer * 2) % 5) * 0.8) * ss(0.2, 0.9, this.shotT) - 0.7 * ss(0.9, 0.3, this.shotT) + 0.25 * Math.cos(this.clock * 3.7 + i * 2.3));
         rate = 15;
       } else {
         // a fan behind it; while it aims, to both sides
@@ -1565,7 +1571,7 @@ export class FlockScene {
       this.target.position.copy(foe.root.position);
       this.target.quaternion.copy(camera.quaternion).multiply(this.turnQ.setFromAxisAngle(this.s.set(0, 0, 1), this.clock * 0.6));
       const d = foe.root.position.distanceTo(camera.position);
-      this.target.scale.setScalar((3.4 + 0.035 * d) * (1 + 0.05 * Math.sin(this.clock * 5)));
+      this.target.scale.setScalar((3.4 + 0.035 * d) * (1 + (0.05 + 0.1 * this.dive) * Math.sin(this.clock * (5 + 11 * this.dive))));
       // (not on the ring it flies to)
       this.a.copy(foe.root.position).project(camera);
       this.b.copy(goal).project(camera);
@@ -1586,7 +1592,7 @@ export class FlockScene {
       this.arrow.scale.setScalar(1.25 + 0.12 * Math.sin(this.clock * 9));
     }
     // ---- streaks past the view
-    this.streakLevel.value = 0.1 + 0.55 * this.boost;
+    this.streakLevel.value = 0.1 + 0.55 * Math.max(this.boost, 0.7 * this.dive);
     this.streaks.visible = true;
     camera.getWorldDirection(this.c);
     for (let i = 0; i < STREAKS; i++) {
