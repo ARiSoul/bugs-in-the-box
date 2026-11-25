@@ -47,7 +47,6 @@ export const DESK_WHITE = 33; // a white laminate table top (ash and dust are dr
 export const DASH = 34; // a dashboard's dark moulded skin (the drawn skin lies over it)
 export const DASH_FOAM = 35; // the yellowed foam under a dashboard's skin
 export const DASH_TRIM = 36; // a car's dark grey hard plastic: the doors, the tunnel
-export const SOLDER = 37; // what bugs build of: bright beads of solder
 
 /**
  * Glow of each material (`MATERIAL_PBR[id][2]`): what the renderer may light up. Signed so that the
@@ -99,7 +98,6 @@ export const MATERIAL_PBR: readonly (readonly [number, number, number])[] = [
   [0.8, 0, 0], // DASH: matte soft plastic
   [0.95, 0, 0], // DASH_FOAM
   [0.7, 0, 0], // DASH_TRIM
-  [0.34, 0.6, 0], // SOLDER: fresh and shiny
 ];
 
 /**
@@ -107,7 +105,7 @@ export const MATERIAL_PBR: readonly (readonly [number, number, number])[] = [
  * Clean painted and moulded surfaces barely vary; a white one shows any variation as dirt.
  */
 export const MATERIAL_NOISE: readonly number[] = (() => {
-  const n = new Array<number>(SOLDER + 1).fill(0.24);
+  const n = new Array<number>(37).fill(0.24);
   n[ENAMEL] = 0.025;
   n[LINER] = 0.025;
   n[TILE] = 0.1;
@@ -119,7 +117,6 @@ export const MATERIAL_NOISE: readonly number[] = (() => {
   n[DESK_WHITE] = 0; // (a drawn dusty sheet lies over it)
   n[DASH] = 0.04;
   n[DASH_TRIM] = 0.04;
-  n[SOLDER] = 0.1;
   n[STEEL] = 0.08; // (galvanised and brushed sheet: a cloudy swing reads as dirt)
   return n;
 })();
@@ -163,5 +160,4 @@ export const MATERIAL_RGB: readonly (readonly [number, number, number])[] = [
   [0.027, 0.027, 0.028], // DASH
   [0.34, 0.27, 0.15], // DASH_FOAM: pale yellow-brown
   [0.05, 0.05, 0.053], // DASH_TRIM
-  [0.62, 0.64, 0.66], // SOLDER
 ];

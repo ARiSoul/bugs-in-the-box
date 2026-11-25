@@ -8,7 +8,7 @@ import { CHUNK } from '../terrain/constants';
 import type { Terrain } from '../terrain/Terrain';
 import { ARMS, BUGS } from './emblems';
 import { letters } from './lettering';
-import { SkillCard } from './skillCard';
+import { art, SkillCard } from './skillCard';
 
 const el = <T extends HTMLElement>(id: string): T => {
   const e = document.getElementById(id);
@@ -31,7 +31,32 @@ const WHAT: Record<ItemKind, string> = { battery: 'the special loads', patch: 'p
 /** Seconds from which the clock is urgent. */
 const URGENT = 5;
 /** Degrees between two cards of the hand. */
-const FAN = 7;
+const FAN = 4.6;
+
+/** A slot of the hand with nothing in it. */
+const NONE = -99;
+const GROUP_COLORS = ['#ff9a3c', '#5cc8ff'];
+const BOLT = '<path fill="currentColor" d="M27 2 9 27h12l-5 19 23-28H26z"/>';
+const SHIELD = '<path fill="currentColor" d="M24 3 42 9v14c0 11-8 18-18 22C14 41 6 34 6 23V9z"/><path fill="var(--b)" d="M24 9 36.500 13.200v10c0 8-5.500 13-12.500 16.300z"/>';
+
+/** Which card of the hand opens on a weapon: attack (0), defence (1), or none. */
+function groupOf(w: Weapon): number {
+  return w.sceneTicks > 0 ? 0 : w.start !== undefined ? 1 : -1;
+}
+
+/** A card that opens a level. */
+function group(name: string, color: string, art: string): HTMLElement {
+  const s = make('slot grp', `<button class="card" aria-label="${name}"><em></em><svg viewBox="0 0 48 48" aria-hidden="true">${art}</svg><span>${name}</span><div class="mini"></div><div class="pips"></div></button>`);
+  s.style.setProperty('--g', color);
+  return s;
+}
+
+function fan(slots: readonly HTMLElement[], by: number): void {
+  slots.forEach((s, i) => {
+    s.style.setProperty('--a', `${((i - (slots.length - 1) / 2) * by).toFixed(2)}deg`);
+    s.style.setProperty('--i', String(i));
+  });
+}
 
 export interface HudState {
   /** Where meshing runs ("3 workers", "main thread"). */
@@ -92,12 +117,26 @@ export class Hud {
   private readonly skill = new SkillCard(0, 0, true);
   private readonly skillHolder = make('slot special-slot');
   private skillWeapon = -1;
+  /** The cards that open a level of their own: what loads (attack), what is built and hides (defence). */
+  private readonly groups = [group('Attack', '#ff9a3c', BOLT), group('Defence', '#5cc8ff', SHIELD)];
+  /** The open level (-1: none), and its cards. */
+  private open = -1;
+  private readonly level = make('level');
+  private readonly levelHead = make('level-head');
+  /** What the number keys pick now: a weapon, or (under zero) a level to open or close (-1 - its number). */
+  private slots: number[] = [];
   private onWeapon: (index: number) => void = () => {};
   private readonly last = new Map<string, string>();
   private readonly sorted = new Float32Array(120);
 
   constructor() {
-    this.deck.append(this.aim, this.power, this.hand);
+    this.deck.append(this.aim, this.power, this.hand, this.level, this.levelHead);
+    this.groups.forEach((g, i) =>
+      g.addEventListener('click', () => {
+        this.toggle(i);
+        (g.firstElementChild as HTMLElement).blur();
+      }),
+    );
     this.flock.id = 'flock';
     this.flock.innerHTML = `<div class="cells">${'<i></i>'.repeat(RINGS)}<em></em></div><div class="fuel"><svg viewBox="0 0 24 24"><path d="M12 1l9.5 5.5v11L12 23l-9.5-5.5v-11z"/></svg><u><b></b></u></div><p></p>`;
     document.body.append(this.flock);
@@ -161,7 +200,7 @@ export class Hud {
       b.className = 'card';
       b.style.setProperty('--w', hex(w.color));
       const power = Math.min(5, Math.round((w.damage + w.arcDamage * 0.5) / 11));
-      b.innerHTML = `<em></em><svg viewBox="0 0 48 48" aria-hidden="true">${ARMS[w.id] ?? ''}</svg><span>${w.name}</span><div class="facts"><i title="damage">${'<u class="on"></u>'.repeat(power)}${'<u></u>'.repeat(5 - power)}</i><small>${w.kind === 'tunnel' ? 'digs' : w.kind === 'wall' || w.kind === 'bridge' ? 'builds' : w.kind === 'shelter' ? 'hides' : w.kind === 'screen' ? 'catches' : w.kind === 'grenade' ? 'bounces' : w.kind === 'web' || w.kind === 'trap' ? 'holds' : w.arcs ? 'arcs' : 'bursts'}${w.windFactor > 0.5 ? ' · wind' : ''}</small></div>`;
+      b.innerHTML = `<em></em><svg viewBox="0 0 48 48" aria-hidden="true">${ARMS[w.id] ?? ''}</svg><span>${w.name}</span><div class="facts"><i title="damage">${'<u class="on"></u>'.repeat(power)}${'<u></u>'.repeat(5 - power)}</i><small>${w.kind === 'tunnel' ? 'digs' : w.kind === 'wall' || w.kind === 'bridge' ? 'builds' : w.kind === 'shelter' ? 'hides' : w.kind === 'grenade' ? 'bounces' : w.kind === 'web' || w.kind === 'trap' ? 'holds' : w.arcs ? 'arcs' : 'bursts'}${w.windFactor > 0.5 ? ' · wind' : ''}</small></div>`;
       b.setAttribute('aria-label', w.name);
       b.addEventListener('click', () => {
         onWeapon(index);
@@ -170,6 +209,37 @@ export class Hud {
       return { root: b, key: b.firstElementChild as HTMLElement, index };
     });
     this.last.clear();
+  }
+
+  private levelWas = -1;
+
+  private slotOf(c: { root: HTMLButtonElement; key: HTMLElement; index: number }, n: number, match: Match, team: number): HTMLElement {
+    const s = make('slot');
+    s.append(c.root);
+    c.key.textContent = String(n);
+    c.root.dataset.left = match.stock[team][c.index] > 0 ? `×${match.usesLeft(team, c.index)}` : '';
+    return s;
+  }
+
+  /** Open a level of the hand, or close it. */
+  toggle(i: number): void {
+    this.open = this.open === i ? -1 : i;
+  }
+
+  /** Number key `n` (from 0): the weapon it picks, or -1 (it opened or closed a level, or is none). */
+  pick(n: number): number {
+    const s = this.slots[n] ?? NONE;
+    if (s === NONE) return -1;
+    if (s >= 0) return s;
+    this.toggle(-1 - s);
+    return -1;
+  }
+
+  /** Close an open level; true if one was. */
+  close(): boolean {
+    const was = this.open >= 0;
+    this.open = -1;
+    return was;
   }
 
   private tell(html: string, color: string): void {
@@ -263,33 +333,81 @@ export class Hud {
       this.call.classList.add('on');
     }, `${match.turnNumber}|${computer}`);
 
-    // the hand (a weapon of another species is not in it; the special attack is the last card)
+    // the hand: what every turn offers, then the two cards that open a level
+    const turnKey = `${u.bug.species.id}|${u.team}|${match.turnNumber}`;
+    if (this.last.get('handTurn') !== turnKey) {
+      this.last.set('handTurn', turnKey);
+      this.open = -1;
+    }
+    // (a level closes once something in it is done, or anything else is picked)
+    if (this.open >= 0 && match.weapon !== this.levelWas) {
+      const w = WEAPONS[match.weapon];
+      if (groupOf(w) !== this.open) this.open = -1;
+    }
+    this.levelWas = match.weapon;
     this.set('hand', () => {
-      const own = this.cards.filter((c) => match.has(u, c.index) && WEAPONS[c.index].sceneTicks === 0);
-      this.skillWeapon = this.cards.find((c) => match.has(u, c.index) && WEAPONS[c.index].sceneTicks > 0)?.index ?? -1;
-      const slots: HTMLElement[] = own.map((c, i) => {
-        const s = make('slot');
-        s.append(c.root);
-        c.key.textContent = String(i + 1);
-        c.root.dataset.left = match.stock[u.team][c.index] > 0 ? `×${match.usesLeft(u.team, c.index)}` : '';
-        return s;
+      const own = this.cards.filter((c) => match.has(u, c.index));
+      this.skillWeapon = own.find((c) => WEAPONS[c.index].sceneTicks > 0)?.index ?? -1;
+      const normal = own.filter((c) => groupOf(WEAPONS[c.index]) < 0);
+      const slots: HTMLElement[] = normal.map((c, i) => this.slotOf(c, i + 1, match, u.team));
+      this.slots = normal.map((c) => c.index);
+      this.groups.forEach((g, i) => {
+        g.querySelector('em')!.textContent = String(slots.length + 1);
+        g.classList.toggle('open', this.open === i);
+        slots.push(g);
+        this.slots.push(-1 - i);
       });
-      if (this.skillWeapon >= 0) slots.push(this.skillHolder);
-      slots.forEach((s, i) => {
-        s.style.setProperty('--a', `${((i - (slots.length - 1) / 2) * FAN).toFixed(2)}deg`);
-        s.style.setProperty('--i', String(i));
-      });
+      fan(slots, FAN);
       this.hand.replaceChildren(...slots);
-      this.hand.classList.remove('deal');
-      void this.hand.offsetWidth;
-      this.hand.classList.add('deal');
-      this.hand.style.setProperty('--c', TEAM[u.team] ?? '#ffb547');
-    }, `${u.bug.species.id}|${u.team}|${match.turnNumber}|${match.stock[u.team].join()}|${match.works[u.team]}`);
-    if (this.skillWeapon >= 0) this.skill.show(WEAPONS[this.skillWeapon], match.skill[u.team] / SKILL_FULL, String(this.hand.children.length));
+      const dealt = this.last.get('dealt') === turnKey;
+      this.last.set('dealt', turnKey);
+      if (!dealt) {
+        this.hand.classList.remove('deal');
+        void this.hand.offsetWidth;
+        this.hand.classList.add('deal');
+      }
+      this.deck.style.setProperty('--c', TEAM[u.team] ?? '#ffb547');
+      this.deck.classList.toggle('opened', this.open >= 0);
+      const inside: HTMLElement[] = [];
+      if (this.open >= 0) {
+        const list = own.filter((c) => groupOf(WEAPONS[c.index]) === this.open);
+        this.slots = list.map((c) => c.index);
+        // (the same key closes it: the number its card has)
+        const key = normal.length + this.open;
+        while (this.slots.length < key) this.slots.push(NONE);
+        this.slots[key] = -1 - this.open;
+        // (and the other one opens in its place)
+        const other = normal.length + 1 - this.open;
+        while (this.slots.length <= other) this.slots.push(NONE);
+        if (this.slots[other] === NONE) this.slots[other] = -2 + this.open;
+        for (const [i, c] of list.entries()) {
+          if (c.index === this.skillWeapon) inside.push(this.skillHolder);
+          else inside.push(this.slotOf(c, i + 1, match, u.team));
+        }
+        this.level.style.setProperty('--g', GROUP_COLORS[this.open]);
+        this.levelHead.style.setProperty('--g', GROUP_COLORS[this.open]);
+        this.levelHead.innerHTML = this.open === 1 ? `<b>Defence</b><small>${match.works[u.team]} of ${WORKS} uses left in this match</small><small>${key + 1}: back</small>` : `<b>Attack skills</b><small>${key + 1}: back</small>`;
+        fan(inside, 5);
+      }
+      this.level.replaceChildren(...inside);
+    }, `${turnKey}|${this.open}|${match.stock[u.team].join()}|${match.works[u.team]}`);
+    this.set('uses', () => {
+      this.groups[1].querySelector('.pips')!.innerHTML = '<u></u>'.repeat(match.works[u.team]) + '<u class="off"></u>'.repeat(WORKS - match.works[u.team]);
+      this.groups[1].querySelector('.mini')!.innerHTML = this.cards.filter((c) => match.has(u, c.index) && groupOf(WEAPONS[c.index]) === 1).map((c) => `<svg viewBox="0 0 48 48">${ARMS[WEAPONS[c.index].id] ?? ''}</svg>`).join('');
+      this.groups[0].querySelector('.mini')!.innerHTML = this.skillWeapon >= 0 ? art(WEAPONS[this.skillWeapon].id) : '';
+    }, `${turnKey}|${match.stock[u.team].join()}|${match.works[u.team]}`);
+    const load = match.skill[u.team] / SKILL_FULL;
+    this.set('load', () => {
+      const n = Math.floor(load * 4 + 1e-6);
+      this.groups[0].querySelector('.pips')!.innerHTML = '<u></u>'.repeat(n) + '<u class="off"></u>'.repeat(4 - n);
+      this.groups[0].classList.toggle('ready', load >= 1);
+    }, `${Math.floor(load * 4 + 1e-6)}|${load >= 1}`);
+    if (this.skillWeapon >= 0) this.skill.show(WEAPONS[this.skillWeapon], load, '1');
     this.set('weapon', () => {
       for (const c of this.cards) c.root.parentElement?.classList.toggle('on', c.index === match.weapon);
       this.skillHolder.classList.toggle('on', match.weapon === this.skillWeapon);
-    }, `${match.weapon}|${match.turnNumber}|${match.stock[u.team].join()}`);
+      this.groups.forEach((g, i) => g.classList.toggle('holds', groupOf(WEAPONS[match.weapon]) === i));
+    }, `${match.weapon}|${match.turnNumber}|${match.stock[u.team].join()}|${this.open}`);
     this.set('spent', () => this.deck.classList.toggle('spent', match.phase !== 'aim' && match.phase !== 'special'), match.phase);
 
     const power = match.charging ? match.power : 0;
@@ -311,7 +429,7 @@ export class Hud {
           : match.phase === 'aim'
             ? `<b>${match.currentWeapon.name}</b> aim ${((Math.atan2(u.aimV, u.aimH) * 180) / Math.PI).toFixed(1)}°${u.bug.species.flight ? ` · ${u.bug.flying ? 'run: up, jump: let go' : u.bug.grounded ? 'jump twice: fly' : 'jump: fly'} · breath ${Math.round((u.bug.breath / (u.bug.species.flight * TICK_RATE)) * 100)}%` : ''}`
             : '';
-    if (aim && match.currentWeapon.start !== undefined) aim += ` · <b>${match.works[u.team]}</b> of ${WORKS} left in all${match.built && match.currentWeapon.kind !== 'shelter' && match.currentWeapon.kind !== 'screen' ? ' · once a turn' : ''}`;
+    if (aim && match.built && (match.currentWeapon.kind === 'wall' || match.currentWeapon.kind === 'bridge')) aim += ' · once a turn';
     this.showFlock(match, computer);
     this.set('aim', () => (this.aim.innerHTML = aim), aim);
 

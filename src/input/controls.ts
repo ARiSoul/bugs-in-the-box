@@ -190,8 +190,8 @@ export class Controls {
     return this.any('forward') ? 1 : this.any('back') ? -1 : 0;
   }
 
-  /** The weapons on offer, in the order of the number keys (set by the game). */
-  weaponSlots: () => readonly number[] = () => [0, 1, 2, 3, 4, 5];
+  /** What number key `n` (from 0) picks, or -1 (set by the game). */
+  pickSlot: (n: number) => number = (n) => n;
 
   selectWeapon(index: number): void {
     this.weaponQueued = index;
@@ -201,7 +201,7 @@ export class Controls {
     this.held.add(code);
     if (this.keys.jump.includes(code)) this.jumpQueued = true;
     const w = WEAPON_KEYS.indexOf(code);
-    if (w >= 0) this.weaponQueued = this.weaponSlots()[w] ?? -1;
+    if (w >= 0) this.weaponQueued = this.pickSlot(w);
   }
 
   release(code: string): void {

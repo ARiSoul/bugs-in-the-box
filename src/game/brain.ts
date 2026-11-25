@@ -212,7 +212,7 @@ export class Brain {
     const enemies = this.enemies(match, u);
     WEAPONS.forEach((w, index) => {
       if (!match.canUse(u, index) || (w.sceneTicks > 0 && !this.specials)) return;
-      if (w.kind === 'tunnel' || w.kind === 'trap' || w.kind === 'wall' || w.kind === 'bridge' || w.kind === 'shelter' || w.kind === 'screen') return;
+      if (w.kind === 'tunnel' || w.kind === 'trap' || w.kind === 'wall' || w.kind === 'bridge' || w.kind === 'shelter') return;
       if (w.kind === 'brood') {
         for (const e of enemies) this.queue.push(() => this.tryMark(match, u, w, index, e));
       } else if (w.kind === 'flock') {
@@ -283,8 +283,8 @@ export class Brain {
     const p = new Projectile(0, w, b).launch(b.x + dx * out, b.y + dy * out, b.z + dz * out, dx * speed, dy * speed, dz * speed);
     for (let n = 0; n < FLIGHT; n++) {
       const r = p.step(match.field, match.windX, match.windZ, bugs, match.options.strictBounds === true);
-      // (a screen catches it)
-      if (w.kind !== 'arrow' && match.screenOn(p, u.team, dir)) return -1;
+      // (a curtain of silk catches it)
+      if (w.kind !== 'arrow' && match.curtainAt(p, u.team)) return -1;
       if (r === 'lost') return -1;
       if (r === 'fly') continue;
       this.end[0] = p.x;
@@ -592,7 +592,7 @@ export class Brain {
 
   /** An enemy that could shoot straight at it: a wall before that one, and then it thinks of its own shot. */
   private seekWall(match: Match, u: Unit): boolean {
-    const index = WEAPONS.findIndex((w) => w.kind === 'wall');
+    const index = WEAPONS.findIndex((w) => w.kind === 'wall' && w.species === u.bug.species.id);
     const e = this.enemies(match, u)[0];
     if (!this.walls || !e || match.built || !match.canUse(u, index) || u.bug.ny < 0.8 || u.web >= 0) return false;
     const dx = e.bug.x - u.bug.x;
@@ -608,7 +608,7 @@ export class Brain {
 
   private foe: Unit | null = null;
   private wall(match: Match, u: Unit): void {
-    const index = WEAPONS.findIndex((w) => w.kind === 'wall');
+    const index = WEAPONS.findIndex((w) => w.kind === 'wall' && w.species === u.bug.species.id);
     const e = this.foe as Unit;
     const dx = e.bug.x - u.bug.x;
     const dz = e.bug.z - u.bug.z;
@@ -624,7 +624,7 @@ export class Brain {
 
   /** Its way of hiding, if it has one and would rather do that now. */
   private shelter(match: Match, u: Unit, best: number): Plan | null {
-    const index = WEAPONS.findIndex((w) => (w.kind === 'shelter' || w.kind === 'screen') && w.species === u.bug.species.id);
+    const index = WEAPONS.findIndex((w) => w.kind === 'shelter' && w.species === u.bug.species.id);
     if (!this.hides || index < 0 || u.web >= 0 || best >= (u.bug.health < u.bug.species.health * 0.4 ? 16 : 6)) return null;
     const e = this.enemies(match, u)[0];
     if (!e) return null;
@@ -743,12 +743,12 @@ export class Brain {
     if (!this.tuned) {
       this.tuned = true;
       this.timer = 8;
-      if (w.kind !== 'tunnel' && w.kind !== 'column' && w.kind !== 'flock' && w.kind !== 'shelter' && w.kind !== 'screen') this.tune(match, u, w, p);
+      if (w.kind !== 'tunnel' && w.kind !== 'column' && w.kind !== 'flock' && w.kind !== 'shelter') this.tune(match, u, w, p);
       return;
     }
     o.fire = true;
     if (w.kind === 'flock') this.state = 'done';
-    else if (w.kind === 'shelter' || w.kind === 'screen') {
+    else if (w.kind === 'shelter') {
       // (no room for it here: a shot, then)
       this.hides = false;
       this.state = 'look';

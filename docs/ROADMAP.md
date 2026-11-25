@@ -51,7 +51,7 @@ Goal now: a PC demo first, as a proof of concept. The phone items below are post
 - [x] Desk (`?scenario=desk`): the owner's real desk from photos (an L-shaped standing desk, three curved monitors and two laptops with pictures on them, keyboards, vertical mice, two studio speakers, a bottle, small things, cables), at twice the scale on its own 10×3×5 map (`Scenario.mapSize`) so the bugs keep their size; visual critic to "none", detail critic (macro close-ups against the owner's photos) to "accept"
 - [x] Car Dashboard (`?scenario=car`): the owner's car from photos and a video, door to door, ignition on (lit instruments, flashing hazard button, the radio behind its cracked glass, a phone with a map), the steering wheel, the open glove box with its papers, on its own map (10x4x5)
 - [x] Cinematic camera in the menu, for every map (the scripted flight, with pause, skip and restart)
-- [ ] Building and hiding: the first set done (Solder Wall, Solder Bridge, Burrow, Flatten, Wax Cell, Silk Screen; limits per kind and in all); the other ideas one prototype at a time (IDEAS); bridges for the computer; boxes that give more
+- [ ] Building and hiding: a wall, a bridge and a shelter of each species' own, limits per kind and in all, the hand in three parts; the other ideas one prototype at a time (IDEAS); bridges for the computer; boxes that give more
 - [ ] Abilities per species: spider done (Web Shot, the thread, Web Bow), the ant's first done (Ant Column; three more and an unlock system in IDEAS); the cockroach done (Hard Shell, Blackout Swarm; the other ideas in IDEAS); the bee done (flight, Queen's Flight); each team's species is picked in the menu
 
 ## Settings and admins (proposed)
@@ -59,6 +59,21 @@ Goal now: a PC demo first, as a proof of concept. The phone items below are post
 - [ ] One registry of settings (id, value, unit, range, what it does), by module, instead of constants spread over the code: limits, times, speeds, damage, texts
 - [ ] A match takes a frozen, numbered set of settings (as it takes a seed): every client must simulate with the same
 - [ ] An admin page that edits a set live (first local, in dev; then behind a server with accounts and roles, with history and undo). Numbers of the simulation change from the next match on; looks, sounds and texts at once
+
+## One linked engine, RPG style (proposed, waits for the owner's answer)
+
+Everything that affects something else goes through the same five pieces, as data in the settings registry:
+
+- **Attributes** of a bug: a base and modifiers (health, speed, jump, damage, defence, luck)
+- **Effects**: states with a duration, stacks and rules (held, burnt, wet, sheltered, overclocked)
+- **Triggers**: "when X, do Y" (hit, box opened, turn begins), in a fixed order, so every client simulates the same
+- **Abilities**: attacks, specials, building and hiding in one format (cost, charge, limit, target, effects); limits become resources that items and levels change
+- **Progression**: what stays between matches (experience, levels, skills chosen, items kept); it enters a match at its start, like the seed
+- **Tags** (fire, electric, silk, wax, resin, metal, wet) link them: a rule looks at the tag, not at the weapon's name
+
+Order: 1 the base, the game unchanged (whole matches compared tick by tick) · 2 items, shelters, webs and shell moved over, one at a time · 3 every attack in the one format · 4 tags and the first five combinations · 5 the local settings page · 6 progression.
+
+To be decided: who evolves (recommended: the species, per player) · whether levels give power (recommended: options, not strength) · whether interactions reach one's own team (recommended: yes).
 
 ## Phase 5 · Multiplayer
 - [ ] Deterministic simulation validated across clients (same seed + same events = same map)

@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { Match, NO_INPUT, type MatchEvent, type MatchInput } from '../src/game/match';
 import { ANT, BEE, COCKROACH, SPIDER, type BugSpecies } from '../src/game/species';
-import { BURROW, SILK_SCREEN, SOLDER_BLOB, SOLDER_BRIDGE, SOLDER_WALL, WAX_CELL, WEAPONS, WORKS, type Weapon } from '../src/game/weapons';
-import { SOLDER } from '../src/terrain/materials';
+import { ANTHILL, LIVING_BRIDGE, RAMPART, SILK_CURTAIN, SOLDER_BLOB, WAX_NEST, WEAPONS, WORKS, type Weapon } from '../src/game/weapons';
+import { COLLIDER } from '../src/terrain/materials';
 import type { Terrain } from '../src/terrain/Terrain';
 import { world } from './helpers/worlds';
+import { BUILD_MODELS, buildModel } from '../src/render/gpu/buildModels';
 import { analyze, meshAll } from './helpers/meshIntegrity';
 
 const at = (w: Weapon): number => WEAPONS.indexOf(w);
@@ -37,27 +38,27 @@ function pass(m: Match): void {
 }
 
 describe('building', () => {
-  it('a wall of solder stands before the bug, once a turn, and the turn goes on with the weapon it had', () => {
+  it('a wall stands before the bug, once a turn, and the turn goes on with the weapon it had', () => {
     const t = plain();
     const m = setup(t);
     run(m, 1, { weapon: 1 });
     expect(t.sample(24, 12, 32)).toBeGreaterThan(0);
-    expect(use(m, SOLDER_WALL).some((e) => e.type === 'built')).toBe(true);
+    expect(use(m, RAMPART).some((e) => e.type === 'built')).toBe(true);
     expect(t.sample(24, 12, 32)).toBeLessThan(0);
     expect(t.sample(24, 13.5, 35)).toBeLessThan(0);
-    expect(t.material[t.idx(24, 12, 32)]).toBe(SOLDER);
+    expect(t.material[t.idx(24, 12, 32)]).toBe(COLLIDER);
     expect(m.phase).toBe('aim');
     expect(m.weapon).toBe(1);
-    expect(m.stock[0][at(SOLDER_WALL)]).toBe(1);
+    expect(m.stock[0][at(RAMPART)]).toBe(1);
     run(m, 2);
-    expect(use(m, SOLDER_WALL).some((e) => e.type === 'noRoom')).toBe(true);
-    expect(m.stock[0][at(SOLDER_WALL)]).toBe(1);
+    expect(use(m, RAMPART).some((e) => e.type === 'noRoom')).toBe(true);
+    expect(m.stock[0][at(RAMPART)]).toBe(1);
   });
 
   it('is the same for the same seed, stays watertight, and is blown away like anything', () => {
     const a = plain();
     const b = plain();
-    for (const t of [a, b]) use(setup(t), SOLDER_WALL);
+    for (const t of [a, b]) use(setup(t), RAMPART);
     expect(b.dens).toEqual(a.dens);
     expect(analyze(meshAll(a)).openEdges).toBe(0);
     a.carve(24, 12, 32, 5);
@@ -71,13 +72,13 @@ describe('building', () => {
     const e = m.units[1].bug;
     e.drop(t, 24, 32);
     run(m, 30);
-    use(m, SOLDER_WALL);
+    use(m, RAMPART);
     expect(t.sample(e.x, e.y, e.z)).toBeGreaterThan(0.8);
     const g = gap();
     const n = setup(g);
     n.units[0].bug.drop(g, 23, 32);
     run(n, 60, { faceX: 1 });
-    expect(use(n, SOLDER_WALL).some((q) => q.type === 'noRoom')).toBe(true);
+    expect(use(n, RAMPART).some((q) => q.type === 'noRoom')).toBe(true);
   });
 
   it('a bridge carries a bug over a gap it would fall into', () => {
@@ -89,7 +90,7 @@ describe('building', () => {
     const u = m.units[0];
     u.aimH = 1;
     u.aimV = 0;
-    expect(use(m, SOLDER_BRIDGE).some((e) => e.type === 'built')).toBe(true);
+    expect(use(m, LIVING_BRIDGE).some((e) => e.type === 'built')).toBe(true);
     const y = b.y;
     let low = 99;
     for (let k = 0; k < 200; k++) {
@@ -105,7 +106,7 @@ describe('limits', () => {
   it('each kind has its own, and all of them a total, for the whole match', () => {
     const m = setup(plain());
     let n = 0;
-    for (const w of [SOLDER_WALL, SOLDER_WALL, SOLDER_WALL, SOLDER_BRIDGE, BURROW, BURROW]) {
+    for (const w of [RAMPART, RAMPART, RAMPART, LIVING_BRIDGE, ANTHILL, ANTHILL]) {
       if (!m.canUse(m.activeUnit, at(w))) continue;
       m.units[0].bug.drop(m.field, 20, 8 + n * 9);
       run(m, 40, { faceX: 1 });
@@ -116,16 +117,16 @@ describe('limits', () => {
     }
     expect(m.works[0]).toBe(0);
     expect(n).toBe(WORKS);
-    expect(m.stock[0][at(SOLDER_WALL)]).toBe(0);
-    expect(m.stock[0][at(SOLDER_BRIDGE)]).toBe(1);
-    expect(m.has(m.units[0], at(SOLDER_BRIDGE))).toBe(false);
+    expect(m.stock[0][at(RAMPART)]).toBe(0);
+    expect(m.stock[0][at(LIVING_BRIDGE)]).toBe(1);
+    expect(m.has(m.units[0], at(LIVING_BRIDGE))).toBe(false);
     expect(m.works[1]).toBe(WORKS);
   });
 });
 
 describe('hiding', () => {
   it('keeps off part of every blow until it breaks or its turn comes, and it is not thrown', () => {
-    for (const [s, w] of [[ANT, BURROW], [BEE, WAX_CELL]] as const) {
+    for (const [s, w] of [[ANT, ANTHILL], [BEE, WAX_NEST]] as const) {
       const m = setup(plain(), s);
       const u = m.units[0];
       expect(use(m, w).some((e) => e.type === 'hide')).toBe(true);
@@ -135,7 +136,7 @@ describe('hiding', () => {
       expect(Math.abs(u.bug.vy)).toBe(0);
     }
     const m = setup(plain());
-    use(m, BURROW);
+    use(m, ANTHILL);
     pass(m);
     expect(m.units[0].cover).not.toBeNull();
     pass(m);
@@ -146,14 +147,14 @@ describe('hiding', () => {
   it('each species has its own', () => {
     for (const s of [ANT, BEE, COCKROACH, SPIDER]) {
       const m = setup(plain(), s);
-      expect(WEAPONS.filter((w, i) => (w.kind === 'shelter' || w.kind === 'screen') && m.has(m.units[0], i)).length).toBe(1);
+      expect(WEAPONS.filter((w, i) => w.start !== undefined && m.has(m.units[0], i)).map((w) => w.kind)).toEqual(['wall', 'bridge', 'shelter']);
     }
   });
 
-  it('a screen of silk catches two shots of the others, lets its own through, and holds who walks into it', () => {
+  it('a curtain of silk catches two shots of the others, then it is a wall like any other', () => {
     const m = setup(plain(), SPIDER);
-    use(m, SILK_SCREEN);
-    expect(m.webs.length).toBe(1);
+    expect(use(m, SILK_CURTAIN).some((e) => e.type === 'built')).toBe(true);
+    expect(m.curtains.length).toBe(1);
     pass(m);
     const shoot = (): MatchEvent[] => {
       run(m, 1, { weapon: 0, faceX: -1 });
@@ -162,15 +163,60 @@ describe('hiding', () => {
       u.aimV = 0.199;
       const charging = run(m, 89, { fire: true });
       return [...charging, ...run(m, 90)];
-
     };
-    const one = shoot();
-    expect(one.filter((e) => e.type === 'caught').length).toBe(1);
-    expect(one.some((e) => e.type === 'explosion')).toBe(false);
-    expect(m.webs.length).toBe(1);
-    pass(m);
-    pass(m);
-    expect(shoot().some((e) => e.type === 'webGone')).toBe(true);
-    expect(m.webs.length).toBe(0);
+    for (const left of [1, 0]) {
+      const e = shoot();
+      expect(e.filter((q) => q.type === 'caught').length).toBe(1);
+      expect(e.some((q) => q.type === 'explosion')).toBe(false);
+      expect(m.curtains[0]?.left ?? 0).toBe(left);
+      pass(m);
+      pass(m);
+    }
+    expect(m.curtains.length).toBe(0);
+    expect(shoot().some((q) => q.type === 'explosion')).toBe(true);
   });
+});
+
+describe('a deck is smooth', () => {
+  const rough = (): Terrain => world(5, 3, 2, (i, j, k) => j - 10 - Math.sin(i * 0.5 + k * 0.2) * 0.8 - Math.cos(k * 0.45) * 0.7);
+  it('every species walks up its bridge without a stop, over rough ground too, on it or off its middle', () => {
+    for (const s of [ANT, BEE, SPIDER, COCKROACH])
+      for (const t of [plain(), rough()])
+        for (const v of [-0.1, 0.25, 0.55])
+          for (const off of [0, 0.8]) {
+            const m = setup(t, s);
+            const u = m.units[0];
+            u.aimV = v;
+            u.aimH = Math.sqrt(1 - v * v);
+            const w = WEAPONS.find((q) => q.kind === 'bridge' && q.species === s.id) as Weapon;
+            const built = use(m, w).some((e) => e.type === 'built');
+            if (v < 0 || !built) continue;
+            const b = u.bug;
+            b.z += off;
+            const x0 = b.x;
+            let last = b.x;
+            for (let k = 0; k < 5; k++) {
+              run(m, 24, { move: 1, faceX: 1 });
+              expect(b.x - last, `${s.id} ${v} ${off} ${k} ${b.x - x0}`).toBeGreaterThan(0.5);
+              last = b.x;
+              if (b.x - x0 > 8) break;
+            }
+          }
+  });
+});
+
+describe('models', () => {
+  it('every weapon that builds or hides has one, whole and lit', () => {
+    expect([...BUILD_MODELS].sort()).toEqual(WEAPONS.filter((w) => w.start !== undefined).map((w) => w.id).sort());
+    for (const id of BUILD_MODELS) {
+      const m = buildModel(id);
+      const n = m.position.length / 3;
+      expect(m.index.length, id).toBeGreaterThan(3000);
+      expect(m.index.length / 3, id).toBeLessThan(260000);
+      expect(Math.max(...m.index.subarray(0, 9999)), id).toBeLessThan(n);
+      for (const a of [m.position, m.color, m.look]) expect(a.every(Number.isFinite), id).toBe(true);
+      // (a normal of no length makes a black screen: the bloom spreads it)
+      for (let k = 0; k < n; k++) expect(Math.hypot(m.normal[k * 3], m.normal[k * 3 + 1], m.normal[k * 3 + 2]) > 0.5 || id).toBe(true);
+    }
+  }, 30000);
 });

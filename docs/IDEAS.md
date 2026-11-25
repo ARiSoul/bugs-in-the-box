@@ -75,8 +75,7 @@ Every idea gets a prototype, one at a time, to be played and judged. Each has it
 
 In the game (the first set):
 
-- **Every bug, Solder Wall and Solder Bridge:** a wall before it, or a bridge (a ramp) along its aim; a build does not cost the shot, one a turn.
-- **Ant, Burrow:** dug in, only its head out; less damage. **Cockroach, Flatten:** pressed flat on any surface; half the damage, nothing throws it. **Bee, Wax Cell:** a clear cell of wax round it. **Spider, Silk Screen:** a web that stands up, catches two enemy shots and lets its own side's through. Hiding takes the shot's place.
+- **A wall, a bridge and a shelter of each species' own** (the first set's solder beads for all were ugly, and feet sank into them): ant Rampart, Living Bridge, Anthill; spider Silk Curtain (catches two enemy shots), Silk Span, Silk Funnel; cockroach Shield Wall, Scale Walk, Husk; bee Comb Wall, Comb Span, Wax Nest. All walls and all bridges are equally strong until tags (fire, silk, wax...) make them differ.
 
 To be prototyped:
 

@@ -28,7 +28,7 @@ export type WeaponKind =
   /** The bug hides until its next turn, in the way of its species (instead of a shot). */
   | 'shelter'
   /** A screen of silk before the bug: it catches the shots of the other teams. */
-  | 'screen';
+ ;
 
 export interface Weapon {
   readonly id: string;
@@ -256,25 +256,32 @@ export const DUD: Weapon = { ...BASE, id: 'dud', name: 'Dud', kind: 'shell', bla
 /** How much a team builds and hides in a match, all kinds together (each has its own limit too). */
 export const WORKS = 4;
 
-/** Every bug: a wall of solder beads before it. It stops shots until it is blown away. The turn goes on. */
-export const SOLDER_WALL: Weapon = { ...BASE, id: 'solder-wall', name: 'Solder Wall', kind: 'wall', found: true, start: 2, color: 0xd5dae2 };
+const WORK = { ...BASE, found: true, start: 2 } as const;
 
-/** Every bug: a bridge (or a ramp) of solder along its aim. The turn goes on. */
-export const SOLDER_BRIDGE: Weapon = { ...BASE, id: 'solder-bridge', name: 'Solder Bridge', kind: 'bridge', found: true, start: 2, color: 0xb9c6d6 };
+/**
+ * What each species builds and where it hides. Walls stop shots until they are blown away, bridges (and ramps) run along
+ * the aim; building does not end the turn. Every species' wall and bridge are the same shape (see `build.ts`); they look
+ * their own. Hiding takes the shot's place.
+ */
+export const RAMPART: Weapon = { ...WORK, id: 'rampart', name: 'Rampart', kind: 'wall', species: 'ant', color: 0xd9a85c };
+export const LIVING_BRIDGE: Weapon = { ...WORK, id: 'living-bridge', name: 'Living Bridge', kind: 'bridge', species: 'ant', color: 0xd9774a };
+export const ANTHILL: Weapon = { ...WORK, id: 'anthill', name: 'Anthill', kind: 'shelter', species: 'ant', cover: 0.65, coverHealth: 45, color: 0xc98a4a };
 
-/** Ants: dug into the ground, under a lid of crumbs. */
-export const BURROW: Weapon = { ...BASE, id: 'burrow', name: 'Burrow', kind: 'shelter', species: 'ant', found: true, start: 2, cover: 0.65, coverHealth: 45, color: 0xc98a4a };
+/** A spider's wall also catches the first CATCHES shots of the others that get to it. */
+export const SILK_CURTAIN: Weapon = { ...WORK, id: 'silk-curtain', name: 'Silk Curtain', kind: 'wall', species: 'spider', color: 0xf2f2ee };
+export const SILK_SPAN: Weapon = { ...WORK, id: 'silk-span', name: 'Silk Span', kind: 'bridge', species: 'spider', color: 0xe2e6ea };
+export const SILK_FUNNEL: Weapon = { ...WORK, id: 'silk-funnel', name: 'Silk Funnel', kind: 'shelter', species: 'spider', cover: 0.55, coverHealth: 50, color: 0xd6dce2 };
+export const CATCHES = 2;
 
-/** Cockroaches: pressed flat against what they stand on, walls and ceilings too; nothing throws them. */
-export const FLATTEN: Weapon = { ...BASE, id: 'flatten', name: 'Flatten', kind: 'shelter', species: 'cockroach', found: true, start: 2, cover: 0.5, coverHealth: 60, color: 0x9a6a3c };
+export const SHIELD_WALL: Weapon = { ...WORK, id: 'shield-wall', name: 'Shield Wall', kind: 'wall', species: 'cockroach', color: 0xe0863c };
+export const SCALE_WALK: Weapon = { ...WORK, id: 'scale-walk', name: 'Scale Walk', kind: 'bridge', species: 'cockroach', color: 0xc9702c };
+export const HUSK: Weapon = { ...WORK, id: 'husk', name: 'Husk', kind: 'shelter', species: 'cockroach', cover: 0.5, coverHealth: 60, color: 0xb8622a };
 
-/** Bees: a cell of wax round them. */
-export const WAX_CELL: Weapon = { ...BASE, id: 'wax-cell', name: 'Wax Cell', kind: 'shelter', species: 'bee', found: true, start: 2, cover: 0.6, coverHealth: 50, color: 0xffc04a };
+export const COMB_WALL: Weapon = { ...WORK, id: 'comb-wall', name: 'Comb Wall', kind: 'wall', species: 'bee', color: 0xffc04a };
+export const COMB_SPAN: Weapon = { ...WORK, id: 'comb-span', name: 'Comb Span', kind: 'bridge', species: 'bee', color: 0xffb02a };
+export const WAX_NEST: Weapon = { ...WORK, id: 'wax-nest', name: 'Wax Nest', kind: 'shelter', species: 'bee', cover: 0.6, coverHealth: 50, color: 0xffd070 };
 
-/** Spiders: a screen of strong silk before them; their own side shoots through it. */
-export const SILK_SCREEN: Weapon = { ...BASE, id: 'silk-screen', name: 'Silk Screen', kind: 'screen', species: 'spider', found: true, start: 2, webRadius: 4, webTurns: 8, color: 0xf2f2ee };
-
-export const WEAPONS: readonly Weapon[] = [SOLDER_BLOB, CAPACITOR, SHORT_CIRCUIT, SOLDERING_IRON, WEB_SHOT, WEB_BOW, ANT_COLUMN, BLACKOUT_SWARM, THERMAL_PASTE, QUEENS_FLIGHT, BURROW, FLATTEN, WAX_CELL, SILK_SCREEN, SOLDER_WALL, SOLDER_BRIDGE];
+export const WEAPONS: readonly Weapon[] = [SOLDER_BLOB, CAPACITOR, SHORT_CIRCUIT, SOLDERING_IRON, WEB_SHOT, WEB_BOW, ANT_COLUMN, BLACKOUT_SWARM, THERMAL_PASTE, QUEENS_FLIGHT, RAMPART, LIVING_BRIDGE, ANTHILL, SILK_CURTAIN, SILK_SPAN, SILK_FUNNEL, SHIELD_WALL, SCALE_WALK, HUSK, COMB_WALL, COMB_SPAN, WAX_NEST];
 
 /** Whether a bug of this species has the weapon. */
 export function hasWeapon(species: string, w: Weapon): boolean {

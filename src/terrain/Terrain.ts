@@ -1,5 +1,6 @@
 import { CHUNK, DENSITY_CLAMP } from './constants';
-import { SOLDER } from './materials';
+import { COLLIDER } from './materials';
+import { HIDDEN_CLEAR } from './sdf';
 
 /**
  * Destructible terrain stored as a grid of signed-distance-like density samples.
@@ -203,23 +204,36 @@ export class Terrain {
   }
 
   /**
-   * Add spheres (x, y, z, radius each) of solder, melted into each other a little. What is clear of them keeps its
-   * density: only samples nearer to a sphere than to what was there change. The outer shell of the world stays as it is.
+   * Add thick flat pieces with round edges (eleven numbers each: the middle, two half axes square to each other, how
+   * thick they are round them, and one not used here). Their body is hidden (COLLIDER: what is built is drawn apart, the
+   * hidden body stops shots and bugs); what was solid keeps its material. The outer shell
+   * of the world stays as it is.
    */
-  deposit(beads: readonly number[]): void {
+  deposit(pieces: readonly number[]): void {
     const { sx, sy, sz, dens, scorch, material } = this;
-    for (let q = 0; q + 3 < beads.length; q += 4) {
-      const px = beads[q];
-      const py = beads[q + 1];
-      const pz = beads[q + 2];
-      const r = beads[q + 3];
+    for (let q = 0; q + 10 < pieces.length; q += 11) {
+      const px = pieces[q];
+      const py = pieces[q + 1];
+      const pz = pieces[q + 2];
+      const ux = pieces[q + 3];
+      const uy = pieces[q + 4];
+      const uz = pieces[q + 5];
+      const vx = pieces[q + 6];
+      const vy = pieces[q + 7];
+      const vz = pieces[q + 8];
+      const r = pieces[q + 9];
+      const iu = 1 / (ux * ux + uy * uy + uz * uz);
+      const iv = 1 / (vx * vx + vy * vy + vz * vz);
       const pad = r + DENSITY_CLAMP;
-      const i0 = Math.max(1, Math.floor(px - pad));
-      const i1 = Math.min(sx - 2, Math.ceil(px + pad));
-      const j0 = Math.max(1, Math.floor(py - pad));
-      const j1 = Math.min(sy - 2, Math.ceil(py + pad));
-      const k0 = Math.max(1, Math.floor(pz - pad));
-      const k1 = Math.min(sz - 2, Math.ceil(pz + pad));
+      const ex = pad + Math.abs(ux) + Math.abs(vx);
+      const ey = pad + Math.abs(uy) + Math.abs(vy);
+      const ez = pad + Math.abs(uz) + Math.abs(vz);
+      const i0 = Math.max(1, Math.floor(px - ex));
+      const i1 = Math.min(sx - 2, Math.ceil(px + ex));
+      const j0 = Math.max(1, Math.floor(py - ey));
+      const j1 = Math.min(sy - 2, Math.ceil(py + ey));
+      const k0 = Math.max(1, Math.floor(pz - ez));
+      const k1 = Math.min(sz - 2, Math.ceil(pz + ez));
       if (i0 > i1 || j0 > j1 || k0 > k1) continue;
       for (let k = k0; k <= k1; k++)
         for (let j = j0; j <= j1; j++)
@@ -227,15 +241,23 @@ export class Terrain {
             const dx = i - px;
             const dy = j - py;
             const dz = k - pz;
-            const d = Math.sqrt(dx * dx + dy * dy + dz * dz) - r;
+            let a = (dx * ux + dy * uy + dz * uz) * iu;
+            let b = (dx * vx + dy * vy + dz * vz) * iv;
+            a = a > 1 ? 1 : a < -1 ? -1 : a;
+            b = b > 1 ? 1 : b < -1 ? -1 : b;
+            const ox = dx - ux * a - vx * b;
+            const oy = dy - uy * a - vy * b;
+            const oz = dz - uz * a - vz * b;
+            let d = Math.sqrt(ox * ox + oy * oy + oz * oz) - r;
+            // (no surface exactly on a sample, see `stamp`)
+            if (d < 1e-3 && d > -1e-3) d = d < 0 ? -1e-3 : 1e-3;
             const id = i + sx * (j + sy * k);
-            if (d >= dens[id]) continue;
-            // (what was solid keeps its own stuff: solder lies on it)
-            if (dens[id] > 0 && d < 1.2) {
-              material[id] = SOLDER;
+            // (clear samples round it too: a vertex of its body blends what all eight corners of its cell are of)
+            if (dens[id] > 0 && d < HIDDEN_CLEAR) {
+              material[id] = COLLIDER;
               scorch[id] = 0;
             }
-            dens[id] = d;
+            if (d < dens[id]) dens[id] = d;
           }
       const c0x = Math.max(0, Math.floor((i0 - 1) / CHUNK));
       const c1x = Math.min(this.cx - 1, Math.floor((i1 + 1) / CHUNK));

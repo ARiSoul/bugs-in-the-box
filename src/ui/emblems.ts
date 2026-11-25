@@ -18,18 +18,30 @@ export const ARMS: Record<string, string> = {
   'soldering-iron': '<path fill="currentColor" d="m27 14 7 7-4 4-7-7zM33 5l10 10-7 7-10-10z"/><path stroke="currentColor" stroke-width="4" stroke-linecap="round" d="M25 23 12 36"/><path fill="currentColor" d="M12 33 5 43l10-7z"/><path fill="none" stroke="currentColor" stroke-width="2.400" stroke-linecap="round" d="M6 33c-3-3 0-5-2-8M13 43c3 2 5 0 8 2"/>',
   // a smear
   'thermal-paste': '<path fill="currentColor" d="M5 37c2-9 8-8 9-15S20 9 27 12s3 9 8 11 9 4 8 14z"/><path fill="none" stroke="var(--b)" stroke-width="2.600" d="M13 32c6-5 14 3 22-3M20 23c4-3 7 0 10-2"/>',
-  // beads of solder, laid in rows
-  'solder-wall': '<g fill="currentColor"><circle cx="10" cy="37" r="7"/><circle cx="24" cy="37" r="7"/><circle cx="38" cy="37" r="7"/><circle cx="17" cy="25" r="7"/><circle cx="31" cy="25" r="7"/><circle cx="10" cy="13" r="7"/><circle cx="24" cy="13" r="7"/><circle cx="38" cy="13" r="7"/></g><path fill="none" stroke="var(--b)" stroke-width="2.2" stroke-linecap="round" d="M7 11q2-3 5-2M21 11q2-3 5-2M35 11q2-3 5-2M14 23q2-3 5-2M28 23q2-3 5-2"/>',
-  // a bridge over a gap
-  'solder-bridge': '<path fill="currentColor" d="M2 28h11v16H2zM35 28h11v16H35z"/><path fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round" stroke-dasharray=".1 7.500" d="M4 25q20-15 41 0"/>',
-  // an ant's eyes in a hole
-  burrow: '<path fill="currentColor" d="M2 36q8-17 22-17t22 17l-5 4q-6 4-17 4T7 40z"/><ellipse cx="24" cy="33" rx="13" ry="8" fill="var(--b)"/><circle cx="19" cy="33" r="3" fill="currentColor"/><circle cx="29" cy="33" r="3" fill="currentColor"/><path fill="none" stroke="currentColor" stroke-width="2.600" stroke-linecap="round" d="M19 17q-2-7-8-9M29 17q2-7 8-9"/>',
-  // pressed flat
-  flatten: '<path fill="currentColor" d="M5 36q4-11 19-11t19 11zM2 39h44v4H2z"/><path fill="none" stroke="currentColor" stroke-width="3.400" stroke-linecap="round" stroke-linejoin="round" d="M24 4v13M17 12l7 7 7-7"/>',
-  // a cell of wax
-  'wax-cell': '<path fill="currentColor" d="M24 3 42 13.500v21L24 45 6 34.500v-21z"/><path fill="var(--b)" d="M24 10.500 35.500 17v14L24 37.500 12.500 31V17z"/><path fill="currentColor" d="M18 22a6 5 0 0 1 12 0v6a6 5 0 0 1-12 0z"/><path stroke="var(--b)" stroke-width="2.400" d="M17 24h14M17 28.500h14"/>',
-  // a web that stands up and stops a shot
-  'silk-screen': '<path fill="none" stroke="currentColor" stroke-width="2.600" d="M33 4q9 20 0 40M33 4q-9 20 0 40M33 4v40M27 14h12M26 24h14M27 34h12"/><circle cx="11" cy="24" r="5" fill="currentColor"/><path fill="none" stroke="currentColor" stroke-width="2.600" stroke-linecap="round" d="M18 18l4 6-4 6"/>',
+  // splinters side by side on a bank
+  rampart: '<path fill="currentColor" d="M5 34V14l4-8 4 8v20zM14.500 34V10l4-8 4 8v24zM24 34V13l4-8 4 8v21zM33.500 34V10l4-8 5 9v23z"/><path fill="currentColor" d="M1 44q5-9 23-9t23 9z"/><path stroke="var(--b)" stroke-width="1.800" d="M9 14v16M18.500 12v18M28 14v16M38 13v17"/>',
+  // ants in a chain over a gap
+  'living-bridge': '<path fill="currentColor" d="M1 26h9v18H1zM38 26h9v18h-9z"/><g fill="currentColor"><circle cx="13" cy="22" r="3.600"/><circle cx="19" cy="19" r="2.800"/><circle cx="24" cy="18" r="3.600"/><circle cx="29" cy="19" r="2.800"/><circle cx="35" cy="22" r="3.600"/></g><path fill="none" stroke="currentColor" stroke-width="1.800" d="M11 18 8 13M16 16l-2-5M22 14l-2-6M26 14l2-6M32 16l2-5M37 18l3-5M14 26l-2 5M24 22v7M34 26l2 5"/>',
+  // a hill with a door, eyes in it
+  anthill: '<path fill="currentColor" d="M2 43q6-5 9-18Q14 6 24 6t13 19q3 13 9 18z"/><path fill="var(--b)" d="M15 43V31a9 9 0 0 1 18 0v12z"/><circle cx="20.500" cy="33" r="2.600" fill="currentColor"/><circle cx="27.500" cy="33" r="2.600" fill="currentColor"/>',
+  // a curtain between posts
+  'silk-curtain': '<path fill="currentColor" d="M3 8h4v36H3zM22 5h4v39h-4zM41 8h4v36h-4z"/><path fill="none" stroke="currentColor" stroke-width="2.200" d="M7 11q7 8 15-3M26 8q8 11 15 3M7 19q7 8 15-1M26 18q8 9 15 1M7 28q7 7 15 0M26 28q8 7 15 0M7 37q7 5 15 0M26 37q8 5 15 0M12 15v28M17 14v29M31 14v29M36 15v28"/>',
+  // a span of threads
+  'silk-span': '<path fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" d="M2 14q22 20 44 0M2 30q22 14 44 0"/><path fill="none" stroke="currentColor" stroke-width="1.800" d="M7 18v15M13 22v14M19 24v14M24 24.500v14M29 24v14M35 22v14M41 18v15M2 14v16M46 14v16"/>',
+  // a tent with a mouth, eyes in it
+  'silk-funnel': '<path fill="currentColor" d="M3 43Q6 20 12 12l3-6 3 5q6-3 12 0l3-5 3 6q6 8 9 31z"/><circle cx="24" cy="31" r="10.500" fill="var(--b)"/><circle cx="20" cy="30" r="2.800" fill="currentColor"/><circle cx="28" cy="30" r="2.800" fill="currentColor"/><path stroke="currentColor" stroke-width="1.600" d="M2 43h44"/>',
+  // shields, each over the next
+  'shield-wall': '<g fill="currentColor" stroke="var(--b)" stroke-width="1.800"><ellipse cx="11" cy="33" rx="9" ry="12"/><ellipse cx="24" cy="33" rx="9" ry="12"/><ellipse cx="37" cy="33" rx="9" ry="12"/><ellipse cx="17.500" cy="16" rx="9" ry="12"/><ellipse cx="30.500" cy="16" rx="9" ry="12"/></g><g fill="var(--b)"><circle cx="14.500" cy="13" r="1.900"/><circle cx="20.500" cy="13" r="1.900"/><circle cx="27.500" cy="13" r="1.900"/><circle cx="33.500" cy="13" r="1.900"/></g>',
+  // plates of a back, legs under them
+  'scale-walk': '<path fill="currentColor" d="M3 18h8l1 12H2zM12.500 16h8l1 13h-9zM22 15h8l1 13h-9zM31.500 16h8l1 13h-9zM41 18h5l1 12h-6z"/><path fill="none" stroke="currentColor" stroke-width="2.200" stroke-linecap="round" d="M9 31l-3 5 3 6M18 31l-2 5 3 6M28 31l2 5-3 6M38 31l3 5-3 6"/>',
+  // a husk, eyes under it
+  husk: '<path fill="currentColor" d="M2 41Q4 12 24 10q20 2 22 31h-8q-2-11-14-11T10 41z"/><path fill="none" stroke="var(--b)" stroke-width="2" d="M6 28q18-13 36 0M10 20q14-9 28 0"/><circle cx="20" cy="38" r="3" fill="currentColor"/><circle cx="28" cy="38" r="3" fill="currentColor"/><path fill="none" stroke="currentColor" stroke-width="1.800" d="M18 11Q14 4 6 4M30 11q4-7 12-7"/>',
+  // cells of a comb
+  'comb-wall': '<path fill="currentColor" d="M14 4l8 4.600v9.300l-8 4.600-8-4.600V8.600zM34 4l8 4.600v9.300l-8 4.600-8-4.600V8.600zM24 22l8 4.600v9.300L24 40.500l-8-4.600v-9.300z"/><path fill="var(--b)" d="M34 8l4.500 2.600v5.200L34 18.400l-4.500-2.600v-5.200z"/>',
+  // an arch of comb
+  'comb-span': '<path fill="currentColor" d="M2 14h44v26h-7q-1-13-15-13T9 40H2z"/><path fill="var(--b)" d="M9 18.500l3-1.700 3 1.700V22l-3 1.700L9 22zM18 18.500l3-1.700 3 1.700V22l-3 1.700-3-1.700zM27 18.500l3-1.700 3 1.700V22l-3 1.700-3-1.700zM36 18.500l3-1.700 3 1.700V22l-3 1.700-3-1.700z"/>',
+  // a nest with a door
+  'wax-nest': '<path fill="currentColor" d="M3 43Q1 8 24 6q23 2 21 37z"/><path fill="var(--b)" d="M24 19l10 5.800v11.500L24 42l-10-5.700V24.800z"/><circle cx="20.500" cy="31" r="2.600" fill="currentColor"/><circle cx="27.500" cy="31" r="2.600" fill="currentColor"/><path fill="none" stroke="var(--b)" stroke-width="1.600" d="M24 7v8M14 11l3 6M34 11l-3 6M7 24l6 2M41 24l-6 2"/>',
   // a web
   'web-shot': '<path fill="none" stroke="currentColor" stroke-width="2.600" d="M24 4v40M4 24h40M10 10l28 28M38 10 10 38"/><path fill="none" stroke="currentColor" stroke-width="2.600" d="M24 12 33 15 36 24 33 33 24 36 15 33 12 24 15 15z"/><circle cx="24" cy="24" r="4.500" fill="currentColor"/>',
 };

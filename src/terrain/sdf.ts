@@ -232,7 +232,7 @@ function shapeBounds(s: Shape): void {
 /** A surface sample takes the material of the shape that owns the surface within this distance. */
 const MATERIAL_BAND = 1.5;
 /** A hidden solid only marks samples at least this far from any surface (see `addHidden`). */
-const HIDDEN_CLEAR = 1.2;
+export const HIDDEN_CLEAR = 1.2;
 /** Smallest |density| a stamp writes (see `stamp`). */
 const ZERO_GAP = 0.01;
 

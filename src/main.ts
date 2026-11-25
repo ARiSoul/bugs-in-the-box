@@ -94,7 +94,7 @@ const projectiles = new ProjectileViews(stage.scene);
 const aim = new AimView(stage.scene);
 const webViews = new WebViews(stage.scene);
 const itemViews = new ItemViews(stage.scene);
-const buildViews = new BuildViews(stage.scene, terrain);
+const buildViews = new BuildViews(stage.scene);
 const bow = new BowScene(stage.scene, stage.fx);
 const antColumn = new ColumnScene(stage.scene, stage.fx, bow.light, bow.targetLight);
 const brood = new BroodScene(stage.scene, stage.fx, bow.light);
@@ -211,7 +211,7 @@ function newTeams(s: number, turns = 0): void {
   bestHit = 0;
   webViews.clear();
   itemViews.clear();
-  buildViews.clear();
+  buildViews.clear(match.teams.map((t) => t.species.id));
   bow.clear();
   antColumn.clear();
   brood.clear();
@@ -406,9 +406,7 @@ const controls = new Controls(window, (code) => {
   if (code === 'KeyN') newMatch(seed);
   else if (code === 'KeyM') soundMenu.toggle();
 });
-const slotsOf = (i: number): boolean => match.has(match.activeUnit, i);
-// (as the hand shows them: the special attack last)
-controls.weaponSlots = () => [...WEAPONS.keys()].filter(slotsOf).sort((a, b) => Math.sign(WEAPONS[a].sceneTicks) - Math.sign(WEAPONS[b].sceneTicks));
+controls.pickSlot = (n) => hud.pick(n);
 controls.bindButtons(hud.pad);
 setupKeysMenu(controls);
 if (hooks.fly) {
@@ -1195,7 +1193,7 @@ function frame(now: number): void {
   }
   placeSight();
   itemViews.update(match, scaled, now / 1000);
-  buildViews.update(match, bugViews.map((v) => v.view), ground, !brain() && !debugCamera && !inMenu && !menus.over, scaled, now / 1000);
+  buildViews.update(match, bugViews.map((v) => v.view), !brain() && !debugCamera && !inMenu && !menus.over, scaled, now / 1000);
   webViews.update(match, ground, (i, out) => out.copy(bugViews[i].view.root.position), now);
   const active = bugViews[match.active];
   aim.update(match, active.view.root.position, active.height, now, stage.camera.position.distanceTo(active.view.root.position));

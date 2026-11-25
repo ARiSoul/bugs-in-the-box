@@ -115,14 +115,12 @@ export class BugView {
   hover = false;
   /** Its legs trail (0..1), while it hangs in the air. */
   trail = 0;
-  /** It hides (0 or 1, eased): down in a hole, pressed flat, curled up. And where its body would be if it did not. */
-  sunk = 0;
-  flat = 0;
-  curled = 0;
+  /** It sits in a shelter: how far forward in it, how large (its radius); and where its body would be if it did not. */
+  seated = false;
+  seatOut = 0;
+  seatSize = 1;
   readonly restPoint = new THREE.Vector3();
-  private sunkNow = 0;
-  private flatNow = 0;
-  private curledNow = 0;
+  private seatNow = 0;
   private heldNow = 0;
   /** The head's middle and radius, and the eyes' material (for what a special attack adds to them). */
   readonly headAt = new THREE.Vector3();
@@ -409,35 +407,23 @@ export class BugView {
       for (const leg of this.legs) leg.pivot.rotation.z += leg.side * (0.75 + 0.3 * Math.sin(this.fight * 21 + leg.offset)) * this.tumble;
     }
     if (this.cases.length > 0) this.moveArmour(dt);
-    if (this.flatNow > 0.005) for (const leg of this.legs) leg.pivot.rotation.z -= leg.side * 0.42 * this.flatNow;
-    if (this.curledNow > 0.005)
-      for (const leg of this.legs) {
-        leg.pivot.rotation.z += leg.side * 0.5 * this.curledNow;
-        leg.pivot.rotation.y += leg.side * Math.sign(leg.foot.z || 1) * -0.35 * this.curledNow;
-      }
     if (this.pose.weight > 0.001) this.stand(ground);
     else if (this.posed) this.unpose();
   }
 
   /** Into its shelter, or out of it. */
   private settleIn(dt: number): void {
+    const was = this.seatNow;
+    this.seatNow += ((this.seated ? 1 : 0) - this.seatNow) * (1 - Math.exp(-dt * 7));
+    if (this.seatNow < 0.005) {
+      if (was >= 0.005) this.root.scale.setScalar(1);
+      this.seatNow = this.seated ? this.seatNow : 0;
+      return;
+    }
     const r = this.species.radius;
-    const e = 1 - Math.exp(-dt * 7);
-    this.sunkNow += (this.sunk - this.sunkNow) * e;
-    this.flatNow += (this.flat - this.flatNow) * e;
-    this.curledNow += (this.curled - this.curledNow) * e;
-    if (this.sunkNow > 0.005) {
-      // (its tail down the hole, its head at the rim)
-      this.root.position.addScaledVector(this.up, -1.32 * r * this.sunkNow).addScaledVector(this.fwd, 0.35 * r * this.sunkNow);
-      this.roll.setFromEuler(this.wild.set(-0.62 * this.sunkNow, 0, 0));
-      this.root.quaternion.multiply(this.roll);
-    }
-    if (this.curledNow > 0.005) this.root.position.addScaledVector(this.up, -0.12 * r * this.curledNow);
-    const flat = 1 - 0.55 * this.flatNow;
-    if (this.flatNow > 0.005 || this.torso.scale.y !== 1) {
-      this.torso.scale.set(1 + 0.32 * this.flatNow, this.flatNow > 0.005 ? flat : 1, 1 + 0.1 * this.flatNow);
-      this.root.position.addScaledVector(this.up, -0.42 * r * this.flatNow);
-    }
+    const size = 1 - (1 - this.seatSize) * this.seatNow;
+    this.root.scale.setScalar(size);
+    this.root.position.addScaledVector(this.up, -(1 - size) * r).addScaledVector(this.fwd, this.seatOut * r * this.seatNow);
   }
 
   private readonly wild = new THREE.Euler();

@@ -1,5 +1,5 @@
 import { CHUNK } from './constants';
-import { MATERIAL_PBR } from './materials';
+import { COLLIDER, MATERIAL_PBR } from './materials';
 import { shadeNoise, shadeVertex, shadeWithNoise } from './shading';
 import type { Terrain } from './Terrain';
 
@@ -255,9 +255,17 @@ export class ChunkMesher {
         let g = 0;
         let b = 0;
         let wsum = 0;
+        // (what is hidden depends on the solid corners alone: an air corner marked as a hidden body's never hides a floor
+        // beside it, nor an air corner that is not shows the body)
+        let hides = false;
+        for (let c = 0; c < 8 && !hides; c++) {
+          const ci = c0 + (c & 1) + (c & 2 ? sx : 0) + (c & 4 ? sk : 0);
+          hides = dens[ci] < 0 && material[ci] === COLLIDER;
+        }
         for (let c = 0; c < 8; c++) {
           const ci = c0 + (c & 1) + (c & 2 ? sx : 0) + (c & 4 ? sk : 0);
-          const w = (c & 1 ? fx : 1 - fx) * (c & 2 ? fy : 1 - fy) * (c & 4 ? fz : 1 - fz) * (dens[ci] < 0 ? 1 : 0.3) + 1e-6;
+          const air = hides || material[ci] === COLLIDER ? 0 : 0.3;
+          const w = (c & 1 ? fx : 1 - fx) * (c & 2 ? fy : 1 - fy) * (c & 4 ? fz : 1 - fz) * (dens[ci] < 0 ? 1 : air) + 1e-6;
           const cm = material[ci];
           shadeWithNoise(tc, 0, n, vnrm[l3 + 1], burn, cm);
           r += tc[0] * w;

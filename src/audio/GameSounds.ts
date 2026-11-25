@@ -2,6 +2,7 @@ import { KILL_Y, TICK_RATE } from '../game/bug';
 import type { Match, MatchEvent } from '../game/match';
 import type { MusicEngine, MusicMood } from './MusicEngine';
 import type { LoopSound, SoundEngine } from './SoundEngine';
+import { WEAPONS } from '../game/weapons';
 import { SOUNDS, type SoundId } from './sounds';
 
 /** How far a bug walks between two steps that are heard, and at which fall speed a landing is. */
@@ -168,8 +169,7 @@ export class GameSounds {
           engine.play('pour', { at, scene: true, rate: 0.8 });
         } else if (kind === 'flock') engine.play('beesOut', { at, scene: true, rate: 1.2 });
         else if (kind === 'web') engine.play('spit', { at });
-        else if (kind === 'screen') break;
-        else if (kind === 'shelter') engine.play(e.weapon === 'wax-cell' ? 'wax' : 'burrow', { at, rate: e.weapon === 'flatten' ? 1.5 : 1, level: e.weapon === 'flatten' ? 0.5 : 1 });
+        else if (kind === 'shelter') this.works(e.weapon, at);
         else if (e.weapon === 'short-circuit') engine.play('spark', { at });
         else if (kind !== 'tunnel') engine.play('lob', { at, rate: kind === 'grenade' ? 0.85 : 1 });
         break;
@@ -208,7 +208,7 @@ export class GameSounds {
         }
         break;
       case 'built':
-        engine.play('solder', { at: match.units[e.unit].bug });
+        this.works(e.weapon, match.units[e.unit].bug);
         break;
       case 'noRoom':
         engine.play('noRoom');
@@ -286,6 +286,15 @@ export class GameSounds {
   }
 
   /** What was hurt this tick: a blow for each, harder the more it lost; the last blow rings out. */
+  /** What a bug builds of, as it is put up. */
+  private works(weapon: string, at: { x: number; y: number; z: number }): void {
+    const species = WEAPONS.find((w) => w.id === weapon)?.species;
+    if (species === 'bee') this.engine.play('wax', { at });
+    else if (species === 'spider') this.engine.play('thread', { at, rate: 0.7, level: 1.4 });
+    else if (species === 'cockroach') this.engine.play('shellCrack', { at, rate: 0.7, level: 0.6 });
+    else this.engine.play('burrow', { at });
+  }
+
   private impact(match: Match, scene = false): void {
     for (const e of match.events) {
       if (e.type !== 'damage') continue;
