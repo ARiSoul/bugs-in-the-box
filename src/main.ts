@@ -126,8 +126,16 @@ const inScene = (): BowScene | ColumnScene | BroodScene | FlockScene | null => (
 /** What hides the bug is seen through; or (as it was) the camera moves out of the way. The player's choice. */
 const seeThrough = new SeeThrough();
 const CAMERA = 'bugs-in-the-box.camera';
+/** How far along the aim the view is kept free. */
+const AHEAD = 14;
+const aimAt = new Float64Array(3);
+const lookAhead = new THREE.Vector3();
 const placing = new Placing();
-const places = (): boolean => !brain() && !debugCamera && !menus.setup && !menus.over && match.phase === 'aim' && !match.going && match.activeUnit.bug.alive && Placing.takes(match.currentWeapon);
+/** Time for reading: the clock stands still while the inventory is open on a player's turn; so much a turn, so much a match. */
+const READ_TURN = 20;
+const READ_MATCH = 90;
+const reading = { turn: READ_TURN, match: [READ_MATCH, READ_MATCH], key: '', on: false };
+const places = (): boolean => !reading.on && !brain() && !debugCamera && !menus.setup && !menus.over && match.phase === 'aim' && !match.going && match.activeUnit.bug.alive && Placing.takes(match.currentWeapon);
 /** The player marks a spot for a brood. */
 const marking = (): boolean => !brain() && match.stance && match.phase === 'aim' && match.currentWeapon.kind === 'brood' && brood.camera.active;
 const follow = new FollowCamera(stage.camera, stage.controls);
@@ -239,6 +247,8 @@ function newTeams(s: number, turns = 0): void {
     return { view, face, wing: 0, blink: 1 + Math.random() * 4, label, height: u.bug.species.radius * 2.4 };
   });
   bestHit = 0;
+  reading.match = [READ_MATCH, READ_MATCH];
+  reading.key = '';
   webViews.clear();
   itemViews.clear();
   buildViews.clear(match.teams.map((t) => t.species.id));
@@ -456,7 +466,7 @@ const soundMenu = new SoundMenu(sound);
 const controls = new Controls(window, (code) => {
   if (code === 'KeyN') newMatch(seed);
   else if (code === 'KeyM') soundMenu.toggle();
-  else if (code === 'KeyI') inventory.toggle();
+  else if (code === 'KeyI' || code === 'KeyP') inventory.toggle();
   else if (code === 'KeyV') setCamera(!follow.stays);
 });
 controls.pickSlot = (n) => hud.pick(n);
@@ -1241,7 +1251,21 @@ function frame(now: number): void {
   let faced = false;
   // (a special attack slows the match for a moment: the same ticks, later)
   const scaled = dt * Math.min(bow.timeScale, antColumn.timeScale, brood.timeScale, flock.timeScale);
-  if (!inMenu) accumulator += scaled;
+  // (reading: time stands still)
+  const readKey = `${match.turnNumber}|${match.active}`;
+  if (reading.key !== readKey) {
+    reading.key = readKey;
+    reading.turn = READ_TURN;
+  }
+  const team = match.activeUnit.team;
+  reading.on = inventory.isOpen && !brain() && !inMenu && !menus.over && match.phase === 'aim' && !inScene() && reading.turn > 0 && reading.match[team] > 0;
+  if (reading.on) {
+    reading.turn -= dt;
+    reading.match[team] -= dt;
+  }
+  controls.frozen = inventory.locked = reading.on;
+  hud.reading(reading.on ? Math.min(reading.turn, reading.match[team]) : -1, inventory.isOpen && match.phase === 'aim' && !brain() && !reading.on);
+  if (!inMenu && !reading.on) accumulator += scaled;
   while (accumulator >= DT) {
     prevTurns = match.turntableTurns;
     // a debug camera (or the intro) owns the view: the match keeps running without input
@@ -1381,7 +1405,19 @@ function frame(now: number): void {
     stage.controls.update();
     follow.avoid(terrain, dt);
   }
-  seeThrough.update(stage.controls.target, follow.stays && !debugCamera && !inMenu && !intro && !inScene() && !menus.over && follow.hides(terrain), dt);
+  {
+    // (the way to where the aim goes is kept free too, and all of it is wider looking up)
+    const u = match.activeUnit;
+    match.aimDirection(u, aimAt);
+    const t = stage.controls.target;
+    lookAhead.set(t.x + aimAt[0] * AHEAD, t.y + aimAt[1] * AHEAD, t.z + aimAt[2] * AHEAD);
+    const c = stage.camera.position;
+    const d = c.distanceTo(t) || 1;
+    const up = Math.max(0, (t.y - c.y) / d + Math.max(0, aimAt[1]) * 0.5);
+    const playing = follow.stays && !debugCamera && !inMenu && !intro && !inScene() && !menus.over;
+    const aheadHidden = playing && match.phase === 'aim' && terrain.raycast(c.x, c.y, c.z, lookAhead.x - c.x, lookAhead.y - c.y, lookAhead.z - c.z, c.distanceTo(lookAhead) - 1) >= 0 && terrain.sample(c.x, c.y, c.z) < 3;
+    seeThrough.update(t, lookAhead, up, playing && (follow.hides(terrain) || aheadHidden), dt);
+  }
   wasSpecial = inScene() !== null;
   bowState.active = bow.camera.active;
   bowState.hitFor = bow.hitFor;

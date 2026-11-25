@@ -128,20 +128,26 @@ describe('boxes', () => {
       put(m, kind, b.x + 1, b.y, b.z);
       m.step(NO_INPUT);
     };
+    // (of use now: at once; of none now: kept)
     b.health = 40;
+    open('patch');
+    expect(b.health).toBeGreaterThan(70);
+    expect(m.bag[0]).toEqual({});
+    b.health = b.species.health;
     open('patch');
     open('patch');
     open('fuse');
+    expect(m.units[0].fuse).toBe(true);
+    open('fuse');
     expect(m.bag[0]).toEqual({ patch: 2, fuse: 1 });
-    expect(b.health).toBe(40);
     // (no space: at once)
-    open('spring');
-    expect(b.leap).toBeGreaterThan(1.3);
+    open('magnet');
+    expect(m.bag[0].magnet).toBeUndefined();
+    b.health = 40;
     m.step({ ...NO_INPUT, item: ITEM_KINDS.indexOf('patch') });
     expect(m.events.some((e) => e.type === 'use' && e.kind === 'patch')).toBe(true);
     expect(b.health).toBeGreaterThan(70);
-    m.step({ ...NO_INPUT, item: ITEM_KINDS.indexOf('fuse') });
-    expect(m.units[0].fuse).toBe(false);
+    m.step({ ...NO_INPUT, item: ITEM_KINDS.indexOf('patch') });
     expect(m.bag[0]).toEqual({ patch: 1, fuse: 1 });
   });
 

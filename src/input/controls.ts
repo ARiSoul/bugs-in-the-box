@@ -67,6 +67,8 @@ export class Controls {
   faced = false;
   /** False while a menu has the keyboard. */
   enabled = true;
+  /** Time stands still for reading: no key does anything to the match (the others still reach the game). */
+  frozen = false;
   /** Set while the menu waits for a key to bind: the next key press goes there instead of the game. */
   private capture: ((code: string) => void) | null = null;
   private readonly out: MatchInput = { move: 0, turn: 0, faceX: 0, faceZ: 0, jump: false, run: false, aim: 0, fire: false, weapon: -1 };
@@ -210,6 +212,7 @@ export class Controls {
   }
 
   press(code: string): void {
+    if (this.frozen) return;
     this.held.add(code);
     if (this.keys.jump.includes(code)) this.jumpQueued = true;
     const w = WEAPON_KEYS.indexOf(code);

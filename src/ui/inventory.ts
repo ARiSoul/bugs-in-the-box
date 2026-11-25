@@ -119,8 +119,15 @@ export class Inventory {
     if (a) this.act(a);
   }
 
+  /** Time stands still: one may look, and arrange the slots, but not use anything. */
+  locked = false;
+
+  get isOpen(): boolean {
+    return this.open;
+  }
+
   private act(a: Action): void {
-    if (!this.match || !this.unit) return;
+    if (!this.match || !this.unit || this.locked) return;
     if (a.item) this.use.item(a);
     else if (this.match.weapon === a.weapon) this.use.drop();
     else this.use.weapon(a.weapon);

@@ -1,5 +1,5 @@
 import * as THREE from 'three/webgpu';
-import { Fn, If, bool, cameraPosition, clamp, float, fract, frontFacing, length, mix, positionWorld, screenCoordinate, smoothstep, uniform } from 'three/tsl';
+import { Fn, If, bool, cameraPosition, clamp, float, fract, frontFacing, length, max, mix, positionWorld, screenCoordinate, smoothstep, step, uniform } from 'three/tsl';
 
 type F = THREE.Node<'float'>;
 type B = THREE.Node<'bool'>;
@@ -16,6 +16,9 @@ const LEFT = 0.08;
 const PITCH = 9;
 /** Seconds to fade. */
 const FADE = 0.16;
+/** Looking straight up, it is this much wider again; round where the aim goes. */
+const UP_WIDER = 2.2;
+const AHEAD_ROUND = 4;
 
 /**
  * What stands between the camera and a bug is drawn as thin lines, so the bug is seen through it and one still knows that
@@ -24,6 +27,9 @@ const FADE = 0.16;
 export class SeeThrough {
   private readonly at = uniform(new THREE.Vector3());
   private readonly amount = uniform(0);
+  /** Where the aim goes (a way kept free to it too), and how much wider all of it is (looking up from under something). */
+  private readonly ahead = uniform(new THREE.Vector3());
+  private readonly wider = uniform(1);
   /** Something is seen through now. */
   get on(): boolean {
     return this.amount.value > 0.3;
@@ -33,9 +39,11 @@ export class SeeThrough {
   private readonly masks = new Map<THREE.Node | null, B>();
   private readonly whole = bool(true) as unknown as B;
 
-  /** Follow: where the bug is, and whether something is in the way of it. */
-  update(point: THREE.Vector3, hidden: boolean, dt: number): void {
+  /** Follow: where the bug is, where its aim goes, how far up the view looks (0..1), whether something is in the way. */
+  update(point: THREE.Vector3, ahead: THREE.Vector3, up: number, hidden: boolean, dt: number): void {
     this.at.value.copy(point);
+    this.ahead.value.copy(ahead);
+    this.wider.value += (1 + UP_WIDER * Math.max(0, up) - this.wider.value) * (1 - Math.exp(-dt / FADE));
     const k = 1 - Math.exp(-dt / FADE);
     this.amount.value += ((hidden ? 1 : 0) - this.amount.value) * k;
     if (!hidden && this.amount.value < 0.003) this.amount.value = 0;
@@ -62,25 +70,29 @@ export class SeeThrough {
     m.needsUpdate = true;
   }
 
+  /** How open a fragment is on the way from the camera to `to` (0..1), with a way this wide round `to`. */
+  private open(to: THREE.Node<'vec3'>, round: number): F {
+    const way = to.sub(cameraPosition);
+    const far = length(way);
+    const dir = way.div(far);
+    const rel = positionWorld.sub(cameraPosition);
+    const along = rel.dot(dir);
+    const before = far.sub(along) as unknown as F;
+    const off = length(rel.sub(dir.mul(along)));
+    const wide = clamp(before.mul(WIDER).add(round), 0, WIDEST).mul(this.wider);
+    // (a back that faces the camera: it is inside of something, or under the ground)
+    const back = frontFacing.select(float(0), float(1)) as unknown as F;
+    const o = clamp(smoothstep(wide, wide.mul(0.62), off).add(back.mul(smoothstep(wide.mul(2.4), wide.mul(1.4), off))), 0, 1);
+    return o.mul(step(BEFORE, before)) as unknown as F;
+  }
+
   private mask(was: B | null): B {
     return Fn(() => {
       const keep = (was ?? bool(true)).toVar();
       If(this.amount.greaterThan(0.01), () => {
-        const way = this.at.sub(cameraPosition);
-        const far = length(way);
-        const dir = way.div(far);
-        const rel = positionWorld.sub(cameraPosition);
-        const along = rel.dot(dir);
-        const before = far.sub(along) as unknown as F;
-        If(before.greaterThan(BEFORE), () => {
-          const off = length(rel.sub(dir.mul(along)));
-          const wide = clamp(before.mul(WIDER).add(ROUND), 0, WIDEST);
-          // (a back that faces the camera: it is inside of something, or under the ground)
-          const back = frontFacing.select(float(0), float(1)) as unknown as F;
-          const open = clamp(smoothstep(wide, wide.mul(0.62), off).add(back.mul(smoothstep(wide.mul(2.4), wide.mul(1.4), off))), 0, 1).mul(this.amount);
-          const line = fract(screenCoordinate.x.add(screenCoordinate.y).div(PITCH));
-          keep.assign(keep.and(line.lessThan(mix(float(1.01), float(LEFT), open))));
-        });
+        const open = max(this.open(this.at as unknown as THREE.Node<'vec3'>, ROUND), this.open(this.ahead as unknown as THREE.Node<'vec3'>, AHEAD_ROUND)).mul(this.amount);
+        const line = fract(screenCoordinate.x.add(screenCoordinate.y).div(PITCH));
+        keep.assign(keep.and(line.lessThan(mix(float(1.01), float(LEFT), open))));
       });
       return keep;
     })() as unknown as B;

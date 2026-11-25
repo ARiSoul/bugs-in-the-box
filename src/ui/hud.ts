@@ -88,6 +88,7 @@ export class Hud {
   private readonly banner = el('banner');
   private readonly root = el('hud');
   private readonly clock = make('clock', '<div class="digits"></div><small></small>');
+  private readonly read = make('read');
   private readonly wind = make('wind', '<span>Wind</span><i><svg viewBox="-24 -24 48 48"><path d="M18 0L2 -14V-5.5H-17L-13 0L-17 5.5H2V14Z"/></svg></i><div class="force"><u></u><u></u><u></u><u></u><u></u></div>');
   private readonly call = make('call');
   /** What turned up, or was found, on the map. */
@@ -112,7 +113,7 @@ export class Hud {
     this.flock.id = 'flock';
     this.flock.innerHTML = `<div class="cells">${'<i></i>'.repeat(RINGS)}<em></em></div><div class="fuel"><svg viewBox="0 0 24 24"><path d="M12 1l9.5 5.5v11L12 23l-9.5-5.5v-11z"/></svg><u><b></b></u></div><p></p>`;
     document.body.append(this.flock);
-    this.root.append(this.clock, this.wind, this.call, this.news, this.deck);
+    this.root.append(this.read, this.clock, this.wind, this.call, this.news, this.deck);
   }
 
   /** Frame rate and frame-time spread over the last `count` frame times (ms). */
@@ -205,6 +206,15 @@ export class Hud {
     this.news.append(line);
     while (this.news.children.length > 3) this.news.firstElementChild?.remove();
     setTimeout(() => line.remove(), 3600);
+  }
+
+  /** Time stands still for reading (seconds of it left; -1: it does not), or the time for it is up. */
+  reading(left: number, spent: boolean): void {
+    this.set('read', () => {
+      this.read.className = left >= 0 ? 'read on' : spent ? 'read spent' : 'read';
+      document.body.classList.toggle('reading', left >= 0);
+      this.read.innerHTML = left >= 0 ? `<b>Paused</b> reading · ${Math.ceil(left)} s` : spent ? '<b>Reading time is up</b> the clock runs' : '';
+    }, `${Math.ceil(left)}|${spent}`);
   }
 
   /** A box sets out. */

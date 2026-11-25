@@ -75,6 +75,12 @@ Order: 1 the base, the game unchanged (whole matches compared tick by tick) · 2
 
 To be decided: who evolves (recommended: the species, per player) · whether levels give power (recommended: options, not strength) · whether interactions reach one's own team (recommended: yes).
 
+## Backlog (from playing)
+
+- [ ] **Burst** (every species, a few times a match): it throws itself through the air much faster for a few seconds; for escapes
+- [ ] **Mini-map**: the bugs by team; it opens perks for later (a ghost that does not show on it, and the like)
+- [ ] Reading time over the network: the pause is an event of the match's, with its limits
+
 ## Phase 5 · Multiplayer
 - [ ] Deterministic simulation validated across clients (same seed + same events = same map)
 - [ ] Turn-based room server; map sharing by seed/link

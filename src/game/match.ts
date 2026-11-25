@@ -2061,7 +2061,7 @@ export class Match {
     this.items.remove(it);
     this.tally[u.team].boxes++;
     this.heal(u, this.passive(u.team, 'nectar'));
-    const kept = this.keeps(u.team, it.kind);
+    const kept = this.keeps(u, it.kind);
     // (the event first: what it does may end the turn, or the bug)
     const e = { type: 'open' as const, unit: u.id, kind: it.kind, x: it.x, y: it.y, z: it.z, id: it.id, gain: 0, kept };
     this.events.push(e);
@@ -2069,12 +2069,32 @@ export class Match {
     else e.gain = this.effect(u, it.kind, it.x, it.y, it.z);
   }
 
-  /** Whether the team keeps what it found: one of those that are, and there is a space for it. */
-  private keeps(team: number, kind: ItemKind): boolean {
-    if (!KEPT.includes(kind)) return false;
+  /** Whether the team keeps what it found: one of those that are, of no use right now, and there is a space for it. */
+  private keeps(u: Unit, kind: ItemKind): boolean {
+    if (!KEPT.includes(kind) || this.wantsNow(u, kind)) return false;
+    const team = u.team;
     const bag = this.bag[team];
     const taken = KEPT.filter((k) => (bag[k] ?? 0) > 0).length + (this.stock[team][PASTE] > 0 ? 1 : 0);
     return (bag[kind] ?? 0) > 0 || taken < this.spaces(team);
+  }
+
+  /** What a box holds is of use to who opened it right now (then it takes effect at once). */
+  private wantsNow(u: Unit, kind: ItemKind): boolean {
+    const b = u.bug;
+    switch (kind) {
+      case 'patch':
+        return b.health < b.species.health;
+      case 'crystal':
+        return u === this.units[this.active] && this.phase === 'aim';
+      case 'fuse':
+        return !u.fuse;
+      case 'overclock':
+        return !u.boost;
+      case 'spring':
+        return u.spring === 0;
+      default:
+        return false;
+    }
   }
 
   /** Use an item the team keeps: one a turn. */
