@@ -45,7 +45,7 @@ const WINDS: [number, string][] = [[0, 'Off'], [0.5, 'Breeze'], [1, 'Windy'], [1
 const ABOUT: Record<string, [string, string, string]> = {
   ant: ['Tough. Never alone.', 'The most health of all', 'March a column of workers at them'],
   spider: ['Patient. Hard to corner.', 'Web Shot, and hangs by a thread', 'Draw a bow of silk, let the dart fly'],
-  bee: ['Sweet. Until it is not.', 'Flies: 3 seconds a turn', 'Not yet: it is still young'],
+  bee: ['Sweet. Until it is not.', 'Flies: 3 seconds a turn', 'Dance, then fly the swarm yourself'],
   cockroach: ['Fast. Refuses to die.', 'Hard Shell: outlives one blow', 'Kill the lights, send in the brood'],
 };
 /** A line for each device, and its colour. */

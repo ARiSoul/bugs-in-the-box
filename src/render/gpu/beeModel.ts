@@ -716,7 +716,7 @@ export function dressBee(view: BugView, side: number): Face {
   }
   lip.unshift(onSnout(-0.163, smile(0.152) + 0.026, 0.004), onSnout(-0.16, smile(0.152) + 0.012, 0.013));
   lip.push(onSnout(0.16, smile(0.152) + 0.012, 0.013), onSnout(0.163, smile(0.152) + 0.026, 0.004));
-  add(head, tube(lip, (u) => 0.0004 + 0.0072 * Math.sin(Math.PI * u) ** 0.9, 64, 8), P.mouth, undefined, false);
+  const lipLine = add(head, tube(lip, (u) => 0.0004 + 0.0072 * Math.sin(Math.PI * u) ** 0.9, 64, 8), P.mouth, undefined, false);
   // (a fold of the cheek at each end)
   const jaw = new THREE.Group();
   head.add(jaw);
@@ -729,6 +729,8 @@ export function dressBee(view: BugView, side: number): Face {
   add(jaw, cavity, P.mouth, undefined, false);
   add(jaw, shape(new THREE.CircleGeometry(0.04, 28), (p) => p.copy(onSnout(p.x * 1.35, smile(0) - 0.052 + p.y * 0.5, 0.0325))), P.tongue, undefined, false);
   jaw.visible = false;
+  const oh = add(head, shape(new THREE.CircleGeometry(1, 40), (p) => p.copy(onSnout(p.x * 0.07, smile(0) - 0.03 + p.y * 0.085, 0.036))), P.mouth, undefined, false);
+  oh.visible = false;
   // ---- feelers: a socket, a long joint, ten beads, a slim club
   const feelers: THREE.Group[] = [];
   for (const x of [-1, 1]) {
@@ -823,6 +825,7 @@ export function dressBee(view: BugView, side: number): Face {
 
   view.root.traverse((o) => (o.userData.bug = view));
   let close = -1;
+  let raised = 0;
   return {
     near(on, distance = on ? 0 : 99) {
       // (a thinner coat the farther it is)
@@ -851,10 +854,16 @@ export function dressBee(view: BugView, side: number): Face {
       jaw.position.y = (1 - jaw.scale.y) * (SMILE_Y + smile(0));
       feelers.forEach((g, i) => {
         g.rotation.z = (i ? -1 : 1) * 0.12 * open;
-        g.rotation.x = -0.15 * open;
+        g.rotation.x = -0.15 * open - 0.4 * raised;
       });
     },
+    cry(on) {
+      oh.visible = on;
+      lipLine.visible = !on;
+      if (on) jaw.visible = false;
+    },
     wingsTo(open, beat, seconds) {
+      raised = open;
       // (folded back over the abdomen; in flight out to the sides, beating)
       const phase = seconds * 62;
       for (const w of wings) {

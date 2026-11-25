@@ -126,7 +126,7 @@ export class FloatingTexts {
 
   constructor(private readonly scene: THREE.Scene) {}
 
-  spawn(text: string, color: number, at: THREE.Vector3, life = 1): void {
+  spawn(text: string, color: number, at: THREE.Vector3, life = 1, size = 1): void {
     const wide = Math.max(128, 24 + text.length * 27);
     const { sprite, ctx, texture } = textSprite(wide, 64);
     ctx.font = `800 44px ${FONT}`;
@@ -137,18 +137,23 @@ export class FloatingTexts {
     ctx.strokeText(text, wide / 2, 48);
     ctx.fillText(text, wide / 2, 48);
     // (sprites keep one screen size, whatever the distance)
-    sprite.scale.set((0.065 * wide) / 64, 0.065, 1);
+    sprite.scale.set((0.065 * size * wide) / 64, 0.065 * size, 1);
     sprite.position.copy(at);
     this.scene.add(sprite);
     this.items.push({ sprite, texture, t0: performance.now(), life, y0: at.y });
   }
 
+  /** Away with those that are shown. */
+  clear(): void {
+    for (const f of this.items) f.life = 0;
+  }
+
   /** Kept off the strip at the top of the screen. */
-  clamp(camera: THREE.Camera): void {
+  clamp(camera: THREE.Camera, top = STRIP - 0.07, bottom = -2): void {
     for (const f of this.items) {
       const p = SNAP.copy(f.sprite.position).project(camera);
-      if (p.z > 1 || p.y > 1.2 || p.y < STRIP - 0.07) continue;
-      p.y = STRIP - 0.07;
+      if (p.z > 1 || p.y > 1.2 || p.y < -1.2 || (p.y < top && p.y > bottom)) continue;
+      p.y = p.y < bottom ? bottom : top;
       f.sprite.position.copy(p.unproject(camera));
     }
   }

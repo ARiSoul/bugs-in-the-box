@@ -1,3 +1,4 @@
+import { Flock, FLOCK_TICKS, steerFlock, type FlockInput } from './flock';
 import type { Item } from './items';
 import { createRng } from '../terrain/noise';
 import { Bug, GRAVITY, type BugInput } from './bug';
@@ -84,6 +85,7 @@ interface Spot {
 
 type State = 'look' | 'fetch' | 'think' | 'spots' | 'walk' | 'aim' | 'charge' | 'done';
 
+const fly: FlockInput = { turn: 0, up: 0, faceX: 0, faceZ: 0, pitch: 0 };
 const dir = new Float64Array(3);
 const vel = new Float64Array(3);
 const step: BugInput = { move: 0, turn: 0, jump: false, run: false, faceX: 0, faceZ: 0 };
@@ -132,7 +134,8 @@ export class Brain {
     if (u.bug.species.flight && !u.bug.grounded && !u.bug.flying && u.bug.breath > 0 && u.bug.vy < -FALLS && u.bug.airTicks % 12 === 0) o.jump = true;
     if (u.bug.species.silk && !u.bug.grounded && !u.bug.thread && u.bug.vy < -FALLS && u.bug.airTicks % 12 === 0) o.jump = true;
     if (match.phase === 'flight') {
-      if (match.column) this.steer(match, match.column, u);
+      if (match.flock) this.pilot(match, match.flock, u);
+      else if (match.column) this.steer(match, match.column, u);
       else if (match.retreatTicks > 0) this.hide(match, u);
       return o;
     }
@@ -198,6 +201,8 @@ export class Brain {
       if (w.kind === 'tunnel' || w.kind === 'trap') return;
       if (w.kind === 'brood') {
         for (const e of enemies) this.queue.push(() => this.tryMark(match, u, w, index, e));
+      } else if (w.kind === 'flock') {
+        for (const e of enemies) this.queue.push(() => this.tryFlock(match, u, index, e));
       } else if (w.kind === 'column') {
         for (const e of enemies) this.queue.push(() => this.tryColumn(match, u, index, e));
       } else {
@@ -347,6 +352,25 @@ export class Brain {
       if (d < w.coverRadius) score += this.harmScore(u, q, Math.round(w.damage * (1 - (0.6 * d) / w.coverRadius)));
     }
     this.plans.push({ weapon: index, fx: u.bug.fx, fz: u.bug.fz, aimH: u.aimH, aimV: u.aimV, charge: 0, score: score * 0.9, target: e.id, mark: [x, y, z] });
+  }
+
+  /** Could it fly there? It tries, in its head. */
+  private tryFlock(match: Match, u: Unit, index: number, e: Unit): void {
+    const b = u.bug;
+    const dx = e.bug.x - b.x;
+    const dz = e.bug.z - b.z;
+    const l = Math.sqrt(dx * dx + dz * dz);
+    if (l < 1e-3) return;
+    const f = new Flock(b.x + (dx / l) * 2.6, b.y + 2, b.z + (dz / l) * 2.6, []).aim(dx / l, 0.35, dz / l);
+    // (its own side does not stop it)
+    for (let n = 0; n < FLOCK_TICKS; n++) {
+      // (a thought every so often, as when it flies)
+      if (n % 10 === 0) steerFlock(f, match.field, e.bug.x, e.bug.y, e.bug.z, fly);
+      const end = f.step(match.field, fly, [e.bug]);
+      if (!end) continue;
+      if (end === 'bug') this.plans.push({ weapon: index, fx: dx / l, fz: dz / l, aimH: 0.94, aimV: 0.34, charge: 0, score: this.harmScore(u, e, 58) * 0.9, target: e.id, mark: null });
+      return;
+    }
   }
 
   private tryColumn(match: Match, u: Unit, index: number, e: Unit): void {
@@ -651,11 +675,12 @@ export class Brain {
     if (!this.tuned) {
       this.tuned = true;
       this.timer = 8;
-      if (w.kind !== 'tunnel' && w.kind !== 'column') this.tune(match, u, w, p);
+      if (w.kind !== 'tunnel' && w.kind !== 'column' && w.kind !== 'flock') this.tune(match, u, w, p);
       return;
     }
     o.fire = true;
-    if (w.kind !== 'tunnel') {
+    if (w.kind === 'flock') this.state = 'done';
+    else if (w.kind !== 'tunnel') {
       this.state = 'charge';
       this.timer = p.charge;
     } else this.state = 'done';
@@ -725,6 +750,41 @@ export class Brain {
   }
 
   // ---------------------------------------------------------------- after the shot
+
+  /** Through the rings that lie ahead (as many as its hand is good for), then at its target. */
+  private pilot(match: Match, f: Flock, u: Unit): void {
+    const t = this.plan && this.plan.target >= 0 ? match.units[this.plan.target] : this.enemies(match, u)[0];
+    if (!t) return;
+    if (f.age % 6 !== 1) {
+      this.out.turn = fly.turn as -1 | 0 | 1;
+      this.out.aim = fly.up as -1 | 0 | 1;
+      return;
+    }
+    let x = t.bug.x;
+    let y = t.bug.y;
+    let z = t.bug.z;
+    const far = Math.sqrt((x - f.x) * (x - f.x) + (y - f.y) * (y - f.y) + (z - f.z) * (z - f.z));
+    const want = this.skill.id === 'easy' ? 2 : this.skill.id === 'normal' ? 4 : f.rings.length;
+    for (let i = 0; i < f.rings.length && i < want; i++) {
+      const r = f.rings[i];
+      if (r.taken) continue;
+      const ax = r.x - f.x;
+      const ay = r.y - f.y;
+      const az = r.z - f.z;
+      const d = Math.sqrt(ax * ax + ay * ay + az * az) || 1;
+      // (behind it, or out of its way, or no time: not that one)
+      const ahead = (ax * f.dx + ay * f.v + az * f.dz) / d;
+      const rest = Math.sqrt((x - r.x) * (x - r.x) + (y - r.y) * (y - r.y) + (z - r.z) * (z - r.z));
+      if (ahead < 0.3 || d + rest > (f.left / 60) * 10 || d > far + 4) continue;
+      x = r.x;
+      y = r.y;
+      z = r.z;
+      break;
+    }
+    steerFlock(f, match.field, x, y, z, fly);
+    this.out.turn = fly.turn as -1 | 0 | 1;
+    this.out.aim = fly.up as -1 | 0 | 1;
+  }
 
   private steer(match: Match, c: Column, u: Unit): void {
     if (c.victim >= 0) return;

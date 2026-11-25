@@ -110,6 +110,11 @@ export class BugView {
   private crackT = -1;
   /** Held down by a web (0..1, eased): it crouches and pulls. */
   held = 0;
+  /** It runs on the spot (units a second), and hangs in the air although it stands (a scene moves it). */
+  pace = 0;
+  hover = false;
+  /** Its legs trail (0..1), while it hangs in the air. */
+  trail = 0;
   private heldNow = 0;
   /** The head's middle and radius, and the eyes' material (for what a special attack adds to them). */
   readonly headAt = new THREE.Vector3();
@@ -366,16 +371,17 @@ export class BugView {
     const dx = bug.x - bug.px;
     const dz = bug.z - bug.pz;
     const dy = bug.grounded ? bug.y - bug.py : 0;
-    const speed = Math.sqrt(dx * dx + dy * dy + dz * dz) * TICK_RATE;
+    const speed = Math.sqrt(dx * dx + dy * dy + dz * dz) * TICK_RATE + this.pace;
+    const stands = bug.grounded && !this.hover;
     this.phase += speed * dt * 2.2;
-    const swingAmp = bug.grounded ? Math.min(1, speed / 2) * 0.45 : 0;
+    const swingAmp = stands ? Math.min(1, speed / 2) * 0.45 : 0;
     this.feetOffset = 0;
     for (const leg of this.legs) {
       const a = this.phase + leg.offset;
-      leg.pivot.rotation.y = leg.side * Math.sin(a) * swingAmp;
-      const bend = bug.grounded && ground ? this.bendToGround(leg, ground) : 0;
+      leg.pivot.rotation.y = leg.side * (Math.sin(a) * swingAmp + (this.hover ? 0.85 * this.trail : 0));
+      const bend = stands && ground ? this.bendToGround(leg, ground) : 0;
       leg.bend += (bend - leg.bend) * (1 - Math.exp(-dt * 25));
-      leg.pivot.rotation.z = leg.side * (leg.bend + (bug.grounded ? Math.max(0, Math.cos(a)) * swingAmp * 0.5 : 0.35));
+      leg.pivot.rotation.z = leg.side * (leg.bend + (stands ? Math.max(0, Math.cos(a)) * swingAmp * 0.5 : 0.35));
     }
     if (this.struggle > 0.01) {
       // two legs at a time are torn loose, and stamped down again

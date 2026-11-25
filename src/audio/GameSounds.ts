@@ -42,9 +42,17 @@ const BROOD_SCENE: readonly Cue[] = [
   [3.25, 'eyesOpen'],
   [3.6, 'eyesOpen', 0.7, 1.2],
 ];
+const FLOCK_SCENE: readonly Cue[] = [
+  [0.1, 'wings', 0.5, 1.5],
+  [0.5, 'waggle'],
+  [2.95, 'queenRise'],
+  [3.68, 'crown'],
+  [4.03, 'beesOut'],
+];
 /** ...and from when its hit is seen. */
 const COLUMN_END: readonly Cue[] = [[3.52, 'finale']];
 const BROOD_END: readonly Cue[] = [[0.45, 'pour', 0.9, 1.3], [3.42, 'finale']];
+const FLOCK_END: readonly Cue[] = [[2.9, 'beesOut', 0.5, 1.2], [4.0, 'crown', 0.6, 1.0]];
 /** Into the swarm (ticks), the ground starts to split. */
 const SPLIT = 130;
 
@@ -81,6 +89,8 @@ export class GameSounds {
   private readonly draw: LoopSound;
   private readonly hum: LoopSound;
   private readonly swarm: LoopSound;
+  private readonly buzz: LoopSound;
+  private buzzing = 0;
   private readonly blackout: LoopSound;
   private readonly turntable: LoopSound;
   private readonly rooms = new Map<string, LoopSound>();
@@ -104,6 +114,7 @@ export class GameSounds {
     this.draw = engine.loop('bowDraw', false, 'scene');
     this.hum = engine.loop('bowHum', false, 'scene', 0.25);
     this.swarm = engine.loop('swarm', true, 'scene', 0.15);
+    this.buzz = engine.loop('buzz', true, 'scene', 0.1);
     this.blackout = engine.loop('blackout', false, 'scene', 0.4);
     this.turntable = engine.loop('turntable', true, 'world', 0.2);
   }
@@ -156,7 +167,8 @@ export class GameSounds {
         } else if (kind === 'brood') {
           engine.play('wings', { at, scene: true, rate: 1.25 });
           engine.play('pour', { at, scene: true, rate: 0.8 });
-        } else if (kind === 'web') engine.play('spit', { at });
+        } else if (kind === 'flock') engine.play('beesOut', { at, scene: true, rate: 1.2 });
+        else if (kind === 'web') engine.play('spit', { at });
         else if (e.weapon === 'short-circuit') engine.play('spark', { at });
         else if (kind !== 'tunnel') engine.play('lob', { at, rate: kind === 'grenade' ? 0.85 : 1 });
         break;
@@ -210,6 +222,14 @@ export class GameSounds {
         break;
       case 'skill':
         engine.play('skillReady', { rate: e.team === 0 ? 1 : 1.122 });
+        break;
+      case 'ring':
+        engine.play('ring', { at: e, scene: true, rate: 2 ** ([0, 2, 4, 7, 9][(match.flock?.taken ?? 1) - 1] / 12) });
+        break;
+      case 'sting':
+        engine.play('sting', { at: e, scene: true, level: 0.9 + 0.06 * e.rings });
+        if (e.unit >= 0) this.impact(match, true);
+        this.hitTime = -1;
         break;
       case 'cover':
         engine.play('pour', { at: e, scene: true, rate: 1.3 });
@@ -302,10 +322,10 @@ export class GameSounds {
   }
 
   /** Every frame. `scale`: how fast time runs. */
-  frame(match: Match, dt: number, scale: number, bow: SceneState, column: SceneState, brood: SceneState): void {
+  frame(match: Match, dt: number, scale: number, bow: SceneState, column: SceneState, brood: SceneState, flock: SceneState): void {
     const { engine } = this;
     engine.setTimeScale(scale);
-    const scene = bow.active || column.active || brood.active;
+    const scene = bow.active || column.active || brood.active || flock.active;
     // (in a blackout the place goes silent)
     const out = brood.active && brood.hitFor < 0 && (brood.time < 0 || brood.time > 2.1);
     engine.setRoomLevel(out ? 0 : scene ? 0.3 : 1);
@@ -331,9 +351,9 @@ export class GameSounds {
     this.turntable.set(match.phase === 'spin' ? 1 : 0, 1, match.field.W / 2, match.field.H / 3, match.field.D / 2);
 
     // ---- a special attack's scene, by its own clock (slowed with it)
-    const t = Math.max(bow.time, column.time, brood.time);
+    const t = Math.max(bow.time, column.time, brood.time, flock.time);
     if (t >= 0) {
-      this.cues(bow.time >= 0 ? BOW_SCENE : column.time >= 0 ? COLUMN_SCENE : BROOD_SCENE, this.sceneTime, t, b);
+      this.cues(bow.time >= 0 ? BOW_SCENE : column.time >= 0 ? COLUMN_SCENE : brood.time >= 0 ? BROOD_SCENE : FLOCK_SCENE, this.sceneTime, t, b);
       this.sceneTime = t;
     } else if (this.sceneTime >= 0) {
       this.sceneTime = -1;
@@ -345,6 +365,9 @@ export class GameSounds {
     } else if (brood.active && brood.hitFor >= 0) {
       this.cues(BROOD_END, this.hitTime, brood.hitFor, b);
       this.hitTime = brood.hitFor;
+    } else if (flock.active && flock.hitFor >= 0) {
+      this.cues(FLOCK_END, this.hitTime, flock.hitFor, b);
+      this.hitTime = flock.hitFor;
     } else this.hitTime = -1;
     if (this.wasStance && !match.stance && match.phase === 'aim') engine.stopScene();
     this.wasStance = match.stance;
@@ -379,6 +402,16 @@ export class GameSounds {
     a.level += (want - a.level) * Math.min(1, dt * 6);
     if (want === 0 && a.level < 0.01) a.level = 0;
     this.swarm.set(a.level, rate, a.x, a.y, a.z);
+
+    // ---- the bees: round the one that called them, on their way, round what they struck
+    const f = match.flock;
+    let loud = 0;
+    if (f) loud = 1;
+    else if (flock.active) loud = flock.time >= 0 ? (flock.time > 4.0 ? 0.55 : flock.time > 0.5 && flock.time < 2.45 ? 0.22 : 0) : flock.hitFor < 0 ? 0.4 : Math.max(0, 1.2 - flock.hitFor * 0.42);
+    this.buzzing += (loud - this.buzzing) * Math.min(1, dt * 6);
+    if (loud === 0 && this.buzzing < 0.01) this.buzzing = 0;
+    const p0 = f ?? b;
+    this.buzz.set(this.buzzing, f ? 1.05 + 0.04 * f.taken + 0.16 * f.v : flock.hitFor >= 0 ? 1.15 : 0.9, p0.x, p0.y, p0.z);
   }
 
   private readonly mood: MusicMood = { base: 0, groove: 0, tension: 0, far: 0 };

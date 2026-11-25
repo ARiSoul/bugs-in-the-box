@@ -24,6 +24,7 @@ export const HUE = [
 export interface FaceParts {
   blink(shut: number): void;
   open(k: number): void;
+  cry(on: boolean): void;
   sway(seconds: number, lively: number): void;
   coats: THREE.InstancedMesh[];
   small: THREE.Object3D[];
@@ -130,6 +131,13 @@ class HeadShape {
       const deep = w * 0.78 * Math.max(0, 1 - (p.x * 2) ** 2) ** 0.8;
       p.copy(this.on(x, this.smile(x) + 0.003 - (0.5 - p.y) * deep, out));
     });
+  }
+
+  /** A round mouth that cries out. */
+  cry(out: number): THREE.BufferGeometry {
+    const { w } = this.s.smile;
+    const y = this.smile(0) + w * 0.1;
+    return shape(new THREE.CircleGeometry(1, 40), (p) => p.copy(this.on(p.x * w * 0.48, y + p.y * w * 0.72, out)));
   }
 
   tongue(out: number): THREE.BufferGeometry {
@@ -466,6 +474,10 @@ export function makeFace(view: BugView, side: number): FaceParts {
   add(jaw, once(`mouth${id}`, () => H.mouth(furOn + (id === 'spider' ? 0.02 : 0.016))), mouth, undefined, false);
   add(jaw, once(`tongue${id}`, () => H.tongue(furOn + (id === 'spider' ? 0.0225 : 0.0185))), tongue, undefined, false);
 
+  const oh = add(g, once(`cry${id}`, () => H.cry(furOn + (id === 'spider' ? 0.03 : 0.024))), plain(`cry${side}`, 0x4a0a12, 0.5), undefined, false);
+  const yell = add(g, once(`yell${id}`, () => H.tongue(furOn + (id === 'spider' ? 0.034 : 0.028)).scale(0.75, 1, 1)), tongue, undefined, false);
+  oh.visible = yell.visible = false;
+
   // ---- what each has of its own
   const feelers: { g: THREE.Group; x: number }[] = [];
   const mandibles: { g: THREE.Group; x: number }[] = [];
@@ -549,6 +561,12 @@ export function makeFace(view: BugView, side: number): FaceParts {
         m.g.visible = o < 0.6;
       }
       lip.visible = o <= 0.3;
+    },
+    cry(on) {
+      oh.visible = yell.visible = on;
+      if (!on) return;
+      lip.visible = jaw.visible = false;
+      for (const m of mandibles) m.g.visible = false;
     },
     sway(seconds, lively) {
       if (id === 'cockroach' && view.pose.weight < 0.001) {

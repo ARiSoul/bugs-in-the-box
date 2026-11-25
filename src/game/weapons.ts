@@ -18,6 +18,8 @@ export type WeaponKind =
   | 'column'
   /** A swarm called in the dark, from everywhere, onto a marked spot: it covers every enemy near it. */
   | 'brood'
+  /** A swarm the player flies through the air, through rings that make it stronger, into whatever it meets. */
+  | 'flock'
   /** Laid where the bug stands: it holds whoever of the other teams steps on it. */
   | 'trap';
 
@@ -204,6 +206,24 @@ export const BLACKOUT_SWARM: Weapon = {
   color: 0xffc46b,
 };
 
+/**
+ * Bees only, their special attack: it dances a figure eight, and a crown of its light. The player flies the swarm for a
+ * few seconds; every ring of pollen on the way makes it hurt more (RING_DAMAGE).
+ */
+export const QUEENS_FLIGHT: Weapon = {
+  ...BASE,
+  id: 'queens-flight',
+  name: "Queen's Flight",
+  kind: 'flock',
+  species: 'bee',
+  blastRadius: 2.4,
+  damage: 46,
+  sceneTicks: 324,
+  color: 0xffc83a,
+};
+/** What each ring adds. */
+export const RING_DAMAGE = 10;
+
 /** From a box: thermal paste, smeared where the bug stands. Whoever of another team steps on it sticks. */
 export const THERMAL_PASTE: Weapon = {
   ...BASE,
@@ -219,7 +239,7 @@ export const THERMAL_PASTE: Weapon = {
 /** What a box's dud does. */
 export const DUD: Weapon = { ...BASE, id: 'dud', name: 'Dud', kind: 'shell', blastRadius: 3, damage: 24, color: 0xff7a2f };
 
-export const WEAPONS: readonly Weapon[] = [SOLDER_BLOB, CAPACITOR, SHORT_CIRCUIT, SOLDERING_IRON, WEB_SHOT, WEB_BOW, ANT_COLUMN, BLACKOUT_SWARM, THERMAL_PASTE];
+export const WEAPONS: readonly Weapon[] = [SOLDER_BLOB, CAPACITOR, SHORT_CIRCUIT, SOLDERING_IRON, WEB_SHOT, WEB_BOW, ANT_COLUMN, BLACKOUT_SWARM, THERMAL_PASTE, QUEENS_FLIGHT];
 
 /** Whether a bug of this species has the weapon. */
 export function hasWeapon(species: string, w: Weapon): boolean {

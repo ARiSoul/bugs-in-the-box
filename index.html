@@ -60,6 +60,20 @@
       body.cinematic.quiet #cineBar { opacity: 0; pointer-events: none; }
       body.cinematic.quiet { cursor: none; }
       #banner { left: 50%; top: 30%; height: 12vh; transform: translate(-50%, -50%); display: none; background: none; border: 0; backdrop-filter: none; padding: 0; }
+    /* a swarm in the air: the rings it took (cells of a comb), the time it has left */
+      #flock { position: fixed; left: 5vw; right: 5vw; bottom: 0; height: 9vh; z-index: 8; pointer-events: none; display: grid; grid-template-columns: 44vh 38vh 44vh; justify-content: center; align-items: center; gap: 5vh; opacity: 0 !important; transition: opacity 0.2s; font-family: 'Bahnschrift', 'Segoe UI Variable Display', 'Segoe UI', system-ui, sans-serif; }
+      #flock.on { opacity: 1 !important; }
+      #flock .cells { display: flex; gap: 0.5vh; align-items: center; justify-content: flex-start; }
+      #flock .cells i { width: 5.6vh; height: 6.3vh; clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%); background: #a06a10; position: relative; }
+      #flock .cells i::after { content: ''; position: absolute; inset: 0.5vh; clip-path: inherit; background: #1c1204; }
+      #flock .cells i.got { background: #fff2c2; animation: got 0.5s cubic-bezier(0.2, 2.2, 0.4, 1); } #flock .cells i.got::after { background: linear-gradient(#ffd75a, #ff9a12); }
+      #flock .cells i.lost { background: #4c4a46; } #flock .cells i.lost::after { background: linear-gradient(118deg, #23211e 46%, #6a665e 46%, #6a665e 50%, #23211e 50%, #23211e 64%, #55524b 64%, #55524b 67%, #23211e 67%); }
+      #flock .cells em { font: 700 4.2vh/1 'Bahnschrift', sans-serif; color: #ffcf4a; margin-left: 1vh; } #flock .cells em { width: 2em; }
+      @keyframes got { 0% { scale: 1.9; } }
+      #flock .fuel { display: flex; align-items: center; gap: 1.1vh; } #flock .fuel svg { width: 3.2vh; fill: #ffb52e; } #flock .fuel u { display: block; width: 32vh; height: 1.8vh; background: #3a2708; transform: skewX(-18deg); } #flock .fuel b { display: block; height: 100%; transform-origin: 0 0; background: linear-gradient(90deg, #ff9a12, #ffe08a); }
+      #flock.low .fuel b { background: #ff4a2e; } #flock.low .fuel { animation: low 0.35s infinite alternate; } @keyframes low { to { opacity: 0.55; } }
+      #flock p { margin: 0; min-width: 32vh; white-space: nowrap; font-size: 2.4vh; color: #fff2d0; transition: opacity 0.6s; display: flex; align-items: center; gap: 0.7vh; } #flock.late p { opacity: 0; } #flock p svg { width: 1.5vh; vertical-align: -0.35vh; fill: none; stroke: #2a1a04; stroke-width: 3.4; }
+      #flock kbd { font: inherit; font-weight: 700; background: #fff2d0; color: #2a1a04; padding: 0.1em 0.6em; transform: skewX(-8deg); } #flock kbd.go { background: #ffb52e; margin-left: 1.6vh; } #flock p kbd:nth-of-type(3), #flock p kbd:nth-of-type(5) { margin-left: 1.4vh; }
     /* a special attack's scene: the bars of a film, and nothing over the picture */
       body::before, body::after { content: ''; position: fixed; left: 0; right: 0; height: 0; background: #000; z-index: 5; transition: height 0.45s ease; pointer-events: none; }
       body::before { top: 0; }

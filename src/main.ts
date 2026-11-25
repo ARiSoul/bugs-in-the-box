@@ -19,6 +19,7 @@ import { AimView } from './render/aim';
 import { BugView } from './render/BugView';
 import { BowScene } from './render/gpu/bowScene';
 import { BroodScene } from './render/gpu/broodScene';
+import { FlockScene } from './render/gpu/flockScene';
 import { ColumnScene } from './render/gpu/columnScene';
 import { WebViews } from './render/webs';
 import { DrawnGround } from './render/drawnGround';
@@ -95,8 +96,9 @@ const itemViews = new ItemViews(stage.scene);
 const bow = new BowScene(stage.scene, stage.fx);
 const antColumn = new ColumnScene(stage.scene, stage.fx, bow.light, bow.targetLight);
 const brood = new BroodScene(stage.scene, stage.fx, bow.light);
+const flock = new FlockScene(stage.scene, stage.fx, bow.light);
 /** The special attack whose scene has the view now, if any. */
-const inScene = (): BowScene | ColumnScene | BroodScene | null => (bow.camera.active ? bow : antColumn.camera.active ? antColumn : brood.camera.active ? brood : null);
+const inScene = (): BowScene | ColumnScene | BroodScene | FlockScene | null => (bow.camera.active ? bow : antColumn.camera.active ? antColumn : brood.camera.active ? brood : flock.camera.active ? flock : null);
 /** The player marks a spot for a brood. */
 const marking = (): boolean => !brain() && match.stance && match.phase === 'aim' && match.currentWeapon.kind === 'brood' && brood.camera.active;
 const follow = new FollowCamera(stage.camera, stage.controls);
@@ -209,6 +211,7 @@ function newTeams(s: number): void {
   bow.clear();
   antColumn.clear();
   brood.clear();
+  flock.clear();
   gameSounds.reset(match, scenario.id);
   indexedTurns = 0;
   ground.reset(stage.scene, bugViews.map((v) => v.view.root));
@@ -223,7 +226,11 @@ function newTeams(s: number): void {
 const heldDamage: { unit: number; amount: number }[] = [];
 function showDamage(unit: number, amount: number, long: boolean): void {
   const u = match.units[unit];
-  texts.spawn(`-${amount}`, match.teams[u.team].color, at.set(u.bug.x, u.bug.y + bugViews[unit].height + (long ? 1.9 : 1), u.bug.z), long ? 2.6 : 1);
+  const stung = flock.camera.active;
+  if (stung) texts.clear();
+  // (beside it: over it is the one that stung it)
+  at2.set(stung ? -2.6 : 0, 0, 0).applyQuaternion(stage.camera.quaternion);
+  texts.spawn(`-${amount}`, stung ? 0xffc83a : match.teams[u.team].color, at.set(u.bug.x, u.bug.y + (stung ? 0.4 : bugViews[unit].height + (long ? 1.9 : 1)), u.bug.z).add(at2), long && !stung ? 2.6 : 1.1, stung ? 1.8 : 1);
 }
 
 /** The sight of a special attack: where its dart points, and how far the string is drawn. */
@@ -279,7 +286,7 @@ function handleEvents(events: readonly MatchEvent[]): void {
         break;
       case 'explosion':
         // (an ant column digs: no fireball)
-        if (!antColumn.camera.active) flashes.spawn(at.set(e.x, e.y, e.z), e.radius);
+        if (!antColumn.camera.active && !flock.camera.active) flashes.spawn(at.set(e.x, e.y, e.z), e.radius);
         stage.craters.add(e.x, e.y, e.z, e.radius);
         ground.addCrater(e.x, e.y, e.z, e.radius);
         lookAtSpot(e.x, e.y, e.z);
@@ -313,6 +320,13 @@ function handleEvents(events: readonly MatchEvent[]): void {
         if (match.currentWeapon.kind === 'arrow') bow.onFire();
         else if (match.currentWeapon.kind === 'column') antColumn.onFire();
         else if (match.currentWeapon.kind === 'brood') brood.onFire(match, ground);
+        else if (match.currentWeapon.kind === 'flock') flock.onFire();
+        break;
+      case 'ring':
+        flock.onRing(e.index, e.x, e.y, e.z);
+        break;
+      case 'sting':
+        flock.onSting(e.x, e.y, e.z, e.unit >= 0 ? bugViews[e.unit].view : null);
         break;
       case 'cover':
         brood.onCover(e.units, bugViews.map((v) => v.view));
@@ -801,14 +815,16 @@ canvas.addEventListener('pointermove', (e) => {
     if ((e.buttons & 2) !== 0) brood.camera.turn(-e.movementX * 0.005, e.movementY * 0.004);
     return;
   }
-  if (brain() || !match.stance || match.phase !== 'aim' || (e.buttons & 3) === 0) return;
+  // (a swarm in the air is flown the same way)
+  const f = match.flock;
+  if (brain() || (!f && (!match.stance || match.phase !== 'aim')) || (e.buttons & 3) === 0) return;
   const slow = SIGHT_SPEED * (match.charging ? 0.6 : 1);
   const b = match.activeUnit.bug;
   const a = -e.movementX * slow;
   // (from where the last movement of this frame left it)
   if (stanceFace.tick !== match.tick) {
-    stanceFace.x = b.fx;
-    stanceFace.z = b.fz;
+    stanceFace.x = f ? f.fx : b.fx;
+    stanceFace.z = f ? f.fz : b.fz;
     stanceFace.tick = match.tick;
   }
   const c = Math.cos(a);
@@ -960,6 +976,7 @@ function hear(): void {
   sound.listen(c.position.x, c.position.y, c.position.z, camDir.x, camDir.y, camDir.z, hearUp.x, hearUp.y, hearUp.z);
 }
 const bowState = { active: false, hitFor: -1, time: -1 };
+const flockState = { active: false, hitFor: -1, time: -1 };
 const columnState = { active: false, hitFor: -1, time: -1 };
 const broodState = { active: false, hitFor: -1, time: -1 };
 
@@ -1018,7 +1035,7 @@ function frame(now: number): void {
   brood.pan = marking() ? controls.moveHeld : 0;
   let faced = false;
   // (a special attack slows the match for a moment: the same ticks, later)
-  const scaled = dt * Math.min(bow.timeScale, antColumn.timeScale, brood.timeScale);
+  const scaled = dt * Math.min(bow.timeScale, antColumn.timeScale, brood.timeScale, flock.timeScale);
   if (!inMenu) accumulator += scaled;
   while (accumulator >= DT) {
     prevTurns = match.turntableTurns;
@@ -1054,6 +1071,7 @@ function frame(now: number): void {
   bow.update({ match, view: bugViews[match.active].view, views: bugViews.map((v) => v.view), ground, camera: stage.camera, alpha, dt: scaled });
   antColumn.update({ match, view: bugViews[match.active].view, views: bugViews.map((v) => v.view), ground, camera: stage.camera, alpha, dt: scaled });
   brood.update({ match, view: bugViews[match.active].view, views: bugViews.map((v) => v.view), ground, camera: stage.camera, alpha, dt: scaled });
+  flock.update({ match, view: bugViews[match.active].view, views: bugViews.map((v) => v.view), ground, camera: stage.camera, alpha, dt: scaled });
   const sceneNow = inScene();
   match.units.forEach((u, i) => {
     const v = bugViews[i];
@@ -1063,20 +1081,25 @@ function frame(now: number): void {
     // (it blinks; dead, its lids are shut; about to shoot, its jaws open)
     v.blink -= scaled;
     if (v.blink < -0.16) v.blink = 1.5 + Math.random() * 4;
-    v.face.blink(!u.bug.alive || v.blink < 0 ? 1 : 0);
-    v.wing += ((u.bug.alive && !u.bug.grounded ? (u.bug.flying ? 1 : 0.5) : 0) - v.wing) * (1 - Math.exp(-scaled * 14));
-    v.face.wingsTo?.(v.wing, u.bug.flying ? 1 : 0, now / 1000);
+    const queen = sceneNow === flock && i === match.active;
+    if (queen && !flock.glad) v.blink = Math.max(v.blink, 0.4);
+    v.face.blink(!u.bug.alive || (queen && flock.glad) || (sceneNow === flock && flock.hurts(v.view)) || v.blink < 0 ? 1 : 0);
+    v.wing += (Math.max(queen ? flock.wing : 0, u.bug.alive && !u.bug.grounded ? (u.bug.flying ? 1 : 0.5) : 0) - v.wing) * (1 - Math.exp(-scaled * 14));
+    v.face.wingsTo?.(v.wing, u.bug.flying || (queen && flock.wing > 0) ? 1 : 0, now / 1000);
     v.face.jaws(!u.bug.alive ? 0.3 : i === match.active && match.charging ? match.power : 0.12 + 0.1 * Math.sin(now * 0.002 + i * 2));
   });
+  // (stung: it cries out)
+  for (const v of bugViews) v.face.cry?.(sceneNow === flock && flock.cries(v.view));
   // (the small ants go on bugs posed for this frame)
   antColumn.late();
   brood.late();
+  flock.late();
   projectiles.sync(match.projectiles, alpha, ground);
   // (the bars of a film, and no names: while it stands and aims, and once the hit is seen, the names are back)
-  document.body.classList.toggle('special', sceneNow !== null && !match.stance && !debugCamera);
-  if (sceneNow) stage.hud.visible = (match.stance && sceneNow !== brood) || (sceneNow.hitFor > 0.5 && sceneNow.names) || (sceneNow === antColumn && antColumn.swarming && antColumn.names);
+  document.body.classList.toggle('special', sceneNow !== null && (!match.stance || sceneNow === flock) && !debugCamera);
+  if (sceneNow) stage.hud.visible = (match.stance && sceneNow !== brood) || (sceneNow.hitFor > 0.5 && sceneNow.names) || (sceneNow === antColumn && antColumn.swarming && antColumn.names) || (sceneNow === flock && flock.flies);
   else if (wasSpecial) stage.hud.visible = true;
-  if (!sceneNow || sceneNow.hitFor > 0.8) {
+  if (!sceneNow || sceneNow.hitFor > (sceneNow === flock ? 1.35 : 0.8)) {
     // (the damage of a special attack shows when its flash is over)
     for (const e of heldDamage) showDamage(e.unit, e.amount, true);
     heldDamage.length = 0;
@@ -1158,7 +1181,10 @@ function frame(now: number): void {
   broodState.active = brood.camera.active;
   broodState.hitFor = brood.hitFor;
   broodState.time = brood.sceneTime;
-  gameSounds.frame(match, dt, Math.min(bow.timeScale, antColumn.timeScale, brood.timeScale), bowState, columnState, broodState);
+  flockState.active = flock.camera.active;
+  flockState.hitFor = flock.hitFor;
+  flockState.time = flock.sceneTime;
+  gameSounds.frame(match, dt, Math.min(bow.timeScale, antColumn.timeScale, brood.timeScale, flock.timeScale), bowState, columnState, broodState, flockState);
   hear();
   updateMenus(dt);
   flashes.update(now);
@@ -1259,17 +1285,22 @@ requestAnimationFrame(loop);
  */
 function placeLabels(): void {
   stage.camera.updateMatrixWorld();
-  texts.clamp(stage.camera);
+  const bars = document.body.classList.contains('special');
+  texts.clamp(stage.camera, bars ? 0.72 : undefined, bars ? -0.72 : -2);
   match.units.forEach((u, i) => {
     const v = bugViews[i];
     const dist = stage.camera.position.distanceTo(v.view.root.position);
-    v.view.setCameraDistance(dist);
+    // (a scene that moves the bug places it)
+    if (flock.camera.active && i === match.active) v.view.root.scale.setScalar(1);
+    else v.view.setCameraDistance(dist);
     // (a narrow lens, as a special attack's scene has, brings it nearer)
     const seen = dist * (Math.tan((stage.camera.fov * Math.PI) / 360) / LENS);
     v.face.near(seen < 60, seen);
     v.label.update(v.view.root.position, v.height * v.view.root.scale.y, u.bug.health, u.bug.alive, dist, u.bug.alive && occluded(v.view.root.position, dist), i === match.active);
     // (its own name is in the way of what it points at)
-    if (i === match.active && antColumn.camera.active) v.label.sprite.visible = false;
+    if (i === match.active && (antColumn.camera.active || flock.camera.active)) v.label.sprite.visible = false;
+    // (the swarm flies to its rings: what hangs over the one they lead to hides them)
+    if (i !== match.active && flock.camera.active && (flock.hidesNames(match) || (match.flock && u.team === match.activeUnit.team))) v.label.sprite.visible = false;
     v.label.snap(stage.camera, canvas.width, canvas.height);
   });
 }
@@ -1300,6 +1331,7 @@ const debugApi = {
   bow,
   antColumn,
   brood,
+  flock,
   follow,
   sound,
   music,

@@ -11,6 +11,8 @@ type V3 = THREE.Node<'vec3'>;
 export interface Face {
   blink(shut: number): void;
   jaws(open: number): void;
+  /** Its mouth round, in pain (after `jaws`). */
+  cry?(on: boolean): void;
   /** Whether it is near enough for its hairs and spines. */
   near(on: boolean, distance?: number): void;
   /** Wings: how far out, how hard they beat (only what has any). */
@@ -143,6 +145,7 @@ export function dress(view: BugView, side: number): Face {
     },
     blink: (shut) => face.blink(shut),
     jaws: (open) => face.open(open),
+    cry: (on) => face.cry(on),
     wingsTo: (open, _beat, seconds) => {
       face.sway(seconds, open);
       back?.();

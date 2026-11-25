@@ -43,6 +43,11 @@ Special skills as attacks, each with its own attack animation (a skill is a weap
 - **Last Nerve (cockroach):** it runs on without its head. The body runs blind, steered only in wide turns, and bursts at the end; the head stays behind and sees it all.
 - **Wing Storm (cockroach):** it opens its wings, takes off and beats up a gale: little damage, but it sweeps a whole cone of bugs away, off the map if they stand badly.
 - **Fallout Charge (cockroach):** it soaks up the device's energy, glows from inside and drops head first from high up: a huge crater, and it pays with its own health (goes well with Hard Shell).
+- **Queen's Flight (bee, in the game):** it dances a figure eight of light that becomes a crown; the player flies the swarm through the air, and every ring of pollen it takes makes the hit stronger.
+- **Waggle Squadron (bee):** the dance is the order: the player marks three waypoints, and a squadron in an arrow flies that route and dives at its end.
+- **Last Sting (bee):** the bee itself is the shot, a dive in slow motion onto one enemy; huge damage, and it costs the bee health.
+- **Honey Fall (bee):** a comb breaks over a place: damage in an area, and whoever is in the honey sticks and loses the next walk.
+- **Choosing skills:** each species will have several; the player picks the main one, with progress more may be active at once, and some may turn up in the boxes on the map.
 - **How special skills are earned (the skill loader is in the game; the others to come):** a match should not open with them. Ways to get one, alone or together:
   - the **skill loader** (in the game): a card per team that fills by turn and by damage done and taken, and gives one special when full;
   - **items** found on the map, which unlock or charge one;

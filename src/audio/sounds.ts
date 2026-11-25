@@ -197,6 +197,9 @@ function tune(seconds: number, notes: readonly (readonly [number, number, number
   );
 }
 
+/** On from `at` for `long` seconds, with soft ends. */
+const between = (t: number, at: number, long: number): number => smooth(at, at + 0.04, t) * (1 - smooth(at + long - 0.08, at + long, t));
+
 /** A snap of something dry. */
 const snap: Grain = (r) => {
   const f = 500 + 2600 * r();
@@ -619,6 +622,80 @@ const RECIPES = {
       const out = render(1.8, (t) => lp(n(), 150 + 60 * w(t), 1) * 2.4 * smooth(0, 0.3, t) * (1 - smooth(0.9, 1.8, t)));
       scatter(out, r, 150, 0.05, 1.6, 1.1, (u) => 0.4 * (1 - 0.6 * u), knock(1100, 0.007));
       return finish(out, 0.9, 0.3);
+    },
+  },
+  // ---- Queen's Flight
+  buzz: {
+    loop: true,
+    level: 0.5,
+    make: (r) => {
+      // (two dozen wings, each a little off the next, wavering)
+      const n = 22;
+      const s = Array.from({ length: n }, () => saw(r()));
+      const hz = Array.from({ length: n }, () => 190 + 85 * r());
+      const w = Array.from({ length: n }, () => wander(r, 5));
+      const lp = lowpass();
+      return loop(
+        render(3.4, (t) => {
+          let v = 0;
+          for (let i = 0; i < n; i++) {
+            const k = w[i](t);
+            v += s[i](hz[i] * (1 + 0.07 * k)) * (0.75 + 0.25 * k);
+          }
+          return (lp(v / n, 2100, 0.8)) * 2;
+        }),
+        0.4,
+      );
+    },
+  },
+  waggle: {
+    level: 0.5,
+    make: (r) => {
+      // (two runs of the dance, each a trill of its wings)
+      const a = saw();
+      const b = saw(0.3);
+      const bp = bandpass();
+      const out = render(2.2, (t) => {
+        const run = Math.max(between(t, 0, 0.42), between(t, 1.08, 0.42));
+        const trill = 0.55 + 0.45 * Math.sin(t * 2 * Math.PI * 15);
+        return bp(a(236) + b(239.5) * 0.8, 900, 1.2) * run * trill;
+      });
+      const notes = tune(2.2, [[0, 3, 0.3], [0.14, 7, 0.3], [0.28, 10, 0.4], [0.55, 12, 0.5], [1.08, 3, 0.3], [1.22, 7, 0.3], [1.36, 12, 0.4], [1.62, 15, 0.6]]);
+      void r;
+      return finish(out.map((v, i) => v * 0.6 + (notes[i] ?? 0) * 0.4), 0.9, 0.15);
+    },
+  },
+  queenRise: { level: 0.5, make: (r) => shimmer(r, 1.0, 520, 2.2, 0.8) },
+  crown: { level: 0.6, make: () => tune(2.4, [[0, 3, 1.2], [0.02, 10, 1.2], [0.04, 15, 1.4], [0.07, 19, 1.5], [0.12, 22, 1.6], [0.2, 27, 1.3]]) },
+  beesOut: {
+    level: 0.55,
+    make: (r) => {
+      const n = 12;
+      const s = Array.from({ length: n }, () => saw(r()));
+      const hz = Array.from({ length: n }, () => 200 + 90 * r());
+      const lp = lowpass();
+      const air = white(r);
+      const bp = bandpass();
+      return finish(
+        render(1.5, (t) => {
+          let v = 0;
+          const up = 1 + 0.35 * smooth(0, 0.35, t) - 0.12 * smooth(0.5, 1.5, t);
+          for (let i = 0; i < n; i++) v += s[i](hz[i] * up);
+          return (lp(v / n, 2600, 0.8) * 1.8 + bp(air(), 700 + 900 * t, 1) * 0.5) * smooth(0, 0.16, t) * (1 - smooth(0.4, 1.5, t));
+        }),
+        0.9,
+        0.2,
+      );
+    },
+  },
+  ring: { level: 0.6, make: () => tune(1.3, [[0, 10, 0.5], [0.05, 15, 0.6], [0.1, 22, 0.8], [0.16, 27, 0.7]]) },
+  sting: {
+    level: 0.95,
+    make: (r) => {
+      const out = blast(r, 1.8, 52, 8);
+      const ring = tune(1.8, [[0.02, -9, 1.2], [0.03, 3, 1.2], [0.05, 10, 1.3], [0.08, 15, 1.4]]);
+      const air = whoosh(r, 0.9, 300, 2600, 500, 1.2, 0.15);
+      return finish(out.map((v, i) => v * 0.75 + (ring[i] ?? 0) * 0.45 + (air[i] ?? 0) * 0.4), 0.95, 0.4);
     },
   },
   swarm: { loop: true, level: 0.5, make: (r) => crowd(r, 3, 240, 26) },

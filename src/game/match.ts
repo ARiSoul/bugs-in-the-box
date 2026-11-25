@@ -5,8 +5,9 @@ import { rot, rotate2 } from './math';
 import { Projectile } from './projectile';
 import { dropNear } from './spawn';
 import { MARCHER, type BugSpecies } from './species';
+import { Flock, layRings, type FlockInput, type Ring } from './flock';
 import { BOX, Items, type Item, type ItemKind } from './items';
-import { DUD, hasWeapon, WEAPONS, type Weapon } from './weapons';
+import { DUD, hasWeapon, RING_DAMAGE, WEAPONS, type Weapon } from './weapons';
 
 /**
  * One match: teams of bugs taking turns on a destructible map. Pure and deterministic like Bug:
@@ -187,6 +188,8 @@ export type MatchEvent =
   | { type: 'webGone'; id: number; torn: boolean }
   | { type: 'damage'; unit: number; amount: number }
   | { type: 'death'; unit: number }
+  | { type: 'ring'; index: number; x: number; y: number; z: number }
+  | { type: 'sting'; x: number; y: number; z: number; unit: number; rings: number }
   | { type: 'box'; id: number }
   | { type: 'open'; unit: number; kind: ItemKind; x: number; y: number; z: number; id: number; gain: number }
   | { type: 'boxGone'; id: number; x: number; y: number; z: number }
@@ -276,6 +279,8 @@ const aimed = new Float64Array(3);
 const BODY = 1.15;
 /** A bug that comes down on another slides off it at this speed. */
 const SLIDE_OFF = 3;
+const flying: FlockInput = { turn: 0, up: 0, faceX: 0, faceZ: 0, pitch: 0 };
+const foes: Bug[] = [];
 const bugInput: BugInput = { move: 0, turn: 0, jump: false, run: false, faceX: 0, faceZ: 0 };
 
 /** Fraction of the full rate after holding a key for `held` ticks (see RAMP_START). */
@@ -324,6 +329,9 @@ export class Match {
   /** The brood on its way, if any, and the spot marked for one. */
   brood: Brood | null = null;
   mark: Mark | null = null;
+  /** The swarm a player flies, if any, and the rings laid out for it. */
+  flock: Flock | null = null;
+  rings: Ring[] = [];
   /** How far each team's special attack is loaded (0..SKILL_FULL). */
   readonly skill: number[];
   /** The boxes on the map. */
@@ -460,6 +468,7 @@ export class Match {
       }
       if (this.column) this.columnTick(this.column, unit, input);
       else if (this.brood) this.broodTick(this.brood, unit);
+      else if (this.flock) this.flockTick(this.flock, unit, input);
       else if (this.lingerTicks > 0) {
         // (a special attack's hit is looked at first; then the shooter may walk away)
         if (--this.lingerTicks === 0) this.retreatTicks = RETREAT_TICKS;
@@ -585,6 +594,7 @@ export class Match {
     if (this.currentWeapon.sceneTicks > 0 && !this.stance && unit.bug.grounded) {
       this.phase = 'special';
       this.specialTicks = this.currentWeapon.sceneTicks;
+      if (this.currentWeapon.kind === 'flock') this.layOut(unit);
       this.events.push({ type: 'special', unit: unit.id, weapon: this.currentWeapon.id });
       return IDLE;
     }
@@ -603,7 +613,7 @@ export class Match {
       return this.stance ? this.onTheSpot(input) : IDLE;
     }
     if (fireDown && unit.bug.grounded) {
-      if (w.kind === 'tunnel' || w.kind === 'trap' || (w.kind === 'brood' && this.mark)) this.fire(unit, w);
+      if (w.kind === 'tunnel' || w.kind === 'trap' || w.kind === 'flock' || (w.kind === 'brood' && this.mark)) this.fire(unit, w);
       else if (w.kind !== 'brood') {
         this.charging = true;
         this.power = 0;
@@ -832,11 +842,81 @@ export class Match {
     else if (w.kind === 'column') {
       const power = this.power < MIN_POWER ? MIN_POWER : this.power;
       this.column = { head: this.columnHead(unit), path: [], left: Math.round(MARCH_TICKS * power), swarm: 0, still: 0, victim: -1 };
-    } else if (w.kind === 'brood' && this.mark) this.brood = { at: this.mark, ticks: 0, units: [], harm: [] };
+    } else if (w.kind === 'flock') this.flock = this.newFlock(unit);
+    else if (w.kind === 'brood' && this.mark) this.brood = { at: this.mark, ticks: 0, units: [], harm: [] };
     else this.projectiles.push(this.makeProjectile(unit, w, this.power));
     this.phase = 'flight';
     this.retreatTicks = w.sceneTicks > 0 ? 0 : RETREAT_TICKS;
     this.stance = false;
+  }
+
+  /** A flock of this unit's, where it would set out now. */
+  newFlock(u: Unit): Flock {
+    const b = u.bug;
+    const [dx, dy, dz] = this.aimDirection(u, aimed);
+    const off = b.species.radius + 1.6;
+    return new Flock(b.x + dx * off, b.y + dy * off + 0.6, b.z + dz * off, this.rings).aim(dx, dy, dz);
+  }
+
+  /** The rings are laid out, and the bug turns to the first of them. */
+  private layOut(u: Unit): void {
+    const b = u.bug;
+    this.rings = this.ringsFor(u);
+    const r = this.rings[0];
+    if (!r || b.ny < 0.64) return;
+    const dx = r.x - b.x;
+    const dz = r.z - b.z;
+    const l = Math.sqrt(dx * dx + dz * dz);
+    if (l < 1e-3) return;
+    b.fx = dx / l;
+    b.fz = dz / l;
+    const d = Math.sqrt(l * l + (r.y - b.y) * (r.y - b.y));
+    u.aimH = l / d;
+    u.aimV = (r.y - b.y) / d;
+  }
+
+  /** The rings on the way to the nearest enemy. */
+  private ringsFor(u: Unit): Ring[] {
+    const b = u.bug;
+    let best: Bug | null = null;
+    let bestD = 1e12;
+    for (const q of this.units) {
+      if (q.team === u.team || !q.bug.alive) continue;
+      const d = (q.bug.x - b.x) * (q.bug.x - b.x) + (q.bug.y - b.y) * (q.bug.y - b.y) + (q.bug.z - b.z) * (q.bug.z - b.z);
+      if (d >= bestD) continue;
+      bestD = d;
+      best = q.bug;
+    }
+    return best ? layRings(this.field, this.luck, b.x, b.y + 2, b.z, best.x, best.y + 1, best.z) : [];
+  }
+
+  /** One tick of the flock: the player flies it; it bursts on what it meets. */
+  private flockTick(f: Flock, owner: Unit, input: Readonly<MatchInput>): void {
+    flying.turn = input.turn;
+    flying.up = input.aim !== 0 ? input.aim : input.move;
+    flying.faceX = input.faceX;
+    flying.faceZ = input.faceZ;
+    flying.pitch = input.pitch ?? 0;
+    foes.length = 0;
+    for (const q of this.units) if (q.team !== owner.team) foes.push(q.bug);
+    const end = f.step(this.field, flying, foes);
+    if (f.ring >= 0) this.events.push({ type: 'ring', index: f.ring, x: f.rings[f.ring].x, y: f.rings[f.ring].y, z: f.rings[f.ring].z });
+    if (!end) return;
+    this.flock = null;
+    this.rings = [];
+    if (end === 'lost') {
+      this.events.push({ type: 'sting', x: f.x, y: f.y, z: f.z, unit: -1, rings: f.taken });
+      this.retreatTicks = RETREAT_TICKS;
+      return;
+    }
+    const v = f.touched;
+    const unit = v ? this.units[this.bugs.indexOf(v)] : null;
+    const x = v ? v.x : f.x;
+    const y = v ? v.y : f.y;
+    const z = v ? v.z : f.z;
+    this.events.push({ type: 'sting', x, y, z, unit: unit ? unit.id : -1, rings: f.taken });
+    this.explode(x, y, z, { ...this.currentWeapon, damage: this.currentWeapon.damage + RING_DAMAGE * f.taken });
+    this.lingerTicks = LINGER_TICKS;
   }
 
   /** What leads a column of this unit's, where it would set out now. */
@@ -1066,6 +1146,8 @@ export class Match {
         this.column = null;
         this.brood = null;
         this.mark = null;
+        this.flock = null;
+        this.rings = [];
         if (!this.canUse(u, this.weapon) || this.currentWeapon.sceneTicks > 0) this.weapon = 0;
         for (let q = this.webs.length - 1; q >= 0; q--) if (--this.webs[q].turns < 0) this.removeWeb(this.webs[q], false);
         this.retreatTicks = 0;
@@ -1174,7 +1256,8 @@ export class Match {
         ky /= kl;
         kz /= kl;
       }
-      const speed = KNOCKBACK * f * (w.damage / 45);
+      // (a swarm's hit does not throw as hard as it hurts)
+      const speed = KNOCKBACK * f * (Math.min(60, w.damage) / 45);
       b.push(kx * speed, ky * speed, kz * speed);
     }
     if (w.arcs > 0) this.arc(x, y, z, w);

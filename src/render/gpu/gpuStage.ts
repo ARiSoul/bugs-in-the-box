@@ -41,7 +41,13 @@ export interface StageFx {
   dim: { value: number };
   vignette: { value: number };
   flash: { value: number };
+  flashTint: { value: THREE.Vector3 };
   focusBlur: { value: number };
+  /** A pool of warm light in a place (x, y, z, its radius); how much of what is outside it goes dark. */
+  pool: { value: THREE.Vector4 };
+  poolOn: { value: number };
+  /** How warm it is (0..1). */
+  poolWarm: { value: number };
   /** The whole picture towards black. */
   fade: { value: number };
   /** A blackout: the world goes dark and cold, its lights out (0..1), and how much of it shows in the spot. */
@@ -200,13 +206,18 @@ export async function createGpuStage(canvas: HTMLCanvasElement, terrain: Terrain
     // (the one it aims at keeps its light: a soft spot on the screen)
     const spot = smoothstep(fx.spot.z, 0, vec2(screenUV.x.sub(fx.spot.x).mul(fx.spot.w), screenUV.y.sub(fx.spot.y)).length()).mul(smoothstep(6, 1.5, abs(viewZ.sub(fx.spotAt))));
     const dimBy = spot.mul(0.8).oneMinus().mul(min(fx.dim.mul(mix(pale, 1.12, far)), 0.988));
-    const lit = world.mul(dimBy.oneMinus());
+    // (a pool of light: where in the world this pixel is)
+    const ray = eye.forward.add(eye.right.mul(screenUV.x.mul(2).sub(1))).add(eye.up.mul(float(1).sub(screenUV.y.mul(2))));
+    const there = eye.at.add(ray.mul(viewZ));
+    const outside = smoothstep(fx.pool.w.mul(0.5), fx.pool.w.mul(1.35), there.sub(fx.pool.xyz).length()).mul(fx.poolOn);
+    const warm = mix(vec3(1), vec3(0.98, 0.72, 0.42).mul(smoothstep(0.25, 0.75, bright).mul(0.3).oneMinus()), fx.poolOn.mul(fx.poolWarm).mul(own.oneMinus()));
+    const lit = world.mul(dimBy.oneMinus()).mul(warm).mul(outside.mul(own.mul(0.6).oneMinus()).mul(0.93).oneMinus());
     // (a blackout: what is left is moonlight)
     const lum = world.dot(vec3(0.3, 0.6, 0.1)).mul(own.mul(0.85).oneMinus());
     const night = vec3(0.42, 0.58, 1).mul(pow(max(lum, 0), 0.7).div(lum.mul(2).add(1))).mul(0.15);
     const dimmed = mix(lit, night.add(world.mul(spot).mul(fx.reveal)), fx.black);
     const edge = smoothstep(0.35, 0.85, away.length());
-    const final = dimmed.mul(edge.mul(fx.vignette).oneMinus()).add(fxColor.sample(screenUV).rgb).add(bloomPass.rgb.mul(fx.dim.mul(0.25).add(1))).add(vec3(0.25, 0.8, 1).mul(fx.flash).mul(smoothstep(0.34, 0.0, away.length())).mul(1.5)).mul(fx.fade.oneMinus());
+    const final = dimmed.mul(edge.mul(fx.vignette).oneMinus()).add(fxColor.sample(screenUV).rgb).add(bloomPass.rgb.mul(fx.dim.mul(0.25).add(1))).add(vec3(fx.flashTint).mul(fx.flash).mul(smoothstep(0.34, 0.0, away.length())).mul(1.5)).mul(fx.fade.oneMinus());
     // debug views: 1 = god rays only, 2 = bloom only, 3 = emissive buffer
     const raysView = mix(base.rgb.mul(0.15), sunColor, raysTex.sample(screenUV).r);
     const viewN = select(debugView.lessThan(2.5), bloomPass.rgb, sceneEmissive.sample(screenUV).rgb);
@@ -288,7 +299,17 @@ export async function createGpuStage(canvas: HTMLCanvasElement, terrain: Terrain
     const drawn = renderOutput(vec4(front.rgb.div(max(a, 0.001)), 1)) as unknown as THREE.Node<'vec4'>;
     return vec4(mix(back, drawn.rgb, a), 1) as THREE.Node<'vec4'>;
   };
-  const fx = { scene: fxScene, depthAt, dim: uniform(0), vignette: uniform(0), flash: uniform(0), focusBlur: uniform(0), fade: uniform(0), black: uniform(0), reveal: uniform(0), subject: uniform(10), spot: uniform(new THREE.Vector4(0, 0, 0.0001, 1)), spotAt: uniform(10) };
+  const fx = { scene: fxScene, depthAt, dim: uniform(0), vignette: uniform(0), flash: uniform(0), flashTint: uniform(new THREE.Vector3(0.25, 0.8, 1)), focusBlur: uniform(0), pool: uniform(new THREE.Vector4(0, 0, 0, 1)), poolOn: uniform(0), poolWarm: uniform(1), fade: uniform(0), black: uniform(0), reveal: uniform(0), subject: uniform(10), spot: uniform(new THREE.Vector4(0, 0, 0.0001, 1)), spotAt: uniform(10) };
+  const eye = { at: uniform(new THREE.Vector3()), forward: uniform(new THREE.Vector3()), right: uniform(new THREE.Vector3()), up: uniform(new THREE.Vector3()) };
+  /** Where the picture is taken from (for the pool). */
+  const aimEye = (): void => {
+    const t = Math.tan((camera.fov * Math.PI) / 360);
+    const e = camera.matrixWorld.elements;
+    eye.at.value.set(e[12], e[13], e[14]);
+    eye.right.value.set(e[0], e[1], e[2]).multiplyScalar(t * camera.aspect);
+    eye.up.value.set(e[4], e[5], e[6]).multiplyScalar(t);
+    eye.forward.value.set(-e[8], -e[9], -e[10]);
+  };
   const debugView = uniform(0);
   /** The shafts in the dust are warmer than the light itself (scattering in warm, dusty air). */
   const sunColor = uniform(new THREE.Color(0xffb36b));
@@ -389,6 +410,7 @@ export async function createGpuStage(canvas: HTMLCanvasElement, terrain: Terrain
       heroes.update(seconds);
       carParts.update(seconds);
       dust?.update(dt);
+      aimEye();
       (pipeline ?? firstPipeline()).render();
     },
     menu: {

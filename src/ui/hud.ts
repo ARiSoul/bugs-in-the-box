@@ -1,3 +1,5 @@
+import { FLOCK_TICKS, RINGS } from '../game/flock';
+import { RING_DAMAGE } from '../game/weapons';
 import { TICK_RATE } from '../game/bug';
 import { SKILL_FULL, WIND_MAX, type Match } from '../game/match';
 import type { ItemKind } from '../game/items';
@@ -80,6 +82,8 @@ export class Hud {
   private readonly news = make('news');
   private readonly deck = make('deck');
   private readonly hand = make('hand');
+  /** While a swarm is flown: the rings it took, the time it has left. */
+  private readonly flock = document.createElement('div');
   private readonly power = make('power', '<u></u><s></s>');
   private readonly aim = make('aim');
   private teams: TeamView[] = [];
@@ -94,6 +98,9 @@ export class Hud {
 
   constructor() {
     this.deck.append(this.aim, this.power, this.hand);
+    this.flock.id = 'flock';
+    this.flock.innerHTML = `<div class="cells">${'<i></i>'.repeat(RINGS)}<em></em></div><div class="fuel"><svg viewBox="0 0 24 24"><path d="M12 1l9.5 5.5v11L12 23l-9.5-5.5v-11z"/></svg><u><b></b></u></div><p></p>`;
+    document.body.append(this.flock);
     this.root.append(this.clock, this.wind, this.call, this.news, this.deck);
     this.skillHolder.append(this.skill.root);
     this.skill.root.addEventListener('click', () => {
@@ -303,6 +310,7 @@ export class Hud {
           : match.phase === 'aim'
             ? `<b>${match.currentWeapon.name}</b> aim ${((Math.atan2(u.aimV, u.aimH) * 180) / Math.PI).toFixed(1)}°${u.bug.species.flight ? ` · ${u.bug.flying ? 'run: up, jump: let go' : u.bug.grounded ? 'jump twice: fly' : 'jump: fly'} · breath ${Math.round((u.bug.breath / (u.bug.species.flight * TICK_RATE)) * 100)}%` : ''}`
             : '';
+    this.showFlock(match, computer);
     this.set('aim', () => (this.aim.innerHTML = aim), aim);
 
     const banner = match.phase !== 'over' || document.body.classList.contains('menu') ? '' : match.winner >= 0 ? `${team.name ? match.teams[match.winner].name : ''} win` : 'Nobody left';
@@ -310,6 +318,36 @@ export class Hud {
       this.banner.style.display = banner ? 'block' : 'none';
       this.banner.innerHTML = banner ? letters(banner.replace('Cockroaches', 'Roaches'), { fill: TEAM[match.winner] ?? '#ffb547' }) : '';
     }, banner);
+  }
+
+  /** A swarm is aimed or flown: the rings, what they add, the time, the keys. */
+  private showFlock(match: Match, computer: boolean): void {
+    const q = match.flock;
+    const aiming = !q && match.stance && match.currentWeapon.kind === 'flock';
+    const rings = q ? q.rings : match.rings;
+    const left = q ? q.left / FLOCK_TICKS : 1;
+    const taken = q ? q.taken : 0;
+    // (one it flew past: one after it is taken)
+    const last = rings.reduce((n, r, i) => (r.taken ? i : n), -1);
+    const state = rings.map((r, i) => (r.taken ? 'got' : i < last ? 'lost' : '')).join('|');
+    this.set('flockOn', () => {
+      this.flock.classList.toggle('on', q !== null || aiming);
+      this.flock.classList.toggle('late', q !== null && q.age > 170);
+      this.flock.classList.toggle('low', q !== null && q.left < 120);
+    }, `${q !== null}|${aiming}|${q ? q.age > 170 : 0}|${q ? q.left < 120 : 0}`);
+    this.set('flockRings', () => {
+      const cells = this.flock.querySelectorAll<HTMLElement>('.cells i');
+      const now = state.split('|');
+      cells.forEach((c, i) => {
+        c.className = now[i] ?? '';
+        c.style.display = i < rings.length ? '' : 'none';
+      });
+      (this.flock.querySelector('em') as HTMLElement).textContent = taken > 0 ? `+${taken * RING_DAMAGE}` : '';
+    }, `${state}|${taken}`);
+    this.set('flockTime', () => ((this.flock.querySelector('.fuel b') as HTMLElement).style.transform = `scaleX(${left.toFixed(3)})`), left.toFixed(3));
+    this.set('flockKeys', () => {
+      (this.flock.querySelector('p') as HTMLElement).innerHTML = computer ? '' : aiming ? '<kbd>A</kbd><kbd>D</kbd> turn to the rings <kbd class="go">Q</kbd> fly' : '<kbd>A</kbd><kbd>D</kbd> turn <kbd>W</kbd><kbd>S</kbd> up, down <kbd><svg viewBox="0 0 24 34"><rect x="2" y="2" width="20" height="30" rx="10"/><path d="M12 8v6"/></svg></kbd> drag';
+    }, `${computer}|${aiming}`);
   }
 
   private set(key: string, apply: () => void, value: string): void {
