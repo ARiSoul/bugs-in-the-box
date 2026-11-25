@@ -197,7 +197,7 @@ export interface MatchInput {
 
 export type Place = readonly [number, number, number, number, number, number];
 /** Why something cannot be put somewhere. */
-export type NoPlace = '' | 'too far' | 'no ground' | 'no room' | 'once a turn' | 'too short' | 'no way there';
+export type NoPlace = '' | 'too far' | 'no ground' | 'no room' | 'once a turn' | 'too short' | 'no way there' | 'nothing to bridge';
 
 export const NO_INPUT: Readonly<MatchInput> = Object.freeze({ move: 0, turn: 0, faceX: 0, faceZ: 0, jump: false, run: false, aim: 0, fire: false, weapon: -1 });
 
@@ -1006,6 +1006,11 @@ export class Match {
       fy /= far;
       fz /= far;
       bridgePieces(this.field, site, fx, fy, fz, count, out);
+    }
+    // (a bridge that lies in the ground it goes over is none)
+    if (w.kind === 'bridge' && laid(this.field, out) < 3) {
+      out.length = 0;
+      return 'nothing to bridge';
     }
     return this.allowed(out).length > 0 ? '' : 'no room';
   }

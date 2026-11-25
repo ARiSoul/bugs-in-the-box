@@ -672,7 +672,7 @@ export class BuildViews {
     }
     if (!s || !model) return;
     // (a bridge's near end: the rest of it comes with its far one)
-    const ok = s.why === '' || (s.w.kind === 'bridge' && !placing?.first && s.why === 'no room');
+    const ok = s.why === '' || (s.w.kind === 'bridge' && !placing?.first && (s.why === 'no room' || s.why === 'nothing to bridge'));
     this.ghostBeat.value = 0.5 + 0.5 * Math.sin(time * 5);
     this.ghostColor.value.set(...GHOST[ok ? 0 : 1]);
     this.ghost.geometry = model;
@@ -691,7 +691,7 @@ export class BuildViews {
         f.first = (-(COLUMNS - 1) / 2) * APART;
         f.gap = APART;
       } else {
-        f.out.set(-fz / l, 0, fx / l).negate();
+        f.out.set(-fz / l, 0, fx / l);
         f.first = 0;
         f.gap = (SPANS * SPAN) / (STATIONS - 1);
       }
