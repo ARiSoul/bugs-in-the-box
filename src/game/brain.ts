@@ -129,6 +129,7 @@ export class Brain {
     const u = match.activeUnit;
     if (!u.bug.alive) return o;
     // (a spider that falls takes hold of its thread)
+    if (u.bug.species.flight && !u.bug.grounded && !u.bug.flying && u.bug.breath > 0 && u.bug.vy < -FALLS && u.bug.airTicks % 12 === 0) o.jump = true;
     if (u.bug.species.silk && !u.bug.grounded && !u.bug.thread && u.bug.vy < -FALLS && u.bug.airTicks % 12 === 0) o.jump = true;
     if (match.phase === 'flight') {
       if (match.column) this.steer(match, match.column, u);

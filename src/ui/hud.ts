@@ -214,7 +214,9 @@ export class Hud {
 
     this.teams.forEach((t, i) => {
       const h = match.teamHealth(i);
-      t.card.show(WEAPONS[specialOf(match, i)], match.skill[i] / SKILL_FULL, '');
+      const own = WEAPONS[specialOf(match, i)];
+      t.card.root.style.display = own ? '' : 'none';
+      if (own) t.card.show(own, match.skill[i] / SKILL_FULL, '');
       this.set(`team${i}`, () => {
         const f = `${((h / t.max) * 100).toFixed(1)}%`;
         t.fill.style.width = f;
@@ -299,7 +301,7 @@ export class Hud {
         : brood
           ? 'point at a spot, click (or the fire key) to call them · W/S move, right drag turns the view'
           : match.phase === 'aim'
-            ? `<b>${match.currentWeapon.name}</b> aim ${((Math.atan2(u.aimV, u.aimH) * 180) / Math.PI).toFixed(1)}°`
+            ? `<b>${match.currentWeapon.name}</b> aim ${((Math.atan2(u.aimV, u.aimH) * 180) / Math.PI).toFixed(1)}°${u.bug.species.flight ? ` · ${u.bug.flying ? 'run: up, jump: let go' : u.bug.grounded ? 'jump twice: fly' : 'jump: fly'} · breath ${Math.round((u.bug.breath / (u.bug.species.flight * TICK_RATE)) * 100)}%` : ''}`
             : '';
     this.set('aim', () => (this.aim.innerHTML = aim), aim);
 

@@ -178,9 +178,9 @@
       #setup .team-card.side1 { right: 0; --c: var(--blue); --t1: rgba(10, 40, 92, 0.82); text-align: right; padding: 5vh 1.8vw 2vh 2.6vw; animation: fromRight 0.5s 0.5s both cubic-bezier(0.2, 1.1, 0.3, 1); }
       #setup .team-card.side1::before { inset: 0 -8vw 0 0; border-right: 0; border-left: 4px solid var(--c); }
       @keyframes fromLeft { from { transform: translateX(-110%); } } @keyframes fromRight { from { transform: translateX(110%); } }
-      #setup .chips { display: flex; gap: 0.5em; } #setup .side1 .chips { justify-content: flex-end; }
-      #setup .chips button { padding: 0.35em 0.55em; color: var(--dim); background: rgba(255, 255, 255, 0.08); transform: skewX(-8deg); transition: transform 0.15s cubic-bezier(0.2, 2, 0.4, 1), color 0.15s; }
-      #setup .chips svg { display: block; width: 3.5em; transform: skewX(8deg); } #setup .side1 .chips svg { transform: skewX(8deg) scaleX(-1); }
+      #setup .chips { display: flex; gap: 0.35em; } #setup .side1 .chips { justify-content: flex-end; }
+      #setup .chips button { padding: 0.35em 0.35em; color: var(--dim); background: rgba(255, 255, 255, 0.08); transform: skewX(-8deg); transition: transform 0.15s cubic-bezier(0.2, 2, 0.4, 1), color 0.15s; }
+      #setup .chips svg { display: block; width: 2.95em; transform: skewX(8deg); } #setup .side1 .chips svg { transform: skewX(8deg) scaleX(-1); }
       #setup .chips button:hover { color: var(--ink); transform: skewX(-8deg) translateY(-4px) scale(1.06); }
       #setup .chips button.on { background: var(--c); color: #160d0a; }
       #setup .name { height: 6.6vh; display: flex; margin-left: -0.5vh; } #setup .side1 .name { justify-content: flex-end; margin: 0 -1vh 0 0; }

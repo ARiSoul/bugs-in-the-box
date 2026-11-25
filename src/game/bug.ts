@@ -48,6 +48,12 @@ const CEILING_NY = -0.8;
 /** Aiming: level ground up to this steep (normal Y) aims by the world; from the second on, wholly by the surface. */
 const AIM_LEVEL_NY = 0.94;
 const AIM_SURFACE_NY = 0.64;
+/** Flying: speed ahead, up and down; how fast it takes its new speed; how near the top of the world it may go. */
+const FLY_SPEED = 9;
+const FLY_CLIMB = 6.5;
+const FLY_SINK = 1.6;
+const FLY_GRIP = 0.12;
+const FLY_ROOF = 4;
 /** A spider on its thread comes down at this speed; sideways it slows by this factor a tick. */
 const THREAD_SPEED = 6;
 const THREAD_DRAG = 0.97;
@@ -125,6 +131,12 @@ export class Bug {
   tx = 0;
   ty = 0;
   tz = 0;
+  /**
+   * Flying (species with `flight`): a jump in the air starts and ends it. It goes where it faces (walk keys), up while it
+   * runs, else slowly down, as long as its breath (ticks) lasts; a push ends it.
+   */
+  flying = false;
+  breath = 0;
   /** It has stood somewhere (there is a place for a thread to hang from). */
   private stood = false;
   /** The surface's normal, valid while grounded. */
@@ -144,6 +156,7 @@ export class Bug {
 
   constructor(readonly species: BugSpecies) {
     this.health = species.health;
+    this.breath = Math.round((species.flight ?? 0) * TICK_RATE);
   }
 
   /**
@@ -204,6 +217,8 @@ export class Bug {
     this.confine = o.confine;
     this.slow = o.slow;
     this.leap = o.leap;
+    this.flying = o.flying;
+    this.breath = o.breath;
     this.hung = o.hung;
     this.airTicks = o.airTicks;
     this.alive = o.alive;
@@ -260,13 +275,23 @@ export class Bug {
       this.vz = this.hz * v;
       stick = true;
     } else {
+      if (input.jump && this.breath > 0) this.flying = !this.flying;
       if (input.jump && sp.silk && this.stood) this.thread = !this.thread;
       if (this.thread && field.sample(this.tx, this.ty, this.tz) > 1) this.thread = false;
-      this.vy -= GRAVITY * DT;
+      if (!this.flying) this.vy -= GRAVITY * DT;
       if (this.thread) {
         if (this.vy < -THREAD_SPEED) this.vy = -THREAD_SPEED;
         this.vx *= THREAD_DRAG;
         this.vz *= THREAD_DRAG;
+      }
+      if (this.flying) {
+        this.breath--;
+        const v = input.move > 0 ? FLY_SPEED : input.move < 0 ? -FLY_SPEED * 0.6 : 0;
+        const up = input.run && this.y < field.H - FLY_ROOF ? FLY_CLIMB : -FLY_SINK;
+        this.vx += (this.fx * v - this.vx) * FLY_GRIP;
+        this.vy += (up - this.vy) * FLY_GRIP;
+        this.vz += (this.fz * v - this.vz) * FLY_GRIP;
+        if (this.breath <= 0) this.flying = false;
       }
       if (this.vy < -MAX_FALL_SPEED) this.vy = -MAX_FALL_SPEED;
       fallSpeed = -this.vy;
@@ -304,6 +329,12 @@ export class Bug {
       }
     }
 
+    // (a flyer turns back at the edge of where it may be)
+    if (this.flying && (this.x < EDGE * 3 || this.z < EDGE * 3 || this.x > field.W - EDGE * 3 || this.z > field.D - EDGE * 3 || (this.confine !== null && !this.confine(this.x, this.y, this.z) && this.confine(this.px, this.py, this.pz)))) {
+      this.x = this.px;
+      this.z = this.pz;
+      this.vx = this.vz = 0;
+    }
     if (stick) {
       // walked into another surface: over onto it
       if (input.move !== 0 && aheadDot < TAKE_OVER) {
@@ -355,6 +386,7 @@ export class Bug {
     if (this.grounded) {
       this.airTicks = 0;
       this.thread = false;
+      this.flying = false;
       this.stood = true;
       // (where a thread would hang from)
       this.tx = this.x - this.nx * sp.radius;
@@ -496,6 +528,7 @@ export class Bug {
     this.vz += vz;
     this.grounded = false;
     this.thread = false;
+    this.flying = false;
   }
 
   /**

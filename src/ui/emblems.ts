@@ -2,6 +2,7 @@
 export const BUGS: Record<string, string> = {
   ant: '<g stroke="currentColor" stroke-width="3.4" fill="none"><path d="M40 32 28 50l-6 6M48 34v22M56 34l14 22M42 28 30 14M50 28l2-18M58 28l14-16M78 24l14-12M80 28l16-6"/></g><g fill="currentColor"><ellipse cx="24" cy="32" rx="18" ry="12"/><ellipse cx="50" cy="31" rx="11" ry="7"/><circle cx="74" cy="30" r="11"/></g>',
   spider: '<g stroke="currentColor" stroke-width="3.4" fill="none"><path d="M46 28 30 8 14 20M44 32 22 20 6 38M44 36H22L10 54M48 38l-16 8-6 12M58 28 72 8l16 12M60 32l20-12 16 18M60 36h20l12 18M56 38l14 8 6 12"/></g><g fill="currentColor"><circle cx="42" cy="34" r="17"/><circle cx="64" cy="34" r="10"/></g>',
+  bee: '<g stroke="currentColor" stroke-width="3.400" fill="none"><path d="M52 40l-6 14M62 41l2 14M70 38l10 14M84 24c4-8 8-10 13-10M82 22c2-9 5-12 9-15"/></g><g fill="currentColor"><path d="M8 33Q10 20 26 20v26Q12 46 8 33zM30 20q6-1 10 1v25q-5 1-10 0z"/><ellipse cx="56" cy="31" rx="14" ry="13"/><circle cx="78" cy="31" r="10"/><ellipse cx="40" cy="11" rx="20" ry="7" transform="rotate(14 40 11)" opacity=".7"/></g>',
   cockroach: '<g stroke="currentColor" stroke-width="3.4" fill="none"><path d="M36 36 22 56M50 38l-2 18M64 36l14 18M36 24 22 6M52 22l2-18M66 24 80 8M82 26c8-8 12-16 16-22M84 32c8 0 12-4 15-8"/></g><g fill="currentColor"><ellipse cx="44" cy="30" rx="36" ry="15"/><circle cx="80" cy="30" r="9"/></g>',
 };
 

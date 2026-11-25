@@ -271,6 +271,7 @@ export class GameSounds {
       if (!s || !b.alive) return;
       if (b.justLanded && b.lastImpact > LAND_SPEED) this.engine.play('land', { at: b, level: Math.min(1.5, 0.3 + b.lastImpact / 18) });
       else if (s.grounded && !b.grounded && u === match.activeUnit && b.vy > 2 && jumps) this.engine.play('jump', { at: b });
+      if (b.flying && match.tick % 5 === 0) this.engine.play('wings', { at: b, rate: 1.9, level: 0.5 });
       if (b.thread && !s.thread) this.engine.play('thread', { at: b });
       s.thread = b.thread;
       s.grounded = b.grounded;

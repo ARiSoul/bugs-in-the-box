@@ -8,7 +8,7 @@ export const ITEM_KINDS = ['battery', 'patch', 'fuse', 'overclock', 'spring', 'p
 export type ItemKind = (typeof ITEM_KINDS)[number];
 
 /** How often each turns up, against the others. */
-const ODDS: Readonly<Record<ItemKind, number>> = { battery: 5, patch: 5, fuse: 3, overclock: 4, spring: 3, paste: 3, crystal: 2, magnet: 2, scrap: 2, dud: 3 };
+const ODDS: Readonly<Record<ItemKind, number>> = { battery: 5, patch: 5, fuse: 3, overclock: 4, spring: 3, paste: 3, crystal: 2, magnet: 2, scrap: 2, dud: 1.2 };
 
 /** A box on the map, or on its way to it. What is in it shows when it is opened. */
 export interface Item {

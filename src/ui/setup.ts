@@ -32,9 +32,9 @@ export interface SetupHooks {
   random(): number;
 }
 
-const PLURAL: Record<string, string> = { ant: 'Ants', spider: 'Spiders', cockroach: 'Cockroaches' };
+const PLURAL: Record<string, string> = { ant: 'Ants', spider: 'Spiders', cockroach: 'Cockroaches', bee: 'Bees' };
 /** Short enough to stand large. */
-const SHORT: Record<string, string> = { ant: 'Ants', spider: 'Spiders', cockroach: 'Roaches' };
+const SHORT: Record<string, string> = { ant: 'Ants', spider: 'Spiders', cockroach: 'Roaches', bee: 'Bees' };
 const SIDES = ['Red', 'Blue'];
 const PLAYERS: [string, string][] = [['human', 'You'], ['easy', 'Easy'], ['normal', 'Normal'], ['hard', 'Hard']];
 const SECONDS = [15, 30, 45, 60];
@@ -43,6 +43,7 @@ const WINDS: [number, string][] = [[0, 'Off'], [0.5, 'Breeze'], [1, 'Windy'], [1
 const ABOUT: Record<string, [string, string, string]> = {
   ant: ['Tough. Never alone.', 'The most health of all', 'March a column of workers at them'],
   spider: ['Patient. Hard to corner.', 'Web Shot, and hangs by a thread', 'Draw a bow of silk, let the dart fly'],
+  bee: ['Sweet. Until it is not.', 'Flies: 3 seconds a turn', 'Not yet: it is still young'],
   cockroach: ['Fast. Refuses to die.', 'Hard Shell: outlives one blow', 'Kill the lights, send in the brood'],
 };
 /** A line for each device, and its colour. */
@@ -263,7 +264,7 @@ export class SetupScreen {
         `<div class="name">${letters(SHORT[s.id], { fill: i ? '#8ccaff' : '#ff8676', drop: 7, outline: 11 })}</div><p>${line}</p>` +
         `<div class="stats">${bars.map(([n, v, k]) => `<div><em>${n}</em><i><u style="--v:${Math.min(1, v).toFixed(2)}"></u></i><strong>${k}</strong></div>`).join('')}</div>` +
         `<div class="trait"><em>Trait</em><span>${gift}</span></div>` +
-        `<div class="special"><span class="emblem" style="color:#${(special?.color ?? 0xffffff).toString(16).padStart(6, '0')}">${special ? art(special.id) : ''}</span><div><em>Special</em><b>${special?.name ?? ''}</b><span>${what}</span></div></div>` +
+        (special ? `<div class="special"><span class="emblem" style="color:#${(special?.color ?? 0xffffff).toString(16).padStart(6, '0')}">${special ? art(special.id) : ''}</span><div><em>Special</em><b>${special?.name ?? ''}</b><span>${what}</span></div></div>` : `<div class="special"><div><em>Special</em><span>${what}</span></div></div>`) +
         `<div class="who" role="group" aria-label="${SIDES[i]}: who plays"></div>`;
       for (const b of card.querySelectorAll<HTMLButtonElement>('.chips button')) b.addEventListener('click', () => this.pickSpecies(i, Number(b.dataset.k)));
       // (the bars grow again)

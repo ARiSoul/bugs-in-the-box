@@ -1074,6 +1074,7 @@ export class Match {
         const wind = WIND_MAX * (this.options.wind ?? 1);
         this.windX = (this.rng() * 2 - 1) * wind;
         this.windZ = (this.rng() * 2 - 1) * wind;
+        for (const q of this.units) q.bug.breath = Math.round((q.bug.species.flight ?? 0) * TICK_RATE);
         this.turnTicks += u.extra * TICK_RATE;
         u.extra = 0;
         this.hard = 1;

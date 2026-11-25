@@ -42,7 +42,7 @@ import { setupKeysMenu } from './ui/keys';
 import { setupSoundMenu } from './ui/sound';
 
 /** The two teams, each of one species (chosen in the menu, kept in the address as `?teams=ant,spider`). */
-const PLURAL: Record<string, string> = { ant: 'Ants', spider: 'Spiders', cockroach: 'Cockroaches' };
+const PLURAL: Record<string, string> = { ant: 'Ants', spider: 'Spiders', cockroach: 'Cockroaches', bee: 'Bees' };
 const picked: BugSpecies[] = [ANT, SPIDER];
 /** Who plays each team: a player here ('human'), or the computer (a skill's id); `?players=human,normal`. */
 const players = ['human', 'normal'];
@@ -151,7 +151,7 @@ let bowPending = false;
 /** The turntable's turn when the drawn ground was indexed. */
 let indexedTurns = 0;
 let views: ScenarioViews;
-let bugViews: { view: BugView; face: Face; blink: number; label: UnitLabel; height: number }[] = [];
+let bugViews: { view: BugView; face: Face; wing: number; blink: number; label: UnitLabel; height: number }[] = [];
 
 /** New map and new match from one number: the seed is all two players need to share. */
 function newMatch(s: number): void {
@@ -201,7 +201,7 @@ function newTeams(s: number): void {
     const label = new UnitLabel(u.name, match.teams[u.team].color);
     stage.scene.add(view.root);
     stage.hud.add(label.sprite);
-    return { view, face, blink: 1 + Math.random() * 4, label, height: u.bug.species.radius * 2.4 };
+    return { view, face, wing: 0, blink: 1 + Math.random() * 4, label, height: u.bug.species.radius * 2.4 };
   });
   bestHit = 0;
   webViews.clear();
@@ -1060,6 +1060,8 @@ function frame(now: number): void {
     v.blink -= scaled;
     if (v.blink < -0.16) v.blink = 1.5 + Math.random() * 4;
     v.face.blink(!u.bug.alive || v.blink < 0 ? 1 : 0);
+    v.wing += ((u.bug.alive && !u.bug.grounded ? (u.bug.flying ? 1 : 0.5) : 0) - v.wing) * (1 - Math.exp(-scaled * 14));
+    v.face.wingsTo?.(v.wing, u.bug.flying ? 1 : 0, now / 1000);
     v.face.jaws(!u.bug.alive ? 0.3 : i === match.active && match.charging ? match.power : 0.12 + 0.1 * Math.sin(now * 0.002 + i * 2));
   });
   // (the small ants go on bugs posed for this frame)
@@ -1258,7 +1260,7 @@ function placeLabels(): void {
     const v = bugViews[i];
     const dist = stage.camera.position.distanceTo(v.view.root.position);
     v.view.setCameraDistance(dist);
-    v.face.near(dist < 60);
+    v.face.near(dist < 60, dist);
     v.label.update(v.view.root.position, v.height * v.view.root.scale.y, u.bug.health, u.bug.alive, dist, u.bug.alive && occluded(v.view.root.position, dist), i === match.active);
     // (its own name is in the way of what it points at)
     if (i === match.active && antColumn.camera.active) v.label.sprite.visible = false;

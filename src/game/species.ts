@@ -21,6 +21,8 @@ export interface BugSpecies {
   readonly health: number;
   /** Spins silk: in the air it can hang on a thread (see Bug.thread), and no web holds it. */
   readonly silk?: boolean;
+  /** Flies (see Bug.flying): the seconds of breath it has for that in a turn. */
+  readonly flight?: number;
   /** Its shell takes the first blow that would kill it, once a match (see Match.damage). */
   readonly shell?: boolean;
 
@@ -96,7 +98,26 @@ export const COCKROACH: BugSpecies = {
   accent: 0x43230e,
 };
 
+export const BEE: BugSpecies = {
+  id: 'bee',
+  radius: 1,
+  walkSpeed: 4.6,
+  turnRate: 3,
+  jumpSpeed: 9,
+  jumpForward: 4,
+  health: 110,
+  flight: 3,
+  legs: 6,
+  legLength: 1.12,
+  bodyLength: 2.6,
+  abdomen: 0.62,
+  head: 0.42,
+  antennae: 0,
+  color: 0xf2a313,
+  accent: 0x2a1204,
+};
+
 /** The head of an ant column: what leads it crawls like any bug, small and fast. Not a species one plays. */
 export const MARCHER: BugSpecies = { ...ANT, id: 'marcher', radius: 0.7, walkSpeed: 12, turnRate: 1.7 };
 
-export const SPECIES: readonly BugSpecies[] = [ANT, SPIDER, COCKROACH];
+export const SPECIES: readonly BugSpecies[] = [ANT, SPIDER, COCKROACH, BEE];

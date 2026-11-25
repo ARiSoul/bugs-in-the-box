@@ -17,7 +17,7 @@ const CHARGE_MEET = 0.6;
 const HANG = 0.12;
 const COLORS = [0xff5a45, 0x4da8ff];
 /** How large each species stands (its legs' reach decides it). */
-const SIZE: Record<string, number> = { ant: 1.46, spider: 1.12, cockroach: 1.5 };
+const SIZE: Record<string, number> = { ant: 1.46, spider: 1.12, cockroach: 1.5, bee: 1.3 };
 
 interface Fighter {
   bug: Bug;
@@ -101,7 +101,7 @@ export class Heroes {
     this.key.shadow.radius = 4;
     scene.add(this.key, this.key.target, this.spark);
     // (a rim of the team's colour from behind each)
-    for (const [x, c] of [[-5.5, 0xff5a3c], [5.5, 0x6fb4ff]] as const) {
+    for (const [x, c] of [[-5.5, 0xff5a3c], [5.5, 0x4a9fff]] as const) {
       const rim = new THREE.PointLight(c, 170, 40);
       rim.position.set(x, 3.4, -5);
       this.rims.push(rim);
@@ -280,7 +280,7 @@ export class Heroes {
     cam.lookAt(sx * 0.2, 0.0 + sy * 0.2, 0);
     const dark = this.gloom > 0 ? 1 - Math.min(1, this.gloom * 2.4) * 0.92 * (Math.sin(this.time * 47) > 0.75 ? 0.5 : 1) : 1;
     this.key.intensity = 780 * dark;
-    for (const [i, r] of this.rims.entries()) r.intensity = (i ? 210 : 170) * (0.4 + 0.6 * dark);
+    for (const [i, r] of this.rims.entries()) r.intensity = (i ? 165 : 170) * (0.4 + 0.6 * dark);
     this.stage.power.forEach((p, i) => {
       const lost = this.winner >= 0 && this.winner !== i;
       p.value += ((lost ? 0.12 : this.ready || this.charging >= 0 ? 2.4 : 1) * dark - p.value) * (1 - Math.exp(-dtReal * 8));
@@ -373,9 +373,10 @@ export class Heroes {
     // (a cockroach's feelers: back, and on its own side)
     if (b.species.shell) t.head.rotation.x += 0.12;
     t.carryLegs();
+    f.face.wingsTo?.(Math.max(g, rush ? 1 : 0, f.y > 0.02 ? 1 : 0, won ? 0.6 : 0), Math.max(g, rush || f.y > 0.02 ? 1 : 0), this.time);
     f.blink -= dt;
     if (f.blink < -0.2) f.blink = 1.6 + Math.random() * 3.5;
-    const squint = g > 0.3 ? 0.35 : crouch * 0.45;
+    const squint = crouch * 0.3;
     f.face.blink(Math.max(squint, f.blink < 0 ? Math.sin(Math.PI * Math.min(1, -f.blink / 0.16)) : 0));
     f.face.jaws(Math.max(g * (0.75 + 0.25 * Math.sin(this.time * 30)), rush ? 1 : 0, 0.12 + 0.12 * Math.sin(this.time * 1.7 + side * 2)));
   }
@@ -395,6 +396,7 @@ export class Heroes {
       f.gesture += dt;
       const kind = f.bug.species.id;
       // an ant hops, a spider drums its feet, a cockroach takes the lights
+      if (kind === 'bee' && f.gesture > 0.2 && f.gesture < 0.95) f.vy = 2.2 + GRAVITY * dt;
       if (kind === 'ant' && was < 0.42 && f.gesture >= 0.42) f.vy = 6.5;
       if (kind === 'spider' && Math.floor(was * 8) !== Math.floor(f.gesture * 8) && f.gesture < 0.9) {
         f.squash = 0.35;

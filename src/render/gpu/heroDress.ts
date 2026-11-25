@@ -1,6 +1,7 @@
 import * as THREE from 'three/webgpu';
 import { abs, bumpMap, float, fract, mix, mx_noise_float, normalView, positionLocal, positionViewDirection, smoothstep, uniform, vec3 } from 'three/tsl';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { dressBee } from './beeModel';
 import type { BugView } from '../BugView';
 
 const UP = new THREE.Vector3(0, 1, 0);
@@ -16,7 +17,9 @@ export interface Face {
   blink(shut: number): void;
   jaws(open: number): void;
   /** Whether it is near enough for its hairs and spines. */
-  near(on: boolean): void;
+  near(on: boolean, distance?: number): void;
+  /** Wings: how far out, how hard they beat (only what has any). */
+  wingsTo?(open: number, beat: number, seconds: number): void;
 }
 
 /** Each team's colours on the fighters: the shell, its shadow side, the light on its edge, the limbs. */
@@ -38,14 +41,14 @@ interface Coat {
 
 /** A number, or a colour, of the bug a mesh belongs to: the material is shared, this is not. */
 const ofBug = (o: THREE.Object3D | null): BugView | undefined => o?.userData.bug as BugView | undefined;
-function own(get: (v: BugView) => number): F {
+export function own(get: (v: BugView) => number): F {
   return uniform(0).onObjectUpdate(({ object }) => {
     const v = ofBug(object);
     return v ? get(v) : 0;
   }) as unknown as F;
 }
 const NONE = new THREE.Color(0);
-function ownColor(get: (v: BugView) => THREE.Color): V3 {
+export function ownColor(get: (v: BugView) => THREE.Color): V3 {
   return uniform(new THREE.Color(0)).onObjectUpdate(({ object }, self) => {
     const v = ofBug(object);
     (self.value as unknown as THREE.Color).copy(v ? get(v) : NONE);
@@ -57,6 +60,7 @@ EYE.fog = false;
 EYE.emissiveNode = ownColor((v) => v.eyes.emissive);
 const GLINT = new THREE.MeshBasicNodeMaterial({ color: 0xffffff });
 const FANG = new THREE.MeshStandardNodeMaterial({ color: 0x060505, roughness: 0.12, fog: false });
+const MOUTH = new THREE.MeshStandardNodeMaterial({ color: 0x1a0606, roughness: 0.6 });
 const BRISTLE = [0, 1].map(() => new THREE.MeshStandardNodeMaterial({ roughness: 0.5 }));
 
 /** The coats made so far: every fighter of a team shares them (a shader is slow to make). */
@@ -137,6 +141,7 @@ function fur(on: THREE.Mesh, count: number, long: number, thick: number, root: n
 /** The finer looks a bug gets when it is shown large in the menus: shell in its team's colours, hairs, spines, jaws, eyes. */
 export function dress(view: BugView, side: number): Face {
   const s = view.species;
+  if (s.id === 'bee') return dressBee(view, side);
   const r = s.radius;
   const paint = PAINT[side];
   const coat = { shell: paint.shell, deep: paint.deep, edge: paint.edge, rough: 0.3 };
@@ -169,13 +174,17 @@ export function dress(view: BugView, side: number): Face {
   const v = (x: number, y: number, z: number): THREE.Vector3 => new THREE.Vector3(x, y, z);
   const shine = (b: THREE.Mesh): THREE.Mesh => {
     const g = new THREE.Mesh(BALL, glint);
-    g.scale.setScalar(b.scale.x * 0.17);
-    g.position.copy(b.position).add(v(0.26, 0.5, 0.76).multiplyScalar(b.scale.x));
+    g.scale.setScalar(b.scale.x * 0.25);
+    g.position.copy(b.position).add(v(0.2, 0.46, 0.76).multiplyScalar(b.scale.x));
+    const low = new THREE.Mesh(BALL, glint);
+    low.scale.setScalar(0.42);
+    low.position.set(-1.6, -3.4, 0.3);
+    g.add(low);
     view.head.add(g);
     return g;
   };
   for (const e of eyes) {
-    e.ball.scale.multiplyScalar(spider ? 1.35 : 1.3);
+    e.ball.scale.multiplyScalar(spider ? 1.5 : 1.45);
     e.high = e.ball.scale.y;
     e.glint = shine(e.ball);
   }
@@ -206,13 +215,14 @@ export function dress(view: BugView, side: number): Face {
     const brow = new THREE.Mesh(BALL, dark);
     const at = pair[x < 0 ? 0 : 1];
     brow.scale.set(at.scale.x * 0.95, at.scale.x * 0.2, at.scale.x * 0.5);
-    brow.position.copy(at.position).add(v(x * -0.02, spider ? 0.82 : 0.93, spider ? 0.72 : 0.5).multiplyScalar(at.scale.x));
-    brow.rotation.set(0.35, 0, x * 0.5);
+    brow.position.copy(at.position).add(v(x * 0.06, spider ? 1.0 : 1.12, spider ? 0.62 : 0.45).multiplyScalar(at.scale.x));
+    // (raised in the middle: a kind face)
+    brow.rotation.set(0.35, 0, x * -0.28);
     view.head.add(brow);
     if (s.id === 'ant') {
-      g.position.set(x * hd * 0.5, -hd * 0.35, hd * 0.62);
-      const arc = new THREE.QuadraticBezierCurve3(v(0, 0, 0), v(x * hd * 0.42, -hd * 0.2, hd * 0.75), v(-x * hd * 0.4, -hd * 0.25, hd * 1.0));
-      const tube = new THREE.TubeGeometry(arc, 20, hd * 0.15, 10);
+      g.position.set(x * hd * 0.36, -hd * 0.62, hd * 0.5);
+      const arc = new THREE.QuadraticBezierCurve3(v(0, 0, 0), v(x * hd * 0.2, -hd * 0.3, hd * 0.36), v(-x * hd * 0.3, -hd * 0.42, hd * 0.42));
+      const tube = new THREE.TubeGeometry(arc, 20, hd * 0.1, 10);
       // (a blade: thick at its root, thin at its tip)
       const pos = tube.getAttribute('position');
       const mid = v(0, 0, 0);
@@ -226,7 +236,7 @@ export function dress(view: BugView, side: number): Face {
       const jaw = new THREE.Mesh(tube, dark);
       jaw.castShadow = true;
       g.add(jaw);
-      for (const u of [0.5, 0.68, 0.84]) spike(dark, arc.getPoint(u), v(-x, 0, -0.4), hd * 0.22, hd * 0.07, g);
+      for (const u of [0.5, 0.68, 0.84]) spike(dark, arc.getPoint(u), v(-x, 0, -0.4), hd * 0.1, hd * 0.035, g);
     } else if (spider) {
       for (const [ex, ey, ez, er] of [[0.2, 0.38, 0.86, 0.19], [0.74, 0.5, 0.48, 0.14], [0.34, 0.74, 0.54, 0.13]]) {
         const e = new THREE.Mesh(BALL, eye);
@@ -240,7 +250,7 @@ export function dress(view: BugView, side: number): Face {
       base.scale.set(hd * 0.28, hd * 0.46, hd * 0.3);
       base.position.set(0, -hd * 0.16, hd * 0.07);
       g.add(base);
-      spike(FANG, v(0, -hd * 0.45, hd * 0.2), v(-x * 0.2, -1, -0.1), hd * 0.62, hd * 0.13, g);
+      spike(FANG, v(0, -hd * 0.45, hd * 0.2), v(-x * 0.2, -1, -0.1), hd * 0.34, hd * 0.1, g);
       const limb = new THREE.Mesh(BALL, legs);
       limb.scale.set(hd * 0.15, hd * 0.15, hd * 0.62);
       limb.position.set(x * hd * 0.5, -hd * 0.15, hd * 0.32);
@@ -254,6 +264,25 @@ export function dress(view: BugView, side: number): Face {
       limb.position.set(0, -hd * 0.1, hd * 0.2);
       limb.rotation.x = 0.9;
       g.add(limb);
+    }
+  }
+  // a smile, its corners up in the cheeks
+  {
+    const at = (t: number): THREE.Vector3 => {
+      const x = t * (spider || s.shell ? 0.42 : 0.5);
+      const y = (spider ? -0.16 : s.shell ? -0.28 : -0.5) + 0.26 * t * t;
+      const n = v(x, y, Math.sqrt(Math.max(0.05, 1 - x * x - y * y)));
+      return n.multiplyScalar(spider ? 1.07 : 1.015).multiply(v(hd, hd * 0.9, hd));
+    };
+    const pts: THREE.Vector3[] = [];
+    for (let i = -8; i <= 8; i++) pts.push(at(i / 8));
+    const line = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 40, hd * 0.035, 8), MOUTH);
+    view.head.add(line);
+    for (const t of [-1, 1]) {
+      const dimple = new THREE.Mesh(BALL, MOUTH);
+      dimple.position.copy(at(t));
+      dimple.scale.setScalar(hd * 0.055);
+      view.head.add(dimple);
     }
   }
   if (spider) {
