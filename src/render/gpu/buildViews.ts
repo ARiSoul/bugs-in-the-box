@@ -476,6 +476,7 @@ export class BuildViews {
     const col: number[] = [];
     const look: number[] = [];
     const [c0, c1, rough, glow] = INSIDE[b.species];
+    const side3 = side.clone();
     const p3 = new THREE.Vector3();
     const n3 = new THREE.Vector3();
     const e1 = new THREE.Vector3();
@@ -508,7 +509,9 @@ export class BuildViews {
         const g = Math.sin(q[0] * 7.1 + q[1] * 11.3) * Math.sin(q[1] * 5.7 + q[2] * 9.1) * 0.5 + 0.5;
         // (an ant's wall: wood above, soil under it; the rest lighter towards the skin)
         const w = b.species === 'ant' ? ss(1.9, 2.6, q[4] + g * 0.4) * 0.75 + 0.25 * g : g * 0.6 + 0.4 * Math.min(1, Math.max(0, 1 + q[3] * 2));
-        const s = 0.75 + 0.35 * Math.min(1, Math.max(0, 1 + q[3]));
+        // (broken stakes side by side)
+        const stakes = b.species === 'ant' ? 0.62 + 0.5 * Math.abs(Math.sin((q[0] * side3.x + q[2] * side3.z) * 6.5)) * (0.7 + 0.6 * g) : 1;
+        const s = (0.75 + 0.35 * Math.min(1, Math.max(0, 1 + q[3]))) * stakes;
         for (let k = 0; k < 3; k++) col.push((c0[k] + (c1[k] - c0[k]) * w) * s);
         look.push(rough, glow, 0);
       };

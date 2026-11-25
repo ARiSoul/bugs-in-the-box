@@ -475,7 +475,7 @@ function rampart(): Model {
   s.glow = 0.12;
   for (let i = 0; i < 24; i++) {
     const side = i % 2 ? 1 : -1;
-    const x = -4.9 + (Math.floor(i / 2) / 11) * 9.8 + (rnd(i) - 0.5) * 0.9;
+    const x = -4.4 + (Math.floor(i / 2) / 11) * 8.8 + (rnd(i) - 0.5) * 0.8;
     const y = 1.9 + 2.1 * rnd(i + 3) ** 1.6;
     const q = new Soup();
     q.rough = 0.55;
@@ -619,7 +619,10 @@ function silkCurtain(): Model {
     const t = u - i;
     return posts[i][1] + (posts[i + 1][1] - posts[i][1]) * t - 0.1 - 2 * t * (1 - t);
   };
-  // two sheets, drawn in at the posts; a lid where they meet
+  // a lid between the two sheets, sagging between the posts
+  s.sheet((u, v) => { const x = -5.35 + u * 10.7; const t = ((x + 5.2) / 2.6) % 1; const w = 0.62 * (0.84 + 0.24 * Math.sin(Math.PI * Math.abs(t)) ** 2); return [x, top(x) - 0.02 - 0.12 * Math.sin(Math.PI * v), (1 - 2 * v) * w]; }, 120, 8, (u, v) => felt(u * 26, v * 2, 5));
+  for (let k = 0; k < 60; k++) { const x = -5.2 + (k / 59) * 10.4; s.line(path(6, -0.6, 0.6, (z) => [x + 0.2 * z * (rnd(k) - 0.5) * 4, top(x) - 0.1 * Math.cos(z * 2.6), z] as const), 0.02, dim(SILK, 1.1)); }
+  // two sheets, drawn in at the posts
   for (const side of [-1, 1]) {
     const at = (u: number, v: number): V => {
       const x = -5.35 + u * 10.7;
@@ -733,7 +736,7 @@ function silkFunnel(): Model {
     if (dz > 0.45 && dy < 0.75) return null;
     // (the first place from outside in)
     while (hi > lo && at(hi) > 0) hi -= 0.05;
-    const t = hi + 0.02;
+    const t = hi + 0.035;
     return [dx * t, 0.5 + dy * t, -0.5 + dz * t];
   };
   for (let k = 0; k < 150; k++) {
@@ -742,9 +745,9 @@ function silkFunnel(): Model {
     const da = (rnd(k + 0.3) - 0.5) * 3.4;
     const db = (rnd(k + 0.4) - 0.5) * 1.1;
     let last: V | null = null;
-    for (let i = 0; i <= 14; i++) {
-      const p = skin(a0 + (da * i) / 14, Math.min(1.4, Math.max(-0.12, b0 + (db * i) / 14)));
-      if (p && last && Math.hypot(p[0] - last[0], p[1] - last[1], p[2] - last[2]) < 0.7) s.rod(last, p, 0.011 + 0.012 * rnd(k + 5), dim(SILK, 1.45), 4);
+    for (let i = 0; i <= 26; i++) {
+      const p = skin(a0 + (da * i) / 26, Math.min(1.4, Math.max(-0.12, b0 + (db * i) / 26)));
+      if (p && last && Math.hypot(p[0] - last[0], p[1] - last[1], p[2] - last[2]) < 0.9) s.rod(last, p, 0.011 + 0.012 * rnd(k + 5), dim(SILK, 1.45), 4);
       last = p;
     }
   }
@@ -766,7 +769,7 @@ function silkFunnel(): Model {
 
 // ---------------------------------------------------------------- cockroaches
 
-const CHITIN: readonly V[] = [[0.27, 0.07, 0.012], [0.19, 0.042, 0.008], [0.35, 0.1, 0.018]];
+const CHITIN: readonly V[] = [[0.3, 0.074, 0.008], [0.2, 0.042, 0.006], [0.38, 0.105, 0.012]];
 const LEG: V = [0.085, 0.024, 0.007];
 /** Pale towards an edge (0..1). */
 const rim = (c: V, k: number): V => [c[0] * (1 + k * 0.55), c[1] * (1 + k * 1.15), c[2] * (1 + k * 1.6)];
@@ -810,25 +813,22 @@ function spiny(s: Soup, a: V, b: V, r: number, spines: number): void {
 
 function shieldWall(): Model {
   const s = new Soup();
-  const plates = CHITIN.map((c, k) => shield(1.4, 1.75, 0.3, c, k !== 1));
+  const plates = CHITIN.map((c) => shield(1.4, 1.75, 0.3, c, false));
+  const spotted = CHITIN.map((c, k) => shield(1.4, 1.75, 0.3, c, k !== 1));
   for (const side of [1, -1])
     for (let r = 0; r < 3; r++)
       for (let i = 0; i < 8 - (r % 2); i++) {
         const x = (i - (7 - (r % 2)) / 2) * 1.36;
         // (each over its neighbour, each row over the one under it)
-        s.put(plates[(i * 2 + r) % 3], pose(x, 1.05 + r * 1.42, side * (0.5 + r * 0.06), -0.1, side > 0 ? 0.2 : Math.PI + 0.2, (rnd(i + r * 9 + side) - 0.5) * 0.06), 0.85 + 0.3 * rnd(i * 3 + r + side));
+        s.put((r === 2 ? spotted : plates)[(i * 2 + r) % 3], pose(x, 1.05 + r * 1.42, side * (0.5 + r * 0.1), -0.11, side > 0 ? 0.2 : Math.PI + 0.2, (rnd(i + r * 9 + side) - 0.5) * 0.06), 0.85 + 0.3 * rnd(i * 3 + r + side));
       }
-  for (const e of [-1, 1]) for (let r = 0; r < 3; r++) s.put(plates[(r + 1) % 3], pose(e * (5.35 + 0.05 * r), 1.05 + r * 1.42, 0, -0.1, e * (Math.PI / 2), 0, 0.8, 1, 1), 0.95);
+  for (const e of [-1, 1]) for (let r = 0; r < 3; r++) s.put(plates[(r + 1) % 3], pose(e * (5.5 + 0.06 * r), 1.05 + r * 1.42, 0, -0.08, e * (Math.PI / 2), 0, 0.62, 0.98, 1), 0.95);
   // what holds it up, between the two
   for (let i = -3; i <= 3; i++) {
     const x = i * 1.55;
     spiny(s, [x, 5.0, 0.1], [x + 0.1, 2.4, 0], 0.17, 4);
     spiny(s, [x + 0.1, 2.4, 0], [x - 0.05, -0.4, 0], 0.14, 4);
     s.rod([x - 0.8, 4.3, 0], [x + 0.8, 4.5, 0], 0.1, LEG, 6);
-  }
-  for (const e of [-1, 1]) {
-    spiny(s, [e * 5.2, 3.2, -0.1], [e * 5.9, 1.5, -0.5], 0.14, 3);
-    spiny(s, [e * 5.9, 1.5, -0.5], [e * 5.7, 0, -1.1], 0.1, 4);
   }
   s.rough = 0.9;
   s.glow = 0;
@@ -844,8 +844,8 @@ function shieldWall(): Model {
 /** A plate of a back, across z, its far edge over the next one. */
 function tergite(tone: V): Soup {
   const s = new Soup();
-  s.rough = 0.62;
-  s.glow = 0.2;
+  s.rough = 0.5;
+  s.glow = 0.28;
   const W = DECK + 0.05;
   const f: Field = (x, y, z) => {
     const u = z / W;
@@ -1053,7 +1053,7 @@ function waxNest(): Model {
     if (Math.abs(d) < 0.5 && y > 0.05) {
       const h = cell(x, y, z);
       const t = ss(0, 0.1, CELL * 0.866 - h[2]);
-      const off = 1 - ss(0.5, 1.1, z) * ss(1.9, 1.5, Math.abs(x)) * ss(2.35, 2.0, y);
+      const off = 1 - ss(0.9, 1.35, z) * ss(1.55, 1.25, Math.abs(x)) * ss(2.3, 2.05, y);
       d += (full(h[0], h[1]) ? 0.2 * t : -0.1 * t) * off;
     }
     d = smin(d, smax(Math.hypot(x, z) - 2.5 - 0.16 * noise(x, 2, z), y - 0.2, 0.2), 0.3);
@@ -1066,7 +1066,7 @@ function waxNest(): Model {
     const e = CELL * 0.866 - c[2];
     const tone = 0.9 + 0.22 * rnd(c[0] * 7 + c[1] * 13);
     const inside = inHex(x, y - DY) < 0.97 && z < 2.1 && (z > 1.3 || Math.hypot(x / A[0], y / A[1], z / A[2]) < 0.9) ? Math.max(0.12, 0.62 - (1.9 - z) * 0.28) : 1;
-    return wax((0.82 + 0.2 * noise(x * 1.5, y, z)) * (1 - 0.5 * (1 - ss(0, 0.05, e)) * (1 - ss(0.5, 1.1, z) * ss(1.9, 1.5, Math.abs(x)) * ss(2.35, 2.0, y))) * tone * inside);
+    return wax((0.82 + 0.2 * noise(x * 1.5, y, z)) * (1 - 0.5 * (1 - ss(0, 0.05, e)) * (1 - ss(0.9, 1.35, z) * ss(1.55, 1.25, Math.abs(x)) * ss(2.3, 2.05, y))) * tone * inside);
   });
   for (let r = -4; r <= 4; r++)
     for (let q = -6; q <= 6; q++) {
@@ -1079,7 +1079,7 @@ function waxNest(): Model {
       const x = (u / (h || 1)) * Math.sin(h) * A[0] * 0.885;
       const y = Math.cos(h) * A[1] * 0.885;
       const z = (v / (h || 1)) * Math.sin(h) * A[2] * 0.885;
-      if (z > 0.9 && Math.abs(x) < 1.5) continue;
+      if (z > 0.4 && Math.abs(x) < 1.9) continue;
       honey(s, x, y, z, 0.3, 0.3, 0.3);
     }
   return s.done();
