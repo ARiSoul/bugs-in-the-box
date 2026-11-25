@@ -113,7 +113,7 @@ export class BugView {
   private heldNow = 0;
   /** The head's middle and radius, and the eyes' material (for what a special attack adds to them). */
   readonly headAt = new THREE.Vector3();
-  readonly headRadius: number = 0;
+  headRadius = 0;
   readonly eyes: THREE.MeshStandardMaterial;
   readonly skin: THREE.MeshStandardMaterial;
   readonly legSkin: THREE.MeshStandardMaterial;

@@ -60,7 +60,7 @@ export class Heroes {
   ];
   /** Every fighter that was made, kept: showing one again costs nothing. */
   private readonly made = new Map<string, { view: BugView; face: Face; stand: THREE.Group }>();
-  private readonly key = new THREE.SpotLight(0xfff2e2, 780, 60, 0.75, 0.7);
+  private readonly key = new THREE.SpotLight(0xfff2e2, 640, 60, 0.75, 0.7);
   private readonly rims: THREE.PointLight[] = [];
   private readonly spark = new THREE.PointLight(0xffc070, 0, 12);
   private readonly pieces: THREE.InstancedMesh;
@@ -270,7 +270,7 @@ export class Heroes {
     this.stage.aspect.value = this.layer.camera.aspect;
     this.shake *= Math.exp(-dtReal * 7);
     this.gloom = Math.max(0, this.gloom - dt * 0.9);
-    this.spark.intensity = Math.max(0, this.spark.intensity * Math.exp(-dtReal * 5) - 0.1) + (Math.random() < dtReal * 1.6 && this.winner < 0 ? 60 : 0);
+    this.spark.intensity = Math.max(0, this.spark.intensity * Math.exp(-dtReal * 5) - 0.1) + (Math.random() < dtReal * 1.6 && this.winner < 0 ? 22 : 0);
     const cam = this.layer.camera;
     this.look.lerp(this.pointer, 1 - Math.exp(-dt * 5));
     // (low, so they loom; it leans a little with the pointer)
@@ -279,7 +279,7 @@ export class Heroes {
     cam.position.set(this.look.x * 0.7 + sx * 0.3, 1.35 + this.look.y * 0.22 + sy * 0.3, BACK - (this.ready ? 0.35 : 0));
     cam.lookAt(sx * 0.2, 0.0 + sy * 0.2, 0);
     const dark = this.gloom > 0 ? 1 - Math.min(1, this.gloom * 2.4) * 0.92 * (Math.sin(this.time * 47) > 0.75 ? 0.5 : 1) : 1;
-    this.key.intensity = 780 * dark;
+    this.key.intensity = 640 * dark;
     for (const [i, r] of this.rims.entries()) r.intensity = (i ? 165 : 170) * (0.4 + 0.6 * dark);
     this.stage.power.forEach((p, i) => {
       const lost = this.winner >= 0 && this.winner !== i;

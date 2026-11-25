@@ -912,6 +912,8 @@ function renderStep(dt: number): number {
 }
 
 /** True if terrain lies between the camera and `p` (the density field, as gameplay sees it). */
+/** Half the game's own view, as a tangent. */
+const LENS = Math.tan((55 * Math.PI) / 360);
 const toBug = new THREE.Vector3();
 function occluded(p: THREE.Vector3, dist: number): boolean {
   const c = stage.camera.position;
@@ -1260,7 +1262,9 @@ function placeLabels(): void {
     const v = bugViews[i];
     const dist = stage.camera.position.distanceTo(v.view.root.position);
     v.view.setCameraDistance(dist);
-    v.face.near(dist < 60, dist);
+    // (a narrow lens, as a special attack's scene has, brings it nearer)
+    const seen = dist * (Math.tan((stage.camera.fov * Math.PI) / 360) / LENS);
+    v.face.near(seen < 60, seen);
     v.label.update(v.view.root.position, v.height * v.view.root.scale.y, u.bug.health, u.bug.alive, dist, u.bug.alive && occluded(v.view.root.position, dist), i === match.active);
     // (its own name is in the way of what it points at)
     if (i === match.active && antColumn.camera.active) v.label.sprite.visible = false;

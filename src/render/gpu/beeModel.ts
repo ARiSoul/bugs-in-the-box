@@ -13,7 +13,7 @@ const v3 = (x: number, y: number, z: number): THREE.Vector3 => new THREE.Vector3
 const f = (n: unknown): F => n as F;
 const c3 = (n: unknown): V3 => n as V3;
 const tint = (c: number): V3 => c3(color(c));
-const ss = (a: number, b: number, x: number): number => {
+export const ss = (a: number, b: number, x: number): number => {
   const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
   return t * t * (3 - 2 * t);
 };
@@ -64,6 +64,8 @@ const BLADE = ((): THREE.BufferGeometry => {
 })();
 
 interface FurLook {
+  /** Not gold: its own colour at the root and in the shade. */
+  cool?: boolean;
   count: number;
   long: number;
   thick: number;
@@ -88,7 +90,7 @@ function draws(seed: number): () => number {
 }
 
 /** A coat over a body: hairs drawn over its surface, in no order (so the first part of them is a thinner coat). */
-function fur(g: THREE.BufferGeometry, o: FurLook): THREE.InstancedMesh {
+export function fur(g: THREE.BufferGeometry, o: FurLook): THREE.InstancedMesh {
   const rnd = draws(o.count);
   const pos = g.getAttribute('position');
   const nor = g.getAttribute('normal');
@@ -107,7 +109,7 @@ function fur(g: THREE.BufferGeometry, o: FurLook): THREE.InstancedMesh {
     sum += b.sub(a).cross(c.sub(a)).length() * 0.5;
     sums[t] = sum;
   }
-  const mesh = new THREE.InstancedMesh(BLADE, furMaterial(), o.count);
+  const mesh = new THREE.InstancedMesh(BLADE, furMaterial(o.cool === true), o.count);
   const p = new THREE.Vector3();
   const n = new THREE.Vector3();
   const lay = new THREE.Vector3();
@@ -168,33 +170,34 @@ function fur(g: THREE.BufferGeometry, o: FurLook): THREE.InstancedMesh {
   return mesh;
 }
 
-let furMat: THREE.MeshPhysicalNodeMaterial | null = null;
-function furMaterial(): THREE.MeshPhysicalNodeMaterial {
-  if (furMat) return furMat;
+const furMats: (THREE.MeshPhysicalNodeMaterial | null)[] = [null, null];
+function furMaterial(cool: boolean): THREE.MeshPhysicalNodeMaterial {
+  const was = furMats[cool ? 1 : 0];
+  if (was) return was;
   const m = new THREE.MeshPhysicalNodeMaterial({ side: THREE.DoubleSide, roughness: 1, specularIntensity: 0, envMapIntensity: 0.9 });
   m.fog = false;
   const s = f(attribute('tall', 'float'));
   const hair = c3(attribute('instanceColor', 'vec3'));
   const dull = own((b) => b.dull);
   // (darker and redder at the root, as light does not get there)
-  const root = c3(hair.mul(vec3(0.6, 0.38, 0.18)));
-  const base = c3(mix(root, hair, smoothstep(0, 0.65, s)));
+  const root = c3(cool ? hair.mul(vec3(0.46, 0.4, 0.38)) : hair.mul(vec3(0.6, 0.38, 0.18)));
+  const base = c3(mix(root, cool ? hair.mul(1.02) : hair, smoothstep(0, cool ? 0.95 : 0.65, s)));
   m.colorNode = mix(base, vec3(0.05, 0.045, 0.04), dull.mul(0.7));
   // (its own warm glow: in weak or cool light the gold stays gold, not olive)
-  m.emissiveNode = c3(hair.mul(vec3(1.35, 0.95, 0.3)).mul(s.mul(0.11).add(0.05))).mul(dull.oneMinus()).add(ownColor((b) => b.skin.emissive).mul(0.6));
-  furMat = m;
+  m.emissiveNode = c3((cool ? hair.mul(0.55) : hair.mul(vec3(1.35, 0.95, 0.3))).mul(s.mul(0.11).add(0.05))).mul(dull.oneMinus()).add(ownColor((b) => b.skin.emissive).mul(0.6));
+  furMats[cool ? 1 : 0] = m;
   return m;
 }
 
 // ---------------------------------------------------------------- shapes (a bee of radius 1)
 
-function ellipsoid(rx: number, ry: number, rz: number, w = 56, h = 40): THREE.BufferGeometry {
+export function ellipsoid(rx: number, ry: number, rz: number, w = 56, h = 40): THREE.BufferGeometry {
   const g = new THREE.SphereGeometry(1, w, h).scale(rx, ry, rz);
   g.computeVertexNormals();
   return g;
 }
 
-function shape(g: THREE.BufferGeometry, fn: (p: THREE.Vector3) => void): THREE.BufferGeometry {
+export function shape(g: THREE.BufferGeometry, fn: (p: THREE.Vector3) => void): THREE.BufferGeometry {
   const pos = g.getAttribute('position');
   const p = new THREE.Vector3();
   for (let i = 0; i < pos.count; i++) {
@@ -207,7 +210,7 @@ function shape(g: THREE.BufferGeometry, fn: (p: THREE.Vector3) => void): THREE.B
 }
 
 /** A tube along points, its radius from `thick` at each place (0..1). */
-function tube(points: THREE.Vector3[], thick: (u: number) => number, seg = 40, round = 12): THREE.BufferGeometry {
+export function tube(points: THREE.Vector3[], thick: (u: number) => number, seg = 40, round = 12): THREE.BufferGeometry {
   const curve = new THREE.CatmullRomCurve3(points);
   const g = new THREE.TubeGeometry(curve, seg, 1, round);
   const pos = g.getAttribute('position');
@@ -354,8 +357,8 @@ const turned = (pts: [number, number][], n = 18): THREE.BufferGeometry => {
   const curve = new THREE.SplineCurve(pts.map(([r, y]) => new THREE.Vector2(r, y)));
   return new THREE.LatheGeometry(curve.getPoints(70).map((p) => new THREE.Vector2(Math.max(0.001, p.x), p.y)), n);
 };
-const FEMUR = turned([[0.02, -0.05], [0.7, -0.035], [1.0, 0.04], [1.4, 0.22], [1.5, 0.42], [1.2, 0.68], [0.85, 0.88], [0.74, 0.95], [0.78, 1.0], [0.55, 1.03], [0.02, 1.04]]);
-const FOOT = ((): THREE.BufferGeometry => {
+export const FEMUR = turned([[0.02, -0.05], [0.7, -0.035], [1.0, 0.04], [1.4, 0.22], [1.5, 0.42], [1.2, 0.68], [0.85, 0.88], [0.74, 0.95], [0.78, 1.0], [0.55, 1.03], [0.02, 1.04]]);
+export const FOOT = ((): THREE.BufferGeometry => {
   const shin = turned([[0.02, -0.05], [0.55, -0.04], [0.8, -0.005], [0.8, 0.05], [0.82, 0.1], [1.1, 0.28], [1.3, 0.45], [1.1, 0.535], [0.6, 0.56], [0.02, 0.565]]);
   const parts: THREE.BufferGeometry[] = [shin];
   let y = 0.55;
@@ -617,7 +620,7 @@ function partsOf(side: number): Parts {
 }
 
 /** A coat for one more bee (the hairs and their shader are shared). */
-function coat(of: THREE.InstancedMesh): THREE.InstancedMesh {
+export function coat(of: THREE.InstancedMesh): THREE.InstancedMesh {
   const m = new THREE.InstancedMesh(of.geometry, of.material as THREE.Material, of.userData.full as number);
   m.instanceMatrix = of.instanceMatrix;
   m.instanceColor = of.instanceColor;
@@ -883,19 +886,21 @@ export function dressBee(view: BugView, side: number): Face {
 
 /** Short hairs over a limb, for its proportions. */
 const HAIRS = new Map<string, THREE.BufferGeometry>();
-function hairs(thin: number, thigh: boolean): THREE.BufferGeometry {
-  const key = `${thigh}${thin.toFixed(3)}`;
+export function hairs(thin: number, thigh: boolean, length = 1, dense = 1): THREE.BufferGeometry {
+  const key = `${thigh}${thin.toFixed(3)}${length}x${dense}`;
   let g = HAIRS.get(key);
   if (g) return g;
   const one = new THREE.ConeGeometry(1, 1, 3).translate(0, 0.5, 0);
   const m = new THREE.Matrix4();
   const all: THREE.BufferGeometry[] = [];
-  const n = thigh ? 260 : 300;
+  const n = Math.round((thigh ? 260 : 300) * dense);
   for (let i = 0; i < n; i++) {
     const a = i * 2.39996;
-    const y = thigh ? 0.05 + (0.85 * i) / n : 0.06 + (0.84 * i) / n;
+    // (a thick coat goes over the knee)
+    const from = dense > 1 ? -0.035 : 0.05;
+    const y = from + ((thigh ? (dense > 1 ? 1.05 : 0.85) : dense > 1 ? 0.93 : 0.84) * i) / n;
     const wide = thigh ? 1.0 + 0.4 * Math.sin(Math.PI * y) : y < 0.55 ? 1.05 : 0.5;
-    const l = (thigh ? 0.75 : y < 0.55 ? 0.9 : 0.4) * (0.6 + 0.5 * Math.abs(Math.sin(i * 7.3)));
+    const l = length * (thigh ? 0.75 : y < 0.55 ? 0.9 : 0.4) * (0.6 + 0.5 * Math.abs(Math.sin(i * 7.3)));
     m.makeBasis(v3(-Math.sin(a) * 0.05, 0, Math.cos(a) * 0.05), v3(Math.cos(a) * l, 1.5 * l * thin, Math.sin(a) * l), v3(0, 0.05 * thin, 0));
     all.push(one.clone().applyMatrix4(m.setPosition(Math.cos(a) * wide * 0.92, y, Math.sin(a) * wide * 0.92)));
   }
