@@ -25,6 +25,7 @@ import { itemIndex } from './game/actions';
 import { computerGrowth, LEVELS, NO_GROWTH, VERSUS, worth, type Growth } from './game/progress';
 import { Profile } from './ui/profile';
 import { SpeciesPage } from './ui/species';
+import { Minimap } from './ui/minimap';
 import { Inventory } from './ui/inventory';
 import { SeeThrough } from './render/gpu/seeThrough';
 import { Placing } from './input/placing';
@@ -247,6 +248,7 @@ function newTeams(s: number, turns = 0): void {
     return { view, face, wing: 0, blink: 1 + Math.random() * 4, label, height: u.bug.species.radius * 2.4 };
   });
   bestHit = 0;
+  minimap.touch();
   reading.match = [READ_MATCH, READ_MATCH];
   reading.key = '';
   webViews.clear();
@@ -313,6 +315,7 @@ function handleEvents(events: readonly MatchEvent[]): void {
   for (const e of events) {
     itemViews.on(e);
     buildViews.on(e, match);
+    if (e.type === 'explosion' || e.type === 'dig' || e.type === 'built' || e.type === 'worn' || e.type === 'pieceGone' || e.type === 'regrown') minimap.touch();
     switch (e.type) {
       case 'open': {
         const look = ITEM_LOOKS[e.kind];
@@ -334,6 +337,9 @@ function handleEvents(events: readonly MatchEvent[]): void {
         break;
       case 'tired':
         texts.spawn('slowed', 0xf2f2ee, at.set(e.x, e.y + 2, e.z));
+        break;
+      case 'burst':
+        texts.spawn('burst!', 0x9fe8ff, at.set(match.units[e.unit].bug.x, match.units[e.unit].bug.y + 2.6, match.units[e.unit].bug.z));
         break;
       case 'heal':
         texts.spawn(`+${e.amount}`, 0xff7fa5, at.set(match.units[e.unit].bug.x, match.units[e.unit].bug.y + 3, match.units[e.unit].bug.z));
@@ -494,6 +500,8 @@ const inventory = new Inventory(
   HAND,
 );
 hud.addInventory(inventory);
+const minimap = new Minimap();
+document.getElementById('hud')?.append(minimap.root);
 inventory.experience = (team) => (equal || players[team] !== 'human' ? null : profile.of(picked[team].id).xp);
 controls.bindButtons(hud.pad);
 setupKeysMenu(controls);
@@ -1337,6 +1345,8 @@ function frame(now: number): void {
     heldDamage.length = 0;
   }
   placeSight();
+  // (a burst leaves a trail)
+  for (const u of match.units) if (u.bug.floating > 0 && u.bug.alive) buildViews.trail(bugViews[u.id].view.root.position);
   itemViews.reveal = !brain() && match.phase === 'aim' && match.passive(match.activeUnit.team, 'scent') > 0;
   itemViews.update(match, scaled, now / 1000);
   buildViews.update(match, bugViews.map((v) => v.view), !brain() && !debugCamera && !inMenu && !menus.over ? placing : null, scaled, now / 1000);
@@ -1386,6 +1396,7 @@ function frame(now: number): void {
   const right = match.windX * -fz + match.windZ * fx;
   const away = match.windX * fx + match.windZ * fz;
   hud.renderMatch(match, Math.atan2(-away, right), brain() !== null);
+  minimap.update(terrain, match, Math.atan2(fx, fz), stage.camera.position, dt, !inMenu && !menus.over && !inScene() && !debugCamera);
 
   if (debugCamera) {
     if (path) path.at(pathFrozenAt ?? (now - pathStart) / 1000, stage.camera, pathTarget);

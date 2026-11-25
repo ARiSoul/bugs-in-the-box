@@ -251,6 +251,7 @@ export type MatchEvent =
   | { type: 'regrown'; build: number; slot: number; gone: readonly number[]; x: number; y: number; z: number }
   | { type: 'conducts'; x: number; y: number; z: number }
   | { type: 'tired'; x: number; y: number; z: number }
+  | { type: 'burst'; unit: number }
   | { type: 'heal'; unit: number; amount: number }
   | { type: 'use'; unit: number; kind: ItemKind; gain: number }
   | { type: 'boxGone'; id: number; x: number; y: number; z: number }
@@ -301,6 +302,8 @@ const BROOD_THROW = 5;
  */
 export const SKILL_FULL = 1000;
 const SKILL_TURN = 200;
+/** Ticks a burst hardly falls. */
+const BURST_TICKS = 50;
 const SKILL_DONE = 2.5;
 const SKILL_TAKEN = 1.8;
 
@@ -353,6 +356,7 @@ const near = new Float64Array(3);
 const site: Site = { x: 0, y: 0, z: 0, nx: 0, ny: 1, nz: 0, fx: 1, fy: 0, fz: 0 };
 /** A bug walks at most this long to where it hides (ticks), and is there this near to it. */
 const GO_TICKS = 240;
+const placed = (w: Weapon): boolean => w.kind === 'wall' || w.kind === 'bridge' || w.kind === 'shelter';
 const GO_NEAR = 0.9;
 const goInput: BugInput = { move: 1, turn: 0, jump: false, run: true, faceX: 0, faceZ: 0 };
 /** A bug keeps this much room from what is built. */
@@ -442,6 +446,9 @@ export class Match {
   private readonly regrown = new Set<number>();
   private stung = false;
   private builtOnce = false;
+  /** The turn a burst was used in; who lands softly. */
+  private burstTurn = -1;
+  private readonly soft = new Set<number>();
   /** How much of its bite the swarm on its way still has. */
   private tired = 1;
   /** The active bug is on its way to hide: where, in what, and how long it may still take. */
@@ -585,6 +592,8 @@ export class Match {
       if (this.retreatTicks > 0) {
         this.retreatTicks--;
         if (!unit.cover) move = this.movement(input);
+        // (getting away: its slot throws it at once)
+        if (input.weapon >= 0 && WEAPONS[input.weapon]?.kind === 'burst' && this.has(unit, input.weapon) && !unit.cover) this.burst(unit);
       }
       if (this.column) this.columnTick(this.column, unit, input);
       else if (this.brood) this.broodTick(this.brood, unit);
@@ -621,7 +630,10 @@ export class Match {
       // (what rides the turntable is moved by it, not by its own physics)
       if (this.phase === 'spin' && this.isCarried(u)) continue;
       b.step(this.field, u === unit ? move : IDLE);
-      if (b.justLanded && b.lastImpact > FALL_SAFE_SPEED && !this.passive(u.team, 'light-feet')) this.damage(u, Math.round((b.lastImpact - FALL_SAFE_SPEED) * FALL_DAMAGE));
+      if (b.justLanded && this.soft.delete(u.id)) {
+        // (it meant to)
+        b.floating = 0;
+      } else if (b.justLanded && b.lastImpact > FALL_SAFE_SPEED && !this.passive(u.team, 'light-feet')) this.damage(u, Math.round((b.lastImpact - FALL_SAFE_SPEED) * FALL_DAMAGE));
       if (!b.alive && !u.dead) this.announceDeath(u);
       // (its hold is gone: so is its shelter)
       else if (u.cover && !b.grounded && b.airTicks > 6) this.bare(u, true);
@@ -739,7 +751,7 @@ export class Match {
       if (input.weapon >= 0 || input.jump || (fireDown && this.going.left < GO_TICKS - 1)) this.going = null;
       else return this.goHide(unit);
     }
-    if (input.place && !this.charging && unit.bug.grounded && w.start !== undefined) {
+    if (input.place && !this.charging && unit.bug.grounded && placed(w)) {
       this.putAt(unit, w, input.place);
       return this.going ? this.goHide(unit) : IDLE;
     }
@@ -751,6 +763,10 @@ export class Match {
         this.fire(unit, w);
       }
       return this.stance ? this.onTheSpot(input) : IDLE;
+    }
+    if (fireDown && w.kind === 'burst') {
+      this.burst(unit);
+      return IDLE;
     }
     if (fireDown && unit.bug.grounded) {
       if (w.kind === 'wall' || w.kind === 'bridge') this.build(unit, w);
@@ -809,7 +825,8 @@ export class Match {
   /** How often a team may still use what it has only some of. */
   usesLeft(team: number, index: number): number {
     const n = this.stock[team][index];
-    return WEAPONS[index].start === undefined ? n : Math.min(n, this.works[team]);
+    const w = WEAPONS[index];
+    return w.start === undefined || w.alone ? n : Math.min(n, this.works[team]);
   }
 
   /** Whether the unit can use weapon `index` now. */
@@ -1885,6 +1902,28 @@ export class Match {
       return null;
     }
     return null;
+  }
+
+  /** It throws itself along its aim: fast, far, and it lands softly. Once a turn; the turn goes on. */
+  private burst(u: Unit): void {
+    const i = WEAPONS.findIndex((w) => w.kind === 'burst');
+    const b = u.bug;
+    if (this.burstTurn === this.turnNumber || this.usesLeft(u.team, i) <= 0 || u.web >= 0 || u.cover || !b.alive) {
+      this.events.push({ type: 'noRoom', unit: u.id });
+      return;
+    }
+    this.burstTurn = this.turnNumber;
+    this.stock[u.team][i]--;
+    const [dx, dy, dz] = this.aimDirection(u, aimed);
+    const v = WEAPONS[i].maxSpeed;
+    b.grounded = false;
+    b.vx = dx * v;
+    b.vy = dy * v + 3;
+    b.vz = dz * v;
+    b.floating = BURST_TICKS;
+    this.soft.add(u.id);
+    this.events.push({ type: 'burst', unit: u.id });
+    if (this.phase === 'aim') this.weapon = this.keptBy(u);
   }
 
   /** A team's turn comes: its shelters tend to who is in them, or beside them. */

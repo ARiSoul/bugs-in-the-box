@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Match, NO_INPUT, type MatchEvent, type MatchInput } from '../src/game/match';
 import { ANT, BEE, COCKROACH, SPIDER, type BugSpecies } from '../src/game/species';
-import { ANTHILL, LIVING_BRIDGE, RAMPART, SILK_CURTAIN, SOLDER_BLOB, WAX_NEST, WEAPONS, WORKS, type Weapon } from '../src/game/weapons';
+import { BURST, ANTHILL, LIVING_BRIDGE, RAMPART, SILK_CURTAIN, SOLDER_BLOB, WAX_NEST, WEAPONS, WORKS, type Weapon } from '../src/game/weapons';
 import { COLLIDER } from '../src/terrain/materials';
 import type { Terrain } from '../src/terrain/Terrain';
 import { world } from './helpers/worlds';
@@ -147,7 +147,7 @@ describe('hiding', () => {
   it('each species has its own', () => {
     for (const s of [ANT, BEE, COCKROACH, SPIDER]) {
       const m = setup(plain(), s);
-      expect(WEAPONS.filter((w, i) => w.start !== undefined && m.has(m.units[0], i)).map((w) => w.kind)).toEqual(['wall', 'bridge', 'shelter']);
+      expect(WEAPONS.filter((w, i) => w.start !== undefined && !w.alone && m.has(m.units[0], i)).map((w) => w.kind)).toEqual(['wall', 'bridge', 'shelter']);
     }
   });
 
@@ -207,7 +207,7 @@ describe('a deck is smooth', () => {
 
 describe('models', () => {
   it('every weapon that builds or hides has one, whole and lit', () => {
-    expect([...BUILD_MODELS].sort()).toEqual(WEAPONS.filter((w) => w.start !== undefined).map((w) => w.id).sort());
+    expect([...BUILD_MODELS].sort()).toEqual(WEAPONS.filter((w) => w.start !== undefined && !w.alone).map((w) => w.id).sort());
     for (const id of BUILD_MODELS) {
       const m = buildModel(id);
       const n = m.position.length / 3;
@@ -262,5 +262,28 @@ describe('putting things down with the pointer', () => {
     expect(e.some((q) => q.type === 'hide')).toBe(true);
     const b = m.units[0].bug;
     expect(Math.hypot(b.x - 16, b.z - 38)).toBeLessThan(1.5);
+  });
+});
+
+describe('burst', () => {
+  it('throws the bug far along its aim, lands softly, twice a match, once a turn, apart from the works', () => {
+    const m = setup(plain());
+    const u = m.units[0];
+    const b = u.bug;
+    u.aimH = 0.8;
+    u.aimV = 0.6;
+    const x = b.x;
+    const h = b.health;
+    use(m, BURST);
+    expect(b.floating).toBeGreaterThan(0);
+    expect(m.phase).toBe('aim');
+    run(m, 240);
+    expect(b.x - x).toBeGreaterThan(18);
+    expect(b.grounded).toBe(true);
+    expect(b.health).toBe(h);
+    const again = use(m, BURST);
+    expect(again.some((e) => e.type === 'noRoom'), JSON.stringify([m.phase, again.map((e) => e.type)])).toBe(true);
+    expect(m.works[0]).toBe(WORKS);
+    expect(m.usesLeft(0, at(BURST))).toBe(1);
   });
 });

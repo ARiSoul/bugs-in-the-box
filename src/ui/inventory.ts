@@ -25,7 +25,7 @@ const div = (cls: string): HTMLElement => {
 };
 const byId = (id: string): Action | undefined => ACTIONS.find((a) => a.id === id);
 const picture = (a: Action): string =>
-  a.item ? `<svg viewBox="0 0 48 48"><path fill="currentColor" fill-rule="evenodd" d="${ITEM_LOOKS[a.item].path}"/></svg>` : a.category === 'skill' ? art(a.id) : `<svg viewBox="0 0 48 48">${ARMS[a.id] ?? ''}</svg>`;
+  a.item ? `<svg viewBox="0 0 48 48"><path fill="currentColor" fill-rule="evenodd" d="${ITEM_LOOKS[a.item].path}"/></svg>` : a.weapon >= 0 && WEAPONS[a.weapon].sceneTicks > 0 ? art(a.id) : `<svg viewBox="0 0 48 48">${ARMS[a.id] ?? ''}</svg>`;
 const colorOf = (a: Action): string => (a.item ? ITEM_LOOKS[a.item].color : COLORS[a.category]);
 
 export interface InventoryUse {
@@ -236,7 +236,7 @@ export class Inventory {
     const n = this.left(a);
     const has = this.has(a);
     const off = !has || n === 0 || (a.item !== null && m.usedItem) || (m.built && a.weapon >= 0 && (WEAPONS[a.weapon].kind === 'wall' || WEAPONS[a.weapon].kind === 'bridge'));
-    const skill = a.category === 'skill';
+    const skill = a.weapon >= 0 && WEAPONS[a.weapon].sceneTicks > 0;
     return `<button class="q ${a.weapon === m.weapon && a.weapon >= 0 ? 'on' : ''} ${off ? 'off' : ''} ${skill && load >= 1 ? 'ready' : ''}" data-slot="${i}" data-id="${a.id}" style="--g:${colorOf(a)};--load:${skill ? load : 1}" title="${a.name}"><i></i>${picture(a)}${skill && load < 1 ? '<s></s>' : ''}<b>${key}</b>${n !== null ? `<u>${n}</u>` : ''}</button>`;
   }
 

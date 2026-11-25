@@ -344,7 +344,7 @@ export class Hud {
       const word = s ? wordFor(match.currentWeapon.id, s.weapon.id) : '';
       if (s && word) aim += ` · <b>${word}: ${s.weapon.name}</b>`;
     }
-    if (aim && match.currentWeapon.start !== undefined) aim = match.going ? `<b>${match.currentWeapon.name}</b> on its way` : `<b>${match.currentWeapon.name}</b> ${match.currentWeapon.kind === 'bridge' ? 'click its near end, then its far one' : match.currentWeapon.kind === 'shelter' ? 'click where it goes to hide' : 'click where it stands · wheel turns it'} · right click drops it · fire key: right here`;
+    if (aim && match.currentWeapon.start !== undefined && !match.currentWeapon.alone) aim = match.going ? `<b>${match.currentWeapon.name}</b> on its way` : `<b>${match.currentWeapon.name}</b> ${match.currentWeapon.kind === 'bridge' ? 'click its near end, then its far one' : match.currentWeapon.kind === 'shelter' ? 'click where it goes to hide' : 'click where it stands · wheel turns it'} · right click drops it · fire key: right here`;
     if (aim && match.built && (match.currentWeapon.kind === 'wall' || match.currentWeapon.kind === 'bridge')) aim += ' · once a turn';
     this.showFlock(match, computer);
     this.set('aim', () => (this.aim.innerHTML = aim), aim);

@@ -19,8 +19,8 @@ export const xpFor = (l: number): number => 100 + (l - 1) * 50;
 
 /** Levels that bring a passive in use, a quick slot, a space for items, a point to learn a passive with. */
 const ACTIVE_AT = [2, 5, 8];
-const SLOT_AT = [3, 6];
-const SPACE_AT = [4, 7, 9];
+const SLOT_AT = [3];
+const SPACE_AT = [4, 6, 7, 9];
 const POINT_AT = [2, 3, 4, 6, 7, 9];
 const upTo = (at: readonly number[], l: number): number => at.reduce((n, q) => (q <= l ? n + 1 : n), 0);
 

@@ -27,7 +27,7 @@ export interface Action {
 }
 
 /** Quick slots, and spaces for items: what a level will change. */
-export const QUICK_SLOTS = 4;
+export const QUICK_SLOTS = 5;
 export const BAG_SPACES = 5;
 
 /** The boxes whose content is kept (the rest takes effect at once). */
@@ -55,6 +55,7 @@ const ABOUT: Readonly<Record<string, readonly [string, ...Tag[]]>> = {
   'comb-wall': ['A wall of comb. Fire melts it into a puddle that holds the others.', 'wax', 'honey'],
   'comb-span': ['A bridge of comb. Fire melts it into a puddle that holds the others.', 'wax', 'honey'],
   'wax-nest': ['Keeps off 60% until it breaks.', 'wax'],
+  burst: ['It throws itself along its aim, far and fast, and lands softly. Twice a match; also while it gets away.', 'alive'],
   'thermal-paste': ['Smeared where you stand: others stick in it. It conducts shocks to all in it.', 'metal', 'sticky'],
   patch: ['Heals 40% of its health.', 'heal'],
   fuse: ['The next blow hurts half; a shock not at all.', 'electric'],
@@ -67,6 +68,7 @@ const ITEM_NAMES: Partial<Record<ItemKind, string>> = { patch: 'Flux Patch', fus
 
 function categoryOf(w: Weapon): Category {
   if (w.kind === 'trap') return 'item';
+  if (w.kind === 'burst') return 'skill';
   if (w.start !== undefined) return 'defence';
   if (w.sceneTicks > 0) return 'skill';
   return w.species ? 'special' : 'common';
@@ -91,5 +93,5 @@ export const itemIndex = (k: ItemKind): number => ITEM_KINDS.indexOf(k);
 export function firstSlots(species: string): string[] {
   const own = (f: (a: Action) => boolean): string => ACTIONS.find((a) => a.species === species && f(a))?.id ?? '';
   const kind = (k: string) => (a: Action): boolean => a.weapon >= 0 && WEAPONS[a.weapon].kind === k;
-  return [own((a) => a.category === 'skill'), own(kind('wall')), own(kind('bridge')), own(kind('shelter'))];
+  return [own((a) => a.category === 'skill' && WEAPONS[a.weapon].sceneTicks > 0), own(kind('wall')), own(kind('bridge')), own(kind('shelter')), 'burst'];
 }

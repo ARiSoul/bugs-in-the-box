@@ -27,7 +27,7 @@ const GHOST: readonly (readonly [number, number, number])[] = [[0.02, 0.22, 1], 
 /** How a bug sits in its shelter (in its radius): how far forward, how large. */
 const SEAT: Record<string, readonly [number, number]> = { anthill: [0.62, 0.92], 'silk-funnel': [0.62, 0.62], husk: [0.95, 0.82], 'wax-nest': [0.35, 0.78] };
 /** What flies off of each species' work. */
-const BITS: Record<string, readonly number[]> = { ant: [0x6b4a2e, 0xb08a55, 0x4a3423], spider: [0xd8d4ca, 0xb9b6ae], cockroach: [0x8a3d12, 0x5a240a, 0xc98a4a], bee: [0xd9942a, 0xb86a10, 0xffc040], ember: [0xff8a2a, 0x3a2418, 0x1a1210] };
+const BITS: Record<string, readonly number[]> = { ant: [0x6b4a2e, 0xb08a55, 0x4a3423], spider: [0xd8d4ca, 0xb9b6ae], cockroach: [0x8a3d12, 0x5a240a, 0xc98a4a], bee: [0xd9942a, 0xb86a10, 0xffc040], ember: [0xff8a2a, 0x3a2418, 0x1a1210], air: [0xe8f8ff, 0x9fe8ff, 0xffffff] };
 
 /** What each is made of inside: two colours, how rough, how much light comes through. */
 const INSIDE: Record<string, readonly [readonly [number, number, number], readonly [number, number, number], number, number]> = {
@@ -345,6 +345,11 @@ export class BuildViews {
     } else if (e.type === 'caught') {
       for (let k = 0; k < 14; k++) this.bit(this.p.set(e.x, e.y, e.z), 'spider', 4, 0.3, 0.08);
     }
+  }
+
+  /** A puff of air behind a bug that bursts. */
+  trail(at: THREE.Vector3): void {
+    this.bit(at, 'air', 0.6, 0.5, 0.09);
   }
 
   private bit(at: THREE.Vector3, species: string, speed: number, spread: number, size: number): void {

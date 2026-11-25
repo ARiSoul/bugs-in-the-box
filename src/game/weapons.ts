@@ -4,6 +4,8 @@
  * Units: world units, seconds (fuse in ticks). Damage is in health points (a bug has 100).
  */
 export type WeaponKind =
+  /** The bug itself is thrown, fast, along its aim (Burst). */
+  | 'burst'
   /** Projectile that explodes on the first contact with terrain or a bug. */
   | 'shell'
   /** Projectile that bounces and explodes when its fuse runs out. */
@@ -71,6 +73,8 @@ export interface Weapon {
    */
   readonly found?: boolean;
   readonly start?: number;
+  /** Its uses are its own: not part of WORKS. */
+  readonly alone?: boolean;
   /** Shelter: how much of a blow it keeps off (0..1), and how much in all before it breaks. */
   readonly cover?: number;
   readonly coverHealth?: number;
@@ -284,7 +288,10 @@ export const COMB_WALL: Weapon = { ...WORK, id: 'comb-wall', name: 'Comb Wall', 
 export const COMB_SPAN: Weapon = { ...WORK, id: 'comb-span', name: 'Comb Span', kind: 'bridge', reach: 9, species: 'bee', color: 0xffb02a };
 export const WAX_NEST: Weapon = { ...WORK, id: 'wax-nest', name: 'Wax Nest', kind: 'shelter', reach: 9, species: 'bee', cover: 0.6, coverHealth: 50, color: 0xffd070 };
 
-export const WEAPONS: readonly Weapon[] = [SOLDER_BLOB, CAPACITOR, SHORT_CIRCUIT, SOLDERING_IRON, WEB_SHOT, WEB_BOW, ANT_COLUMN, BLACKOUT_SWARM, THERMAL_PASTE, QUEENS_FLIGHT, RAMPART, LIVING_BRIDGE, ANTHILL, SILK_CURTAIN, SILK_SPAN, SILK_FUNNEL, SHIELD_WALL, SCALE_WALK, HUSK, COMB_WALL, COMB_SPAN, WAX_NEST];
+/** Every bug, a few times a match: it throws itself along its aim, far and fast, and lands softly. Also while it gets away. */
+export const BURST: Weapon = { ...BASE, id: 'burst', name: 'Burst', kind: 'burst', found: true, start: 2, alone: true, maxSpeed: 21, color: 0x9fe8ff };
+
+export const WEAPONS: readonly Weapon[] = [SOLDER_BLOB, CAPACITOR, SHORT_CIRCUIT, SOLDERING_IRON, WEB_SHOT, WEB_BOW, ANT_COLUMN, BLACKOUT_SWARM, THERMAL_PASTE, QUEENS_FLIGHT, RAMPART, LIVING_BRIDGE, ANTHILL, SILK_CURTAIN, SILK_SPAN, SILK_FUNNEL, SHIELD_WALL, SCALE_WALK, HUSK, COMB_WALL, COMB_SPAN, WAX_NEST, BURST];
 
 /** Whether a bug of this species has the weapon. */
 export function hasWeapon(species: string, w: Weapon): boolean {

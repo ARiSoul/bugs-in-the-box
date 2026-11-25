@@ -15,6 +15,8 @@ import type { BugSpecies } from './species';
 export const TICK_RATE = 60;
 export const DT = 1 / TICK_RATE;
 export const GRAVITY = 25;
+/** How much of the gravity a bursting bug feels. */
+const FLOAT_GRAVITY = 0.15;
 export const MAX_FALL_SPEED = 40;
 /** A contact whose normal has at least this Y component is ground; below it is wall (~50°). */
 export const WALKABLE_NY = 0.64;
@@ -136,6 +138,8 @@ export class Bug {
    * runs, else slowly down, as long as its breath (ticks) lasts; a push ends it.
    */
   flying = false;
+  /** Ticks left of a burst: it hardly falls. */
+  floating = 0;
   breath = 0;
   /** It has stood somewhere (there is a place for a thread to hang from). */
   private stood = false;
@@ -218,6 +222,7 @@ export class Bug {
     this.slow = o.slow;
     this.leap = o.leap;
     this.flying = o.flying;
+    this.floating = o.floating;
     this.breath = o.breath;
     this.hung = o.hung;
     this.airTicks = o.airTicks;
@@ -278,7 +283,8 @@ export class Bug {
       if (input.jump && this.breath > 0) this.flying = !this.flying;
       if (input.jump && sp.silk && this.stood) this.thread = !this.thread;
       if (this.thread && field.sample(this.tx, this.ty, this.tz) > 1) this.thread = false;
-      if (!this.flying) this.vy -= GRAVITY * DT;
+      if (!this.flying) this.vy -= GRAVITY * DT * (this.floating > 0 ? FLOAT_GRAVITY : 1);
+      if (this.floating > 0) this.floating--;
       if (this.thread) {
         if (this.vy < -THREAD_SPEED) this.vy = -THREAD_SPEED;
         this.vx *= THREAD_DRAG;

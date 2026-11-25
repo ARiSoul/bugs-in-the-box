@@ -45,10 +45,10 @@ const pass = (m: Match): void => {
 
 describe('levels', () => {
   it('go up with experience, bring more, and end', () => {
-    expect(levelOf(0)).toMatchObject({ level: 1, slots: 4, spaces: 5, actives: 0, points: 0, into: 0 });
+    expect(levelOf(0)).toMatchObject({ level: 1, slots: 5, spaces: 5, actives: 0, points: 0, into: 0 });
     expect(levelOf(xpFor(1)).level).toBe(2);
     expect(levelOf(xpFor(1) + xpFor(2) - 1)).toMatchObject({ level: 2, into: xpFor(2) - 1 });
-    expect(levelOf(1e9)).toMatchObject({ level: LEVELS, slots: 6, spaces: 8, actives: 3, points: 6, next: 0 });
+    expect(levelOf(1e9)).toMatchObject({ level: LEVELS, slots: 6, spaces: 9, actives: 3, points: 6, next: 0 });
     expect(levelOf(-5).level).toBe(1);
     for (let l = 1; l <= LEVELS; l++) expect(brings(l).length, `level ${l}`).toBeGreaterThan(0);
   });

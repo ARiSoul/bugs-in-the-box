@@ -77,8 +77,9 @@ To be decided: who evolves (recommended: the species, per player) · whether lev
 
 ## Backlog (from playing)
 
-- [ ] **Burst** (every species, a few times a match): it throws itself through the air much faster for a few seconds; for escapes
-- [ ] **Mini-map**: the bugs by team; it opens perks for later (a ghost that does not show on it, and the like)
+- [x] **Burst** (every species, twice a match, once a turn, also while getting away): it throws itself along its aim, far and fast, and lands softly
+- [x] **Mini-map**: the ground from above, turned with the view, the bugs by team, the boxes
+- [ ] Perks for the mini-map: a ghost that does not show on the others' (`Minimap.shows`)
 - [ ] Reading time over the network: the pause is an event of the match's, with its limits
 
 ## Phase 5 · Multiplayer

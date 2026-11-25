@@ -25,7 +25,7 @@ export class Placing {
 
   /** Whether weapon `w` is put down with the pointer. */
   static takes(w: Weapon): boolean {
-    return w.start !== undefined;
+    return w.kind === 'wall' || w.kind === 'bridge' || w.kind === 'shelter';
   }
 
   clear(): void {
