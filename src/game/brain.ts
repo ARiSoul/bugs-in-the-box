@@ -1,3 +1,5 @@
+import { PIECE, toPiece } from './build';
+import { wordFor } from './reactions';
 import { Flock, FLOCK_TICKS, steerFlock, type FlockInput } from './flock';
 import { ITEM_KINDS, type Item, type ItemKind } from './items';
 import { createRng } from '../terrain/noise';
@@ -298,6 +300,9 @@ export class Brain {
       if (w.kind !== 'arrow' && match.curtainAt(p, u.team)) return -1;
       if (r === 'lost') return -1;
       if (r === 'fly') continue;
+      for (const s of match.structures)
+        if (s.team === u.team && wordFor(w.id, s.weapon.id) !== '')
+          for (let i = 0; i < s.pieces.length; i += PIECE) if (toPiece(s.pieces, i, p.x, p.y, p.z, dir) < w.blastRadius * 0.7) return -1;
       this.end[0] = p.x;
       this.end[1] = p.y;
       this.end[2] = p.z;

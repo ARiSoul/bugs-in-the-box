@@ -216,6 +216,16 @@ export class GameSounds {
       case 'bared':
         if (e.broken) engine.play('shellCrack', { at: match.units[e.unit].bug, level: 0.8 });
         break;
+      case 'burning':
+        engine.play('solder', { at: e, level: 0.7 });
+        break;
+      case 'worn':
+        if (e.word === 'melting') engine.play('wax', { at: e, rate: 0.7 });
+        else engine.play('shellCrack', { at: e });
+        break;
+      case 'conducts':
+        engine.play('zap', { at: e });
+        break;
       case 'caught':
         engine.play('thread', { at: e, rate: 0.8, level: 1.3 });
         break;

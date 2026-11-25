@@ -44,6 +44,7 @@ export class ItemViews {
   private readonly beeDark: THREE.MeshStandardNodeMaterial;
   private readonly wing: THREE.MeshStandardNodeMaterial;
   private readonly paste: THREE.MeshStandardNodeMaterial;
+  private readonly honey: THREE.MeshStandardNodeMaterial;
   private readonly beamMat: THREE.MeshBasicNodeMaterial;
   private readonly time = uniform(0);
   private readonly p = new THREE.Vector3();
@@ -75,6 +76,8 @@ export class ItemViews {
     this.wing.opacity = 0.45;
     this.wing.side = THREE.DoubleSide;
     this.paste = std(0xaeb7c4, 0.28, 0.35);
+    this.honey = std(0xd98a12, 0.12);
+    this.honey.emissive.setHex(0x5a2600);
     this.beamMat = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide });
     this.beamMat.fog = false;
     const high = positionLocal.y;
@@ -460,7 +463,7 @@ export class ItemViews {
   private smears(match: Match): void {
     for (const w of match.webs) {
       if (w.paste < 0 || this.pasteViews.has(w.id)) continue;
-      const blob = new THREE.Mesh(new THREE.SphereGeometry(1, 40, 12), this.paste);
+      const blob = new THREE.Mesh(new THREE.SphereGeometry(1, 40, 12), w.honey ? this.honey : this.paste);
       const pos = blob.geometry.getAttribute('position');
       for (let i = 0; i < pos.count; i++) {
         const x = pos.getX(i);

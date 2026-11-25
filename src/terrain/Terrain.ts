@@ -271,6 +271,72 @@ export class Terrain {
   }
 
   /**
+   * Take pieces (as `deposit` lays them) away again, or only what of them is inside a sphere (x, y, z, radius). What is
+   * clear of them keeps its density.
+   */
+  erase(pieces: readonly number[], sphere: readonly number[] | null = null): void {
+    const { sx, sy, sz, dens } = this;
+    for (let q = 0; q + 10 < pieces.length; q += 11) {
+      const px = pieces[q];
+      const py = pieces[q + 1];
+      const pz = pieces[q + 2];
+      const ux = pieces[q + 3];
+      const uy = pieces[q + 4];
+      const uz = pieces[q + 5];
+      const vx = pieces[q + 6];
+      const vy = pieces[q + 7];
+      const vz = pieces[q + 8];
+      const r = pieces[q + 9] + 0.12;
+      const iu = 1 / (ux * ux + uy * uy + uz * uz);
+      const iv = 1 / (vx * vx + vy * vy + vz * vz);
+      const pad = r + DENSITY_CLAMP;
+      const ex = pad + Math.abs(ux) + Math.abs(vx);
+      const ey = pad + Math.abs(uy) + Math.abs(vy);
+      const ez = pad + Math.abs(uz) + Math.abs(vz);
+      const i0 = Math.max(1, Math.floor(px - ex));
+      const i1 = Math.min(sx - 2, Math.ceil(px + ex));
+      const j0 = Math.max(1, Math.floor(py - ey));
+      const j1 = Math.min(sy - 2, Math.ceil(py + ey));
+      const k0 = Math.max(1, Math.floor(pz - ez));
+      const k1 = Math.min(sz - 2, Math.ceil(pz + ez));
+      if (i0 > i1 || j0 > j1 || k0 > k1) continue;
+      for (let k = k0; k <= k1; k++)
+        for (let j = j0; j <= j1; j++)
+          for (let i = i0; i <= i1; i++) {
+            const dx = i - px;
+            const dy = j - py;
+            const dz = k - pz;
+            let a = (dx * ux + dy * uy + dz * uz) * iu;
+            let b = (dx * vx + dy * vy + dz * vz) * iv;
+            a = a > 1 ? 1 : a < -1 ? -1 : a;
+            b = b > 1 ? 1 : b < -1 ? -1 : b;
+            const ox = dx - ux * a - vx * b;
+            const oy = dy - uy * a - vy * b;
+            const oz = dz - uz * a - vz * b;
+            let d = Math.sqrt(ox * ox + oy * oy + oz * oz) - r;
+            if (sphere) {
+              const qx = i - sphere[0];
+              const qy = j - sphere[1];
+              const qz = k - sphere[2];
+              const s = Math.sqrt(qx * qx + qy * qy + qz * qz) - sphere[3];
+              if (s > d) d = s;
+            }
+            if (d < 1e-3 && d > -1e-3) d = d < 0 ? -1e-3 : 1e-3;
+            const id = i + sx * (j + sy * k);
+            if (-d > dens[id]) dens[id] = -d > DENSITY_CLAMP ? DENSITY_CLAMP : -d;
+          }
+      const c0x = Math.max(0, Math.floor((i0 - 1) / CHUNK));
+      const c1x = Math.min(this.cx - 1, Math.floor((i1 + 1) / CHUNK));
+      const c0y = Math.max(0, Math.floor((j0 - 1) / CHUNK));
+      const c1y = Math.min(this.cy - 1, Math.floor((j1 + 1) / CHUNK));
+      const c0z = Math.max(0, Math.floor((k0 - 1) / CHUNK));
+      const c1z = Math.min(this.cz - 1, Math.floor((k1 + 1) / CHUNK));
+      for (let z = c0z; z <= c1z; z++)
+        for (let y = c0y; y <= c1y; y++) for (let x = c0x; x <= c1x; x++) this.dirty.add(this.chunkId(x, y, z));
+    }
+  }
+
+  /**
    * Turn a vertical cylinder of the grid (a turntable) a quarter turn about the vertical axis through the
    * sample (cx, cz): rows j0..j1, radius `r` (whole samples). +x goes to +z. The samples only move (density,
    * material and scorch): exact and lossless, so any number of turns keeps every shape and crater. Marks

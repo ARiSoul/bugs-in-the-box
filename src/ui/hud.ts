@@ -1,5 +1,6 @@
 import { FLOCK_TICKS, RINGS } from '../game/flock';
 import { actionOf } from '../game/actions';
+import { tagsOf, wordFor } from '../game/reactions';
 import { RING_DAMAGE } from '../game/weapons';
 import { TICK_RATE } from '../game/bug';
 import { SKILL_FULL, WIND_MAX, type Match } from '../game/match';
@@ -326,6 +327,13 @@ export class Hud {
           : match.phase === 'aim'
             ? `<b>${match.currentWeapon.name}</b> aim ${((Math.atan2(u.aimV, u.aimH) * 180) / Math.PI).toFixed(1)}°${u.bug.species.flight ? ` · ${u.bug.flying ? 'run: up, jump: let go' : u.bug.grounded ? 'jump twice: fly' : 'jump: fly'} · breath ${Math.round((u.bug.breath / (u.bug.species.flight * TICK_RATE)) * 100)}%` : ''}`
             : '';
+    if (aim && match.phase === 'aim' && match.currentWeapon.start === undefined && !match.stance) {
+      const tags = tagsOf(match.currentWeapon.id).filter((q) => q === 'fire' || q === 'electric');
+      if (tags.length) aim += ` · ${tags.join(' ')}`;
+      const s = match.builtAhead(u, 45);
+      const word = s ? wordFor(match.currentWeapon.id, s.weapon.id) : '';
+      if (s && word) aim += ` · <b>${word}: ${s.weapon.name}</b>`;
+    }
     if (aim && match.currentWeapon.start !== undefined) aim = match.going ? `<b>${match.currentWeapon.name}</b> on its way` : `<b>${match.currentWeapon.name}</b> ${match.currentWeapon.kind === 'bridge' ? 'click its near end, then its far one' : match.currentWeapon.kind === 'shelter' ? 'click where it goes to hide' : 'click where it stands · wheel turns it'} · right click drops it · fire key: right here`;
     if (aim && match.built && (match.currentWeapon.kind === 'wall' || match.currentWeapon.kind === 'bridge')) aim += ' · once a turn';
     this.showFlock(match, computer);

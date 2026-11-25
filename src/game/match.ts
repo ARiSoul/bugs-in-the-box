@@ -5,9 +5,10 @@ import { rot, rotate2 } from './math';
 import { Projectile } from './projectile';
 import { dropNear } from './spawn';
 import { MARCHER, type BugSpecies } from './species';
-import { before, bridgePieces, laid, PIECE, SPAN, SPANS, toPiece, wallPieces, type Site } from './build';
+import { before, bridgePieces, laid, PIECE, SPAN, SPANS, toPiece, WALL_DEEP, wallPieces, type Site } from './build';
 import { Flock, layRings, type FlockInput, type Ring } from './flock';
-import { KEPT } from './actions';
+import { KEPT, type Tag } from './actions';
+import { BURN_HURTS, HONEY_TURNS, HONEY_WIDE, reaction, SMOTHERED, tagsOf } from './reactions';
 import { levelAt, passive, type Growth, type Tally } from './progress';
 import { BOX, ITEM_KINDS, Items, type Item, type ItemKind } from './items';
 import { CATCHES, DUD, hasWeapon, SILK_CURTAIN, WORKS, RING_DAMAGE, WEAPONS, type Weapon } from './weapons';
@@ -87,6 +88,8 @@ export interface Web {
   readonly paste: number;
   /** Whose it is. */
   readonly team: number;
+  /** Honey from a melted comb. */
+  readonly honey?: boolean;
   /** Burst open by a special attack (render only). */
   readonly grand: boolean;
   /** Turns left, and pulling (ticks) it still stands. */
@@ -131,6 +134,18 @@ function turnPieces(p: number[], tt: TurntableSpec): void {
       p[i + k + 2] = x;
     }
   }
+}
+
+/** Something built, and what of it burns (slot to how many more times its fire spreads). */
+export interface Structure {
+  readonly id: number;
+  readonly team: number;
+  readonly weapon: Weapon;
+  readonly tags: readonly Tag[];
+  readonly pieces: number[];
+  readonly fire: Map<number, number>;
+  /** Slots taken away (burnt), not blown up. */
+  readonly gone: Set<number>;
 }
 
 export interface TeamSpec {
@@ -229,11 +244,18 @@ export type MatchEvent =
   | { type: 'sting'; x: number; y: number; z: number; unit: number; rings: number }
   | { type: 'box'; id: number }
   | { type: 'open'; unit: number; kind: ItemKind; x: number; y: number; z: number; id: number; gain: number; kept: boolean }
+  | { type: 'burning'; build: number; slot: number; x: number; y: number; z: number; high: number }
+  | { type: 'fireOut'; build: number; slot: number }
+  | { type: 'pieceGone'; build: number; slot: number; upper: boolean; x: number; y: number; z: number; burnt: boolean }
+  | { type: 'worn'; build: number; x: number; y: number; z: number; radius: number; word: string }
+  | { type: 'regrown'; build: number; slot: number; gone: readonly number[]; x: number; y: number; z: number }
+  | { type: 'conducts'; x: number; y: number; z: number }
+  | { type: 'tired'; x: number; y: number; z: number }
   | { type: 'heal'; unit: number; amount: number }
   | { type: 'use'; unit: number; kind: ItemKind; gain: number }
   | { type: 'boxGone'; id: number; x: number; y: number; z: number }
   | { type: 'fuse'; unit: number }
-  | { type: 'built'; unit: number; weapon: string; pieces: readonly number[] }
+  | { type: 'built'; build: number; unit: number; weapon: string; pieces: readonly number[] }
   | { type: 'noRoom'; unit: number }
   | { type: 'hide'; unit: number; weapon: string }
   | { type: 'bared'; unit: number; broken: boolean }
@@ -411,6 +433,8 @@ export class Match {
   usedItem = false;
   /** What each team did (for its experience). */
   readonly tally: Tally[];
+  /** What stands that bugs built. */
+  readonly structures: Structure[] = [];
   /** What of each team's holds enemies that touch it, and how much they slow down. */
   private readonly sticky: { readonly team: number; readonly pieces: number[]; readonly slow: number }[] = [];
   /** Builds in one turn that a team may still do once more; whose shell grew back; whether the active bee stung. */
@@ -418,6 +442,8 @@ export class Match {
   private readonly regrown = new Set<number>();
   private stung = false;
   private builtOnce = false;
+  /** How much of its bite the swarm on its way still has. */
+  private tired = 1;
   /** The active bug is on its way to hide: where, in what, and how long it may still take. */
   going: { x: number; y: number; z: number; w: Weapon; left: number } | null = null;
   /** Curtains of silk that still catch shots of other teams: how many. */
@@ -960,6 +986,7 @@ export class Match {
     c.ticks++;
     if (c.ticks === BROOD_COVER) {
       const radius = w.coverRadius + this.passive(owner.team, 'wider-swarm');
+      this.tire(c.at.x, c.at.y, c.at.z, 1);
       for (const u of this.units) {
         const b = u.bug;
         if (!b.alive || u.team === owner.team) continue;
@@ -970,7 +997,7 @@ export class Match {
         if (d < 0) d = 0;
         if (d > radius) continue;
         c.units.push(u.id);
-        c.harm.push(Math.round(w.damage * this.hard * (1 - ((1 - BROOD_EDGE) * d) / radius)));
+        c.harm.push(Math.round(w.damage * this.hard * this.tired * (1 - ((1 - BROOD_EDGE) * d) / radius)));
       }
       this.events.push({ type: 'cover', x: c.at.x, y: c.at.y, z: c.at.z, units: c.units });
     }
@@ -1167,7 +1194,9 @@ export class Match {
     if (w === SILK_CURTAIN) this.curtains.push({ team: u.team, pieces: [...pieces], left: CATCHES + this.passive(u.team, 'double-weave') });
     const slow = w.species === 'spider' && w.kind === 'bridge' ? this.passive(u.team, 'trapline') : w.species === 'bee' ? this.passive(u.team, 'honey-trap') : 0;
     if (slow > 0) this.sticky.push({ team: u.team, pieces: [...pieces], slow });
-    this.events.push({ type: 'built', unit: u.id, weapon: w.id, pieces });
+    const id = this.structures.length;
+    this.structures.push({ id, team: u.team, weapon: w, tags: tagsOf(w.id), pieces: [...pieces], fire: new Map(), gone: new Set() });
+    this.events.push({ type: 'built', build: id, unit: u.id, weapon: w.id, pieces });
     this.weapon = this.keptBy(u);
     // (webs under it are gone)
     for (let q = this.webs.length - 1; q >= 0; q--) {
@@ -1318,6 +1347,7 @@ export class Match {
     foes.length = 0;
     for (const q of this.units) if (q.team !== owner.team) foes.push(q.bug);
     const end = f.step(this.field, flying, foes);
+    this.tire(f.x, f.y, f.z, 1.2);
     if (f.ring >= 0) this.events.push({ type: 'ring', index: f.ring, x: f.rings[f.ring].x, y: f.rings[f.ring].y, z: f.rings[f.ring].z });
     if (!end) return;
     this.flock = null;
@@ -1333,7 +1363,7 @@ export class Match {
     const y = v ? v.y : f.y;
     const z = v ? v.z : f.z;
     this.events.push({ type: 'sting', x, y, z, unit: unit ? unit.id : -1, rings: f.taken });
-    this.explode(x, y, z, { ...this.currentWeapon, damage: this.currentWeapon.damage + RING_DAMAGE * f.taken });
+    this.explode(x, y, z, { ...this.currentWeapon, damage: Math.round((this.currentWeapon.damage + RING_DAMAGE * f.taken) * this.tired) });
     this.lingerTicks = LINGER_TICKS;
   }
 
@@ -1363,7 +1393,7 @@ export class Match {
     if (c.victim >= 0) {
       const v = this.units[c.victim];
       c.swarm++;
-      if (v.bug.alive && c.swarm % Math.floor(SWARM_TICKS / SWARM_BITES) === 0 && c.swarm < SWARM_TICKS) this.damage(v, Math.round(SWARM_BITE * this.hard));
+      if (v.bug.alive && c.swarm % Math.floor(SWARM_TICKS / SWARM_BITES) === 0 && c.swarm < SWARM_TICKS) this.damage(v, Math.round(SWARM_BITE * this.hard * this.tired));
       if (v.bug.alive && c.swarm < SWARM_TICKS) return;
       // (under it: the nearest ground, which on an edge is not straight below)
       const on = v.bug.alive ? this.toSurface(v.bug.x, v.bug.y, v.bug.z) : null;
@@ -1379,6 +1409,7 @@ export class Match {
     bugInput.jump = false;
     bugInput.run = false;
     h.step(this.field, bugInput);
+    this.tire(h.x, h.y, h.z, 0.4);
     c.path.push(h.x, h.y, h.z, h.nx, h.ny, h.nz, h.hx, h.hy, h.hz);
     c.left--;
     const mx = h.x - h.px;
@@ -1525,6 +1556,7 @@ export class Match {
     this.field.rotateQuarter?.(tt.x, tt.z, tt.j0, tt.j1, tt.radius);
     for (const q of this.curtains) turnPieces(q.pieces, tt);
     for (const q of this.sticky) turnPieces(q.pieces, tt);
+    for (const q of this.structures) turnPieces(q.pieces, tt);
     this.quarterTurns++;
     this.carried.length = 0;
     this.beginTurn(this.units[this.active].team + 1);
@@ -1537,6 +1569,7 @@ export class Match {
 
   /** Give the turn to the next team (from `team` on) that still has bugs, or end the match. */
   private beginTurn(team: number): void {
+    this.smoulder();
     const n = this.teams.length;
     let alive = 0;
     let last = -1;
@@ -1587,6 +1620,7 @@ export class Match {
         u.extra = 0;
         this.hard = 1;
         this.built = this.builtOnce = false;
+        this.tired = 1;
         this.stung = false;
         this.usedItem = false;
         this.going = null;
@@ -1623,6 +1657,234 @@ export class Match {
       dy * speed,
       dz * speed,
     );
+  }
+
+  // ---------------------------------------------------------------- tags that meet (see reactions.ts)
+
+  /** Whether a slot of something built still stands. */
+  private stands(s: Structure, i: number): boolean {
+    return !s.gone.has(s.pieces[i + 10]) && this.field.sample(s.pieces[i], s.pieces[i + 1], s.pieces[i + 2]) < 0;
+  }
+
+  /** Something with these tags happens within `r` of a place: what is built there, and the webs, take it as their tags say. */
+  private react(x: number, y: number, z: number, r: number, by: readonly Tag[]): void {
+    for (const s of this.structures) {
+      const burn = reaction('burn', by, s.tags);
+      const wear = reaction('melt', by, s.tags) ?? reaction('brittle', by, s.tags);
+      if (!burn && !wear) continue;
+      // (what still stands at the edge of the hole, the nearest first)
+      const at: { i: number; d: number; standing: boolean }[] = [];
+      for (let i = 0; i < s.pieces.length; i += PIECE) {
+        const d = toPiece(s.pieces, i, x, y, z, near);
+        if (d < r * 0.8 && !s.gone.has(s.pieces[i + 10])) at.push({ i, d, standing: this.stands(s, i) });
+      }
+      if (at.length === 0) continue;
+      at.sort((a, b) => a.d - b.d || a.i - b.i);
+      if (burn) for (const q of at.filter((v) => v.standing).slice(0, r < 2 ? 1 : 2)) this.light(s, q.i, burn.value);
+      if (!wear) continue;
+      const wide = r * wear.value;
+      this.field.erase?.(s.pieces, [x, y, z, wide]);
+      this.events.push({ type: 'worn', build: s.id, x, y, z, radius: wide, word: wear.word });
+      if (wear.id === 'melt') this.spill(s, at[0].i, x, z);
+    }
+    if (by.includes('fire'))
+      for (let q = this.webs.length - 1; q >= 0; q--) {
+        const w = this.webs[q];
+        const reach = r + w.radius;
+        if (w.paste < 0 && (w.x - x) * (w.x - x) + (w.y - y) * (w.y - y) + (w.z - z) * (w.z - z) < reach * reach) this.removeWeb(w, true);
+      }
+  }
+
+  private light(s: Structure, i: number, spread: number): void {
+    const slot = s.pieces[i + 10];
+    if (s.fire.has(slot) || s.gone.has(slot)) return;
+    s.fire.set(slot, spread);
+    this.events.push({ type: 'burning', build: s.id, slot, x: s.pieces[i], y: s.pieces[i + 1], z: s.pieces[i + 2], high: s.weapon.kind === 'wall' ? 2 : 0.4 });
+  }
+
+  /** Melted comb: a puddle of honey on the ground there, that holds every other team. */
+  private spill(s: Structure, i: number, x: number, z: number): void {
+    const p = s.pieces;
+    const team = s.team;
+    // (beside its foot, on the side it was hit from; under a bridge)
+    let hx = x - p[i];
+    let hz = z - p[i + 2];
+    const l = Math.sqrt(hx * hx + hz * hz);
+    hx = l > 0.1 ? hx / l : 1;
+    hz = l > 0.1 ? hz / l : 0;
+    const wall = s.weapon.kind === 'wall';
+    const fx = p[i] + (wall ? hx * 2.2 : 0);
+    const fz = p[i + 2] + (wall ? hz * 2.2 : 0);
+    const fy = p[i + 1] + (wall ? 0 : -2.4);
+    const t = this.field.raycast(fx, fy, fz, 0, -1, 0, 14);
+    if (t <= 0) return;
+    const on = this.toSurface(fx, fy - t, fz);
+    if (!on) return;
+    for (const w of this.webs) if (w.honey && (w.x - on.x) * (w.x - on.x) + (w.y - on.y) * (w.y - on.y) + (w.z - on.z) * (w.z - on.z) < 4) return;
+    const id = this.nextWebId++;
+    this.webs.push({ id, ...on, radius: HONEY_WIDE, turns: HONEY_TURNS * this.teams.length, strength: WEB_TEAR_TICKS, grand: false, paste: team, team, honey: true });
+    this.events.push({ type: 'web', id });
+  }
+
+  /** A turn begins: what burns is gone and its fire goes on to what is beside it; what is alive grows back. */
+  private smoulder(): void {
+    for (const s of this.structures) {
+      if (s.fire.size > 0) {
+        const slots = [...s.fire.keys()].sort((a, b) => a - b);
+        for (const u of this.units) {
+          const b = u.bug;
+          if (!b.alive) continue;
+          for (let i = 0; i < s.pieces.length; i += PIECE)
+            if (s.fire.has(s.pieces[i + 10]) && toPiece(s.pieces, i, b.x, b.y, b.z, near) < b.species.radius + 0.6) {
+              this.damage(u, BURN_HURTS);
+              break;
+            }
+        }
+        // (earth smothers it: what stands in it burns no lower, nor further)
+        const upper = s.tags.includes('earth');
+        for (const slot of slots) {
+          const spread = s.fire.get(slot) as number;
+          s.fire.delete(slot);
+          this.events.push({ type: 'fireOut', build: s.id, slot });
+          const i = this.slotAt(s, slot);
+          if (i < 0) continue;
+          this.burnAway(s, i, upper);
+          if (spread <= 0) continue;
+          for (const n of [slot - 1, slot + 1]) {
+            const k = this.slotAt(s, n);
+            if (k >= 0 && this.stands(s, k)) this.light(s, k, spread - 1);
+          }
+        }
+      }
+      this.regrow(s);
+    }
+  }
+
+  private slotAt(s: Structure, slot: number): number {
+    for (let i = 0; i < s.pieces.length; i += PIECE) if (s.pieces[i + 10] === slot) return i;
+    return -1;
+  }
+
+  private burnAway(s: Structure, i: number, upper: boolean): void {
+    const p = s.pieces.slice(i, i + PIECE);
+    if (s.weapon.kind === 'wall') {
+      // (not what it stands on)
+      const l = Math.sqrt(p[3] * p[3] + p[4] * p[4] + p[5] * p[5]);
+      // (from this high over the ground up; it stands WALL_DEEP in it)
+      const keep = (upper ? SMOTHERED : 0.4) + WALL_DEEP + p[9];
+      const half = Math.max(0.2, l - keep / 2);
+      for (let k = 0; k < 3; k++) {
+        const u = p[3 + k] / l;
+        p[k] += u * (l - half);
+        p[3 + k] = u * half;
+      }
+    }
+    // (its own place only: the pieces reach into each other)
+    const across = s.weapon.kind === 'wall' ? 6 : 3;
+    const w = Math.sqrt(p[across] * p[across] + p[across + 1] * p[across + 1] + p[across + 2] * p[across + 2]);
+    for (let k = 0; k < 3; k++) p[across + k] *= 0.1 / w;
+    this.field.erase?.(p);
+    if (!upper) s.gone.add(p[10]);
+    this.events.push({ type: 'pieceGone', build: s.id, slot: p[10], upper, x: p[0], y: p[1], z: p[2], burnt: true });
+  }
+
+  /** What is alive closes one gap a turn, while enough of it stands. */
+  private regrow(s: Structure): void {
+    const r = reaction('regrow', [], s.tags);
+    if (!r || s.fire.size > 0) return;
+    const total = s.pieces.length / PIECE;
+    let standing = 0;
+    let first = -1;
+    for (let i = 0; i < s.pieces.length; i += PIECE) {
+      if (this.stands(s, i)) standing++;
+      else if (first < 0 && this.roomFor(s.pieces, i)) first = i;
+    }
+    if (first < 0 || standing <= total * r.value) return;
+    this.field.deposit?.(s.pieces.slice(first, first + PIECE));
+    s.gone.delete(s.pieces[first + 10]);
+    const gone: number[] = [];
+    for (let i = 0; i < s.pieces.length; i += PIECE) if (!this.stands(s, i)) gone.push(s.pieces[i + 10]);
+    this.events.push({ type: 'regrown', build: s.id, slot: s.pieces[first + 10], gone, x: s.pieces[first], y: s.pieces[first + 1], z: s.pieces[first + 2] });
+  }
+
+  /** Something that stops arcs is in between. */
+  private insulated(ax: number, ay: number, az: number, bx: number, by: number, bz: number): boolean {
+    for (const s of this.structures) {
+      if (!reaction('insulate', ['electric'], s.tags)) continue;
+      const dx = bx - ax;
+      const dy = by - ay;
+      const dz = bz - az;
+      const l = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      for (let t = 0.6; t < l; t += 0.6) {
+        const x = ax + (dx * t) / l;
+        const y = ay + (dy * t) / l;
+        const z = az + (dz * t) / l;
+        for (let i = 0; i < s.pieces.length; i += PIECE) if (toPiece(s.pieces, i, x, y, z, near) < 0 && this.field.sample(x, y, z) < 0) return true;
+      }
+    }
+    return false;
+  }
+
+  /** A shock at a place: whatever metal is smeared there takes it to everyone in it. */
+  private conductAt(x: number, y: number, z: number, r: number, harm: number, hit: Set<Unit>): void {
+    const rule = reaction('conduct', ['electric'], ['metal']);
+    if (!rule) return;
+    for (const w of this.webs) {
+      if (w.paste < 0 || w.honey) continue;
+      const reach = w.radius + r;
+      if ((w.x - x) * (w.x - x) + (w.y - y) * (w.y - y) + (w.z - z) * (w.z - z) > reach * reach) continue;
+      this.events.push({ type: 'conducts', x: w.x, y: w.y, z: w.z });
+      for (const u of this.units) {
+        const b = u.bug;
+        if (!b.alive || hit.has(u)) continue;
+        const dx = b.x - w.x;
+        const dy = b.y - w.y;
+        const dz = b.z - w.z;
+        const in_ = w.radius + b.species.radius * 0.5;
+        if (dx * dx + dy * dy + dz * dz > in_ * in_) continue;
+        hit.add(u);
+        this.events.push({ type: 'arc', x1: w.x, y1: w.y, z1: w.z, x2: b.x, y2: b.y, z2: b.z });
+        this.damage(u, Math.round((harm || rule.value) * this.hard), true);
+      }
+    }
+  }
+
+  /** How much of its bite a swarm keeps that is at a place: it sticks to webs, to silk and honey. */
+  private bite(x: number, y: number, z: number, reach: number): number {
+    const r = reaction('tire', ['swarm'], ['sticky']);
+    if (!r) return 1;
+    for (const w of this.webs) {
+      const d = w.radius + reach;
+      if ((w.x - x) * (w.x - x) + (w.y - y) * (w.y - y) + (w.z - z) * (w.z - z) < d * d) return r.value;
+    }
+    for (const s of this.structures) {
+      if (!reaction('tire', ['swarm'], s.tags)) continue;
+      for (let i = 0; i < s.pieces.length; i += PIECE) if (toPiece(s.pieces, i, x, y, z, near) < reach + 0.6 && this.stands(s, i)) return r.value;
+    }
+    return 1;
+  }
+
+  /** The active special attack gets stuck on its way, once. */
+  private tire(x: number, y: number, z: number, reach: number): void {
+    if (this.tired < 1) return;
+    this.tired = this.bite(x, y, z, reach);
+    if (this.tired < 1) this.events.push({ type: 'tired', x, y, z });
+  }
+
+  /** What the bug's aim meets first that is built (within `range`), or null. */
+  builtAhead(u: Unit, range: number): Structure | null {
+    if (this.structures.length === 0) return null;
+    const [dx, dy, dz] = this.aimDirection(u, aimed);
+    const b = u.bug;
+    for (let t = 1.5; t < range; t += 0.7) {
+      const x = b.x + dx * t;
+      const y = b.y + dy * t;
+      const z = b.z + dz * t;
+      if (this.field.sample(x, y, z) > 0.4) continue;
+      for (const s of this.structures) for (let i = 0; i < s.pieces.length; i += PIECE) if (toPiece(s.pieces, i, x, y, z, near) < 0.4 && this.stands(s, i)) return s;
+      return null;
+    }
+    return null;
   }
 
   /** A team's turn comes: its shelters tend to who is in them, or beside them. */
@@ -1667,6 +1929,7 @@ export class Match {
     const stepLen = w.tunnelRadius * 0.7;
     const start = b.species.radius * 0.5;
     for (let s = start; s <= w.tunnelLength; s += stepLen) this.field.carve(b.x + dx * s, b.y + dy * s, b.z + dz * s, w.tunnelRadius);
+    for (let s = start; s <= w.tunnelLength; s += 1) this.react(b.x + dx * s, b.y + dy * s, b.z + dz * s, w.tunnelRadius, tagsOf(w.id));
     const hot = this.passive(u.team, 'hot-tip');
     if (hot)
       for (const q of this.units) {
@@ -1696,6 +1959,9 @@ export class Match {
 
   /** Carve the crater, hurt and throw every bug in reach, then let a Short Circuit arc jump on. */
   explode(x: number, y: number, z: number, w: Weapon): void {
+    const tags = tagsOf(w.id);
+    // (arcs find it by themselves)
+    if (tags.includes('electric') && w.arcs === 0) this.conductAt(x, y, z, w.blastRadius, w.arcDamage, new Set());
     this.field.carve(x, y, z, w.blastRadius);
     this.lookTicks = Math.max(this.lookTicks, LOOK_BLAST_TICKS);
     this.events.push({ type: 'explosion', x, y, z, radius: w.blastRadius });
@@ -1708,6 +1974,7 @@ export class Match {
       const near = w.blastRadius + s.radius * 0.5;
       if (sx * sx + sy * sy + sz * sz < near * near) this.removeWeb(s, true);
     }
+    this.react(x, y, z, w.blastRadius, tags);
     for (const it of this.items.near(x, y, z, w.blastRadius + BOX)) {
       this.items.remove(it);
       this.events.push({ type: 'boxGone', id: it.id, x: it.x, y: it.y, z: it.z });
@@ -1721,7 +1988,7 @@ export class Match {
       const dist = Math.sqrt(ex * ex + ey * ey + ez * ez);
       const f = blastShare(b, x, y, z, w);
       if (f <= 0) continue;
-      this.damage(u, Math.round(w.damage * this.hard * f));
+      this.damage(u, Math.round(w.damage * this.hard * f), tags.includes('electric'));
       // thrown away from the blast, with an upward bias so it does not just slide
       let kx = 0;
       let ky = 1;
@@ -1760,7 +2027,7 @@ export class Match {
         const dy = b.y - fy;
         const dz = b.z - fz;
         const d2 = dx * dx + dy * dy + dz * dz;
-        if (d2 < bestD) {
+        if (d2 < bestD && !this.insulated(fx, fy, fz, b.x, b.y, b.z)) {
           bestD = d2;
           best = u;
         }
@@ -1770,7 +2037,8 @@ export class Match {
       const b = best.bug;
       this.events.push({ type: 'arc', x1: fx, y1: fy, z1: fz, x2: b.x, y2: b.y, z2: b.z });
       // (grounded in its husk: it runs off)
-      if (!(best.cover && best.cover.species === 'cockroach' && this.passive(best.team, 'grounded'))) this.damage(best, Math.round(w.arcDamage * this.hard));
+      if (!(best.cover && best.cover.species === 'cockroach' && this.passive(best.team, 'grounded'))) this.damage(best, Math.round(w.arcDamage * this.hard), true);
+      this.conductAt(b.x, b.y, b.z, 0, w.arcDamage, hit);
       b.push(0, 5, 0);
       fx = b.x;
       fy = b.y;
@@ -1887,7 +2155,7 @@ export class Match {
     this.events.push({ type: 'arc', x1: b.x, y1: b.y, z1: b.z, x2: o.x, y2: o.y, z2: o.z });
   }
 
-  private damage(u: Unit, amount: number): void {
+  private damage(u: Unit, amount: number, electric = false): void {
     if (amount <= 0 || !u.bug.alive) return;
     const b = u.bug;
     if (u.cover) {
@@ -1901,8 +2169,10 @@ export class Match {
     }
     if (u.fuse && amount > 1) {
       u.fuse = false;
-      amount = Math.ceil(amount / 2);
+      // (a shock: it takes all of it)
+      amount = electric ? 0 : Math.ceil(amount / 2);
       this.events.push({ type: 'fuse', unit: u.id });
+      if (amount <= 0) return;
     }
     // (its shell just took a blow that would have killed it: nothing more gets through this turn)
     if (u.shellTurn === this.turnNumber) return;

@@ -50,6 +50,7 @@ src/
     flock.ts            the bee's swarm that a player flies (Queen's Flight): steering, rings, what ends it; how the computer steers it
     items.ts            boxes on the map: how they come, fall and what they hold
     actions.ts          everything a bug can do as data (category, text, tags); what is kept, how many slots
+    reactions.ts        what comes of two tags that meet (data)
     progress.ts         levels, experience, passives (data)
     build.ts            what bugs build (thick flat pieces): where they go (wall, bridge)
     weapons.ts          weapons as data (Solder Blob, Capacitor, Short Circuit, Soldering Iron; building and hiding; the species' own: Web Shot, Web Bow, Ant Column, Blackout Swarm, Queen's Flight)

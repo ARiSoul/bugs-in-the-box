@@ -1,8 +1,9 @@
 import * as THREE from 'three/webgpu';
-import { abs, attribute, clamp, float, floor, mix, normalView, positionGeometry, positionViewDirection, pow, smoothstep, uniform, uniformArray } from 'three/tsl';
+import { abs, attribute, clamp, float, floor, mix, normalView, positionGeometry, positionViewDirection, pow, smoothstep, uniform, uniformArray, vec3 } from 'three/tsl';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { APART, COLUMNS, DECK_UNDER, PIECE, shifted, SPAN, SPANS, WALL_DEEP } from '../../game/build';
 import type { Match, MatchEvent, Unit } from '../../game/match';
+import { SMOTHERED } from '../../game/reactions';
 import { WEAPONS } from '../../game/weapons';
 import type { BuildReply } from '../../workers/build.worker';
 import type { BugView } from '../BugView';
@@ -19,12 +20,14 @@ const GO = 0.3;
 /** Places along a wall or a bridge whose ground is known. */
 const STATIONS = 7;
 const FLAKES = 90;
+const FLAMES = 240;
+const FLAMES_EACH = 22;
 const GHOST: readonly (readonly [number, number, number])[] = [[0.02, 0.22, 1], [1, 0.03, 0.01]];
 
 /** How a bug sits in its shelter (in its radius): how far forward, how large. */
 const SEAT: Record<string, readonly [number, number]> = { anthill: [0.62, 0.92], 'silk-funnel': [0.62, 0.62], husk: [0.95, 0.82], 'wax-nest': [0.35, 0.78] };
 /** What flies off of each species' work. */
-const BITS: Record<string, readonly number[]> = { ant: [0x6b4a2e, 0xb08a55, 0x4a3423], spider: [0xd8d4ca, 0xb9b6ae], cockroach: [0x8a3d12, 0x5a240a, 0xc98a4a], bee: [0xd9942a, 0xb86a10, 0xffc040] };
+const BITS: Record<string, readonly number[]> = { ant: [0x6b4a2e, 0xb08a55, 0x4a3423], spider: [0xd8d4ca, 0xb9b6ae], cockroach: [0x8a3d12, 0x5a240a, 0xc98a4a], bee: [0xd9942a, 0xb86a10, 0xffc040], ember: [0xff8a2a, 0x3a2418, 0x1a1210] };
 
 /** What each is made of inside: two colours, how rough, how much light comes through. */
 const INSIDE: Record<string, readonly [readonly [number, number, number], readonly [number, number, number], number, number]> = {
@@ -52,6 +55,10 @@ interface Frame {
 }
 
 interface Built {
+  /** Which one it is of the match's (a hole's wall: its own's; -1: of a match before). */
+  id: number;
+  /** Per vertex: its slot, and 64 more where a fire over earth reaches. */
+  slots: Uint8Array;
   mesh: THREE.Mesh;
   species: string;
   age: number;
@@ -146,8 +153,12 @@ export class BuildViews {
   private readonly spot: THREE.Mesh;
   private readonly built: Built[] = [];
   /** What was built before its model was made. */
-  private waiting: { weapon: string; frame: Frame; turns: boolean }[] = [];
+  private waiting: { weapon: string; frame: Frame; turns: boolean; id: number }[] = [];
   private readonly blasts: number[] = [];
+  private readonly worn: { id: number; at: readonly [number, number, number, number] }[] = [];
+  private readonly lost: { id: number; slot: number; upper: boolean; at: THREE.Vector3 }[] = [];
+  private readonly fires: { build: number; slot: number; at: THREE.Vector3; high: number; t: number; out: boolean }[] = [];
+  private readonly flames: THREE.InstancedMesh;
   private turned = 0;
   private readonly shelters: Shelter[] = [];
   private readonly flakes: THREE.InstancedMesh;
@@ -209,6 +220,18 @@ export class BuildViews {
         this.root.add(o);
       }
     }
+    {
+      const m = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
+      const high = positionGeometry.y;
+      m.colorNode = mix(vec3(2.6, 1.15, 0.16), vec3(1.5, 0.16, 0.01), smoothstep(-0.2, 1, high));
+      m.opacityNode = smoothstep(1.05, 0.1, high).mul(smoothstep(0, 0.55, abs(normalView.dot(positionViewDirection)))).mul(0.75);
+      m.fog = false;
+      this.flames = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 10, 8), m, FLAMES);
+      this.flames.frustumCulled = false;
+      this.flames.count = 0;
+      this.flames.renderOrder = 7;
+      this.root.add(this.flames);
+    }
     const g = new THREE.IcosahedronGeometry(1, 0);
     this.flakes = new THREE.InstancedMesh(g, new THREE.MeshStandardNodeMaterial({ roughness: 0.7 }), FLAKES);
     this.flakes.frustumCulled = false;
@@ -256,7 +279,7 @@ export class BuildViews {
     this.models.set(id, g);
     const now = this.waiting.filter((q) => q.weapon === id);
     this.waiting = this.waiting.filter((q) => q.weapon !== id);
-    for (const q of now) this.put(id, q.frame, q.turns);
+    for (const q of now) this.put(id, q.frame, q.turns, q.id);
   }
 
   /** All that was asked for is there (the captures wait for it). */
@@ -275,11 +298,12 @@ export class BuildViews {
 
   /** A new match: nobody hides. */
   clear(species: readonly string[]): void {
+    for (const b of this.built) b.id = -1;
     for (const s of this.shelters) this.root.remove(s.mesh);
     this.shelters.length = 0;
     this.ghost.visible = this.ring.visible = this.spot.visible = false;
     for (const b of this.bits) b.t = b.life;
-    this.blasts.length = 0;
+    this.blasts.length = this.worn.length = this.lost.length = this.fires.length = 0;
     this.turned = 0;
     this.ask(species);
   }
@@ -297,9 +321,15 @@ export class BuildViews {
       const tt = match.options.turntable;
       const [x, y, z] = e.pieces;
       const turns = tt !== undefined && Math.hypot(x - tt.x, z - tt.z) < tt.radius && y > tt.surface - 2;
-      if (this.models.has(e.weapon)) this.put(e.weapon, frame, turns);
-      else this.waiting.push({ weapon: e.weapon, frame, turns });
-    } else if (e.type === 'explosion') this.blasts.push(e.x, e.y, e.z, e.radius);
+      if (this.models.has(e.weapon)) this.put(e.weapon, frame, turns, e.build);
+      else this.waiting.push({ weapon: e.weapon, frame, turns, id: e.build });
+    } else if (e.type === 'worn') this.worn.push({ id: e.build, at: [e.x, e.y, e.z, e.radius] });
+    else if (e.type === 'burning') this.fires.push({ build: e.build, slot: e.slot, at: new THREE.Vector3(e.x, e.y, e.z), high: e.high, t: 0, out: false });
+    else if (e.type === 'fireOut') {
+      for (const f of this.fires) if (f.build === e.build && f.slot === e.slot) f.out = true;
+    } else if (e.type === 'pieceGone') this.lost.push({ id: e.build, slot: e.slot, upper: e.upper, at: new THREE.Vector3(e.x, e.y, e.z) });
+    else if (e.type === 'regrown') this.grow(e.build, e.gone);
+    else if (e.type === 'explosion') this.blasts.push(e.x, e.y, e.z, e.radius);
     else if (e.type === 'dig') {
       const l = Math.hypot(e.x2 - e.x1, e.y2 - e.y1, e.z2 - e.z1);
       const n = Math.max(1, Math.ceil(l / (e.radius * 0.5)));
@@ -335,7 +365,7 @@ export class BuildViews {
   // ---------------------------------------------------------------- walls and bridges
 
   /** Put one up: its model, bent over the ground it stands on. */
-  private put(weapon: string, f: Frame, turns: boolean): void {
+  private put(weapon: string, f: Frame, turns: boolean, id: number): void {
     const model = this.models.get(weapon) as THREE.BufferGeometry;
     const p = (model.getAttribute('position') as THREE.BufferAttribute).array;
     const n = (model.getAttribute('normal') as THREE.BufferAttribute).array;
@@ -343,9 +373,13 @@ export class BuildViews {
     const nor = new Float32Array(p.length);
     const side = new THREE.Vector3().crossVectors(f.up, f.out);
     const { up, out } = f;
+    const slots = new Uint8Array(p.length / 3);
+    const wall = WEAPONS.find((w) => w.id === weapon)?.kind === 'wall';
     for (let k = 0; k < p.length; k += 3) {
       const x = Math.min(f.x1, Math.max(f.x0, p[k]));
       const st = (x - f.first) / f.gap;
+      const slot = wall ? Math.min(COLUMNS - 1, Math.max(0, Math.round(st))) : Math.min(SPANS - 1, Math.max(0, Math.floor(x / SPAN)));
+      slots[k / 3] = slot + (p[k + 1] > SMOTHERED - 0.2 ? 64 : 0);
       const i = Math.min(STATIONS - 2, Math.max(0, Math.floor(st)));
       const t = st - i;
       const a = f.feet[i];
@@ -376,13 +410,14 @@ export class BuildViews {
     this.root.add(mesh);
     const s = g.boundingSphere as THREE.Sphere;
     const species = WEAPONS.find((w) => w.id === weapon)?.species ?? 'ant';
-    this.built.push({ mesh, species, age: 0, turns, middle: s.center.clone(), reach: s.radius, of: { weapon, frame: f } });
+    this.built.push({ id, slots, mesh, species, age: 0, turns, middle: s.center.clone(), reach: s.radius, of: { weapon, frame: f } });
     for (let k = 0; k < 24; k++) this.bit(f.feet[k % STATIONS], species, 5, 0.8, 0.1);
   }
 
   /** Blow a sphere out of what stands: its triangles there are gone, those at its edge end at it. */
-  private blow(x: number, y: number, z: number, r: number): void {
+  private blow(x: number, y: number, z: number, r: number, only = -1): void {
     for (const b of [...this.built]) {
+      if (only >= 0 && b.id !== only) continue;
       b.mesh.updateMatrixWorld();
       const c = b.mesh.worldToLocal(this.p.set(x, y, z));
       if (c.distanceTo(b.middle) > r + b.reach) continue;
@@ -439,6 +474,46 @@ export class BuildViews {
     }
   }
 
+  /** A piece is gone (burnt): its triangles with it (over earth, its upper part). */
+  private lose(id: number, slot: number, upper: boolean, at: THREE.Vector3): void {
+    for (const b of this.built) {
+      if (b.id !== id) continue;
+      const idx = (b.mesh.geometry.getIndex() as THREE.BufferAttribute).array;
+      const s = b.slots;
+      const out = (v: number): boolean => (s[v] & 63) === slot && (!upper || s[v] >= 64);
+      let n = 0;
+      for (let k = 0; k < idx.length; k += 3) {
+        if (out(idx[k]) && out(idx[k + 1]) && out(idx[k + 2])) continue;
+        idx[n] = idx[k];
+        idx[n + 1] = idx[k + 1];
+        idx[n + 2] = idx[k + 2];
+        n += 3;
+      }
+      for (let k = n; k < idx.length; k++) idx[k] = 0;
+      b.mesh.geometry.setDrawRange(0, n);
+      (b.mesh.geometry.getIndex() as THREE.BufferAttribute).needsUpdate = true;
+      for (let k = 0; k < 16; k++) this.bit(at, b.species, 5, 1.2, 0.13);
+    }
+  }
+
+  /** It closed a gap: whole again, but for the slots that are still gone. */
+  private grow(id: number, gone: readonly number[]): void {
+    const was = this.built.find((b) => b.id === id && b.of);
+    if (!was?.of) return;
+    // (the walls of its holes too)
+    for (let k = this.built.length - 1; k >= 0; k--)
+      if (this.built[k].id === id) {
+        this.remove(this.built[k].mesh);
+        this.built.splice(k, 1);
+      }
+    this.put(was.of.weapon, was.of.frame, was.turns, id);
+    const now = this.built[this.built.length - 1];
+    now.mesh.position.copy(was.mesh.position);
+    now.mesh.quaternion.copy(was.mesh.quaternion);
+    now.age = GROW;
+    for (const s of gone) this.lose(id, s, false, now.middle);
+  }
+
   /** The wall of a hole: what is inside shows there. */
   private line(b: Built, x: number, y: number, z: number, r: number): void {
     if (!b.of) return;
@@ -448,6 +523,9 @@ export class BuildViews {
     const at: number[] = [];
     const deep: number[] = [];
     const high: number[] = [];
+    const locals: number[] = [];
+    const capSlots: number[] = [];
+    const isWall = WEAPONS.find((w) => w.id === weapon)?.kind === 'wall';
     const side = this.a.crossVectors(f.up, f.out);
     const start = f.feet[0];
     const span = f.feet[STATIONS - 1];
@@ -483,6 +561,7 @@ export class BuildViews {
         at.push(x + ux * k, y + uy * k, z + uz * k);
         deep.push(d);
         high.push(l[1]);
+        locals.push(l[0]);
       }
     const pos: number[] = [];
     const nor: number[] = [];
@@ -509,6 +588,8 @@ export class BuildViews {
         }
       }
       if (poly.length < 3) return;
+      const lx = locals[ids[0]];
+      const slot = isWall ? Math.min(COLUMNS - 1, Math.max(0, Math.round((lx - f.first) / f.gap))) : Math.min(SPANS - 1, Math.max(0, Math.floor(lx / SPAN)));
       e1.set(poly[1][0] - poly[0][0], poly[1][1] - poly[0][1], poly[1][2] - poly[0][2]);
       e2.set(poly[2][0] - poly[0][0], poly[2][1] - poly[0][1], poly[2][2] - poly[0][2]);
       n3.crossVectors(e1, e2).normalize();
@@ -527,6 +608,7 @@ export class BuildViews {
         const s = (0.75 + 0.35 * Math.min(1, Math.max(0, 1 + q[3]))) * stakes;
         for (let k = 0; k < 3; k++) col.push((c0[k] + (c1[k] - c0[k]) * w) * s);
         look.push(rough, glow, 0);
+        capSlots.push(slot + (q[4] > SMOTHERED - 0.2 ? 64 : 0));
       };
       for (let n = 1; n + 1 < poly.length; n++) {
         put(poly[0]);
@@ -555,7 +637,7 @@ export class BuildViews {
     mesh.userData.grown = 1.3;
     this.root.add(mesh);
     const s = g.boundingSphere as THREE.Sphere;
-    this.built.push({ mesh, species: b.species, age: GROW, turns: b.turns, middle: s.center.clone(), reach: s.radius, of: null });
+    this.built.push({ id: b.id, slots: Uint8Array.from(capSlots), mesh, species: b.species, age: GROW, turns: b.turns, middle: s.center.clone(), reach: s.radius, of: null });
   }
 
   // ---------------------------------------------------------------- shelters
@@ -606,6 +688,11 @@ export class BuildViews {
     this.turn(match);
     for (let k = 0; k < this.blasts.length; k += 4) this.blow(this.blasts[k], this.blasts[k + 1], this.blasts[k + 2], this.blasts[k + 3]);
     this.blasts.length = 0;
+    for (const w of this.worn) this.blow(w.at[0], w.at[1], w.at[2], w.at[3], w.id);
+    this.worn.length = 0;
+    for (const l of this.lost) this.lose(l.id, l.slot, l.upper, l.at);
+    this.lost.length = 0;
+    this.burn(dt, time);
     for (const b of this.built) {
       b.age += dt;
       b.mesh.userData.grown = Math.min(1.3, (b.age / GROW) * 1.3);
@@ -635,6 +722,34 @@ export class BuildViews {
     });
     this.flakes.visible = n > 0;
     if (n > 0) this.flakes.instanceMatrix.needsUpdate = true;
+  }
+
+  /** Flames on what burns, until its fire is out. */
+  private burn(dt: number, time: number): void {
+    let n = 0;
+    for (let i = this.fires.length - 1; i >= 0; i--) {
+      const f = this.fires[i];
+      f.t += f.out ? -dt * 2.5 : dt;
+      if (f.out && f.t > 0.6) f.t = 0.6;
+      if (f.out && f.t <= 0) {
+        this.fires.splice(i, 1);
+        continue;
+      }
+      const on = Math.min(1, f.t / 0.6);
+      for (let k = 0; k < FLAMES_EACH && n < FLAMES; k++) {
+        const a = k * 2.4 + i;
+        const p = (time * (0.9 + 0.25 * Math.sin(k * 7.1)) + k * 0.37 + i * 0.21) % 1;
+        const r = 0.9 * Math.sqrt((k + 0.5) / FLAMES_EACH);
+        this.p.set(f.at.x + Math.cos(a) * r, f.at.y + f.high * (k / FLAMES_EACH - 0.3) + p * 1.5, f.at.z + Math.sin(a) * r);
+        const s = on * (0.42 + 0.2 * Math.sin(k * 3.3)) * Math.sin(Math.PI * Math.min(1, p * 1.15 + 0.08));
+        this.q.setFromEuler(this.e.set(0.25 * Math.sin(time * 9 + k), a + time, 0.25 * Math.cos(time * 8 + k * 2)));
+        this.flames.setMatrixAt(n++, this.m.compose(this.p, this.q, this.s.set(s * 0.7, s * 1.7, s * 0.7)));
+      }
+      if (Math.random() < dt * 5) this.bit(f.at, 'ember', 3, 0.8, 0.06);
+    }
+    this.flames.count = n;
+    this.flames.visible = n > 0;
+    if (n > 0) this.flames.instanceMatrix.needsUpdate = true;
   }
 
   /** What stands on a turntable goes round with it. */

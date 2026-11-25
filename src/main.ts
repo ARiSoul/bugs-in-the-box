@@ -26,6 +26,7 @@ import { computerGrowth, LEVELS, NO_GROWTH, VERSUS, worth, type Growth } from '.
 import { Profile } from './ui/profile';
 import { SpeciesPage } from './ui/species';
 import { Inventory } from './ui/inventory';
+import { SeeThrough } from './render/gpu/seeThrough';
 import { Placing } from './input/placing';
 import { BuildViews } from './render/gpu/buildViews';
 import { WebViews } from './render/webs';
@@ -122,6 +123,9 @@ const flock = new FlockScene(stage.scene, stage.fx, bow.light);
 /** The special attack whose scene has the view now, if any. */
 const inScene = (): BowScene | ColumnScene | BroodScene | FlockScene | null => (bow.camera.active ? bow : antColumn.camera.active ? antColumn : brood.camera.active ? brood : flock.camera.active ? flock : null);
 /** What the player builds follows the pointer, until a click puts it down. */
+/** What hides the bug is seen through; or (as it was) the camera moves out of the way. The player's choice. */
+const seeThrough = new SeeThrough();
+const CAMERA = 'bugs-in-the-box.camera';
 const placing = new Placing();
 const places = (): boolean => !brain() && !debugCamera && !menus.setup && !menus.over && match.phase === 'aim' && !match.going && match.activeUnit.bug.alive && Placing.takes(match.currentWeapon);
 /** The player marks a spot for a brood. */
@@ -191,6 +195,8 @@ function newMatch(s: number): void {
   buildViews.raze();
   scenario.generate(terrain, s, layout);
   stage.setScenario(scenario, layout);
+  seeThrough.give(stage.look.material);
+  seeThrough.apply(stage.scene, bugViews.map((v) => v.view.root));
   chunks.setSharp(scenario.sharpEdges);
   follow.chaseElevation = scenario.chaseElevation ?? CHASE_ELEVATION;
   views = viewsFor(scenario.id, terrain, layout);
@@ -307,6 +313,18 @@ function handleEvents(events: readonly MatchEvent[]): void {
         flashes.spawn(at.set(e.x, e.y, e.z), 0.9);
         break;
       }
+      case 'burning':
+        texts.spawn('burning', 0xff8a2a, at.set(e.x, e.y + 2.5, e.z));
+        break;
+      case 'worn':
+        texts.spawn(e.word, e.word === 'melting' ? 0xffc040 : 0xffb080, at.set(e.x, e.y + 2, e.z));
+        break;
+      case 'conducts':
+        texts.spawn('conducts', 0x8fe3ff, at.set(e.x, e.y + 2, e.z));
+        break;
+      case 'tired':
+        texts.spawn('slowed', 0xf2f2ee, at.set(e.x, e.y + 2, e.z));
+        break;
       case 'heal':
         texts.spawn(`+${e.amount}`, 0xff7fa5, at.set(match.units[e.unit].bug.x, match.units[e.unit].bug.y + 3, match.units[e.unit].bug.z));
         break;
@@ -439,8 +457,24 @@ const controls = new Controls(window, (code) => {
   if (code === 'KeyN') newMatch(seed);
   else if (code === 'KeyM') soundMenu.toggle();
   else if (code === 'KeyI') inventory.toggle();
+  else if (code === 'KeyV') setCamera(!follow.stays);
 });
 controls.pickSlot = (n) => hud.pick(n);
+const cameraButton = document.getElementById('camMode') as HTMLButtonElement;
+function setCamera(stays: boolean): void {
+  follow.stays = stays;
+  cameraButton.textContent = `camera: ${stays ? 'sees through walls' : 'moves out of the way'}`;
+  try {
+    localStorage.setItem(CAMERA, stays ? 'stays' : 'moves');
+  } catch {
+    // (it lasts for this visit)
+  }
+}
+cameraButton.addEventListener('click', () => {
+  setCamera(!follow.stays);
+  cameraButton.blur();
+});
+setCamera(localStorage.getItem(CAMERA) !== 'moves');
 const inventory = new Inventory(
   {
     weapon: (i) => controls.selectWeapon(i),
@@ -1203,7 +1237,7 @@ function frame(now: number): void {
   // (the wheel turns what is placed, not the view)
   stage.controls.enableZoom = !places();
   if (!places() || inMenu) placing.clear();
-  else placing.update(match, match.activeUnit, match.currentWeapon, pointer.clientX < 0 || overHud ? null : pickTerrain(pointer, canvas, stage.camera, terrain));
+  else placing.update(match, match.activeUnit, match.currentWeapon, pointer.clientX < 0 || overHud ? null : pickTerrain(pointer, canvas, stage.camera, terrain, seeThrough.on ? Math.max(0, stage.camera.position.distanceTo(stage.controls.target) - 4) : 0));
   let faced = false;
   // (a special attack slows the match for a moment: the same ticks, later)
   const scaled = dt * Math.min(bow.timeScale, antColumn.timeScale, brood.timeScale, flock.timeScale);
@@ -1347,6 +1381,7 @@ function frame(now: number): void {
     stage.controls.update();
     follow.avoid(terrain, dt);
   }
+  seeThrough.update(stage.controls.target, follow.stays && !debugCamera && !inMenu && !intro && !inScene() && !menus.over && follow.hides(terrain), dt);
   wasSpecial = inScene() !== null;
   bowState.active = bow.camera.active;
   bowState.hitFor = bow.hitFor;

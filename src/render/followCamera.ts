@@ -61,6 +61,8 @@ export class FollowCamera {
   private readonly chaseOffset = new THREE.Vector3();
   /** Lowest angle of the chase view above the bug (radians); a scenario with tall walls sets it higher. */
   chaseElevation = CHASE_ELEVATION;
+  /** It stays where the player put it, whatever is in the way (that is seen through); or it moves out of the way. */
+  stays = true;
 
   constructor(
     private readonly camera: THREE.Camera,
@@ -93,6 +95,10 @@ export class FollowCamera {
   chasePose(obstacles: CameraObstacles, point: THREE.Vector3, fx: number, fz: number, outPos: THREE.Vector3): THREE.Vector3 {
     const l = Math.sqrt(fx * fx + fz * fz) || 1;
     // the lowest clear angle at the full distance; with a wall right behind, the angle that sees farthest
+    if (this.stays) {
+      const c = Math.cos(CHASE_ELEVATION);
+      return outPos.copy(point).add(this.dir.set((-fx / l) * c, Math.sin(CHASE_ELEVATION), (-fz / l) * c).multiplyScalar(CHASE_DISTANCE));
+    }
     let bestElev = this.chaseElevation;
     let bestDist = -1;
     for (let e = this.chaseElevation; e <= CHASE_MAX_ELEVATION + 1e-6; e += LIFT_STEP) {
@@ -158,6 +164,12 @@ export class FollowCamera {
    */
   avoid(obstacles: CameraObstacles, dt: number): void {
     if (this.glideT >= 0) return;
+    if (this.stays) {
+      // (as if nothing were in the way; back to the other way, it begins anew)
+      this.wanted = this.placed = this.placedPhi = -1;
+      this.lift = 0;
+      return;
+    }
     const target = this.controls.target;
     this.sph.setFromVector3(this.dir.copy(this.camera.position).sub(target));
     const dist = this.sph.radius;
@@ -213,6 +225,27 @@ export class FollowCamera {
     this.sph.setFromVector3(this.dir.copy(this.camera.position).sub(target));
     this.placed = this.sph.radius;
     this.placedPhi = this.sph.phi;
+  }
+
+  /** Whether something is in the way of the target, or of the bug's sides (from the camera's side). */
+  hides(obstacles: CameraObstacles): boolean {
+    const t = this.controls.target;
+    const c = this.camera.position;
+    if (obstacles.sample(c.x, c.y, c.z) < 0.6) return true;
+    this.dir.copy(c).sub(t);
+    const far = this.dir.length();
+    if (far < RAY_START) return false;
+    this.dir.divideScalar(far);
+    const side = this.offset.crossVectors(UP, this.dir).normalize();
+    const up = this.delta.crossVectors(this.dir, side);
+    for (const [a, b] of [[0, 0.4], [1.6, 0.6], [-1.6, 0.6], [0, 2]]) {
+      const x = t.x + side.x * a + up.x * b + this.dir.x * RAY_START;
+      const y = t.y + side.y * a + up.y * b + this.dir.y * RAY_START;
+      const z = t.z + side.z * a + up.z * b + this.dir.z * RAY_START;
+      const hit = obstacles.raycast(x, y, z, this.dir.x, this.dir.y, this.dir.z, far - RAY_START);
+      if (hit >= 0 && hit < far - RAY_START) return true;
+    }
+    return false;
   }
 
   /** Softly push the camera out of solid terrain (a wall behind it), along the field's gradient. */

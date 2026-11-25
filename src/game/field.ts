@@ -12,6 +12,8 @@ export interface TerrainField {
   carve(x: number, y: number, z: number, r: number): void;
   /** Add what a bug builds (pieces, see `build.ts`). Optional: where it is missing, nothing can be built. */
   deposit?(pieces: readonly number[]): void;
+  /** Take pieces away again, or what of them is inside a sphere (x, y, z, radius). Optional, as `deposit` is. */
+  erase?(pieces: readonly number[], sphere?: readonly number[] | null): void;
   /** Turn a turntable a quarter turn (+x to +z) about the sample (cx, cz): rows j0..j1, radius r. Optional. */
   rotateQuarter?(cx: number, cz: number, j0: number, j1: number, r: number): void;
 }
