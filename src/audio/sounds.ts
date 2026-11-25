@@ -227,6 +227,39 @@ const RECIPES = {
   draw: { level: 0.36, make: () => tune(2.2, [[0, 2, 0.5], [0.25, -2, 0.5], [0.5, -7, 0.9]]) },
 
   // ---- bugs
+  solder: {
+    level: 0.5,
+    make: (r) => {
+      // (molten beads that land one after another, and hiss as they cool)
+      const n = white(r);
+      const hiss = bandpass();
+      const s = sine();
+      const out = render(1.9, (t) => hiss(n(), 5200 - 1500 * t, 0.8) * 0.5 * smooth(0, 0.08, t) * Math.exp(-t * 2.1) + s(58 + 40 * Math.exp(-t * 9)) * strike(t, 0.004, 0.2) * 0.8);
+      scatter(out, r, 26, 0, 0.75, 1, () => 0.6, knock(760, 0.02));
+      return finish(out, 0.9, 0.3);
+    },
+  },
+  noRoom: { level: 0.22, make: () => tune(0.3, [[0, -5, 0.05], [0.09, -8, 0.08]]) },
+  burrow: {
+    level: 0.5,
+    make: (r) => {
+      const n = white(r);
+      const lp = lowpass();
+      const out = render(1, (t) => lp(n(), 420 + 300 * Math.sin(t * 38) ** 2, 1) * (0.5 + 0.5 * Math.sin(t * 44)) * smooth(0, 0.05, t) * (1 - smooth(0.55, 0.95, t)) * 1.6);
+      scatter(out, r, 40, 0.05, 0.9, 1, () => 0.4, knock(1500, 0.008));
+      return finish(out, 0.9, 0.15);
+    },
+  },
+  wax: {
+    level: 0.45,
+    make: (r) => {
+      const n = white(r);
+      const b = bandpass();
+      const out = tune(1.3, [[0, -2, 0.3], [0.08, 3, 0.3], [0.16, 7, 0.4], [0.26, 10, 0.5]]);
+      const wet = render(1.3, (t) => b(n(), 500 + 1500 * t, 3) * smooth(0, 0.15, t) * Math.exp(-t * 4) * 1.6);
+      return finish(out.map((v, i) => v * 0.6 + (wet[i] ?? 0) * 0.5), 0.9, 0.2);
+    },
+  },
   step: {
     variants: 8,
     level: 0.13,

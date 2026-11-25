@@ -114,7 +114,7 @@ describe('boxes', () => {
     s.z = s.pz = p.webs[0].z + 1.5;
     p.step(NO_INPUT);
     expect(p.units[1].web).toBe(p.webs[0].id);
-    expect(opened('scrap').stock[0].reduce((a, b) => a + b, 0)).toBe(2);
+    expect(opened('scrap').stock[0].reduce((a, b, i) => a + (WEAPONS[i].start === undefined ? b : 0), 0)).toBe(2);
     const g = opened('magnet');
     expect(g.units[1].bug.vx).toBeLessThan(-3);
     const d = opened('dud');

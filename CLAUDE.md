@@ -49,7 +49,8 @@ src/
     projectile.ts       shells and grenades (gravity, wind, bounces)
     flock.ts            the bee's swarm that a player flies (Queen's Flight): steering, rings, what ends it; how the computer steers it
     items.ts            boxes on the map: how they come, fall and what they hold
-    weapons.ts          weapons as data (Solder Blob, Capacitor, Short Circuit, Soldering Iron; the species' own: Web Shot, Web Bow, Ant Column, Blackout Swarm, Queen's Flight)
+    build.ts            what bugs build of solder beads: where they go (wall, bridge)
+    weapons.ts          weapons as data (Solder Blob, Capacitor, Short Circuit, Soldering Iron; building and hiding; the species' own: Web Shot, Web Bow, Ant Column, Blackout Swarm, Queen's Flight)
     math.ts             rotate2: deterministic rotation without sin/cos
   render/             three.js: stage (Stage interface, key light), ChunkRenderer (1 mesh per chunk), MeshWorkers (worker pool), BugView, DrawnGround (where a foot rests: the drawn parts, not their hidden bodies), FollowCamera, labels, projectiles, aim, effects
     gpu/                the renderer, WebGPU (TSL): terrain material + glow, atmosphere (fog, glass, backdrop), god rays + bloom post, dust compute, heat shimmer, LEDs; heroes, heroDress, heroStage (the menus' fighters)

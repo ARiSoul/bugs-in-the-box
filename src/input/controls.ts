@@ -33,8 +33,8 @@ export const DEFAULT_KEYS: Readonly<Record<Action, readonly string[]>> = {
 };
 
 /** Keys the game keeps for itself: weapons and a new match. */
-const RESERVED = new Set(['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'KeyN', 'KeyM', 'Escape']);
-const WEAPON_KEYS = ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6'];
+const RESERVED = new Set(['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7', 'Digit8', 'Digit9', 'Digit0', 'KeyN', 'KeyM', 'Escape']);
+const WEAPON_KEYS = ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7', 'Digit8', 'Digit9', 'Digit0'];
 const STORAGE = 'bugs-in-the-box.keys';
 
 /**
@@ -43,7 +43,7 @@ const STORAGE = 'bugs-in-the-box.keys';
  *   W / S        walk forward / back        A / D, ← / →   turn (a tap turns a little)
  *   shift        run (held with W / S)      space          jump
  *   ↑ / ↓        aim higher / lower         Q (hold)       charge, release to fire
- *   1–6          pick a weapon              right drag     turn the view; the bug turns with it
+ *   1–0          pick a weapon              right drag     turn the view; the bug turns with it
  *
  * The keys can be changed (`rebind`, saved in the browser). On-screen buttons (elements with
  * `data-action`) press the same actions, so mouse and touch play the same game.

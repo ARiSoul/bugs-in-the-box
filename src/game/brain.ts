@@ -55,6 +55,10 @@ const WALK_STEP = 40;
 const FETCH = 330;
 const FETCH_TIME = 14 * 60;
 const WEB_MOOD = 0.22;
+/** How often it thinks of a wall, and of hiding; how near an enemy that sees it must be for a wall. */
+const WALL_MOOD = 0.3;
+const HIDE_MOOD = 0.5;
+const WALL_NEAR = 45;
 const FALLS = 12;
 /** It turns this fast (radians a tick). */
 const TURN = 0.045;
@@ -83,7 +87,7 @@ interface Spot {
   best: number;
 }
 
-type State = 'look' | 'fetch' | 'think' | 'spots' | 'walk' | 'aim' | 'charge' | 'done';
+type State = 'look' | 'wall' | 'fetch' | 'think' | 'spots' | 'walk' | 'aim' | 'charge' | 'done';
 
 const fly: FlockInput = { turn: 0, up: 0, faceX: 0, faceZ: 0, pitch: 0 };
 const dir = new Float64Array(3);
@@ -112,6 +116,10 @@ export class Brain {
   private specials = false;
   /** What holding an enemy in a web is worth to it this turn. */
   private webWorth = 0;
+  private match: Match | null = null;
+  /** It means to build a wall, or to hide if it finds nothing good to shoot at. */
+  private walls = false;
+  private hides = false;
 
   constructor(
     readonly skill: Skill,
@@ -127,6 +135,7 @@ export class Brain {
     o.weapon = -1;
     o.pitch = 0;
     o.mark = null;
+    this.match = match;
     if (match.turnNumber !== this.turn) this.reset(match);
     const u = match.activeUnit;
     if (!u.bug.alive) return o;
@@ -142,7 +151,10 @@ export class Brain {
     if (match.phase !== 'aim' || (!u.bug.grounded && this.state !== 'walk' && this.state !== 'fetch')) return o;
     switch (this.state) {
       case 'look':
-        if (--this.timer <= 0 && !this.seekBox(match, u)) this.think(match, u);
+        if (--this.timer <= 0 && !this.seekBox(match, u) && !this.seekWall(match, u)) this.think(match, u);
+        break;
+      case 'wall':
+        this.wall(match, u);
         break;
       case 'fetch':
         this.fetch(match, u);
@@ -177,6 +189,8 @@ export class Brain {
     this.hidden = null;
     this.hiding = false;
     this.specials = this.rng() < this.skill.special;
+    this.walls = this.rng() < WALL_MOOD;
+    this.hides = this.rng() < HIDE_MOOD;
     this.webWorth = this.rng() < WEB_MOOD ? 24 : 12;
   }
 
@@ -198,7 +212,7 @@ export class Brain {
     const enemies = this.enemies(match, u);
     WEAPONS.forEach((w, index) => {
       if (!match.canUse(u, index) || (w.sceneTicks > 0 && !this.specials)) return;
-      if (w.kind === 'tunnel' || w.kind === 'trap') return;
+      if (w.kind === 'tunnel' || w.kind === 'trap' || w.kind === 'wall' || w.kind === 'bridge' || w.kind === 'shelter' || w.kind === 'screen') return;
       if (w.kind === 'brood') {
         for (const e of enemies) this.queue.push(() => this.tryMark(match, u, w, index, e));
       } else if (w.kind === 'flock') {
@@ -269,6 +283,8 @@ export class Brain {
     const p = new Projectile(0, w, b).launch(b.x + dx * out, b.y + dy * out, b.z + dz * out, dx * speed, dy * speed, dz * speed);
     for (let n = 0; n < FLIGHT; n++) {
       const r = p.step(match.field, match.windX, match.windZ, bugs, match.options.strictBounds === true);
+      // (a screen catches it)
+      if (w.kind !== 'arrow' && match.screenOn(p, u.team, dir)) return -1;
       if (r === 'lost') return -1;
       if (r === 'fly') continue;
       this.end[0] = p.x;
@@ -331,6 +347,7 @@ export class Brain {
 
   /** What hurting unit `q` by `harm` is worth. */
   private harmScore(u: Unit, q: Unit, harm: number): number {
+    harm = this.match ? this.match.dealt(q, harm) : harm;
     if (harm <= 0 || q.bug.health <= 0) return 0;
     const kills = harm >= q.bug.health && !q.shell;
     const s = Math.min(harm, q.bug.health) + (kills ? KILL : 0);
@@ -454,6 +471,11 @@ export class Brain {
     }
     this.state = 'aim';
     this.timer = HOLD_TICKS;
+    const cover = this.shelter(match, u, best ? best.score : 0);
+    if (cover) {
+      this.plan = cover;
+      return;
+    }
     if (!this.plan) {
       if (this.clearing) {
         // nothing to hit: it blows away what stands between
@@ -566,6 +588,52 @@ export class Brain {
     return false;
   }
 
+  // ---------------------------------------------------------------- walls and shelters
+
+  /** An enemy that could shoot straight at it: a wall before that one, and then it thinks of its own shot. */
+  private seekWall(match: Match, u: Unit): boolean {
+    const index = WEAPONS.findIndex((w) => w.kind === 'wall');
+    const e = this.enemies(match, u)[0];
+    if (!this.walls || !e || match.built || !match.canUse(u, index) || u.bug.ny < 0.8 || u.web >= 0) return false;
+    const dx = e.bug.x - u.bug.x;
+    const dy = e.bug.y - u.bug.y;
+    const dz = e.bug.z - u.bug.z;
+    const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    if (d < 9 || d > WALL_NEAR || match.field.raycast(u.bug.x, u.bug.y + 0.5, u.bug.z, dx / d, dy / d, dz / d, d - 1.5) >= 0) return false;
+    this.state = 'wall';
+    this.timer = 150;
+    this.foe = e;
+    return true;
+  }
+
+  private foe: Unit | null = null;
+  private wall(match: Match, u: Unit): void {
+    const index = WEAPONS.findIndex((w) => w.kind === 'wall');
+    const e = this.foe as Unit;
+    const dx = e.bug.x - u.bug.x;
+    const dz = e.bug.z - u.bug.z;
+    const l = Math.sqrt(dx * dx + dz * dz) || 1;
+    if (--this.timer < 0 || match.built || !match.canUse(u, index)) {
+      this.think(match, u);
+      return;
+    }
+    if (!this.turnTo(u.bug, dx / l, dz / l)) return;
+    if (match.weapon !== index) this.out.weapon = index;
+    else if (this.timer % 20 === 0) this.out.fire = true;
+  }
+
+  /** Its way of hiding, if it has one and would rather do that now. */
+  private shelter(match: Match, u: Unit, best: number): Plan | null {
+    const index = WEAPONS.findIndex((w) => (w.kind === 'shelter' || w.kind === 'screen') && w.species === u.bug.species.id);
+    if (!this.hides || index < 0 || u.web >= 0 || best >= (u.bug.health < u.bug.species.health * 0.4 ? 16 : 6)) return null;
+    const e = this.enemies(match, u)[0];
+    if (!e) return null;
+    const dx = e.bug.x - u.bug.x;
+    const dz = e.bug.z - u.bug.z;
+    const l = Math.sqrt(dx * dx + dz * dz) || 1;
+    return { weapon: index, fx: dx / l, fz: dz / l, aimH: u.aimH, aimV: u.aimV, charge: 0, score: 0, target: e.id, mark: null };
+  }
+
   // ---------------------------------------------------------------- boxes
 
   private box: Item | null = null;
@@ -675,11 +743,18 @@ export class Brain {
     if (!this.tuned) {
       this.tuned = true;
       this.timer = 8;
-      if (w.kind !== 'tunnel' && w.kind !== 'column' && w.kind !== 'flock') this.tune(match, u, w, p);
+      if (w.kind !== 'tunnel' && w.kind !== 'column' && w.kind !== 'flock' && w.kind !== 'shelter' && w.kind !== 'screen') this.tune(match, u, w, p);
       return;
     }
     o.fire = true;
     if (w.kind === 'flock') this.state = 'done';
+    else if (w.kind === 'shelter' || w.kind === 'screen') {
+      // (no room for it here: a shot, then)
+      this.hides = false;
+      this.state = 'look';
+      this.timer = 2;
+      this.walls = false;
+    }
     else if (w.kind !== 'tunnel') {
       this.state = 'charge';
       this.timer = p.charge;

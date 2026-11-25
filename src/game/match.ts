@@ -5,9 +5,10 @@ import { rot, rotate2 } from './math';
 import { Projectile } from './projectile';
 import { dropNear } from './spawn';
 import { MARCHER, type BugSpecies } from './species';
+import { bridgeBeads, BEAD, laid, wallBeads } from './build';
 import { Flock, layRings, type FlockInput, type Ring } from './flock';
 import { BOX, Items, type Item, type ItemKind } from './items';
-import { DUD, hasWeapon, RING_DAMAGE, WEAPONS, type Weapon } from './weapons';
+import { BURROW, DUD, hasWeapon, WORKS, RING_DAMAGE, WEAPONS, type Weapon } from './weapons';
 
 /**
  * One match: teams of bugs taking turns on a destructible map. Pure and deterministic like Bug:
@@ -84,6 +85,8 @@ export interface Web {
   readonly paste: number;
   /** Burst open by a special attack (render only). */
   readonly grand: boolean;
+  /** A screen that stands up, of this team (-1: it lies on a surface); (x, y, z) is its middle, its normal level. */
+  readonly screen: number;
   /** Turns left, and pulling (ticks) it still stands. */
   turns: number;
   strength: number;
@@ -141,6 +144,9 @@ export interface Unit {
   boost: boolean;
   spring: number;
   extra: number;
+  /** It hides (until its next turn): in which shelter, and how much that still keeps off. */
+  cover: Weapon | null;
+  coverLeft: number;
 }
 
 export interface MatchInput {
@@ -194,6 +200,11 @@ export type MatchEvent =
   | { type: 'open'; unit: number; kind: ItemKind; x: number; y: number; z: number; id: number; gain: number }
   | { type: 'boxGone'; id: number; x: number; y: number; z: number }
   | { type: 'fuse'; unit: number }
+  | { type: 'built'; unit: number; weapon: string; beads: readonly number[] }
+  | { type: 'noRoom'; unit: number }
+  | { type: 'hide'; unit: number; weapon: string }
+  | { type: 'bared'; unit: number; broken: boolean }
+  | { type: 'caught'; id: number; x: number; y: number; z: number }
   | { type: 'over'; winner: number };
 
 /** An ant column marches this long at full power, swarms a bug this long, biting this many times this hard. */
@@ -273,6 +284,16 @@ const SPRING = 1.42;
 const MAGNET = 45;
 const PASTE = WEAPONS.findIndex((w) => w.kind === 'trap');
 const WEB = WEAPONS.findIndex((w) => w.kind === 'web');
+/** After hiding there is a moment to see it (ticks). */
+const HIDE_TICKS = 70;
+/** Hiding loads the special attack a little. */
+const SKILL_HIDE = 120;
+/** A screen: how far before the spider its middle is, how high over the ground; how near its plane a bug is held. */
+export const SCREEN_AHEAD = 4.2;
+export const SCREEN_HIGH = 2.6;
+const SCREEN_NEAR = 1.3;
+/** A bug keeps this much room from what is built. */
+const BUILD_ROOM = 0.15;
 const COS45 = 0.7071067811865476;
 const aimed = new Float64Array(3);
 /** How near two bugs' centres come, as a fraction of their radii together (nose to tail their bodies are longer than their spheres). */
@@ -340,6 +361,8 @@ export class Match {
   readonly items: Items;
   /** Uses left of what each team found (by weapon index). */
   readonly stock: number[][];
+  /** How often each team may still build or hide, whatever kind. */
+  readonly works: number[];
   /** What happened during the last `step` (cleared at the start of every step). */
   readonly events: MatchEvent[] = [];
   phase: Phase = 'aim';
@@ -355,6 +378,8 @@ export class Match {
   /** The weapon each team last picked (not a special attack): its next turn starts with it. */
   readonly kept: number[];
   charging = false;
+  /** Something was built this turn. */
+  built = false;
   /** Ticks left of a special attack's scene. */
   specialTicks = 0;
   /** The active bug stands ready with its special attack: it aims on the spot. */
@@ -414,7 +439,7 @@ export class Match {
         if (i >= teams[t].size) continue;
         const bug = new Bug(teams[t].species);
         bug.confine = options.confine ?? null;
-        this.units.push({ id: id++, team: t, name: `${teams[t].species.id} ${i + 1}`, bug, aimH: COS45, aimV: COS45, dead: false, web: -1, shell: teams[t].species.shell === true, shellTurn: -1, fuse: false, boost: false, spring: 0, extra: 0 });
+        this.units.push({ id: id++, team: t, name: `${teams[t].species.id} ${i + 1}`, bug, aimH: COS45, aimV: COS45, dead: false, web: -1, shell: teams[t].species.shell === true, shellTurn: -1, fuse: false, boost: false, spring: 0, extra: 0, cover: null, coverLeft: 0 });
         this.bugs.push(bug);
       }
     this.nextInTeam = teams.map(() => 0);
@@ -422,7 +447,8 @@ export class Match {
     this.quarterTurns = options.turned ?? 0;
     this.luck = createRng(seed * 1597334677 + 411);
     this.items = new Items(field, this.luck, options.spawnLevels === true, options.confine ?? null);
-    this.stock = teams.map(() => WEAPONS.map(() => 0));
+    this.stock = teams.map((t) => WEAPONS.map((w) => (w.species === undefined || w.species === t.species.id ? (w.start ?? 0) : 0)));
+    this.works = teams.map(() => WORKS);
     this.skill = teams.map(() => 0);
     if (options.placeBugs !== false) this.placeBugs();
     this.beginTurn(0);
@@ -470,7 +496,7 @@ export class Match {
     } else if (this.phase === 'flight') {
       if (this.retreatTicks > 0) {
         this.retreatTicks--;
-        move = this.movement(input);
+        if (!unit.cover) move = this.movement(input);
       }
       if (this.column) this.columnTick(this.column, unit, input);
       else if (this.brood) this.broodTick(this.brood, unit);
@@ -509,6 +535,8 @@ export class Match {
       b.step(this.field, u === unit ? move : IDLE);
       if (b.justLanded && b.lastImpact > FALL_SAFE_SPEED) this.damage(u, Math.round((b.lastImpact - FALL_SAFE_SPEED) * FALL_DAMAGE));
       if (!b.alive && !u.dead) this.announceDeath(u);
+      // (its hold is gone: so is its shelter)
+      else if (u.cover && !b.grounded && b.airTicks > 6) this.bare(u, true);
     }
     if (this.phase !== 'spin') this.keepApart();
     if (this.phase !== 'spin') this.boxes();
@@ -518,6 +546,10 @@ export class Match {
     for (let i = 0; i < this.projectiles.length; i++) {
       const p = this.projectiles[i];
       const r = p.step(this.field, this.windX, this.windZ, this.bugs, this.options.strictBounds === true);
+      if (this.caught(p)) {
+        this.projectiles.splice(i--, 1);
+        continue;
+      }
       if (r === 'fly') continue;
       if (r === 'explode') {
         if (p.weapon.kind === 'arrow') this.arrowHit(p);
@@ -597,7 +629,7 @@ export class Match {
       this.weapon = input.weapon;
       if (this.currentWeapon.sceneTicks === 0) {
         this.stance = false;
-        this.kept[unit.team] = this.weapon;
+        if (!this.currentWeapon.start) this.kept[unit.team] = this.weapon;
       }
     }
     // a special attack begins as soon as it is picked
@@ -623,7 +655,9 @@ export class Match {
       return this.stance ? this.onTheSpot(input) : IDLE;
     }
     if (fireDown && unit.bug.grounded) {
-      if (w.kind === 'tunnel' || w.kind === 'trap' || w.kind === 'flock' || (w.kind === 'brood' && this.mark)) this.fire(unit, w);
+      if (w.kind === 'wall' || w.kind === 'bridge') this.build(unit, w);
+      else if (w.kind === 'shelter' || w.kind === 'screen') this.shelter(unit, w);
+      else if (w.kind === 'tunnel' || w.kind === 'trap' || w.kind === 'flock' || (w.kind === 'brood' && this.mark)) this.fire(unit, w);
       else if (w.kind !== 'brood') {
         this.charging = true;
         this.power = 0;
@@ -671,7 +705,13 @@ export class Match {
 
   /** Whether the unit has weapon `index` (a special attack may still have to load). */
   has(u: Unit, index: number): boolean {
-    return hasWeapon(u.bug.species.id, WEAPONS[index]) || this.stock[u.team][index] > 0;
+    return hasWeapon(u.bug.species.id, WEAPONS[index]) || this.usesLeft(u.team, index) > 0;
+  }
+
+  /** How often a team may still use what it has only some of. */
+  usesLeft(team: number, index: number): number {
+    const n = this.stock[team][index];
+    return WEAPONS[index].start === undefined ? n : Math.min(n, this.works[team]);
   }
 
   /** Whether the unit can use weapon `index` now. */
@@ -707,6 +747,10 @@ export class Match {
     const b = u.bug;
     if (!b.grounded) return null;
     for (const w of this.webs) {
+      if (w.screen >= 0) {
+        if (w.screen !== u.team && !b.species.silk && this.inScreen(w, b.x, b.y, b.z)) return w;
+        continue;
+      }
       if (w.paste >= 0 ? w.paste === u.team : b.species.silk) continue;
       const dx = b.x - w.x;
       const dy = b.y - w.y;
@@ -770,7 +814,7 @@ export class Match {
     const on = this.toSurface(x, y, z);
     if (!on) return;
     const id = this.nextWebId++;
-    this.webs.push({ id, ...on, radius: w.webRadius, turns: w.webTurns, strength: WEB_TEAR_TICKS, grand, paste });
+    this.webs.push({ id, ...on, radius: w.webRadius, turns: w.webTurns, strength: WEB_TEAR_TICKS, grand, paste, screen: -1 });
     this.events.push({ type: 'web', id });
   }
 
@@ -833,6 +877,172 @@ export class Match {
     this.brood = null;
     this.events.push({ type: 'lights', x: c.at.x, y: c.at.y, z: c.at.z, units: c.units });
     this.lingerTicks = LINGER_TICKS;
+  }
+
+  // ---------------------------------------------------------------- building and hiding
+
+  /** The beads a build weapon would lay now, for this unit (none: no room). */
+  beadsFor(u: Unit, w: Weapon, out: number[]): number[] {
+    const b = u.bug;
+    if (w.kind === 'wall') wallBeads(this.field, b, out);
+    else {
+      const [dx, dy, dz] = this.aimDirection(u, aimed);
+      bridgeBeads(this.field, b, dx, dy, dz, out);
+    }
+    // (not into a bug, a box, or where nobody may go)
+    let n = 0;
+    for (let i = 0; i < out.length; i += BEAD) {
+      const x = out[i];
+      const y = out[i + 1];
+      const z = out[i + 2];
+      const r = out[i + 3];
+      if (this.options.confine && !this.options.confine(x, y, z)) continue;
+      if (!this.roomFor(x, y, z, r)) continue;
+      out[n] = x;
+      out[n + 1] = y;
+      out[n + 2] = z;
+      out[n + 3] = r;
+      n += BEAD;
+    }
+    out.length = n;
+    // (next to nothing left of it)
+    if (laid(this.field, out) < 6) out.length = 0;
+    return out;
+  }
+
+  private roomFor(x: number, y: number, z: number, r: number): boolean {
+    for (const q of this.units) {
+      const b = q.bug;
+      if (!b.alive) continue;
+      const near = r + b.species.radius + BUILD_ROOM;
+      const dx = b.x - x;
+      const dy = b.y - y;
+      const dz = b.z - z;
+      // (under its own feet is no harm)
+      if (dx * dx + dy * dy + dz * dz < near * near && dx * b.nx + dy * b.ny + dz * b.nz < b.species.radius + r * 0.8) return false;
+    }
+    return this.items.near(x, y, z, r + BOX).length === 0;
+  }
+
+  /** Lay it; the turn goes on, with the weapon the team had before. */
+  private build(u: Unit, w: Weapon): void {
+    const beads: number[] = [];
+    if (this.built || !this.field.deposit || this.beadsFor(u, w, beads).length === 0) {
+      this.events.push({ type: 'noRoom', unit: u.id });
+      return;
+    }
+    this.field.deposit(beads);
+    this.built = true;
+    this.stock[u.team][WEAPONS.indexOf(w)]--;
+    this.works[u.team]--;
+    this.events.push({ type: 'built', unit: u.id, weapon: w.id, beads });
+    this.weapon = this.keptBy(u);
+    // (webs under it are gone)
+    for (let q = this.webs.length - 1; q >= 0; q--) {
+      const s = this.webs[q];
+      if (s.screen < 0 && this.field.sample(s.x + s.nx, s.y + s.ny, s.z + s.nz) < 0) this.removeWeb(s, true);
+    }
+  }
+
+  /** Hide, or put up a screen: instead of a shot. */
+  private shelter(u: Unit, w: Weapon): void {
+    const b = u.bug;
+    const r = b.species.radius;
+    if (w.kind === 'screen') {
+      if (!this.putScreen(u, w)) {
+        this.events.push({ type: 'noRoom', unit: u.id });
+        return;
+      }
+    } else {
+      // (a burrow needs ground to dig in)
+      if (u.web >= 0 || (w === BURROW && this.field.sample(b.x - b.nx * (r + 1.4), b.y - b.ny * (r + 1.4), b.z - b.nz * (r + 1.4)) > 0)) {
+        this.events.push({ type: 'noRoom', unit: u.id });
+        return;
+      }
+      u.cover = w;
+      u.coverLeft = w.coverHealth ?? 0;
+      this.events.push({ type: 'hide', unit: u.id, weapon: w.id });
+    }
+    this.stock[u.team][WEAPONS.indexOf(w)]--;
+    this.works[u.team]--;
+    this.load(u.team, SKILL_HIDE);
+    this.events.push({ type: 'fire', unit: u.id, weapon: w.id });
+    this.phase = 'flight';
+    this.retreatTicks = HIDE_TICKS;
+  }
+
+  /** Out of its shelter. */
+  private bare(u: Unit, broken: boolean): void {
+    if (!u.cover) return;
+    u.cover = null;
+    u.coverLeft = 0;
+    this.events.push({ type: 'bared', unit: u.id, broken });
+  }
+
+  /** What a blow of this much would do to a unit, as it is now. */
+  dealt(u: Unit, amount: number): number {
+    return u.cover ? amount - Math.min(u.coverLeft, Math.floor(amount * (u.cover.cover ?? 0))) : amount;
+  }
+
+  private putScreen(u: Unit, w: Weapon): boolean {
+    const b = u.bug;
+    if (b.ny < 0.5) return false;
+    const l = Math.sqrt(b.fx * b.fx + b.fz * b.fz) || 1;
+    const nx = b.fx / l;
+    const nz = b.fz / l;
+    const x = b.x + nx * SCREEN_AHEAD;
+    const z = b.z + nz * SCREEN_AHEAD;
+    const t = this.field.raycast(x, b.y + 3, z, 0, -1, 0, 8);
+    if (t === 0) return false;
+    const y = (t < 0 ? b.y - b.species.radius : b.y + 3 - t) + SCREEN_HIGH;
+    const id = this.nextWebId++;
+    this.webs.push({ id, x, y, z, nx, ny: 0, nz, radius: w.webRadius, turns: w.webTurns, strength: WEB_TEAR_TICKS, grand: false, paste: -1, screen: u.team });
+    this.events.push({ type: 'web', id });
+    return true;
+  }
+
+  /** In the plane of a screen, and within it. */
+  private inScreen(w: Web, x: number, y: number, z: number): boolean {
+    const dx = x - w.x;
+    const dy = y - w.y;
+    const dz = z - w.z;
+    const off = dx * w.nx + dy * w.ny + dz * w.nz;
+    return off < SCREEN_NEAR && off > -SCREEN_NEAR && dx * dx + dy * dy + dz * dz < w.radius * w.radius;
+  }
+
+  /** The screen another team's shot flew into on its last tick, or null. Writes where into `crossed`. */
+  screenOn(p: Projectile, team: number, crossed: Float64Array): Web | null {
+    for (const w of this.webs) {
+      if (w.screen < 0 || w.screen === team) continue;
+      const a = (p.px - w.x) * w.nx + (p.py - w.y) * w.ny + (p.pz - w.z) * w.nz;
+      const b = (p.x - w.x) * w.nx + (p.y - w.y) * w.ny + (p.z - w.z) * w.nz;
+      if (a * b > 0 || a === b) continue;
+      const k = a / (a - b);
+      const x = p.px + (p.x - p.px) * k;
+      const y = p.py + (p.y - p.py) * k;
+      const z = p.pz + (p.z - p.pz) * k;
+      if ((x - w.x) * (x - w.x) + (y - w.y) * (y - w.y) + (z - w.z) * (z - w.z) > w.radius * w.radius) continue;
+      crossed[0] = x;
+      crossed[1] = y;
+      crossed[2] = z;
+      return w;
+    }
+    return null;
+  }
+
+  /** A screen catches a shot (a great dart goes through, and tears it); the second one tears it. */
+  private caught(p: Projectile): boolean {
+    const w = this.screenOn(p, this.teamOf(p.owner), aimed);
+    if (!w) return false;
+    this.events.push({ type: 'caught', id: w.id, x: aimed[0], y: aimed[1], z: aimed[2] });
+    w.strength -= WEB_TEAR_TICKS / 2;
+    const through = p.weapon.kind === 'arrow';
+    if (through || w.strength <= 0) this.removeWeb(w, true);
+    return !through;
+  }
+
+  private teamOf(b: Bug | null): number {
+    return b ? this.units[this.bugs.indexOf(b)].team : -1;
   }
 
   private movement(input: Readonly<MatchInput>): Readonly<BugInput> {
@@ -1176,6 +1386,8 @@ export class Match {
         this.turnTicks += u.extra * TICK_RATE;
         u.extra = 0;
         this.hard = 1;
+        this.built = false;
+        this.bare(u, false);
         // (springs wear off as their bug's turns go by)
         for (const q of this.units) {
           if (q === u && q.spring > 0) q.spring--;
@@ -1273,6 +1485,8 @@ export class Match {
         kz /= kl;
       }
       // (a swarm's hit does not throw as hard as it hurts)
+      // (it sits tight in its shelter)
+      if (u.cover) continue;
       const speed = KNOCKBACK * f * (Math.min(60, w.damage) / 45);
       b.push(kx * speed, ky * speed, kz * speed);
     }
@@ -1395,6 +1609,14 @@ export class Match {
   private damage(u: Unit, amount: number): void {
     if (amount <= 0 || !u.bug.alive) return;
     const b = u.bug;
+    if (u.cover) {
+      const w = u.cover;
+      const off = Math.min(u.coverLeft, Math.floor(amount * (w.cover ?? 0)));
+      amount -= off;
+      u.coverLeft -= off;
+      if (u.coverLeft <= 0) this.bare(u, true);
+      if (amount <= 0) return;
+    }
     if (u.fuse && amount > 1) {
       u.fuse = false;
       amount = Math.ceil(amount / 2);
@@ -1424,6 +1646,7 @@ export class Match {
   }
 
   private announceDeath(u: Unit): void {
+    this.bare(u, true);
     u.dead = true;
     u.bug.health = 0;
     this.events.push({ type: 'death', unit: u.id });

@@ -1,4 +1,5 @@
 import { CHUNK, DENSITY_CLAMP } from './constants';
+import { SOLDER } from './materials';
 
 /**
  * Destructible terrain stored as a grid of signed-distance-like density samples.
@@ -199,6 +200,52 @@ export class Terrain {
     const c1z = Math.min(this.cz - 1, Math.floor((k1 + 1) / CHUNK));
     for (let z = c0z; z <= c1z; z++)
       for (let y = c0y; y <= c1y; y++) for (let x = c0x; x <= c1x; x++) this.dirty.add(this.chunkId(x, y, z));
+  }
+
+  /**
+   * Add spheres (x, y, z, radius each) of solder, melted into each other a little. What is clear of them keeps its
+   * density: only samples nearer to a sphere than to what was there change. The outer shell of the world stays as it is.
+   */
+  deposit(beads: readonly number[]): void {
+    const { sx, sy, sz, dens, scorch, material } = this;
+    for (let q = 0; q + 3 < beads.length; q += 4) {
+      const px = beads[q];
+      const py = beads[q + 1];
+      const pz = beads[q + 2];
+      const r = beads[q + 3];
+      const pad = r + DENSITY_CLAMP;
+      const i0 = Math.max(1, Math.floor(px - pad));
+      const i1 = Math.min(sx - 2, Math.ceil(px + pad));
+      const j0 = Math.max(1, Math.floor(py - pad));
+      const j1 = Math.min(sy - 2, Math.ceil(py + pad));
+      const k0 = Math.max(1, Math.floor(pz - pad));
+      const k1 = Math.min(sz - 2, Math.ceil(pz + pad));
+      if (i0 > i1 || j0 > j1 || k0 > k1) continue;
+      for (let k = k0; k <= k1; k++)
+        for (let j = j0; j <= j1; j++)
+          for (let i = i0; i <= i1; i++) {
+            const dx = i - px;
+            const dy = j - py;
+            const dz = k - pz;
+            const d = Math.sqrt(dx * dx + dy * dy + dz * dz) - r;
+            const id = i + sx * (j + sy * k);
+            if (d >= dens[id]) continue;
+            // (what was solid keeps its own stuff: solder lies on it)
+            if (dens[id] > 0 && d < 1.2) {
+              material[id] = SOLDER;
+              scorch[id] = 0;
+            }
+            dens[id] = d;
+          }
+      const c0x = Math.max(0, Math.floor((i0 - 1) / CHUNK));
+      const c1x = Math.min(this.cx - 1, Math.floor((i1 + 1) / CHUNK));
+      const c0y = Math.max(0, Math.floor((j0 - 1) / CHUNK));
+      const c1y = Math.min(this.cy - 1, Math.floor((j1 + 1) / CHUNK));
+      const c0z = Math.max(0, Math.floor((k0 - 1) / CHUNK));
+      const c1z = Math.min(this.cz - 1, Math.floor((k1 + 1) / CHUNK));
+      for (let z = c0z; z <= c1z; z++)
+        for (let y = c0y; y <= c1y; y++) for (let x = c0x; x <= c1x; x++) this.dirty.add(this.chunkId(x, y, z));
+    }
   }
 
   /**

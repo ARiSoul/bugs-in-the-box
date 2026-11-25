@@ -71,10 +71,20 @@ Bees and flies (they **fly**: a new way of moving, with a limit so the ground st
 
 Bugs that make the ground theirs, as an action instead of a shot, or with a limit per match:
 
-- **Spider:** weaves an extra strong web as a barrier: it stops shots and bugs until it is torn.
-- **Ant:** digs a hole and hides in it (out of sight, less damage), or builds a mound.
-- **Cockroach:** to be defined (squeezes into cracks, where nothing reaches it).
-- **Every bug:** walls and barriers of what the map is made of (solder, crumbs, thermal paste), small bridges.
+Every idea gets a prototype, one at a time, to be played and judged. Each has its own limit per match, and all of them together a total per team (4); boxes may give more.
+
+In the game (the first set):
+
+- **Every bug, Solder Wall and Solder Bridge:** a wall before it, or a bridge (a ramp) along its aim; a build does not cost the shot, one a turn.
+- **Ant, Burrow:** dug in, only its head out; less damage. **Cockroach, Flatten:** pressed flat on any surface; half the damage, nothing throws it. **Bee, Wax Cell:** a clear cell of wax round it. **Spider, Silk Screen:** a web that stands up, catches two enemy shots and lets its own side's through. Hiding takes the shot's place.
+
+To be prototyped:
+
+- **Every bug, Tower:** the ground rises under it: a better angle, but in plain sight. **Roof:** an arch over it: against what comes from above, but in the way of its own arcs.
+- **Ant, Mound:** real terrain thrown up round it, worn away by shots. **Tunnel:** it goes down a hole, and comes up at another place nearby on its next turn.
+- **Spider, Cocoon:** it wraps itself up; whoever touches it sticks. **Trapdoor:** under a lid, it bites the first enemy that comes past.
+- **Cockroach, Crack:** squeezed into a crack nothing reaches it, where there are cracks. **Play dead:** on its back; the computer passes it by, and the first blow hardly hurts.
+- **Bee, Team Comb:** a dome that covers those beside it too. **Honey Trap:** honey round its cell holds whoever comes near.
 
 ## Modes and players
 

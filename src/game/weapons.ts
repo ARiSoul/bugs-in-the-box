@@ -21,7 +21,14 @@ export type WeaponKind =
   /** A swarm the player flies through the air, through rings that make it stronger, into whatever it meets. */
   | 'flock'
   /** Laid where the bug stands: it holds whoever of the other teams steps on it. */
-  | 'trap';
+  | 'trap'
+  /** Built of solder, at once, and the turn goes on: a wall before the bug, or a bridge along its aim. */
+  | 'wall'
+  | 'bridge'
+  /** The bug hides until its next turn, in the way of its species (instead of a shot). */
+  | 'shelter'
+  /** A screen of silk before the bug: it catches the shots of the other teams. */
+  | 'screen';
 
 export interface Weapon {
   readonly id: string;
@@ -58,8 +65,15 @@ export interface Weapon {
   readonly sceneTicks: number;
   /** The only species that has it (none: every bug). */
   readonly species?: string;
-  /** Only from a box on the map, a use at a time (see Match.stock). */
+  /**
+   * A use at a time (see Match.stock): from a box on the map, or, for what is built and where bugs hide, the uses a team
+   * has in a match (`start`). Those share a total too (WORKS).
+   */
   readonly found?: boolean;
+  readonly start?: number;
+  /** Shelter: how much of a blow it keeps off (0..1), and how much in all before it breaks. */
+  readonly cover?: number;
+  readonly coverHealth?: number;
   /** Render only. */
   readonly color: number;
 }
@@ -239,7 +253,28 @@ export const THERMAL_PASTE: Weapon = {
 /** What a box's dud does. */
 export const DUD: Weapon = { ...BASE, id: 'dud', name: 'Dud', kind: 'shell', blastRadius: 3, damage: 24, color: 0xff7a2f };
 
-export const WEAPONS: readonly Weapon[] = [SOLDER_BLOB, CAPACITOR, SHORT_CIRCUIT, SOLDERING_IRON, WEB_SHOT, WEB_BOW, ANT_COLUMN, BLACKOUT_SWARM, THERMAL_PASTE, QUEENS_FLIGHT];
+/** How much a team builds and hides in a match, all kinds together (each has its own limit too). */
+export const WORKS = 4;
+
+/** Every bug: a wall of solder beads before it. It stops shots until it is blown away. The turn goes on. */
+export const SOLDER_WALL: Weapon = { ...BASE, id: 'solder-wall', name: 'Solder Wall', kind: 'wall', found: true, start: 2, color: 0xd5dae2 };
+
+/** Every bug: a bridge (or a ramp) of solder along its aim. The turn goes on. */
+export const SOLDER_BRIDGE: Weapon = { ...BASE, id: 'solder-bridge', name: 'Solder Bridge', kind: 'bridge', found: true, start: 2, color: 0xb9c6d6 };
+
+/** Ants: dug into the ground, under a lid of crumbs. */
+export const BURROW: Weapon = { ...BASE, id: 'burrow', name: 'Burrow', kind: 'shelter', species: 'ant', found: true, start: 2, cover: 0.65, coverHealth: 45, color: 0xc98a4a };
+
+/** Cockroaches: pressed flat against what they stand on, walls and ceilings too; nothing throws them. */
+export const FLATTEN: Weapon = { ...BASE, id: 'flatten', name: 'Flatten', kind: 'shelter', species: 'cockroach', found: true, start: 2, cover: 0.5, coverHealth: 60, color: 0x9a6a3c };
+
+/** Bees: a cell of wax round them. */
+export const WAX_CELL: Weapon = { ...BASE, id: 'wax-cell', name: 'Wax Cell', kind: 'shelter', species: 'bee', found: true, start: 2, cover: 0.6, coverHealth: 50, color: 0xffc04a };
+
+/** Spiders: a screen of strong silk before them; their own side shoots through it. */
+export const SILK_SCREEN: Weapon = { ...BASE, id: 'silk-screen', name: 'Silk Screen', kind: 'screen', species: 'spider', found: true, start: 2, webRadius: 4, webTurns: 8, color: 0xf2f2ee };
+
+export const WEAPONS: readonly Weapon[] = [SOLDER_BLOB, CAPACITOR, SHORT_CIRCUIT, SOLDERING_IRON, WEB_SHOT, WEB_BOW, ANT_COLUMN, BLACKOUT_SWARM, THERMAL_PASTE, QUEENS_FLIGHT, BURROW, FLATTEN, WAX_CELL, SILK_SCREEN, SOLDER_WALL, SOLDER_BRIDGE];
 
 /** Whether a bug of this species has the weapon. */
 export function hasWeapon(species: string, w: Weapon): boolean {

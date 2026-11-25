@@ -168,6 +168,8 @@ export class GameSounds {
           engine.play('pour', { at, scene: true, rate: 0.8 });
         } else if (kind === 'flock') engine.play('beesOut', { at, scene: true, rate: 1.2 });
         else if (kind === 'web') engine.play('spit', { at });
+        else if (kind === 'screen') break;
+        else if (kind === 'shelter') engine.play(e.weapon === 'wax-cell' ? 'wax' : 'burrow', { at, rate: e.weapon === 'flatten' ? 1.5 : 1, level: e.weapon === 'flatten' ? 0.5 : 1 });
         else if (e.weapon === 'short-circuit') engine.play('spark', { at });
         else if (kind !== 'tunnel') engine.play('lob', { at, rate: kind === 'grenade' ? 0.85 : 1 });
         break;
@@ -204,6 +206,18 @@ export class GameSounds {
           if (w && !scene && match.events.some((q) => q.type === 'damage')) this.impact(match);
           if (w) engine.play('webOpen', { at: w, rate: scene ? 0.8 : 1, scene });
         }
+        break;
+      case 'built':
+        engine.play('solder', { at: match.units[e.unit].bug });
+        break;
+      case 'noRoom':
+        engine.play('noRoom');
+        break;
+      case 'bared':
+        if (e.broken) engine.play('shellCrack', { at: match.units[e.unit].bug, level: 0.8 });
+        break;
+      case 'caught':
+        engine.play('thread', { at: e, rate: 0.8, level: 1.3 });
         break;
       case 'stuck':
         engine.play('thread', { at: match.units[e.unit].bug, rate: 0.6 });

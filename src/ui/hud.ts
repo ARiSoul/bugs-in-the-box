@@ -1,5 +1,5 @@
 import { FLOCK_TICKS, RINGS } from '../game/flock';
-import { RING_DAMAGE } from '../game/weapons';
+import { RING_DAMAGE, WORKS } from '../game/weapons';
 import { TICK_RATE } from '../game/bug';
 import { SKILL_FULL, WIND_MAX, type Match } from '../game/match';
 import type { ItemKind } from '../game/items';
@@ -161,7 +161,7 @@ export class Hud {
       b.className = 'card';
       b.style.setProperty('--w', hex(w.color));
       const power = Math.min(5, Math.round((w.damage + w.arcDamage * 0.5) / 11));
-      b.innerHTML = `<em></em><svg viewBox="0 0 48 48" aria-hidden="true">${ARMS[w.id] ?? ''}</svg><span>${w.name}</span><div class="facts"><i title="damage">${'<u class="on"></u>'.repeat(power)}${'<u></u>'.repeat(5 - power)}</i><small>${w.kind === 'tunnel' ? 'digs' : w.kind === 'grenade' ? 'bounces' : w.kind === 'web' || w.kind === 'trap' ? 'holds' : w.arcs ? 'arcs' : 'bursts'}${w.windFactor > 0.5 ? ' · wind' : ''}</small></div>`;
+      b.innerHTML = `<em></em><svg viewBox="0 0 48 48" aria-hidden="true">${ARMS[w.id] ?? ''}</svg><span>${w.name}</span><div class="facts"><i title="damage">${'<u class="on"></u>'.repeat(power)}${'<u></u>'.repeat(5 - power)}</i><small>${w.kind === 'tunnel' ? 'digs' : w.kind === 'wall' || w.kind === 'bridge' ? 'builds' : w.kind === 'shelter' ? 'hides' : w.kind === 'screen' ? 'catches' : w.kind === 'grenade' ? 'bounces' : w.kind === 'web' || w.kind === 'trap' ? 'holds' : w.arcs ? 'arcs' : 'bursts'}${w.windFactor > 0.5 ? ' · wind' : ''}</small></div>`;
       b.setAttribute('aria-label', w.name);
       b.addEventListener('click', () => {
         onWeapon(index);
@@ -271,7 +271,7 @@ export class Hud {
         const s = make('slot');
         s.append(c.root);
         c.key.textContent = String(i + 1);
-        c.root.dataset.left = match.stock[u.team][c.index] > 0 ? `×${match.stock[u.team][c.index]}` : '';
+        c.root.dataset.left = match.stock[u.team][c.index] > 0 ? `×${match.usesLeft(u.team, c.index)}` : '';
         return s;
       });
       if (this.skillWeapon >= 0) slots.push(this.skillHolder);
@@ -284,7 +284,7 @@ export class Hud {
       void this.hand.offsetWidth;
       this.hand.classList.add('deal');
       this.hand.style.setProperty('--c', TEAM[u.team] ?? '#ffb547');
-    }, `${u.bug.species.id}|${u.team}|${match.turnNumber}|${match.stock[u.team].join()}`);
+    }, `${u.bug.species.id}|${u.team}|${match.turnNumber}|${match.stock[u.team].join()}|${match.works[u.team]}`);
     if (this.skillWeapon >= 0) this.skill.show(WEAPONS[this.skillWeapon], match.skill[u.team] / SKILL_FULL, String(this.hand.children.length));
     this.set('weapon', () => {
       for (const c of this.cards) c.root.parentElement?.classList.toggle('on', c.index === match.weapon);
@@ -302,7 +302,7 @@ export class Hud {
 
     // the aim angle above the horizon, in degrees, for fine aiming
     const brood = match.currentWeapon.kind === 'brood' && match.stance;
-    const aim = computer
+    let aim = computer
       ? ''
       : brood && !match.mark
         ? 'point at a spot nearer to it'
@@ -311,6 +311,7 @@ export class Hud {
           : match.phase === 'aim'
             ? `<b>${match.currentWeapon.name}</b> aim ${((Math.atan2(u.aimV, u.aimH) * 180) / Math.PI).toFixed(1)}°${u.bug.species.flight ? ` · ${u.bug.flying ? 'run: up, jump: let go' : u.bug.grounded ? 'jump twice: fly' : 'jump: fly'} · breath ${Math.round((u.bug.breath / (u.bug.species.flight * TICK_RATE)) * 100)}%` : ''}`
             : '';
+    if (aim && match.currentWeapon.start !== undefined) aim += ` · <b>${match.works[u.team]}</b> of ${WORKS} left in all${match.built && match.currentWeapon.kind !== 'shelter' && match.currentWeapon.kind !== 'screen' ? ' · once a turn' : ''}`;
     this.showFlock(match, computer);
     this.set('aim', () => (this.aim.innerHTML = aim), aim);
 

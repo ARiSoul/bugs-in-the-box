@@ -21,6 +21,7 @@ import { BowScene } from './render/gpu/bowScene';
 import { BroodScene } from './render/gpu/broodScene';
 import { FlockScene } from './render/gpu/flockScene';
 import { ColumnScene } from './render/gpu/columnScene';
+import { BuildViews } from './render/gpu/buildViews';
 import { WebViews } from './render/webs';
 import { DrawnGround } from './render/drawnGround';
 import { ChunkRenderer } from './render/ChunkRenderer';
@@ -93,6 +94,7 @@ const projectiles = new ProjectileViews(stage.scene);
 const aim = new AimView(stage.scene);
 const webViews = new WebViews(stage.scene);
 const itemViews = new ItemViews(stage.scene);
+const buildViews = new BuildViews(stage.scene, terrain);
 const bow = new BowScene(stage.scene, stage.fx);
 const antColumn = new ColumnScene(stage.scene, stage.fx, bow.light, bow.targetLight);
 const brood = new BroodScene(stage.scene, stage.fx, bow.light);
@@ -163,6 +165,7 @@ function newMatch(s: number): void {
     terrain.resize(...chunksNow);
     chunks.clear();
   }
+  buildViews.raze();
   scenario.generate(terrain, s, layout);
   stage.setScenario(scenario, layout);
   chunks.setSharp(scenario.sharpEdges);
@@ -208,13 +211,14 @@ function newTeams(s: number, turns = 0): void {
   bestHit = 0;
   webViews.clear();
   itemViews.clear();
+  buildViews.clear();
   bow.clear();
   antColumn.clear();
   brood.clear();
   flock.clear();
   gameSounds.reset(match, scenario.id);
   indexedTurns = turns;
-  ground.reset(stage.scene, bugViews.map((v) => v.view.root));
+  ground.reset(stage.scene, [...bugViews.map((v) => v.view.root), buildViews.root]);
   hud.setupMatch(match, WEAPONS, (i) => controls.selectWeapon(i));
   const active = bugViews[match.active];
   active.view.update(match.activeUnit.bug, 1, 0);
@@ -268,6 +272,7 @@ const at2 = new THREE.Vector3();
 function handleEvents(events: readonly MatchEvent[]): void {
   for (const e of events) {
     itemViews.on(e);
+    buildViews.on(e, match);
     switch (e.type) {
       case 'open': {
         const look = ITEM_LOOKS[e.kind];
@@ -280,6 +285,15 @@ function handleEvents(events: readonly MatchEvent[]): void {
       }
       case 'fuse':
         texts.spawn('fuse blown', 0x8ccaff, at.set(match.units[e.unit].bug.x, match.units[e.unit].bug.y + 3.2, match.units[e.unit].bug.z));
+        break;
+      case 'noRoom':
+        texts.spawn(match.built ? 'once a turn' : 'no room', 0xff8a6a, at.set(match.units[e.unit].bug.x, match.units[e.unit].bug.y + 3, match.units[e.unit].bug.z));
+        break;
+      case 'bared':
+        if (e.broken && match.units[e.unit].bug.alive) texts.spawn('shelter broken', 0xffd9a0, at.set(match.units[e.unit].bug.x, match.units[e.unit].bug.y + 3.2, match.units[e.unit].bug.z));
+        break;
+      case 'caught':
+        texts.spawn('caught', 0xf2f2ee, at.set(e.x, e.y + 1.4, e.z));
         break;
       case 'box':
         hud.box(match.items.list.find((q) => q.id === e.id)?.by ?? 'bee');
@@ -392,7 +406,9 @@ const controls = new Controls(window, (code) => {
   if (code === 'KeyN') newMatch(seed);
   else if (code === 'KeyM') soundMenu.toggle();
 });
-controls.weaponSlots = () => WEAPONS.map((_, i) => i).filter((i) => match.has(match.activeUnit, i));
+const slotsOf = (i: number): boolean => match.has(match.activeUnit, i);
+// (as the hand shows them: the special attack last)
+controls.weaponSlots = () => [...WEAPONS.keys()].filter(slotsOf).sort((a, b) => Math.sign(WEAPONS[a].sceneTicks) - Math.sign(WEAPONS[b].sceneTicks));
 controls.bindButtons(hud.pad);
 setupKeysMenu(controls);
 if (hooks.fly) {
@@ -1131,7 +1147,7 @@ function frame(now: number): void {
   // the turntable rests at a new place: so do the things on it
   if (match.turntableTurns !== indexedTurns && match.turntableTurns === prevTurns && match.phase !== 'spin') {
     indexedTurns = match.turntableTurns;
-    ground.reindex(stage.scene, bugViews.map((v) => v.view.root));
+    ground.reindex(stage.scene, [...bugViews.map((v) => v.view.root), buildViews.root]);
   }
   ground.step(INDEX_MS);
   // (the special attack's scene first: it sets the pose the bug is then drawn in)
@@ -1145,6 +1161,7 @@ function frame(now: number): void {
   brood.update({ match, view: bugViews[match.active].view, views: bugViews.map((v) => v.view), ground, camera: stage.camera, alpha, dt: scaled });
   flock.update({ match, view: bugViews[match.active].view, views: bugViews.map((v) => v.view), ground, camera: stage.camera, alpha, dt: scaled });
   const sceneNow = inScene();
+  buildViews.pose(match, bugViews.map((v) => v.view));
   match.units.forEach((u, i) => {
     const v = bugViews[i];
     v.view.held = u.web >= 0 ? 1 : 0;
@@ -1178,6 +1195,7 @@ function frame(now: number): void {
   }
   placeSight();
   itemViews.update(match, scaled, now / 1000);
+  buildViews.update(match, bugViews.map((v) => v.view), ground, !brain() && !debugCamera && !inMenu && !menus.over, scaled, now / 1000);
   webViews.update(match, ground, (i, out) => out.copy(bugViews[i].view.root.position), now);
   const active = bugViews[match.active];
   aim.update(match, active.view.root.position, active.height, now, stage.camera.position.distanceTo(active.view.root.position));
