@@ -1301,6 +1301,8 @@ function placeLabels(): void {
     if (i === match.active && (antColumn.camera.active || flock.camera.active)) v.label.sprite.visible = false;
     // (the swarm flies to its rings: what hangs over the one they lead to hides them)
     if (i !== match.active && flock.camera.active && (flock.hidesNames(match) || (match.flock && u.team === match.activeUnit.team))) v.label.sprite.visible = false;
+    // (over its crown, where what it flies to is)
+    if (flock.flies && u.team !== match.activeUnit.team) v.label.sprite.position.y += 0.02 * dist;
     v.label.snap(stage.camera, canvas.width, canvas.height);
   });
 }

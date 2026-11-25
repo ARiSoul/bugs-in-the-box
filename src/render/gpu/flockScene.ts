@@ -334,7 +334,7 @@ export class FlockScene {
 
     // ---- in the air: a slab of wax for it to lie on
     {
-      const m = new THREE.MeshPhysicalNodeMaterial({ color: 0x7a3c0a, roughness: 0.8, specularIntensity: 0.15, envMapIntensity: 0.3 });
+      const m = new THREE.MeshPhysicalNodeMaterial({ color: 0x8a5a14, roughness: 0.8, specularIntensity: 0.15, envMapIntensity: 0.3 });
       const rim = pow(float(1).sub(abs(normalView.dot(positionViewDirection))), 2);
       m.emissiveNode = vec3(1, 0.42, 0.05).mul(rim.mul(0.12).add(smoothstep(0.02, -0.12, positionLocal.y).mul(0.3)));
       m.fog = false;
@@ -691,7 +691,7 @@ export class FlockScene {
     this.lateX = null;
     if (!x || this.shooter < 0 || !this.view) return;
     // (no other bug in the picture of the scene)
-    for (const q of x.views) if (q !== this.view && q.root.visible && (this.sceneTime >= 0 || this.hitT > HOME) && q.root.position.distanceTo(this.at) < 14) q.root.visible = false;
+    for (const q of x.views) if (q !== this.view && q.root.visible && (this.sceneTime >= 0 || this.hitT > HOME || (this.shotT >= 0 && this.shotT < PAST && this.hitT < 0))) q.root.visible = false;
     this.placeBee(x, this.lateT);
     this.view.root.updateMatrixWorld(true);
     this.a.copy(this.view.root.position).project(x.camera);
@@ -1330,6 +1330,8 @@ export class FlockScene {
         const d = this.b.length();
         if (d < 2.9 && d > 0.01) o.at.addScaledVector(this.b, ((2.9 - d) / d) * (1 - Math.exp(-dt * 12)));
       }
+      // (as it sets out: well behind its sting)
+      if (this.shotT >= 0 && this.hitT < 0 && this.shotT < 1) scale *= ss(2.6, 4, o.at.distanceTo(v.root.position)) * (this.shotT < PAST && i >= 24 ? 0 : 1);
       // (none in the lens; fewer before the ring it flies to)
       const eye = o.at.distanceTo(x.camera.position);
       scale *= special ? ss(0.5, 1.1, eye) : ss(4, 5.8, eye) * (this.flies && i % 3 === 0 ? ss(5.5, 8, eye) : 1);
@@ -1365,6 +1367,32 @@ export class FlockScene {
       this.m.compose(o.at, this.q, this.s.setScalar(Math.max(0.0001, ss(0.35, 0.9, o.size) * SIZE * (0.75 + 0.55 * r1))));
       this.wings.setMatrixAt(i, this.m);
     }
+    // (none before another, as the picture shows them: the one behind steps aside)
+    if (special || (this.hitT >= 0 && this.hitT < HOME + 2)) {
+      this.b.set(1, 0, 0).applyQuaternion(x.camera.quaternion);
+      this.c.set(0, 1, 0).applyQuaternion(x.camera.quaternion);
+      x.camera.getWorldDirection(this.s);
+      for (let i = 0; i < SWARM; i++) {
+        const p = this.a.copy(this.ones[i].at).sub(x.camera.position);
+        const z = Math.max(0.5, p.dot(this.s));
+        this.flatX[i] = p.dot(this.b) / z;
+        this.flatY[i] = p.dot(this.c) / z;
+        this.flatZ[i] = z;
+      }
+      const ease = 1 - Math.exp(-dt * 14);
+      for (let i = 0; i < SWARM; i++)
+        for (let j = i + 1; j < SWARM; j++) {
+          const back = this.flatZ[i] > this.flatZ[j] ? i : j;
+          const fore = back === i ? j : i;
+          const need = (0.62 / this.flatZ[fore] + 0.62 / this.flatZ[back]) * 0.5;
+          const dx = this.flatX[back] - this.flatX[fore];
+          const dy = this.flatY[back] - this.flatY[fore];
+          const d = Math.sqrt(dx * dx + dy * dy);
+          if (d >= need || d < 1e-5) continue;
+          const k = ((need - d) / d) * this.flatZ[back] * ease;
+          this.ones[back].at.addScaledVector(this.b, dx * k).addScaledVector(this.c, dy * k);
+        }
+    }
     // (room between them)
     for (let i = 0; i < SWARM; i++) {
       const p = this.ones[i].at;
@@ -1384,6 +1412,9 @@ export class FlockScene {
     if (special && t > BURST && t < BURST + 0.8 && dt > 0) for (let n = 0; n < 7; n++) this.grain(this.ones[Math.floor(Math.random() * SWARM)].at, 0.4, 0.7, false, 0.15);
     this.bees.instanceMatrix.needsUpdate = this.wings.instanceMatrix.needsUpdate = true;
   }
+  private readonly flatX = new Float32Array(SWARM);
+  private readonly flatY = new Float32Array(SWARM);
+  private readonly flatZ = new Float32Array(SWARM);
   private readonly short = new Float32Array(SWARM).fill(1);
 
   private placeWake(x: BowContext): void {
