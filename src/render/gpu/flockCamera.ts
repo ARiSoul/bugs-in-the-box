@@ -24,8 +24,6 @@ export interface FlockShot {
   dive: number;
   /** Where the first ring is (none: null), and which way what it struck faces (radians; NaN: nothing). */
   ring: THREE.Vector3 | null;
-  /** How large it dances (0..1). */
-  room: number;
   facing: number;
   /** What it struck. */
   hit: THREE.Vector3;
@@ -42,20 +40,17 @@ interface Cut {
 }
 
 /** When each part of the scene starts (seconds). */
-export const DANCE = 0.5;
-export const DANCED = 2.45;
-export const RISE = 2.95;
-export const CROWN = 3.7;
-export const BURST = 4.05;
-export const READY = 5.4;
+export const DRAW = 0.2;
+export const DRAWN = 0.9;
+export const RISE = 0.95;
+export const CROWN = 1.7;
+export const BURST = 2.05;
+export const READY = 3.4;
 
 const CUTS: Cut[] = [
-  { t0: 0, t1: DANCE, a: [32, 7, 5.6, 0.35, 38], b: [22, 10, 5.0, 0.4, 38] },
-  // the dance: round it and from over it, its track on the ground
-  { t0: DANCE, t1: DANCED, a: [34, 36, 10, -0.1, 46], b: [8, 43, 9.2, 0, 46] },
-  // the whole eight, from over it
-  { t0: DANCED, t1: RISE, a: [4, 50, 11, -0.6, 46], b: [0, 57, 11.4, -0.5, 46] },
-  // the track rises round it and becomes a crown
+  // a ring of light runs round it
+  { t0: 0, t1: RISE, a: [34, 20, 7.6, 0.1, 40], b: [20, 15, 6.6, 0.3, 40] },
+  // the ring rises round it and becomes a crown
   { t0: RISE, t1: BURST, a: [-18, 12, 8.8, 0.95, 38], b: [-8, 4, 6.8, 0.95, 36] },
   // the swarm
   { t0: BURST, t1: 99, a: [-8, 3, 7, 1.4, 50], b: [8, 2, 8.4, 1.6, 54] },
@@ -87,7 +82,7 @@ export const PAST = 0.6;
 /** After the hit: the view goes back to the bee. */
 export const HOME = 2.75;
 
-/** The Queen's Flight's camera: cuts round the dance, behind it while it aims, behind the swarm, round what it struck. */
+/** The Queen's Flight's camera: cuts round the bee, behind it while it aims, behind the swarm, round what it struck. */
 export class FlockCamera {
   active = false;
   private shake = 0;
@@ -235,8 +230,6 @@ export class FlockCamera {
       const u = Math.min(1, (x.t - q.t0) / (Math.min(q.t1, q.t0 + 1.35) - q.t0));
       const e = u * u * (3 - 2 * u);
       const v = q.a.map((w, k) => w + (q.b[k] - w) * e);
-      // (nearer to a smaller dance)
-      if (q.t0 >= DANCE && q.t1 <= RISE) v[2] *= 0.72 + 0.28 * x.room;
       this.pose(v, x);
       fov = v[4];
     }

@@ -197,9 +197,6 @@ function tune(seconds: number, notes: readonly (readonly [number, number, number
   );
 }
 
-/** On from `at` for `long` seconds, with soft ends. */
-const between = (t: number, at: number, long: number): number => smooth(at, at + 0.04, t) * (1 - smooth(at + long - 0.08, at + long, t));
-
 /** A snap of something dry. */
 const snap: Grain = (r) => {
   const f = 500 + 2600 * r();
@@ -646,23 +643,6 @@ const RECIPES = {
         }),
         0.4,
       );
-    },
-  },
-  waggle: {
-    level: 0.5,
-    make: (r) => {
-      // (two runs of the dance, each a trill of its wings)
-      const a = saw();
-      const b = saw(0.3);
-      const bp = bandpass();
-      const out = render(2.2, (t) => {
-        const run = Math.max(between(t, 0, 0.42), between(t, 1.08, 0.42));
-        const trill = 0.55 + 0.45 * Math.sin(t * 2 * Math.PI * 15);
-        return bp(a(236) + b(239.5) * 0.8, 900, 1.2) * run * trill;
-      });
-      const notes = tune(2.2, [[0, 3, 0.3], [0.14, 7, 0.3], [0.28, 10, 0.4], [0.55, 12, 0.5], [1.08, 3, 0.3], [1.22, 7, 0.3], [1.36, 12, 0.4], [1.62, 15, 0.6]]);
-      void r;
-      return finish(out.map((v, i) => v * 0.6 + (notes[i] ?? 0) * 0.4), 0.9, 0.15);
     },
   },
   queenRise: { level: 0.5, make: (r) => shimmer(r, 1.0, 520, 2.2, 0.8) },

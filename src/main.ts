@@ -184,15 +184,15 @@ function newMatch(s: number): void {
   newTeams(s);
 }
 
-/** New teams on the map as it is. */
-function newTeams(s: number): void {
-  match = new Match(terrain, teams(), s, { turnSeconds: rules.seconds, wind: rules.wind, strictBounds: scenario.strictBounds, spawnLevels: scenario.spawnLevels === true, turntable: scenario.turntable?.(terrain.W, terrain.H, terrain.D), confine: scenario.confine?.(terrain.W, terrain.H, terrain.D) });
+/** New teams on the map as it is; `turns`: how far its turntable has turned. */
+function newTeams(s: number, turns = 0): void {
+  match = new Match(terrain, teams(), s, { turned: turns, turnSeconds: rules.seconds, wind: rules.wind, strictBounds: scenario.strictBounds, spawnLevels: scenario.spawnLevels === true, turntable: scenario.turntable?.(terrain.W, terrain.H, terrain.D), confine: scenario.confine?.(terrain.W, terrain.H, terrain.D) });
 
   brains = players.map((id, i) => {
     const s = SKILLS.find((q) => q.id === id);
     return s ? new Brain(s, seed * 2 + i) : null;
   });
-  prevTurns = 0;
+  prevTurns = turns;
   for (const v of bugViews) {
     v.view.dispose();
     v.label.dispose();
@@ -213,7 +213,7 @@ function newTeams(s: number): void {
   brood.clear();
   flock.clear();
   gameSounds.reset(match, scenario.id);
-  indexedTurns = 0;
+  indexedTurns = turns;
   ground.reset(stage.scene, bugViews.map((v) => v.view.root));
   hud.setupMatch(match, WEAPONS, (i) => controls.selectWeapon(i));
   const active = bugViews[match.active];
@@ -479,6 +479,8 @@ const menus = {
   /** The colours rip open over the match that starts. */
   ripping: false,
   ended: -1,
+  /** A match was played on this map. */
+  played: !menuAtStart,
   flare: 2.5,
 };
 /** The hardest blow of the match, for its end. */
@@ -513,9 +515,12 @@ setup.root.append(soundMenu.panel());
 const ending = new EndScreen(
   () => {
     closeEnding();
-    seed = randomSeed();
-    keepSeed();
-    newMatch(seed);
+    if (ending.keeps) newTeams(randomSeed(), match.turntableTurns);
+    else {
+      seed = randomSeed();
+      keepSeed();
+      newMatch(seed);
+    }
     flash();
   },
   () => {
@@ -545,6 +550,12 @@ function menuView(t: number): void {
 }
 function openSetup(): void {
   params.delete('play');
+  // (the last match's craters are gone: a new setup starts on a whole map)
+  if (menus.played) {
+    menus.played = false;
+    menus.meshed = workers === null;
+    newMatch(seed);
+  }
   Object.assign(choice, { scenario: scenario.id, species: [picked[0], picked[1]], players: [players[0], players[1]], size: rules.size, seconds: rules.seconds, wind: rules.wind, seed });
   menus.setup = true;
   menus.starting = -1;
@@ -592,6 +603,7 @@ function startMatch(): void {
   menus.ripping = true;
   controls.enabled = true;
   menus.setup = false;
+  menus.played = true;
   menus.starting = -1;
   accumulator = 0;
   music.choose(scenario.id);
@@ -790,6 +802,11 @@ canvas.addEventListener('pointerdown', (e) => {
     if (e.button === 0) controls.click();
     return;
   }
+  // (a click sends the swarm off)
+  if (flockAims()) {
+    if (e.button === 0 && !match.flock) controls.click();
+    return;
+  }
   if (e.button === 2) orbiting = true;
 });
 window.addEventListener('pointerup', (e) => {
@@ -815,16 +832,30 @@ canvas.addEventListener('pointermove', (e) => {
     if ((e.buttons & 2) !== 0) brood.camera.turn(-e.movementX * 0.005, e.movementY * 0.004);
     return;
   }
-  // (a swarm in the air is flown the same way)
-  const f = match.flock;
-  if (brain() || (!f && (!match.stance || match.phase !== 'aim')) || (e.buttons & 3) === 0) return;
+  // (a swarm: the mouse alone turns its bee, then flies it)
+  if (flockAims()) {
+    const f = match.flock;
+    const u = match.activeUnit;
+    if (swarmAim.hold <= 0) {
+      swarmAim.yaw = f ? Math.atan2(f.fx, f.fz) : Math.atan2(u.bug.fx, u.bug.fz);
+      swarmAim.pitch = f ? Math.asin(f.v) : Math.atan2(u.aimV, u.aimH);
+    }
+    // (some browsers report a leap now and then)
+    const most = (v: number): number => Math.max(-160, Math.min(160, v));
+    // (seen from the front as it sets out: to the sides only once the view is behind it)
+    if (!f || f.age > 36) swarmAim.yaw -= most(e.movementX) * SWARM_SPEED;
+    swarmAim.pitch = Math.max(-1, Math.min(1.1, swarmAim.pitch - most(e.movementY) * SWARM_SPEED));
+    swarmAim.hold = SWARM_HOLD;
+    return;
+  }
+  if (brain() || !match.stance || match.phase !== 'aim' || (e.buttons & 3) === 0) return;
   const slow = SIGHT_SPEED * (match.charging ? 0.6 : 1);
   const b = match.activeUnit.bug;
   const a = -e.movementX * slow;
   // (from where the last movement of this frame left it)
   if (stanceFace.tick !== match.tick) {
-    stanceFace.x = f ? f.fx : b.fx;
-    stanceFace.z = f ? f.fz : b.fz;
+    stanceFace.x = b.fx;
+    stanceFace.z = b.fz;
     stanceFace.tick = match.tick;
   }
   const c = Math.cos(a);
@@ -835,6 +866,45 @@ canvas.addEventListener('pointermove', (e) => {
   controls.face(stanceFace.x, stanceFace.z);
   controls.tilt(-e.movementY * slow);
 });
+/** Where the mouse points the swarm (radians), and the ticks left in which it still turns there. */
+const swarmAim = { yaw: 0, pitch: 0, hold: 0 };
+const SWARM_SPEED = 0.0026;
+const SWARM_HOLD = 40;
+/** It points no further off its way than this. */
+const SWARM_LEAD = 0.7;
+/** The player aims, or flies, a swarm. */
+function flockAims(): boolean {
+  return !brain() && !debugCamera && (match.flock !== null || (match.stance && match.phase === 'aim' && match.currentWeapon.kind === 'flock'));
+}
+/** The next tick's input turns the swarm (or its bee) towards where the mouse points. */
+function steerSwarm(): void {
+  if (swarmAim.hold <= 0) return;
+  if (!flockAims() || controls.turnHeld !== 0 || (match.flock && controls.moveHeld !== 0)) {
+    swarmAim.hold = 0;
+    return;
+  }
+  swarmAim.hold--;
+  const f = match.flock;
+  const u = match.activeUnit;
+  const yaw = f ? Math.atan2(f.fx, f.fz) : Math.atan2(u.bug.fx, u.bug.fz);
+  const pitch = f ? Math.asin(f.v) : Math.atan2(u.aimV, u.aimH);
+  const most = (v: number): number => Math.max(-SWARM_LEAD, Math.min(SWARM_LEAD, v));
+  const off = most(Math.atan2(Math.sin(swarmAim.yaw - yaw), Math.cos(swarmAim.yaw - yaw)));
+  swarmAim.yaw = yaw + off;
+  swarmAim.pitch = pitch + most(swarmAim.pitch - pitch);
+  // (softly into it)
+  controls.face(Math.sin(yaw + off * 0.4), Math.cos(yaw + off * 0.4));
+  controls.tilt(Math.max(-0.05, Math.min(0.05, (swarmAim.pitch - pitch) * 0.4)));
+}
+/** As long as a player flies, the mouse is the game's (Escape gives it back). */
+function holdMouse(): void {
+  const locked = document.pointerLockElement === canvas;
+  const want = match.flock !== null && flockAims();
+  if (want && !mouseAsked && !locked) void Promise.resolve(canvas.requestPointerLock?.()).catch(() => undefined);
+  else if (!want && mouseAsked && locked) document.exitPointerLock();
+  mouseAsked = want;
+}
+let mouseAsked = false;
 const stanceFace = { x: 0, z: 1, tick: -1 };
 window.addEventListener('blur', () => {
   orbiting = false;
@@ -1043,6 +1113,7 @@ function frame(now: number): void {
     if (debugCamera || intro || menus.over) match.step(NO_INPUT);
     else {
       // (while the computer plays, the player's keys go nowhere)
+      steerSwarm();
       const typed = controls.next();
       const b = brain();
       match.step(b ? b.next(match) : typed);
@@ -1054,6 +1125,7 @@ function frame(now: number): void {
   }
   syncTerrain();
   const alpha = accumulator / DT;
+  holdMouse();
   stage.setTurntable(prevTurns + (match.turntableTurns - prevTurns) * alpha);
 
   // the turntable rests at a new place: so do the things on it

@@ -314,6 +314,8 @@ export interface MatchOptions {
   spawnLevels?: boolean;
   /** A turntable that turns between turns (see TurntableSpec). */
   turntable?: TurntableSpec;
+  /** The quarter turns it has made before this match (a map that an earlier match was fought on). */
+  turned?: number;
   /** Boxes turn up on the map (default true; not where the tests place the bugs). */
   items?: boolean;
   /** Where a bug may spawn, stand and walk: it turns back at the limit (default: the whole map). Pure. */
@@ -350,6 +352,8 @@ export class Match {
   windX = 0;
   windZ = 0;
   weapon = 0;
+  /** The weapon each team last picked (not a special attack): its next turn starts with it. */
+  readonly kept: number[];
   charging = false;
   /** Ticks left of a special attack's scene. */
   specialTicks = 0;
@@ -414,6 +418,8 @@ export class Match {
         this.bugs.push(bug);
       }
     this.nextInTeam = teams.map(() => 0);
+    this.kept = teams.map(() => 0);
+    this.quarterTurns = options.turned ?? 0;
     this.luck = createRng(seed * 1597334677 + 411);
     this.items = new Items(field, this.luck, options.spawnLevels === true, options.confine ?? null);
     this.stock = teams.map(() => WEAPONS.map(() => 0));
@@ -480,6 +486,7 @@ export class Match {
         this.phase = 'aim';
         this.leaveStance();
         if (input.weapon >= 0 && this.canUse(unit, input.weapon)) this.weapon = input.weapon;
+        if (this.currentWeapon.sceneTicks === 0) this.kept[unit.team] = this.weapon;
       } else if (--this.specialTicks <= 0) {
         this.phase = 'aim';
         this.stance = true;
@@ -588,7 +595,10 @@ export class Match {
   private aimTick(unit: Unit, input: Readonly<MatchInput>, fireDown: boolean): Readonly<BugInput> {
     if (!this.charging && input.weapon >= 0 && input.weapon < WEAPONS.length && this.canUse(unit, input.weapon)) {
       this.weapon = input.weapon;
-      if (this.currentWeapon.sceneTicks === 0) this.stance = false;
+      if (this.currentWeapon.sceneTicks === 0) {
+        this.stance = false;
+        this.kept[unit.team] = this.weapon;
+      }
     }
     // a special attack begins as soon as it is picked
     if (this.currentWeapon.sceneTicks > 0 && !this.stance && unit.bug.grounded) {
@@ -650,7 +660,13 @@ export class Match {
   private leaveStance(): void {
     this.stance = false;
     this.charging = false;
-    if (this.currentWeapon.sceneTicks > 0) this.weapon = 0;
+    if (this.currentWeapon.sceneTicks > 0) this.weapon = this.keptBy(this.activeUnit);
+  }
+
+  /** What a unit's team last picked, if it still has it. */
+  private keptBy(u: Unit): number {
+    if (!this.canUse(u, this.kept[u.team])) this.kept[u.team] = 0;
+    return this.kept[u.team];
   }
 
   /** Whether the unit has weapon `index` (a special attack may still have to load). */
@@ -1148,7 +1164,7 @@ export class Match {
         this.mark = null;
         this.flock = null;
         this.rings = [];
-        if (!this.canUse(u, this.weapon) || this.currentWeapon.sceneTicks > 0) this.weapon = 0;
+        this.weapon = this.keptBy(u);
         for (let q = this.webs.length - 1; q >= 0; q--) if (--this.webs[q].turns < 0) this.removeWeb(this.webs[q], false);
         this.retreatTicks = 0;
         this.charging = false;

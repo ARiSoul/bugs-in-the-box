@@ -73,7 +73,7 @@
       #flock .fuel { display: flex; align-items: center; gap: 1.1vh; } #flock .fuel svg { width: 3.2vh; fill: #ffb52e; } #flock .fuel u { display: block; width: 32vh; height: 1.8vh; background: #3a2708; transform: skewX(-18deg); } #flock .fuel b { display: block; height: 100%; transform-origin: 0 0; background: linear-gradient(90deg, #ff9a12, #ffe08a); }
       #flock.low .fuel b { background: #ff4a2e; } #flock.low .fuel { animation: low 0.35s infinite alternate; } @keyframes low { to { opacity: 0.55; } }
       #flock p { margin: 0; min-width: 32vh; white-space: nowrap; font-size: 2.4vh; color: #fff2d0; transition: opacity 0.6s; display: flex; align-items: center; gap: 0.7vh; } #flock.late p { opacity: 0; } #flock p svg { width: 1.5vh; vertical-align: -0.35vh; fill: none; stroke: #2a1a04; stroke-width: 3.4; }
-      #flock kbd { font: inherit; font-weight: 700; background: #fff2d0; color: #2a1a04; padding: 0.1em 0.6em; transform: skewX(-8deg); } #flock kbd.go { background: #ffb52e; margin-left: 1.6vh; } #flock p kbd:nth-of-type(3), #flock p kbd:nth-of-type(5) { margin-left: 1.4vh; }
+      #flock kbd { font: inherit; font-weight: 700; background: #fff2d0; color: #2a1a04; padding: 0.1em 0.6em; transform: skewX(-8deg); } #flock kbd.go { background: #ffb52e; margin-left: 1.6vh; }
     /* a special attack's scene: the bars of a film, and nothing over the picture */
       body::before, body::after { content: ''; position: fixed; left: 0; right: 0; height: 0; background: #000; z-index: 5; transition: height 0.45s ease; pointer-events: none; }
       body::before { top: 0; }
@@ -115,10 +115,13 @@
       #hud .clock small { color: #1b1206; font-weight: 700; font-size: 0.62em; line-height: 1; position: absolute; left: 0; right: 0; bottom: 0.9vh; text-align: center; }
       #hud .clock.retreat { background: #9fd6a0; } #hud .clock.urgent { background: #fff6e2; } #hud .clock.tick { animation: tock 0.4s cubic-bezier(0.2, 1.8, 0.4, 1); }
       @keyframes tock { from { transform: scale(1.32); } 45% { transform: rotate(-5deg); } 70% { transform: rotate(4deg); } }
-      #hud .wind { position: absolute; left: 50%; top: 6.9vh; transform: translateX(-50%) skewX(-8deg); display: flex; align-items: center; gap: 0.45em; font-size: 0.82em; background: rgba(15, 12, 11, 0.75); padding: 0.15em 0.6em; }
-      #hud .wind span { display: none; } #hud .wind i { width: 1.8em; height: 1.2em; background: var(--ink); clip-path: polygon(0 34%, 55% 34%, 55% 0, 100% 50%, 55% 100%, 55% 66%, 0 66%); transition: transform 0.1s linear; }
-      #hud .force { display: flex; gap: 0.2em; } #hud .force u { width: 0.55em; height: 1em; background: rgba(255, 255, 255, 0.17); } #hud .force u.on { background: #8fe3ff; }
-      #hud .wind.calm i { opacity: 0.25; }
+      #hud .wind { position: absolute; left: 50%; top: 6.4vh; transform: translateX(-50%); display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; isolation: isolate; }
+      #hud .wind::before { content: ''; position: absolute; z-index: -1; left: 0; right: 0; top: 50%; height: 2.7vh; transform: translateY(-50%) skewX(-8deg); background: rgba(15, 12, 11, 0.86); }
+      #hud .wind span { text-align: right; padding: 0 0.7em 0 0.9em; font-weight: 700; font-size: 0.8em; color: var(--ink); } #hud .wind .force { padding: 0 1em 0 0.7em; }
+      #hud .wind i { display: block; width: 6.6vh; height: 6.6vh; border-radius: 50%; background: #14110f; box-shadow: inset 0 0 0 0.35vh #8fe3ff, 0 0 0 0.3vh #0b0908; }
+      #hud .wind svg { display: block; width: 100%; height: 100%; } #hud .wind path { fill: #8fe3ff; } #hud .wind.strong path { fill: #ffb547; } #hud .wind.strong i { box-shadow: inset 0 0 0 0.35vh #ffb547, 0 0 0 0.3vh #0b0908; }
+      #hud .force { display: flex; gap: 0.2em; } #hud .force u { width: 0.5em; height: 1.05em; background: rgba(255, 255, 255, 0.2); transform: skewX(-8deg); } #hud .force u.on { background: #8fe3ff; } #hud .wind.strong .force u.on { background: #ffb547; }
+      #hud .wind.calm i { box-shadow: inset 0 0 0 0.35vh #5b5750, 0 0 0 0.3vh #0b0908; } #hud .wind.calm svg { opacity: 0; }
       #hud .call { position: absolute; left: 26vw; top: 30vh; height: 8.5vh; transform: translateX(-50%); opacity: 0; display: grid; justify-items: center; }
       #hud .call .letters { height: 8.5vh; } #hud .call span { background: #130f0c; padding: 0.2em 1em 0.3em; margin-top: -0.2em; transform: skewX(-8deg); font-weight: 600; white-space: nowrap; }
       #hud .call.on { animation: callin 1.35s both; }
@@ -278,6 +281,8 @@
       #ending .counts { display: flex; gap: 2.4vw; margin-top: 2vh; margin-bottom: auto; background: rgba(9, 7, 7, 0.72); padding: 1vh 2.4vw; transform: skewX(-6deg); animation: swap 0.5s 0.45s both; }
       #ending .counts div { text-align: center; } #ending .counts b { font-size: 2.6em; line-height: 1; display: block; } #ending .counts span { color: var(--dim); }
       #ending .row2 { gap: 1.5em; margin-bottom: 5vh; animation: swap 0.5s 1s both; }
+      #ending .maps { display: flex; margin-bottom: 1.6vh; background: rgba(9, 7, 7, 0.78); transform: skewX(-6deg); padding: 0.35em; gap: 0.35em; animation: swap 0.5s 0.9s both; }
+      #ending .maps button { font-size: 1.15em; padding: 0.45em 1.1em; border-radius: 0; color: var(--dim); } #ending .maps button:hover { color: var(--ink); } #ending .maps button[aria-pressed='true'] { background: var(--ink); color: #1b1206; font-weight: 700; }
       #ending .play { width: 30vh; }
       #ending .ghost { font-size: 1.3em; padding: 0 1.4em; height: 10.6vh; background: rgba(9, 7, 7, 0.78); transform: skewX(-6deg); } #ending .ghost:hover { background: rgba(255, 255, 255, 0.2); }
       @media (max-height: 640px) { #setup .trait, #setup .team-card p { display: none; } }

@@ -45,7 +45,7 @@ const WINDS: [number, string][] = [[0, 'Off'], [0.5, 'Breeze'], [1, 'Windy'], [1
 const ABOUT: Record<string, [string, string, string]> = {
   ant: ['Tough. Never alone.', 'The most health of all', 'March a column of workers at them'],
   spider: ['Patient. Hard to corner.', 'Web Shot, and hangs by a thread', 'Draw a bow of silk, let the dart fly'],
-  bee: ['Sweet. Until it is not.', 'Flies: 3 seconds a turn', 'Dance, then fly the swarm yourself'],
+  bee: ['Sweet. Until it is not.', 'Flies: 3 seconds a turn', 'Take the crown, fly the swarm yourself'],
   cockroach: ['Fast. Refuses to die.', 'Hard Shell: outlives one blow', 'Kill the lights, send in the brood'],
 };
 /** A line for each device, and its colour. */
@@ -333,6 +333,8 @@ export class EndScreen {
   readonly root = make('div');
   private readonly head = make('div', 'head');
   private readonly counts = make('div', 'counts');
+  /** The next match is fought on the map as this one left it. */
+  keeps = false;
 
   constructor(onAgain: () => void, onSetup: () => void) {
     this.root.id = 'ending';
@@ -343,7 +345,21 @@ export class EndScreen {
     again.addEventListener('click', onAgain);
     back.addEventListener('click', onSetup);
     row.append(again, back);
-    this.root.append(this.head, this.counts, row);
+    const maps = make('div', 'maps');
+    const of = [make('button', '', 'Fresh map'), make('button', '', 'Keep the damage')];
+    const pick = (keeps: boolean): void => {
+      this.keeps = keeps;
+      of.forEach((b, i) => b.setAttribute('aria-pressed', String((i === 1) === keeps)));
+    };
+    of.forEach((b, i) =>
+      b.addEventListener('click', () => {
+        pick(i === 1);
+        b.blur();
+      }),
+    );
+    pick(false);
+    maps.append(...of);
+    this.root.append(this.head, this.counts, maps, row);
     this.root.hidden = true;
     document.body.append(this.root);
     window.addEventListener('keydown', (e) => {

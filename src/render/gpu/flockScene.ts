@@ -5,7 +5,7 @@ import { FLOCK_TICKS, RING_RADIUS, RINGS } from '../../game/flock';
 import type { Match } from '../../game/match';
 import type { BugView } from '../BugView';
 import type { BowContext } from './bowScene';
-import { BURST, CROWN, DANCE, DANCED, FlockCamera, HOME, PAST, READY, RISE } from './flockCamera';
+import { BURST, CROWN, DRAW, DRAWN, FlockCamera, HOME, PAST, READY, RISE } from './flockCamera';
 import type { StageFx } from './gpuStage';
 
 type F = THREE.Node<'float'>;
@@ -24,12 +24,11 @@ const GRAINS = 560;
 const SHARDS = 64;
 const DOTS = 90;
 const STREAKS = 36;
-/** Points of the track it dances, of what it leaves in the air. */
+/** Points of the ring of light, of what it leaves in the air. */
 const TRACK = 240;
 const WAKE = 64;
-/** The dance: how far its loops reach to the side, and ahead. */
-const WIDE = 3.1;
-const DEEP = 3;
+/** How far round it the ring of light runs. */
+const WIDE = 2.1;
 /** After the hit: the scene is over. */
 const AFTER = 5.25;
 
@@ -121,7 +120,7 @@ function hexOf(p: V2): F {
 }
 
 /**
- * The Queen's Flight's scene (render only): the bee dances a figure eight, its track rises and becomes a crown, a
+ * The Queen's Flight's scene (render only): a ring of light runs round the bee, rises and becomes a crown, a
  * swarm comes to it; the player flies it through rings of pollen into an enemy, and the swarm whirls round that one;
  * then the bee is home again. It reads the match and never changes it.
  */
@@ -215,7 +214,7 @@ export class FlockScene {
   private readonly m = new THREE.Matrix4();
   private readonly q = new THREE.Quaternion();
   private readonly s = new THREE.Vector3();
-  private readonly dance = { p: new THREE.Vector3(), yaw: 0, wag: 0 };
+  private readonly ringP = new THREE.Vector3();
   private readonly aimed = new Float64Array(3);
   private lateX: BowContext | null = null;
   private lateT = 0;
@@ -292,7 +291,7 @@ export class FlockScene {
       this.keep(this.halo);
     }
 
-    // ---- the track of the dance, and what the swarm leaves in the air
+    // ---- the ring of light, and what the swarm leaves in the air
     {
       const u = uv();
       const across = abs(u.y.sub(0.5)).mul(2);
@@ -626,7 +625,7 @@ export class FlockScene {
     // ---- how it holds itself
     this.poseOf(special, t, stance);
 
-    this.camera.update(x.camera, { t, shotT: this.shotT, hitT: this.hitT, stance, at: this.at, up: this.up, fwd: this.fwd, aim: this.aim, radius: r, head: this.head, dir: this.dir, boost: this.boost, dive: this.dive, room: this.room, hit: this.hit, ring: match.rings.length > 0 ? this.ringAt.set(match.rings[0].x, match.rings[0].y, match.rings[0].z) : null, facing: this.victim ? this.faces(this.victim) : NaN, dt, ground: x.ground });
+    this.camera.update(x.camera, { t, shotT: this.shotT, hitT: this.hitT, stance, at: this.at, up: this.up, fwd: this.fwd, aim: this.aim, radius: r, head: this.head, dir: this.dir, boost: this.boost, dive: this.dive, hit: this.hit, ring: match.rings.length > 0 ? this.ringAt.set(match.rings[0].x, match.rings[0].y, match.rings[0].z) : null, facing: this.victim ? this.faces(this.victim) : NaN, dt, ground: x.ground });
     x.camera.updateMatrixWorld();
     this.lateX = x;
     this.lateT = t;
@@ -641,7 +640,7 @@ export class FlockScene {
     const home = this.hitT > HOME;
     if (special || stance || home) {
       this.a.copy(this.at).addScaledVector(this.up, 3.1).addScaledVector(this.b.copy(x.camera.position).sub(this.at).normalize(), 2.2);
-      goal = special ? 5 + 6 * Math.exp(-(((t - CROWN) / 0.25) ** 2)) + 0.3 * ss(DANCE, DANCE + 0.3, t) : home ? 7 : stance ? 9 : 0;
+      goal = special ? 5 + 6 * Math.exp(-(((t - CROWN) / 0.25) ** 2)) + 0.3 * ss(DRAW, DRAW + 0.3, t) : home ? 7 : stance ? 9 : 0;
     } else if (this.hitT >= 0) {
       this.a.copy(this.hit).addScaledVector(this.up, 3).addScaledVector(this.b.copy(x.camera.position).sub(this.hit).normalize(), 2.5);
       goal = 24 + 50 * Math.exp(-this.hitT * 6);
@@ -676,7 +675,7 @@ export class FlockScene {
     if (this.shotT >= 0 && !match.flock && (this.hitT > AFTER || (this.hitT < 0 && this.shotT > 0.6))) this.end();
   }
 
-  /** Where it dances dims less than the rest. */
+  /** Where it stands dims less than the rest. */
   private placeSpot(camera: THREE.PerspectiveCamera, on: number): void {
     const s = this.fx.spot.value;
     s.z = 0.0001;
@@ -788,7 +787,7 @@ export class FlockScene {
     this.side.crossVectors(this.up, this.fwd);
   }
 
-  /** Where it dances, and how large: a flat place with room, no further than it must be. */
+  /** Where its scene is played, and how large the ring is: a flat place with room, no further than it must be. */
   private measure(x: BowContext): void {
     const home = this.s.copy(this.at);
     let best = -1e9;
@@ -846,7 +845,7 @@ export class FlockScene {
     }
   }
 
-  /** How large it can dance round a place (0.4..1): no wall, no step, no edge. */
+  /** How large the ring can be round a place (0.4..1): no wall, no step, no edge. */
   private roomAt(x: BowContext, at: THREE.Vector3): number {
     const u = this.up;
     let wall = WIDE + 1;
@@ -857,12 +856,12 @@ export class FlockScene {
       if (t >= 0) wall = t;
     }
     let room = Math.min(1, Math.max(0.62, (wall - 0.7) / WIDE));
-    const d = { p: this.dance.p, yaw: 0, wag: 0 };
+    const d = this.ringP;
     for (let n = 0; n < 6 && room > 0.62; n++) {
       let lost = 0;
       for (let k = 0; k < 14; k++) {
-        this.danceAt(k / 14, d);
-        this.a.copy(at).addScaledVector(this.side, d.p.x * room).addScaledVector(this.fwd, d.p.z * room);
+        this.ringPoint(k / 14, d);
+        this.a.copy(at).addScaledVector(this.side, d.x * room).addScaledVector(this.fwd, d.z * room);
         const h = x.ground.rest(this.a.x, this.a.y, this.a.z, -u.x, -u.y, -u.z, 2);
         if (h <= 0 || Math.abs(h - 1) > 0.3) lost++;
       }
@@ -872,33 +871,28 @@ export class FlockScene {
     return room;
   }
 
-  /** Where the dance is after a part of its way (0..1): in the plane it stands on (x: to its side, z: ahead). */
-  private danceAt(u: number, out: { p: THREE.Vector3; yaw: number; wag: number }): void {
-    // (an eight on its side: across its middle twice, each time straight on, with a waggle)
-    const a = Math.min(1, Math.max(0, u)) * Math.PI * 2;
-    const x = Math.sin(a);
-    out.p.set(x * WIDE, 0, Math.sin(a * 2) * 0.5 * DEEP * (0.75 + 0.25 * ss(0.3, 0.8, Math.abs(x))));
-    out.yaw = Math.atan2(Math.cos(a) * WIDE, Math.cos(a * 2) * DEEP);
-    out.wag = 1 - ss(0.3, 0.6, Math.abs(x));
+  /** A point of the ring of light after a part of its way (0..1): in the plane it stands on (x: to its side, z: ahead). */
+  private ringPoint(u: number, out: THREE.Vector3): void {
+    const a = u * Math.PI * 2.04;
+    out.set(Math.sin(a) * WIDE, 0, -Math.cos(a) * WIDE);
   }
 
   private poseOf(special: boolean, t: number, stance: boolean): void {
     const v = this.view;
     if (!v) return;
     const flying = this.shotT >= 0 && this.hitT < HOME;
-    const dancing = special && t > DANCE && t < DANCED;
     const proud = special ? ss(RISE + 0.1, CROWN, t) : stance ? 0.35 : this.hitT > HOME ? 0.5 * ss(HOME + 0.9, HOME + 1.2, this.hitT) : 0;
     this.rise += (proud - this.rise) * 0.25;
-    this.wing = flying || (this.hitT > HOME && this.hitT < HOME + 0.85) ? 1 : dancing ? 0.55 : special ? ss(0.05, 0.3, t) * 0.5 + 0.5 * ss(BURST - 0.15, BURST + 0.1, t) : stance ? 1 : 0;
+    this.wing = flying || (this.hitT > HOME && this.hitT < HOME + 0.85) ? 1 : special ? ss(0.05, 0.3, t) * 0.5 + 0.5 * ss(BURST - 0.15, BURST + 0.1, t) : stance ? 1 : 0;
     this.glad = special ? t > RISE + 0.3 && t < BURST + 0.15 : this.hitT > HOME + 1.0;
-    v.torso.rotation.x = -0.34 * this.rise;
+    // (it gathers itself as the light runs)
+    v.torso.rotation.x = -0.34 * this.rise + (special ? 0.16 * ss(DRAW, DRAWN, t) * (1 - ss(RISE, RISE + 0.3, t)) : 0);
     v.torso.position.y = v.restY + 0.16 * this.rise;
-    v.pace = dancing ? 9 : 0;
+    v.pace = 0;
     v.trail = this.shotT >= 0 && this.hitT < 0 ? 1 : 0;
     v.hover = stance || (special && t > BURST + 0.05 && t < READY - 0.15) || flying || (this.hitT > HOME && this.hitT < HOME + 0.8);
   }
 
-  private lean = 0;
   private readonly turnQ = new THREE.Quaternion();
 
   private placeBee(x: BowContext, t: number): void {
@@ -912,24 +906,6 @@ export class FlockScene {
       if (this.floating) root.position.copy(this.at);
       const h = this.floating ? 0 : x.ground.rest(root.position.x + this.up.x, root.position.y + this.up.y, root.position.z + this.up.z, -this.up.x, -this.up.y, -this.up.z, 3);
       if (h > 0) root.position.addScaledVector(this.up, 2 - h);
-    }
-    if (this.sceneTime >= 0 && t > DANCE - 0.12 && t < RISE) {
-      // (from where it stands to the start of the run, and back at the end)
-      const u = this.danceU(t);
-      const d = this.dance;
-      this.danceAt(u, d);
-      const on = t < DANCED + 0.1 ? 1 : 0;
-      // (then a hop back off it: there it is)
-      const off = ss(DANCED, DANCED + 0.22, t) * (1 - ss(RISE - 0.12, RISE + 0.06, t));
-      root.position.addScaledVector(this.fwd, -(DEEP * 0.5 + 1.1) * Math.max(0.75, this.room) * off).addScaledVector(this.up, 0.8 * Math.sin(Math.PI * ss(DANCED, DANCED + 0.24, t)));
-      const wag = d.wag * Math.sin(this.clock * 46);
-      root.position.addScaledVector(this.side, d.p.x * this.room * on + wag * 0.1).addScaledVector(this.fwd, d.p.z * this.room * on);
-      const yaw = d.yaw * on + wag * 0.3;
-      this.lean += ((d.wag > 0.5 ? 0 : -0.2 * Math.sign(d.p.x)) - this.lean) * (1 - Math.exp(-x.dt * 8));
-      this.turnQ.setFromAxisAngle(this.a.set(0, 1, 0), yaw);
-      root.quaternion.multiply(this.turnQ);
-      v.torso.rotation.z = -wag * 0.16 + this.lean * on;
-      return;
     }
     v.torso.rotation.z = 0;
     if (this.sceneTime >= 0 && t > RISE) {
@@ -1005,8 +981,8 @@ export class FlockScene {
     return Math.max(-2.5, Math.min(2.5, turn));
   }
 
-  private danceU(t: number): number {
-    const u = Math.min(1, Math.max(0, (t - DANCE) / (DANCED - DANCE)));
+  private ringU(t: number): number {
+    const u = Math.min(1, Math.max(0, (t - DRAW) / (DRAWN - DRAW)));
     return u * u * (3 - 2 * u) * 0.35 + u * 0.65;
   }
 
@@ -1031,22 +1007,18 @@ export class FlockScene {
   }
 
   private placeTrack(x: BowContext, t: number): void {
-    const on = this.sceneTime >= 0 && t > DANCE && t < CROWN + 0.18;
+    const on = this.sceneTime >= 0 && t > DRAW && t < CROWN + 0.18;
     this.track.mesh.visible = on;
     if (!on) {
       this.laidCount = 0;
       return;
     }
-    const u = this.danceU(t);
+    const u = this.ringU(t);
     const want = Math.min(TRACK, Math.floor(u * (TRACK - 1)) + 1);
-    const d = { p: this.c, yaw: 0, wag: 0 };
     while (this.laidCount < want) {
       const i = this.laidCount++;
-      this.danceAt(i / (TRACK - 1), d);
-      // (the waggle shows in the track)
-      // (straight across, in zigzag)
-      d.p.z += 0.16 * d.wag * Math.sin(i * 0.5);
-      this.onPlane(d.p, this.laid[i], x);
+      this.ringPoint(i / (TRACK - 1), this.c);
+      this.onPlane(this.c, this.laid[i], x);
     }
     const lift = ss(RISE - 0.05, CROWN, t);
     this.crownPlace(this.b);
@@ -1075,7 +1047,7 @@ export class FlockScene {
     this.trackOver.value = 0.9 * ss(0.7, 0.95, lift);
     this.track.count = this.laidCount;
     this.trackHead.value = lift > 0 ? 2 : u;
-    this.trackLevel.value = (1.1 - 0.35 * ss(DANCED - 0.1, DANCED + 0.1, t) + 0.8 * lift) * (1 - ss(CROWN, CROWN + 0.16, t));
+    this.trackLevel.value = (1.1 - 0.35 * ss(DRAWN - 0.1, DRAWN + 0.1, t) + 0.8 * lift) * (1 - ss(CROWN, CROWN + 0.16, t));
     this.track.draw(x.camera.position, () => 0.2 - 0.11 * lift);
     // (sparks off the track)
     if (t < RISE && x.dt > 0) for (let n = 0; n < 3; n++) this.grain(this.laid[Math.max(0, this.laidCount - 1)], 0.9, 0.8, false, 0.11);
@@ -1093,9 +1065,9 @@ export class FlockScene {
     this.floorY.value.copy(this.up);
     if (this.shotT >= PAST && !home) this.floorIn.value.y = -999;
     if (!on) return;
-    const beat = (Math.max(0, t) - DANCE) / ((RISE - DANCE) / 4);
+    const beat = (Math.max(0, t) - DRAW) / (RISE - DRAW);
     this.floorAt.value = t < RISE ? (beat % 1) * 6.5 : t < CROWN ? 6 * (1 - ss(RISE, CROWN, t)) : (t - CROWN) * 9;
-    this.floorLevel.value = this.shotT >= 0 && !home ? 1.8 * Math.exp(-this.shotT * 1.5) : home ? 0.9 * ss(HOME, HOME + 0.4, this.hitT) : (0.5 + 0.45 * ss(DANCE - 0.2, DANCE + 0.3, t)) * ss(0.02, 0.2, t) * (1 - 0.7 * ss(BURST + 0.6, BURST + 1.3, t));
+    this.floorLevel.value = this.shotT >= 0 && !home ? 1.8 * Math.exp(-this.shotT * 1.5) : home ? 0.9 * ss(HOME, HOME + 0.4, this.hitT) : (0.5 + 0.45 * ss(0, DRAW + 0.3, t)) * ss(0.02, 0.2, t) * (1 - 0.7 * ss(BURST + 0.6, BURST + 1.3, t));
     if (home) this.floorAt.value = ((this.hitT - HOME) * 5) % 8;
     else if (this.shotT >= 0) this.floorAt.value = this.shotT * 16;
     this.floor.position.copy(this.base);

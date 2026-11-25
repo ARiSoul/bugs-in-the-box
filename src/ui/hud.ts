@@ -76,7 +76,7 @@ export class Hud {
   private readonly banner = el('banner');
   private readonly root = el('hud');
   private readonly clock = make('clock', '<div class="digits"></div><small></small>');
-  private readonly wind = make('wind', '<span>wind</span><i></i><div class="force"><u></u><u></u><u></u><u></u><u></u></div>');
+  private readonly wind = make('wind', '<span>Wind</span><i><svg viewBox="-24 -24 48 48"><path d="M18 0L2 -14V-5.5H-17L-13 0L-17 5.5H2V14Z"/></svg></i><div class="force"><u></u><u></u><u></u><u></u><u></u></div>');
   private readonly call = make('call');
   /** What turned up, or was found, on the map. */
   private readonly news = make('news');
@@ -212,11 +212,12 @@ export class Hud {
     }, `${seconds}|${what}`);
 
     const strength = Math.min(1, Math.sqrt(match.windX * match.windX + match.windZ * match.windZ) / (WIND_MAX * Math.SQRT2));
-    (this.wind.children[1] as HTMLElement).style.transform = `rotate(${windAngle.toFixed(2)}rad)`;
+    ((this.wind.children[1] as HTMLElement).firstElementChild as SVGElement).style.transform = `rotate(${windAngle.toFixed(2)}rad)`;
     this.set('wind', () => {
       const n = strength < 0.02 ? 0 : Math.max(1, Math.round(strength * 5));
       [...this.wind.children[2].children].forEach((k, i) => k.classList.toggle('on', i < n));
       this.wind.classList.toggle('calm', n === 0);
+      this.wind.classList.toggle('strong', n >= 4);
     }, strength.toFixed(2));
 
     this.teams.forEach((t, i) => {
@@ -346,7 +347,7 @@ export class Hud {
     }, `${state}|${taken}`);
     this.set('flockTime', () => ((this.flock.querySelector('.fuel b') as HTMLElement).style.transform = `scaleX(${left.toFixed(3)})`), left.toFixed(3));
     this.set('flockKeys', () => {
-      (this.flock.querySelector('p') as HTMLElement).innerHTML = computer ? '' : aiming ? '<kbd>A</kbd><kbd>D</kbd> turn to the rings <kbd class="go">Q</kbd> fly' : '<kbd>A</kbd><kbd>D</kbd> turn <kbd>W</kbd><kbd>S</kbd> up, down <kbd><svg viewBox="0 0 24 34"><rect x="2" y="2" width="20" height="30" rx="10"/><path d="M12 8v6"/></svg></kbd> drag';
+      (this.flock.querySelector('p') as HTMLElement).innerHTML = computer ? '' : aiming ? '<kbd>mouse</kbd> aim <kbd class="go">click</kbd> or <kbd>Q</kbd> fly' : '<kbd>mouse</kbd> steer, or <kbd>A</kbd><kbd>D</kbd><kbd>W</kbd><kbd>S</kbd>';
     }, `${computer}|${aiming}`);
   }
 

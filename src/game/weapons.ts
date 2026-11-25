@@ -207,7 +207,7 @@ export const BLACKOUT_SWARM: Weapon = {
 };
 
 /**
- * Bees only, their special attack: it dances a figure eight, and a crown of its light. The player flies the swarm for a
+ * Bees only, their special attack: a ring of light runs round it and becomes a crown. The player flies the swarm for a
  * few seconds; every ring of pollen on the way makes it hurt more (RING_DAMAGE).
  */
 export const QUEENS_FLIGHT: Weapon = {
@@ -218,7 +218,7 @@ export const QUEENS_FLIGHT: Weapon = {
   species: 'bee',
   blastRadius: 2.4,
   damage: 46,
-  sceneTicks: 324,
+  sceneTicks: 204,
   color: 0xffc83a,
 };
 /** What each ring adds. */

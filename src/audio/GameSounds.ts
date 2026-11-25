@@ -44,10 +44,9 @@ const BROOD_SCENE: readonly Cue[] = [
 ];
 const FLOCK_SCENE: readonly Cue[] = [
   [0.1, 'wings', 0.5, 1.5],
-  [0.5, 'waggle'],
-  [2.95, 'queenRise'],
-  [3.68, 'crown'],
-  [4.03, 'beesOut'],
+  [0.4, 'queenRise'],
+  [1.68, 'crown'],
+  [2.03, 'beesOut'],
 ];
 /** ...and from when its hit is seen. */
 const COLUMN_END: readonly Cue[] = [[3.52, 'finale']];

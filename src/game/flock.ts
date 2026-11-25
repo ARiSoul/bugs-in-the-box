@@ -48,10 +48,13 @@ const ROOM = 1.5;
 const TRIES = 3;
 /** How far apart two rings are, at least. */
 const APART = 6.5;
-/** In these ticks after it set out it does not burst on what it starts from. */
-const CLEAR = 18;
+/** In these ticks after it set out it bursts on no wall: it slips along. */
+const CLEAR = 75;
+/** It sets out slower: its first speed (a part of SPEED), and the ticks until it has all of it. */
+const SLOW = 0.55;
+const SPEED_UP = 80;
 /** It bursts on what it meets more head on than this (the cosine); along the rest it slips. */
-const BLUNT = 0.6;
+const BLUNT = 0.75;
 /** How far the computer thinks ahead of it (ticks), and how long it would keep a key. */
 const FORESIGHT = 60;
 const HELD = [12, 44] as const;
@@ -150,7 +153,7 @@ export class Flock {
       this.h = rot[0] / k;
       this.v = rot[1] / k;
     }
-    const step = (SPEED + RING_SPEED * this.taken) * DT;
+    const step = (SPEED + RING_SPEED * this.taken) * DT * (this.age < SPEED_UP ? SLOW + ((1 - SLOW) * this.age) / SPEED_UP : 1);
     this.x += this.dx * step;
     this.y += this.v * step;
     this.z += this.dz * step;

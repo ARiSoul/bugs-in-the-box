@@ -59,6 +59,28 @@ describe("Queen's Flight", () => {
     expect(b.skill[0]).toBe(0);
   });
 
+  it('a team starts its turn with the weapon it last picked itself, whatever the other one or a special attack did', () => {
+    const m = setup(plain());
+    const pass = (): void => {
+      const n = m.turnNumber;
+      for (let k = 0; k < 4000 && m.turnNumber === n; k++) m.step(NO_INPUT);
+    };
+    run(m, 2, { weapon: 1 });
+    pass();
+    expect([m.activeUnit.team, m.weapon]).toEqual([1, 0]);
+    run(m, 2, { weapon: 2 });
+    pass();
+    expect([m.activeUnit.team, m.weapon]).toEqual([0, 1]);
+    // (a special attack called off)
+    run(m, QUEENS_FLIGHT.sceneTicks + 1, { weapon: INDEX });
+    run(m, 2, { weapon: 1 });
+    run(m, QUEENS_FLIGHT.sceneTicks + 1, { weapon: INDEX });
+    pass();
+    expect([m.activeUnit.team, m.weapon]).toEqual([1, 2]);
+    pass();
+    expect([m.activeUnit.team, m.weapon]).toEqual([0, 1]);
+  });
+
   it('the player flies it: to the right, up and down', () => {
     const m = setup(plain());
     call(m, 1, 0);
