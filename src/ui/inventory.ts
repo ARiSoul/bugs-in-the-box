@@ -1,4 +1,5 @@
-import { ACTIONS, BAG_SPACES, firstSlots, QUICK_SLOTS, type Action, type Category } from '../game/actions';
+import { ACTIONS, firstSlots, QUICK_SLOTS, type Action, type Category } from '../game/actions';
+import { levelAt, levelOf } from '../game/progress';
 import { SKILL_FULL, type Match, type Unit } from '../game/match';
 import { WEAPONS, WORKS } from '../game/weapons';
 import { ITEM_LOOKS } from '../render/gpu/itemLooks';
@@ -46,6 +47,10 @@ export class Inventory {
   private readonly ghost = div('drag');
   private saved: Record<string, string[]> = {};
   private slots: string[] = [];
+  /** How many there are now. */
+  private count = QUICK_SLOTS;
+  /** The player's experience with a species (null: no levels in this match). */
+  experience: (team: number) => number | null = () => null;
   private species = '';
   private tab: Category = 'defence';
   private chosen = '';
@@ -104,7 +109,7 @@ export class Inventory {
   /** Number key `n` (from 0), if it is a slot's. */
   key(n: number): boolean {
     const i = n - this.firstKey;
-    if (i < 0 || i >= QUICK_SLOTS) return false;
+    if (i < 0 || i >= this.count) return false;
     this.pick(i);
     return true;
   }
@@ -165,7 +170,8 @@ export class Inventory {
       if (was >= 0) this.slots[was] = this.slots[i];
       this.slots[i] = p.id;
     } else if (p.from >= 0) this.slots[p.from] = '';
-    this.saved[this.species] = [...this.slots];
+    // (slots a higher level opened keep what they had, in a match without levels)
+    this.saved[this.species] = [...this.slots, ...(this.saved[this.species] ?? []).slice(this.slots.length)];
     try {
       localStorage.setItem(STORE, JSON.stringify(this.saved));
     } catch {
@@ -196,10 +202,14 @@ export class Inventory {
     this.dock.classList.toggle('away', away);
     if (away && this.open) this.toggle(false);
     const id = u.bug.species.id;
-    if (id !== this.species) {
+    const level = match.teams[u.team].growth?.level ?? 1;
+    const count = levelAt(level).slots;
+    if (id !== this.species || count !== this.count) {
       this.species = id;
+      this.count = count;
       const was = this.saved[id];
-      this.slots = Array.isArray(was) ? firstSlots(id).map((_, i) => (typeof was[i] === 'string' ? was[i] : '')) : firstSlots(id);
+      const first = firstSlots(id);
+      this.slots = Array.from({ length: count }, (_, i) => (Array.isArray(was) ? (typeof was[i] === 'string' ? was[i] : '') : (first[i] ?? '')));
       this.chosen = '';
     }
     const load = Math.floor((match.skill[u.team] / SKILL_FULL) * 50) / 50;
@@ -207,7 +217,7 @@ export class Inventory {
     if (key === this.last) return;
     this.last = key;
     this.quick.innerHTML = this.slots.map((s, i) => this.slot(s, i, load)).join('');
-    this.bag.innerHTML = `<em>I</em>${BAG}<u>${this.kept()}/${BAG_SPACES}</u>`;
+    this.bag.innerHTML = `<em>I</em>${BAG}<u>${this.kept()}/${match.spaces(u.team)}</u>`;
     if (this.open) this.drawPanel();
   }
 
@@ -227,21 +237,27 @@ export class Inventory {
     return ACTIONS.filter((a) => a.category === 'item' && (this.left(a) ?? 0) > 0).length;
   }
 
+  private levelLine(team: number): string {
+    const xp = this.experience(team);
+    const l = levelOf(xp ?? 0);
+    return xp === null ? '' : ` <small>level ${l.level}</small><i class="xpbar"><u style="width:${l.next ? (l.into / l.next) * 100 : 100}%"></u></i>`;
+  }
+
   private drawPanel(): void {
     const m = this.match as Match;
     const u = this.unit as Unit;
     const tabOf = (c: Category): Action[] => ACTIONS.filter((a) => a.category === c && this.has(a));
     const list = tabOf(this.tab);
     const about = list.find((a) => a.id === this.chosen);
-    const note = { special: 'only this creature has them', skill: 'they load, then play their scene', defence: `${m.works[u.team]} of ${WORKS} uses left in this match`, item: `${this.kept()} of ${BAG_SPACES} spaces · one a turn`, common: '' }[this.tab];
+    const note = { special: 'only this creature has them', skill: 'they load, then play their scene', defence: `${m.works[u.team]} of ${WORKS} uses left in this match`, item: `${this.kept()} of ${m.spaces(u.team)} spaces · one a turn`, common: '' }[this.tab];
     const cells = list.map((a) => {
       const k = this.slots.indexOf(a.id);
       const n = this.left(a);
       return `<button class="cell ${a.id === this.chosen ? 'on' : ''}" data-id="${a.id}" style="--g:${colorOf(a)}">${picture(a)}${k >= 0 ? `<b>${(this.firstKey + k + 1) % 10}</b>` : ''}${n !== null ? `<u>×${n}</u>` : ''}<span>${a.name}</span></button>`;
     });
-    const spaces = this.tab === 'item' ? Math.max(0, BAG_SPACES - list.length) : 0;
+    const spaces = this.tab === 'item' ? Math.max(0, m.spaces(u.team) - list.length) : 0;
     this.panel.innerHTML =
-      `<div class="inv-head"><svg viewBox="0 0 100 60">${BUGS[u.bug.species.id]}</svg><b>${u.bug.species.id}</b><small>${note}</small></div>` +
+      `<div class="inv-head"><svg viewBox="0 0 100 60">${BUGS[u.bug.species.id]}</svg><b>${u.bug.species.id}${this.levelLine(u.team)}</b><small>${note}</small></div>` +
       `<div class="inv-tabs">${TABS.map(([c, n, k, d]) => `<button data-tab="${c}" class="${c === this.tab ? 'on' : ''}" style="--t:${k}"><svg viewBox="0 0 48 48"><path fill="currentColor" d="${d}"/></svg>${n}<sup>${tabOf(c).length}</sup></button>`).join('')}</div>` +
       `<div class="inv-grid">${cells.join('')}${'<div class="cell none"></div>'.repeat(spaces)}${cells.length + spaces === 0 ? `<p>${this.tab === 'special' ? 'nothing yet' : 'empty'}</p>` : ''}</div>` +
       (about

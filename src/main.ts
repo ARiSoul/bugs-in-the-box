@@ -22,6 +22,9 @@ import { BroodScene } from './render/gpu/broodScene';
 import { FlockScene } from './render/gpu/flockScene';
 import { ColumnScene } from './render/gpu/columnScene';
 import { itemIndex } from './game/actions';
+import { computerGrowth, LEVELS, NO_GROWTH, VERSUS, worth, type Growth } from './game/progress';
+import { Profile } from './ui/profile';
+import { SpeciesPage } from './ui/species';
 import { Inventory } from './ui/inventory';
 import { Placing } from './input/placing';
 import { BuildViews } from './render/gpu/buildViews';
@@ -57,9 +60,21 @@ let brains: (Brain | null)[] = [null, null];
 const brain = (): Brain | null => brains[match.activeUnit.team];
 /** The rules: bugs per team, seconds per turn, how strong the wind is (`?size=3&turn=30&wind=1`). */
 const rules = { size: 3, seconds: 30, wind: 1 };
+/** No levels in this match (`?equal=1`). */
+let equal = false;
+const profile = new Profile();
+/** A side's level: the player's own with its species; the computer's is as high as its rival's. */
+function levelFor(side: number, species: readonly BugSpecies[], who: readonly string[]): number {
+  if (who[side] === 'human') return profile.level(species[side].id).level;
+  return who[1 - side] === 'human' ? profile.level(species[1 - side].id).level : 1;
+}
+function growthFor(side: number): Growth {
+  if (equal) return NO_GROWTH;
+  return players[side] === 'human' ? profile.growth(picked[side].id) : computerGrowth(picked[side].id, levelFor(side, picked, players));
+}
 const teams = (): TeamSpec[] => [
-  { name: `Red ${PLURAL[picked[0].id]}`, species: picked[0], color: 0xff6b5e, size: rules.size },
-  { name: `Blue ${PLURAL[picked[1].id]}`, species: picked[1], color: 0x5fb0ff, size: rules.size },
+  { growth: growthFor(0), name: `Red ${PLURAL[picked[0].id]}`, species: picked[0], color: 0xff6b5e, size: rules.size },
+  { growth: growthFor(1), name: `Blue ${PLURAL[picked[1].id]}`, species: picked[1], color: 0x5fb0ff, size: rules.size },
 ];
 
 const canvas = document.getElementById('c') as HTMLCanvasElement;
@@ -76,6 +91,7 @@ const ruleOf = (name: string, least: number, most: number, otherwise: number): n
   const v = params.get(name);
   return v === null || !Number.isFinite(Number(v)) ? otherwise : Math.min(most, Math.max(least, Number(v)));
 };
+equal = params.get('equal') === '1';
 rules.size = Math.round(ruleOf('size', 1, 5, 3));
 rules.seconds = ruleOf('turn', 10, 120, 30);
 rules.wind = ruleOf('wind', 0, 2, 1);
@@ -210,7 +226,8 @@ function newTeams(s: number, turns = 0): void {
   bugViews = match.units.map((u) => {
     const view = new BugView(u.bug.species);
     const face = dress(view, u.team);
-    const label = new UnitLabel(u.name, match.teams[u.team].color);
+    // (the last level's name is of gold)
+    const label = new UnitLabel(u.name, (match.teams[u.team].growth?.level ?? 1) >= LEVELS ? 0xffd45a : match.teams[u.team].color);
     stage.scene.add(view.root);
     stage.hud.add(label.sprite);
     return { view, face, wing: 0, blink: 1 + Math.random() * 4, label, height: u.bug.species.radius * 2.4 };
@@ -290,6 +307,9 @@ function handleEvents(events: readonly MatchEvent[]): void {
         flashes.spawn(at.set(e.x, e.y, e.z), 0.9);
         break;
       }
+      case 'heal':
+        texts.spawn(`+${e.amount}`, 0xff7fa5, at.set(match.units[e.unit].bug.x, match.units[e.unit].bug.y + 3, match.units[e.unit].bug.z));
+        break;
       case 'use': {
         const look = ITEM_LOOKS[e.kind];
         const b = match.units[e.unit].bug;
@@ -430,6 +450,7 @@ const inventory = new Inventory(
   HAND,
 );
 hud.addInventory(inventory);
+inventory.experience = (team) => (equal || players[team] !== 'human' ? null : profile.of(picked[team].id).xp);
 controls.bindButtons(hud.pad);
 setupKeysMenu(controls);
 if (hooks.fly) {
@@ -525,8 +546,10 @@ let bestHit = 0;
 const menuAt = new THREE.Vector3();
 const heroes = new Heroes(stage.menu);
 const flashEl = document.getElementById('flash') as HTMLElement;
-const choice: SetupChoice = { scenario: scenario.id, species: [picked[0], picked[1]], players: [players[0], players[1]], size: rules.size, seconds: rules.seconds, wind: rules.wind, seed };
+const choice: SetupChoice = { scenario: scenario.id, species: [picked[0], picked[1]], players: [players[0], players[1]], size: rules.size, seconds: rules.seconds, wind: rules.wind, seed, equal };
 const setup = new SetupScreen(choice, {
+  level: (i) => levelFor(i, choice.species, choice.players),
+  onSpeciesPage: (i) => speciesPage.open(choice.species[i].id),
   onMap: () => {
     menus.mapIn = 0.42;
     setup.call();
@@ -548,7 +571,8 @@ const setup = new SetupScreen(choice, {
   random: randomSeed,
   onMute: () => soundMenu.toggle(),
 });
-setup.root.append(soundMenu.panel());
+const speciesPage = new SpeciesPage(profile, (strong) => sound.play(strong ? 'select' : 'tick'), () => setup.refresh());
+setup.root.append(soundMenu.panel(), speciesPage.root);
 const ending = new EndScreen(
   () => {
     closeEnding();
@@ -593,7 +617,7 @@ function openSetup(): void {
     menus.meshed = workers === null;
     newMatch(seed);
   }
-  Object.assign(choice, { scenario: scenario.id, species: [picked[0], picked[1]], players: [players[0], players[1]], size: rules.size, seconds: rules.seconds, wind: rules.wind, seed });
+  Object.assign(choice, { scenario: scenario.id, species: [picked[0], picked[1]], players: [players[0], players[1]], size: rules.size, seconds: rules.seconds, wind: rules.wind, seed, equal });
   menus.setup = true;
   menus.starting = -1;
   menus.mapIn = -1;
@@ -622,11 +646,14 @@ function startMatch(): void {
   rules.size = choice.size;
   rules.seconds = choice.seconds;
   rules.wind = choice.wind;
+  equal = choice.equal;
   params.set('teams', picked.map((q) => q.id).join());
   params.set('players', players.join());
   params.set('size', String(rules.size));
   params.set('turn', String(rules.seconds));
   params.set('wind', String(rules.wind));
+  if (equal) params.set('equal', '1');
+  else params.delete('equal');
   params.set('scenario', scenario.id);
   hud.seed.value = String(seed);
   keepSeed();
@@ -688,8 +715,18 @@ function showEnding(): void {
   const w = match.winner;
   const left = w >= 0 ? match.teamAlive(w) : 0;
   const numbers: [number, string][] = [[left, left === 1 ? 'survivor' : 'survivors'], [match.turnNumber, match.turnNumber === 1 ? 'turn' : 'turns'], [bestHit, 'best hit']];
-  if (w >= 0) ending.show(`${match.teams[w].name.replace('Cockroaches', 'Roaches')} win`, w ? '#8ccaff' : '#ff7a68', numbers);
-  else ending.show('Nobody left', '#ffb547', numbers);
+  // ---- what it was worth
+  const gains = [0, 1]
+    .filter((i) => players[i] === 'human')
+    .map((side) => {
+      const versus = players[1 - side];
+      const got = worth(match.tally[side], w === side, versus);
+      const { before, after } = profile.gain(picked[side].id, got.xp, equal ? null : match.bag[side]);
+      const k = VERSUS[versus] ?? 1;
+      return { side, species: picked[side].id, xp: got.xp, lines: got.lines, note: k < 1 ? `against the computer: ×${k}` : '', before, after };
+    });
+  if (w >= 0) ending.show(`${match.teams[w].name.replace('Cockroaches', 'Roaches')} win`, w ? '#8ccaff' : '#ff7a68', numbers, gains);
+  else ending.show('Nobody left', '#ffb547', numbers, gains);
 }
 heroes.onLand = () => sound.play('land');
 heroes.onShow = () => sound.play('tick');
@@ -1242,6 +1279,7 @@ function frame(now: number): void {
     heldDamage.length = 0;
   }
   placeSight();
+  itemViews.reveal = !brain() && match.phase === 'aim' && match.passive(match.activeUnit.team, 'scent') > 0;
   itemViews.update(match, scaled, now / 1000);
   buildViews.update(match, bugViews.map((v) => v.view), !brain() && !debugCamera && !inMenu && !menus.over ? placing : null, scaled, now / 1000);
   webViews.update(match, ground, (i, out) => out.copy(bugViews[i].view.root.position), now);

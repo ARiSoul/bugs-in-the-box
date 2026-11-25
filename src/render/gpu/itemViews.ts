@@ -1,6 +1,7 @@
+import { ITEM_LOOKS } from './itemLooks';
 import * as THREE from 'three/webgpu';
 import { float, mix, positionLocal, smoothstep, uniform, vec3 } from 'three/tsl';
-import { BOX, WAY_STEP, type Item } from '../../game/items';
+import { BOX, WAY_STEP, type Item, type ItemKind } from '../../game/items';
 import type { Match, MatchEvent } from '../../game/match';
 
 const UP = new THREE.Vector3(0, 1, 0);
@@ -97,7 +98,57 @@ export class ItemViews {
     };
   }
 
+  /** Show what is in the boxes. */
+  reveal = false;
+  private readonly signs = new Map<number, THREE.Sprite>();
+  private readonly signMats = new Map<string, THREE.SpriteNodeMaterial>();
+
+  private sign(kind: ItemKind): THREE.SpriteNodeMaterial {
+    let m = this.signMats.get(kind);
+    if (!m) {
+      const c = document.createElement('canvas');
+      c.width = c.height = 96;
+      const g = c.getContext('2d') as CanvasRenderingContext2D;
+      g.fillStyle = 'rgba(15, 12, 11, 0.85)';
+      g.beginPath();
+      g.arc(48, 48, 46, 0, Math.PI * 2);
+      g.fill();
+      g.translate(20, 20);
+      g.scale(1.17, 1.17);
+      g.fillStyle = ITEM_LOOKS[kind].color;
+      g.fill(new Path2D(ITEM_LOOKS[kind].path), 'evenodd');
+      const map = new THREE.CanvasTexture(c);
+      map.colorSpace = THREE.SRGBColorSpace;
+      m = new THREE.SpriteNodeMaterial({ map, transparent: true, depthTest: false, fog: false });
+      this.signMats.set(kind, m);
+    }
+    return m;
+  }
+
+  private showSigns(match: Match): void {
+    for (const [id, s] of this.signs)
+      if (!this.reveal || !match.items.list.some((q) => q.id === id)) {
+        s.removeFromParent();
+        this.signs.delete(id);
+      }
+    if (!this.reveal) return;
+    for (const it of match.items.list) {
+      let s = this.signs.get(it.id);
+      if (!s) {
+        s = new THREE.Sprite(this.sign(it.kind));
+        s.scale.setScalar(1.3);
+        s.renderOrder = 8;
+        this.signs.set(it.id, s);
+        this.scene.add(s);
+      }
+      s.visible = it.due === 0;
+      s.position.set(it.x, it.y + 2, it.z);
+    }
+  }
+
   clear(): void {
+    for (const s of this.signs.values()) s.removeFromParent();
+    this.signs.clear();
     for (const v of this.views.values()) this.drop(v);
     this.views.clear();
     for (const m of this.pasteViews.values()) m.removeFromParent();
@@ -121,6 +172,7 @@ export class ItemViews {
   }
 
   update(match: Match, dt: number, seconds: number): void {
+    this.showSigns(match);
     this.time.value = seconds;
     for (const it of match.items.list) if (!this.views.has(it.id)) this.views.set(it.id, this.make(it));
     for (const [id, v] of this.views) {

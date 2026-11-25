@@ -7,7 +7,8 @@ import { dropNear } from './spawn';
 import { MARCHER, type BugSpecies } from './species';
 import { before, bridgePieces, laid, PIECE, SPAN, SPANS, toPiece, wallPieces, type Site } from './build';
 import { Flock, layRings, type FlockInput, type Ring } from './flock';
-import { BAG_SPACES, KEPT } from './actions';
+import { KEPT } from './actions';
+import { levelAt, passive, type Growth, type Tally } from './progress';
 import { BOX, ITEM_KINDS, Items, type Item, type ItemKind } from './items';
 import { CATCHES, DUD, hasWeapon, SILK_CURTAIN, WORKS, RING_DAMAGE, WEAPONS, type Weapon } from './weapons';
 
@@ -84,6 +85,8 @@ export interface Web {
   readonly radius: number;
   /** Smeared by this team, not spun: it holds every other team's bugs, spiders too (-1: a web). */
   readonly paste: number;
+  /** Whose it is. */
+  readonly team: number;
   /** Burst open by a special attack (render only). */
   readonly grand: boolean;
   /** Turns left, and pulling (ticks) it still stands. */
@@ -131,6 +134,8 @@ function turnPieces(p: number[], tt: TurntableSpec): void {
 }
 
 export interface TeamSpec {
+  /** Its level, passives and kept items (none: a first level). */
+  readonly growth?: Growth;
   readonly name: string;
   readonly species: BugSpecies;
   /** Render only. */
@@ -224,6 +229,7 @@ export type MatchEvent =
   | { type: 'sting'; x: number; y: number; z: number; unit: number; rings: number }
   | { type: 'box'; id: number }
   | { type: 'open'; unit: number; kind: ItemKind; x: number; y: number; z: number; id: number; gain: number; kept: boolean }
+  | { type: 'heal'; unit: number; amount: number }
   | { type: 'use'; unit: number; kind: ItemKind; gain: number }
   | { type: 'boxGone'; id: number; x: number; y: number; z: number }
   | { type: 'fuse'; unit: number }
@@ -317,6 +323,10 @@ const HIDE_TICKS = 70;
 const SKILL_HIDE = 120;
 /** A curtain catches a shot this near to it. */
 const CURTAIN_NEAR = 0.45;
+/** A caught shot counts as this much kept off. */
+const CAUGHT_WORTH = 20;
+/** A warm nest reaches this far. */
+const BESIDE = 6;
 const near = new Float64Array(3);
 const site: Site = { x: 0, y: 0, z: 0, nx: 0, ny: 1, nz: 0, fx: 1, fy: 0, fz: 0 };
 /** A bug walks at most this long to where it hides (ticks), and is there this near to it. */
@@ -399,6 +409,15 @@ export class Match {
   /** The items each team keeps, and whether one was used this turn. */
   readonly bag: Partial<Record<ItemKind, number>>[];
   usedItem = false;
+  /** What each team did (for its experience). */
+  readonly tally: Tally[];
+  /** What of each team's holds enemies that touch it, and how much they slow down. */
+  private readonly sticky: { readonly team: number; readonly pieces: number[]; readonly slow: number }[] = [];
+  /** Builds in one turn that a team may still do once more; whose shell grew back; whether the active bee stung. */
+  private readonly again: number[];
+  private readonly regrown = new Set<number>();
+  private stung = false;
+  private builtOnce = false;
   /** The active bug is on its way to hide: where, in what, and how long it may still take. */
   going: { x: number; y: number; z: number; w: Weapon; left: number } | null = null;
   /** Curtains of silk that still catch shots of other teams: how many. */
@@ -489,7 +508,9 @@ export class Match {
     this.items = new Items(field, this.luck, options.spawnLevels === true, options.confine ?? null);
     this.stock = teams.map((t) => WEAPONS.map((w) => (w.species === undefined || w.species === t.species.id ? (w.start ?? 0) : 0)));
     this.works = teams.map(() => WORKS);
-    this.bag = teams.map(() => ({}));
+    this.bag = teams.map((t) => ({ ...t.growth?.items }));
+    this.tally = teams.map(() => ({ damage: 0, kills: 0, blocked: 0, boxes: 0 }));
+    this.again = teams.map((t) => (t.growth?.passives.includes('many-hands') ? 1 : 0));
     this.skill = teams.map(() => 0);
     if (options.placeBugs !== false) this.placeBugs();
     this.beginTurn(0);
@@ -574,11 +595,12 @@ export class Match {
       // (what rides the turntable is moved by it, not by its own physics)
       if (this.phase === 'spin' && this.isCarried(u)) continue;
       b.step(this.field, u === unit ? move : IDLE);
-      if (b.justLanded && b.lastImpact > FALL_SAFE_SPEED) this.damage(u, Math.round((b.lastImpact - FALL_SAFE_SPEED) * FALL_DAMAGE));
+      if (b.justLanded && b.lastImpact > FALL_SAFE_SPEED && !this.passive(u.team, 'light-feet')) this.damage(u, Math.round((b.lastImpact - FALL_SAFE_SPEED) * FALL_DAMAGE));
       if (!b.alive && !u.dead) this.announceDeath(u);
       // (its hold is gone: so is its shelter)
       else if (u.cover && !b.grounded && b.airTicks > 6) this.bare(u, true);
     }
+    this.sting(unit);
     if (this.phase !== 'spin') this.keepApart();
     if (this.phase !== 'spin') this.boxes();
     // (whose turn it is now: it may just have passed on from one that died)
@@ -769,8 +791,47 @@ export class Match {
     return this.has(u, index) && (WEAPONS[index].sceneTicks === 0 || this.skill[u.team] >= SKILL_FULL);
   }
 
+  /** A team's passive: its number (1 where it has none), or 0: it is not in use. */
+  passive(team: number, id: string): number {
+    if (!this.teams[team].growth?.passives.includes(id)) return 0;
+    return passive(id)?.value || 1;
+  }
+
+  /** Spaces for items. */
+  spaces(team: number): number {
+    return this.options.bag ?? levelAt(this.teams[team].growth?.level ?? 1).spaces + this.passive(team, 'carrier');
+  }
+
+  /** How far a brood of the active team covers. */
+  get coverRadius(): number {
+    return this.currentWeapon.coverRadius + this.passive(this.units[this.active].team, 'wider-swarm');
+  }
+
+  private heal(u: Unit, n: number): void {
+    const b = u.bug;
+    const gain = Math.min(n, b.species.health - b.health);
+    if (!b.alive || b.health <= 0 || gain <= 0) return;
+    b.health += gain;
+    this.events.push({ type: 'heal', unit: u.id, amount: gain });
+  }
+
+  /** A bug stands on (or touches) something of another team's that holds: how much it slows, 1 if it does not. */
+  private stuckTo(u: Unit): number {
+    const b = u.bug;
+    if (!b.grounded || !b.alive) return 1;
+    for (const s of this.sticky) {
+      if (s.team === u.team) continue;
+      for (let i = 0; i < s.pieces.length; i += PIECE) {
+        if (toPiece(s.pieces, i, b.x, b.y, b.z, near) > b.species.radius + 0.45) continue;
+        if (this.field.sample(near[0], near[1], near[2]) < 0) return s.slow;
+      }
+    }
+    return 1;
+  }
+
   /** Load a team's special attack. */
   private load(team: number, by: number): void {
+    by *= this.passive(team, 'patience') || 1;
     const was = this.skill[team];
     if (was >= SKILL_FULL) return;
     this.skill[team] = was + by < SKILL_FULL ? was + by : SKILL_FULL;
@@ -783,12 +844,14 @@ export class Match {
       const w = u.bug.alive ? this.webAt(u) : null;
       if (w && u.web !== w.id) this.events.push({ type: 'stuck', unit: u.id });
       u.web = w ? w.id : -1;
-      u.bug.slow = w ? WEB_SLOW : 1;
+      const free = this.passive(u.team, 'scurry') && u === active ? this.passive(u.team, 'scurry') : 1;
+      u.bug.slow = w ? WEB_SLOW : free * this.stuckTo(u);
       if (!w || u !== active || (move.move === 0 && !move.jump)) continue;
       if (--w.strength > 0) continue;
       this.removeWeb(w, true);
       u.web = -1;
       u.bug.slow = 1;
+      if (w.team >= 0 && w.team !== u.team && w.paste < 0) this.damage(u, this.passive(w.team, 'barbs'));
     }
   }
 
@@ -860,7 +923,8 @@ export class Match {
     const on = this.toSurface(x, y, z);
     if (!on) return;
     const id = this.nextWebId++;
-    this.webs.push({ id, ...on, radius: w.webRadius, turns: w.webTurns, strength: WEB_TEAR_TICKS, grand, paste });
+    const team = this.units[this.active].team;
+    this.webs.push({ id, ...on, radius: w.webRadius, turns: w.webTurns + (paste < 0 ? this.passive(team, 'strong-silk') : 0), strength: WEB_TEAR_TICKS, grand, paste, team });
     this.events.push({ type: 'web', id });
   }
 
@@ -895,6 +959,7 @@ export class Match {
     const w = this.currentWeapon;
     c.ticks++;
     if (c.ticks === BROOD_COVER) {
+      const radius = w.coverRadius + this.passive(owner.team, 'wider-swarm');
       for (const u of this.units) {
         const b = u.bug;
         if (!b.alive || u.team === owner.team) continue;
@@ -903,9 +968,9 @@ export class Match {
         const dz = b.z - c.at.z;
         let d = Math.sqrt(dx * dx + dy * dy + dz * dz) - b.species.radius;
         if (d < 0) d = 0;
-        if (d > w.coverRadius) continue;
+        if (d > radius) continue;
         c.units.push(u.id);
-        c.harm.push(Math.round(w.damage * this.hard * (1 - ((1 - BROOD_EDGE) * d) / w.coverRadius)));
+        c.harm.push(Math.round(w.damage * this.hard * (1 - ((1 - BROOD_EDGE) * d) / radius)));
       }
       this.events.push({ type: 'cover', x: c.at.x, y: c.at.y, z: c.at.z, units: c.units });
     }
@@ -1093,10 +1158,15 @@ export class Match {
 
   private lay(u: Unit, w: Weapon, pieces: readonly number[]): void {
     this.field.deposit?.(pieces);
-    this.built = true;
+    // (many hands: once a match, two in one turn)
+    if (this.again[u.team] > 0 && this.builtOnce) this.again[u.team]--;
+    this.built = this.again[u.team] <= 0 || this.builtOnce;
+    this.builtOnce = true;
     this.stock[u.team][WEAPONS.indexOf(w)]--;
     this.works[u.team]--;
-    if (w === SILK_CURTAIN) this.curtains.push({ team: u.team, pieces: [...pieces], left: CATCHES });
+    if (w === SILK_CURTAIN) this.curtains.push({ team: u.team, pieces: [...pieces], left: CATCHES + this.passive(u.team, 'double-weave') });
+    const slow = w.species === 'spider' && w.kind === 'bridge' ? this.passive(u.team, 'trapline') : w.species === 'bee' ? this.passive(u.team, 'honey-trap') : 0;
+    if (slow > 0) this.sticky.push({ team: u.team, pieces: [...pieces], slow });
     this.events.push({ type: 'built', unit: u.id, weapon: w.id, pieces });
     this.weapon = this.keptBy(u);
     // (webs under it are gone)
@@ -1113,7 +1183,7 @@ export class Match {
       return;
     }
     u.cover = w;
-    u.coverLeft = w.coverHealth ?? 0;
+    u.coverLeft = (w.coverHealth ?? 0) + (w.species === 'cockroach' ? this.passive(u.team, 'thick-skin') : 0);
     this.events.push({ type: 'hide', unit: u.id, weapon: w.id });
     this.stock[u.team][WEAPONS.indexOf(w)]--;
     this.works[u.team]--;
@@ -1137,7 +1207,7 @@ export class Match {
   }
 
   /** The curtain of another team that a shot is at, or null. */
-  curtainAt(p: Projectile, team: number): { left: number } | null {
+  curtainAt(p: Projectile, team: number): { left: number; readonly team: number } | null {
     for (const c of this.curtains) {
       if (c.team === team) continue;
       for (let i = 0; i < c.pieces.length; i += PIECE) {
@@ -1156,6 +1226,7 @@ export class Match {
     const through = p.weapon.kind === 'arrow';
     c.left = through ? 0 : c.left - 1;
     if (c.left <= 0) this.curtains.splice(this.curtains.findIndex((q) => q === c), 1);
+    if (!through) this.tally[c.team].blocked += CAUGHT_WORTH;
     if (!through) this.events.push({ type: 'caught', x: p.x, y: p.y, z: p.z });
     return !through;
   }
@@ -1186,7 +1257,7 @@ export class Match {
     else if (w.kind === 'trap') this.openWeb(unit.bug.x, unit.bug.y, unit.bug.z, w, false, unit.team);
     else if (w.kind === 'column') {
       const power = this.power < MIN_POWER ? MIN_POWER : this.power;
-      this.column = { head: this.columnHead(unit), path: [], left: Math.round(MARCH_TICKS * power), swarm: 0, still: 0, victim: -1 };
+      this.column = { head: this.columnHead(unit), path: [], left: Math.round(MARCH_TICKS * power * (this.passive(unit.team, 'long-march') || 1)), swarm: 0, still: 0, victim: -1 };
     } else if (w.kind === 'flock') this.flock = this.newFlock(unit);
     else if (w.kind === 'brood' && this.mark) this.brood = { at: this.mark, ticks: 0, units: [], harm: [] };
     else this.projectiles.push(this.makeProjectile(unit, w, this.power));
@@ -1200,7 +1271,9 @@ export class Match {
     const b = u.bug;
     const [dx, dy, dz] = this.aimDirection(u, aimed);
     const off = b.species.radius + 1.6;
-    return new Flock(b.x + dx * off, b.y + dy * off + 0.6, b.z + dz * off, this.rings).aim(dx, dy, dz);
+    const f = new Flock(b.x + dx * off, b.y + dy * off + 0.6, b.z + dz * off, this.rings).aim(dx, dy, dz);
+    f.left = Math.round(f.left * (this.passive(u.team, 'long-flight') || 1));
+    return f;
   }
 
   /** The rings are laid out, and the bug turns to the first of them. */
@@ -1451,6 +1524,7 @@ export class Match {
     if (!last) return;
     this.field.rotateQuarter?.(tt.x, tt.z, tt.j0, tt.j1, tt.radius);
     for (const q of this.curtains) turnPieces(q.pieces, tt);
+    for (const q of this.sticky) turnPieces(q.pieces, tt);
     this.quarterTurns++;
     this.carried.length = 0;
     this.beginTurn(this.units[this.active].team + 1);
@@ -1503,11 +1577,17 @@ export class Match {
         const wind = WIND_MAX * (this.options.wind ?? 1);
         this.windX = (this.rng() * 2 - 1) * wind;
         this.windZ = (this.rng() * 2 - 1) * wind;
-        for (const q of this.units) q.bug.breath = Math.round((q.bug.species.flight ?? 0) * TICK_RATE);
+        for (const q of this.units) q.bug.breath = Math.round((q.bug.species.flight ?? 0) * TICK_RATE * (this.passive(q.team, 'big-lungs') || 1));
+        this.tend(t);
+        if (!u.shell && u.bug.species.shell && u.bug.health < this.passive(t, 'survivor') && !this.regrown.has(u.id)) {
+          this.regrown.add(u.id);
+          u.shell = true;
+        }
         this.turnTicks += u.extra * TICK_RATE;
         u.extra = 0;
         this.hard = 1;
-        this.built = false;
+        this.built = this.builtOnce = false;
+        this.stung = false;
         this.usedItem = false;
         this.going = null;
         this.bare(u, false);
@@ -1545,12 +1625,60 @@ export class Match {
     );
   }
 
+  /** A team's turn comes: its shelters tend to who is in them, or beside them. */
+  private tend(team: number): void {
+    const nursery = this.passive(team, 'nursery');
+    const warm = this.passive(team, 'warm-nest');
+    if (!nursery && !warm) return;
+    for (const u of this.units) {
+      if (u.team !== team || !u.bug.alive || !u.cover) continue;
+      if (nursery && u.cover.species === 'ant') this.heal(u, nursery);
+      if (!warm || u.cover.species !== 'bee') continue;
+      for (const q of this.units) {
+        if (q === u || q.team !== team) continue;
+        const dx = q.bug.x - u.bug.x;
+        const dy = q.bug.y - u.bug.y;
+        const dz = q.bug.z - u.bug.z;
+        if (dx * dx + dy * dy + dz * dz < BESIDE * BESIDE) this.heal(q, warm);
+      }
+    }
+  }
+
+  /** A bee that flies into an enemy stings it. */
+  private sting(u: Unit): void {
+    const n = this.passive(u.team, 'sting');
+    if (!n || this.stung || !u.bug.flying) return;
+    for (const q of this.units) {
+      if (q.team === u.team || !q.bug.alive) continue;
+      const r = u.bug.species.radius + q.bug.species.radius + 0.3;
+      const dx = q.bug.x - u.bug.x;
+      const dy = q.bug.y - u.bug.y;
+      const dz = q.bug.z - u.bug.z;
+      if (dx * dx + dy * dy + dz * dz > r * r) continue;
+      this.stung = true;
+      this.damage(q, n);
+      return;
+    }
+  }
+
   private dig(u: Unit, w: Weapon): void {
     const b = u.bug;
     const [dx, dy, dz] = this.aimDirection(u, aimed);
     const stepLen = w.tunnelRadius * 0.7;
     const start = b.species.radius * 0.5;
     for (let s = start; s <= w.tunnelLength; s += stepLen) this.field.carve(b.x + dx * s, b.y + dy * s, b.z + dz * s, w.tunnelRadius);
+    const hot = this.passive(u.team, 'hot-tip');
+    if (hot)
+      for (const q of this.units) {
+        const c = q.bug;
+        if (q === u || !c.alive) continue;
+        const along = Math.max(0, Math.min(w.tunnelLength, (c.x - b.x) * dx + (c.y - b.y) * dy + (c.z - b.z) * dz));
+        const ex = c.x - b.x - dx * along;
+        const ey = c.y - b.y - dy * along;
+        const ez = c.z - b.z - dz * along;
+        const r = w.tunnelRadius + c.species.radius * 0.6;
+        if (ex * ex + ey * ey + ez * ez < r * r) this.damage(q, hot);
+      }
     const end = w.tunnelLength;
     this.events.push({
       type: 'dig',
@@ -1641,7 +1769,8 @@ export class Match {
       hit.add(best);
       const b = best.bug;
       this.events.push({ type: 'arc', x1: fx, y1: fy, z1: fz, x2: b.x, y2: b.y, z2: b.z });
-      this.damage(best, Math.round(w.arcDamage * this.hard));
+      // (grounded in its husk: it runs off)
+      if (!(best.cover && best.cover.species === 'cockroach' && this.passive(best.team, 'grounded'))) this.damage(best, Math.round(w.arcDamage * this.hard));
       b.push(0, 5, 0);
       fx = b.x;
       fy = b.y;
@@ -1662,6 +1791,8 @@ export class Match {
 
   private open(u: Unit, it: Item): void {
     this.items.remove(it);
+    this.tally[u.team].boxes++;
+    this.heal(u, this.passive(u.team, 'nectar'));
     const kept = this.keeps(u.team, it.kind);
     // (the event first: what it does may end the turn, or the bug)
     const e = { type: 'open' as const, unit: u.id, kind: it.kind, x: it.x, y: it.y, z: it.z, id: it.id, gain: 0, kept };
@@ -1675,7 +1806,7 @@ export class Match {
     if (!KEPT.includes(kind)) return false;
     const bag = this.bag[team];
     const taken = KEPT.filter((k) => (bag[k] ?? 0) > 0).length + (this.stock[team][PASTE] > 0 ? 1 : 0);
-    return (bag[kind] ?? 0) > 0 || taken < (this.options.bag ?? BAG_SPACES);
+    return (bag[kind] ?? 0) > 0 || taken < this.spaces(team);
   }
 
   /** Use an item the team keeps: one a turn. */
@@ -1763,6 +1894,7 @@ export class Match {
       const w = u.cover;
       const off = Math.min(u.coverLeft, Math.floor(amount * (w.cover ?? 0)));
       amount -= off;
+      this.tally[u.team].blocked += off;
       u.coverLeft -= off;
       if (u.coverLeft <= 0) this.bare(u, true);
       if (amount <= 0) return;
@@ -1785,6 +1917,7 @@ export class Match {
     this.lookTicks = LOOK_DAMAGE_TICKS;
     this.events.push({ type: 'damage', unit: u.id, amount });
     const by = this.units[this.active].team;
+    if (by !== u.team) this.tally[by].damage += amount;
     this.load(u.team, amount * SKILL_TAKEN);
     if (by !== u.team && this.currentWeapon.sceneTicks === 0) this.load(by, amount * SKILL_DONE);
     this.hurtOwnTurn(u);
@@ -1800,6 +1933,10 @@ export class Match {
     u.dead = true;
     u.bug.health = 0;
     this.events.push({ type: 'death', unit: u.id });
+    const by = this.units[this.active];
+    if (by.team === u.team) return;
+    this.tally[by.team].kills++;
+    this.heal(by, this.passive(by.team, 'leftovers'));
   }
 
   // ---------------------------------------------------------------- setup

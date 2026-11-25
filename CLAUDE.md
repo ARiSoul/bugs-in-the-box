@@ -50,6 +50,7 @@ src/
     flock.ts            the bee's swarm that a player flies (Queen's Flight): steering, rings, what ends it; how the computer steers it
     items.ts            boxes on the map: how they come, fall and what they hold
     actions.ts          everything a bug can do as data (category, text, tags); what is kept, how many slots
+    progress.ts         levels, experience, passives (data)
     build.ts            what bugs build (thick flat pieces): where they go (wall, bridge)
     weapons.ts          weapons as data (Solder Blob, Capacitor, Short Circuit, Soldering Iron; building and hiding; the species' own: Web Shot, Web Bow, Ant Column, Blackout Swarm, Queen's Flight)
     math.ts             rotate2: deterministic rotation without sin/cos
@@ -59,7 +60,7 @@ src/
   workers/            mesh.worker.ts (runs the mesher on a mirror grid) + message types, build.worker.ts (the models of what bugs build); no three.js, no DOM
   audio/              sound, all computed (no files): dsp.ts and sounds.ts (recipes; pure, tested), sound.worker.ts (computes them), SoundEngine (Web Audio), GameSounds (match events and state -> sounds); reads the match, never changes it; music.ts (a theme per map as data, and its instruments; pure, tested), music.worker.ts, MusicEngine (stems that follow the match)
   input/              Controls (keyboard + on-screen pad -> MatchInput), picking against the density field, placing.ts (what is built follows the pointer)
-  ui/                 DOM HUD; inventory.ts (quick slots, inventory)
+  ui/                 DOM HUD; inventory.ts (quick slots, inventory), profile.ts and species.ts (levels)
   bench/              benchmark shared between the in-browser button and scripts/bench.ts
   main.ts             glue: wires terrain, render, input and UI
 tests/                Vitest + helpers (meshIntegrity, worlds)

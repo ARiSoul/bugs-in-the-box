@@ -243,7 +243,7 @@ export class BroodScene {
       p.startUp.normalize();
       found++;
     }
-    const radius = match.currentWeapon.coverRadius;
+    const radius = match.coverRadius;
     for (let i = 0; i < SWARM; i++) {
       const p = this.runners[i];
       if (i >= found && found > 0) {
@@ -374,7 +374,7 @@ export class BroodScene {
     const marking = stance && match.mark !== null;
     this.ringLevel.value += ((marking ? 1.1 : this.shotT >= 0 && this.shotT < 0.5 ? 2 * (1 - this.shotT * 2) : 0) - this.ringLevel.value) * (1 - Math.exp(-dt * 14));
     this.ring.visible = this.ringLevel.value > 0.02 && (marking || this.shotT >= 0);
-    if (marking) this.layRing(match.currentWeapon.coverRadius);
+    if (marking) this.layRing(match.coverRadius);
 
     // ---- the view, then whatever faces it
     this.camera.update(x.camera, {
@@ -427,7 +427,7 @@ export class BroodScene {
     this.fx.focusBlur.value = 0;
     this.fx.subject.value += (x.camera.position.distanceTo(this.shotT >= 0 && this.hitT < 3.4 ? this.subject : view.root.position) + 1 - this.fx.subject.value) * (1 - Math.exp(-dt * 10));
     this.fx.reveal.value = stance ? 0.16 : this.shotT >= 0 && this.hitT < 0 ? 0.1 + 0.16 * ss(1.2, 2.4, this.shotT) : 0;
-    this.placeSpot(x.camera, marking || this.shotT >= 0 ? 1 : 0, match.currentWeapon.coverRadius);
+    this.placeSpot(x.camera, marking || this.shotT >= 0 ? 1 : 0, match.coverRadius);
 
     this.timeScale = this.hitT >= 0 && this.hitT < 0.3 ? 0.3 + this.hitT : 1;
     if (this.shotT >= 0 && !match.brood && (this.hitT > AFTER || (this.hitT < 0 && this.shotT > 0.6))) this.end();

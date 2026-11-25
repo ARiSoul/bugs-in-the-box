@@ -1,5 +1,6 @@
 import type { BugSpecies } from '../game/species';
 import { SPECIES } from '../game/species';
+import { brings, type Gain, type Level } from '../game/progress';
 import { WEAPONS } from '../game/weapons';
 import { SCENARIOS } from '../terrain/scenarios';
 import { letters } from './lettering';
@@ -16,9 +17,14 @@ export interface SetupChoice {
   seconds: number;
   wind: number;
   seed: number;
+  /** Nobody has levels in this match. */
+  equal: boolean;
 }
 
 export interface SetupHooks {
+  /** A side's level with its species (0: none to show), and its page. */
+  level(side: number): number;
+  onSpeciesPage(side: number): void;
   /** Another map, or another seed for it. */
   onMap(): void;
   onSpecies(side: number): void;
@@ -98,6 +104,8 @@ export class SetupScreen {
   private readonly called = make('div', 'called');
   private readonly play = make('button', 'play', `<span>${letters('Play', { fill: '#1b1206', ink: 'none', shadow: 'none', outline: 0, drop: 0 })}</span>`);
   private open = false;
+  /** The player chose whether the match is equal. */
+  private equalPicked = false;
 
   constructor(
     readonly choice: SetupChoice,
@@ -182,6 +190,10 @@ export class SetupScreen {
       this.stepper('Bugs each', String(c.size), (d) => (c.size = 1 + ((c.size - 1 + d + 5) % 5))),
       this.stepper('Turn', `${c.seconds} s`, (d) => (c.seconds = this.turn(SECONDS, c.seconds, d))),
       this.stepper('Wind', WINDS.find((w) => w[0] === c.wind)?.[1] ?? 'Windy', (d) => (c.wind = this.turn(WINDS.map((w) => w[0]), c.wind, d))),
+      this.stepper('Levels', c.equal ? 'Equal' : 'On', () => {
+        c.equal = !c.equal;
+        this.equalPicked = true;
+      }),
       this.seed(),
     );
   }
@@ -267,13 +279,19 @@ export class SetupScreen {
         `<div class="stats">${bars.map(([n, v, k]) => `<div><em>${n}</em><i><u style="--v:${Math.min(1, v).toFixed(2)}"></u></i><strong>${k}</strong></div>`).join('')}</div>` +
         `<div class="trait"><em>Trait</em><span>${gift}</span></div>` +
         (special ? `<div class="special"><span class="emblem" style="color:#${(special?.color ?? 0xffffff).toString(16).padStart(6, '0')}">${special ? art(special.id) : ''}</span><div><em>Special</em><b>${special?.name ?? ''}</b><span>${what}</span></div></div>` : `<div class="special"><div><em>Special</em><span>${what}</span></div></div>`) +
+        `<button class="lv"></button>` +
         `<div class="who" role="group" aria-label="${SIDES[i]}: who plays"></div>`;
       for (const b of card.querySelectorAll<HTMLButtonElement>('.chips button')) b.addEventListener('click', () => this.pickSpecies(i, Number(b.dataset.k)));
+      card.querySelector('.lv')?.addEventListener('click', () => this.hooks.onSpeciesPage(i));
       // (the bars grow again)
       card.classList.remove('fresh');
       void card.offsetWidth;
       card.classList.add('fresh');
     }
+    const lv = card.querySelector('.lv') as HTMLButtonElement;
+    const level = this.hooks.level(i);
+    lv.innerHTML = c.equal ? '<b>Equal match</b><span>no levels</span>' : c.players[i] === 'human' ? `<b>Level ${level}</b><span>passives ›</span>` : `<b>Level ${level}</b><span>as yours</span>`;
+    lv.disabled = c.players[i] !== 'human';
     const who = card.querySelector('.who') as HTMLElement;
     who.replaceChildren(
       ...PLAYERS.map(([id, label]) => {
@@ -282,6 +300,8 @@ export class SetupScreen {
         b.setAttribute('aria-pressed', String(c.players[i] === id));
         b.addEventListener('click', () => {
           c.players[i] = id;
+          // (two players at one PC: without levels, unless they want them)
+          if (!this.equalPicked) c.equal = c.players[0] === 'human' && c.players[1] === 'human';
           this.hooks.onPick(false);
           this.refresh();
         });
@@ -328,11 +348,22 @@ export class SetupScreen {
   }
 }
 
+export interface EndGain {
+  side: number;
+  species: string;
+  xp: number;
+  lines: Gain[];
+  note: string;
+  before: Level;
+  after: Level;
+}
+
 /** The end of a match: who won, what came of it, and what now. */
 export class EndScreen {
   readonly root = make('div');
   private readonly head = make('div', 'head');
   private readonly counts = make('div', 'counts');
+  private readonly gains = make('div', 'gains');
   /** The next match is fought on the map as this one left it. */
   keeps = false;
 
@@ -359,7 +390,7 @@ export class EndScreen {
     );
     pick(false);
     maps.append(...of);
-    this.root.append(this.head, this.counts, maps, row);
+    this.root.append(this.head, this.counts, this.gains, maps, row);
     this.root.hidden = true;
     document.body.append(this.root);
     window.addEventListener('keydown', (e) => {
@@ -369,7 +400,15 @@ export class EndScreen {
   }
 
   /** `numbers`: each with its label. */
-  show(title: string, color: string, numbers: [number, string][]): void {
+  show(title: string, color: string, numbers: [number, string][], gains: EndGain[] = []): void {
+    this.gains.innerHTML = gains
+      .map((g) => {
+        const up = g.after.level > g.before.level;
+        const from = up ? 0 : (g.before.next ? g.before.into / g.before.next : 1) * 100;
+        const to = (g.after.next ? g.after.into / g.after.next : 1) * 100;
+        return `<div class="gain side${g.side}"><h3><svg viewBox="0 0 100 60">${BUGS[g.species]}</svg>+${g.xp} xp</h3>${g.lines.map((l, i) => `<p style="--i:${i}"><span>${l.label}</span><small>${l.detail}</small><b>+${l.xp}</b></p>`).join('')}${g.note ? `<p style="--i:${g.lines.length}"><span>${g.note}</span></p>` : ''}<div class="xpbar"><u style="--from:${from.toFixed(1)}%;--to:${to.toFixed(1)}%"></u></div><small>level ${g.after.level}${g.after.next ? ` · ${g.after.into} / ${g.after.next}` : ''}</small>${up ? `<div class="up">Level ${g.after.level}! ${brings(g.after.level).join(' · ')}</div>` : ''}</div>`;
+      })
+      .join('');
     this.head.innerHTML = letters(title, { fill: color, each: 'slam1' });
     this.counts.replaceChildren(
       ...numbers.map(([n, label]) => {
