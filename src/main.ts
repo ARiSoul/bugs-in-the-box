@@ -39,7 +39,7 @@ import { Terrain } from './terrain/Terrain';
 import { Hud, type HudState } from './ui/hud';
 import { EndScreen, SetupScreen, type SetupChoice } from './ui/setup';
 import { setupKeysMenu } from './ui/keys';
-import { setupSoundMenu } from './ui/sound';
+import { SoundMenu } from './ui/sound';
 
 /** The two teams, each of one species (chosen in the menu, kept in the address as `?teams=ant,spider`). */
 const PLURAL: Record<string, string> = { ant: 'Ants', spider: 'Spiders', cockroach: 'Cockroaches', bee: 'Bees' };
@@ -373,10 +373,10 @@ function syncTerrain(): void {
 }
 
 // ---- controls ----
-const toggleSound = setupSoundMenu(sound);
+const soundMenu = new SoundMenu(sound);
 const controls = new Controls(window, (code) => {
   if (code === 'KeyN') newMatch(seed);
-  else if (code === 'KeyM') toggleSound();
+  else if (code === 'KeyM') soundMenu.toggle();
 });
 controls.weaponSlots = () => WEAPONS.map((_, i) => i).filter((i) => match.has(match.activeUnit, i));
 controls.bindButtons(hud.pad);
@@ -493,7 +493,9 @@ const setup = new SetupScreen(choice, {
   },
   onPick: (strong) => sound.play(strong ? 'select' : 'tick'),
   random: randomSeed,
+  onMute: () => soundMenu.toggle(),
 });
+setup.root.append(soundMenu.panel());
 const ending = new EndScreen(
   () => {
     closeEnding();

@@ -228,6 +228,17 @@
       #setup .rule { text-align: center; white-space: nowrap; } .row2 { display: flex; align-items: center; justify-content: center; }
       #setup .rule strong { min-width: 3.4em; font-size: 1.2em; }
       #setup .step { min-width: 32px; height: 34px; padding: 0; font-size: 1.7em; line-height: 1; color: var(--amber); display: grid; place-items: center; background: rgba(255, 181, 71, 0.13); transform: skewX(-8deg); }
+      #setup .audio { position: absolute; right: 1.6vw; top: 2.4vh; z-index: 6; pointer-events: auto; transition: transform 0.35s ease-in; } #setup.leave .audio { transform: translateY(-20vh); }
+      #setup .audio-open { display: block; margin-left: auto; width: 6.4vh; height: 6.4vh; background: rgba(9, 7, 7, 0.8); color: var(--amber); transform: skewX(-6deg); padding: 1.2vh; transition: transform 0.18s cubic-bezier(0.2, 2, 0.4, 1), background 0.15s; }
+      #setup .audio-open:hover, #setup .audio-open[aria-expanded='true'] { background: var(--amber); color: #1b1206; } #setup .audio-open:hover { transform: skewX(-6deg) scale(1.08); }
+      #setup .audio-open svg { display: block; width: 100%; fill: currentColor; } #setup .audio-open g path, #setup .audio-open .cross { fill: none; stroke: currentColor; stroke-width: 4; stroke-linecap: round; } #setup .audio .cross, #setup .muted .waves { display: none; } #setup .muted .cross { display: block; }
+      #setup .waves path { animation: wave 1.4s infinite ease-in-out; } #setup .waves path + path { animation-delay: 0.2s; } @keyframes wave { 50% { opacity: 0.25; } }
+      #setup .audio-panel { margin-top: 1.2vh; width: 25em; max-width: 92vw; box-sizing: border-box; background: #0f0d0b; border-top: 3px solid var(--amber); padding: 1.3em 1.5em 1.5em; animation: swap 0.25s both cubic-bezier(0.2, 1.4, 0.4, 1); } #setup .audio-panel[hidden] { display: none; }
+      #setup .audio-panel h3 { margin: 0 0 0.7em; font-size: 1.5em; }
+      #setup .audio-panel label { display: grid; grid-template-columns: 7.2em 1fr 2.4em; gap: 0.9em; align-items: center; margin-bottom: 1em; } #setup .audio-panel small { display: block; color: var(--dim); font-size: 0.82em; line-height: 1.15; } #setup .audio-panel output { text-align: right; font-weight: 700; } #setup .muted label { opacity: 0.45; }
+      #setup .audio-panel input { -webkit-appearance: none; appearance: none; width: 100%; height: 0.7em; padding: 0; border-radius: 0; cursor: pointer; transform: skewX(-18deg); background: linear-gradient(90deg, var(--amber) var(--at, 50%), rgba(255, 255, 255, 0.16) var(--at, 50%)); }
+      #setup .audio-panel input::-webkit-slider-thumb { -webkit-appearance: none; width: 0.9em; height: 1.7em; background: var(--ink); border: 0; } #setup .audio-panel input::-moz-range-thumb { width: 0.9em; height: 1.7em; background: var(--ink); border: 0; border-radius: 0; }
+      #setup .audio-mute { width: 100%; padding: 0.7em; background: rgba(255, 181, 71, 0.16); color: var(--ink); } #setup .audio-mute:hover { background: var(--amber); color: #1b1206; }
       #setup .step:hover { background: var(--amber); color: #1b1206; }
       #setup .dice svg { width: 22px; fill: none; stroke: currentColor; stroke-width: 2; display: block; transition: transform 0.4s cubic-bezier(0.2, 1.6, 0.4, 1); } #setup .dice:hover svg { transform: rotate(180deg) scale(1.15); }
       #setup input { width: 4.4em; text-align: center; font: inherit; font-weight: 700; font-size: 1.15em; color: inherit; background: rgba(255, 255, 255, 0.1); border: 0; border-radius: 3px; padding: 0.35em 0; }

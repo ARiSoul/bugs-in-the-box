@@ -30,6 +30,8 @@ export interface SetupHooks {
   /** A control was used (a sound). */
   onPick(strong: boolean): void;
   random(): number;
+  /** The mute key. */
+  onMute(): void;
 }
 
 const PLURAL: Record<string, string> = { ant: 'Ants', spider: 'Spiders', cockroach: 'Cockroaches', bee: 'Bees' };
@@ -316,6 +318,7 @@ export class SetupScreen {
     const i = SCENARIOS.findIndex((s) => s.id === this.choice.scenario);
     const at = (side: number): number => SPECIES.indexOf(this.choice.species[side]);
     if (e.code === 'Enter' && !(e.target instanceof HTMLButtonElement)) this.start();
+    else if (e.code === 'KeyM') this.hooks.onMute();
     else if (e.code === 'ArrowLeft') this.pickMap(SCENARIOS[(i + SCENARIOS.length - 1) % SCENARIOS.length].id);
     else if (e.code === 'ArrowRight') this.pickMap(SCENARIOS[(i + 1) % SCENARIOS.length].id);
     else if (e.code === 'KeyA' || e.code === 'KeyD') this.pickSpecies(0, at(0) + (e.code === 'KeyA' ? -1 : 1));
