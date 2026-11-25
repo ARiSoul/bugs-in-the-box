@@ -1,4 +1,4 @@
-import type { MatchInput } from '../game/match';
+import type { MatchInput, Place } from '../game/match';
 
 /** What a key or an on-screen button does. */
 export type Action = 'forward' | 'back' | 'left' | 'right' | 'aimUp' | 'aimDown' | 'run' | 'jump' | 'fire';
@@ -60,6 +60,8 @@ export class Controls {
   private faceZ = 0;
   private pitch = 0;
   private marked: readonly [number, number, number] | null = null;
+  private placed: Place | null = null;
+  private item = -1;
   private clicked = false;
   /** True if the last `next()` carried a facing (from `face`). */
   faced = false;
@@ -180,6 +182,16 @@ export class Controls {
     this.marked = [Math.round(x * 64) / 64, Math.round(y * 64) / 64, Math.round(z * 64) / 64];
   }
 
+  /** Use an item the team keeps (an index into ITEM_KINDS) on the next tick. */
+  useItem(index: number): void {
+    this.item = index;
+  }
+
+  /** Put what is picked there on the next tick, rounded like `face`. */
+  placeAt(p: readonly number[]): void {
+    this.placed = p.map((v) => Math.round(v * 64) / 64) as unknown as Place;
+  }
+
   /** Fire on the next tick (a click, in a brood's stance). */
   click(): void {
     this.clicked = true;
@@ -201,7 +213,8 @@ export class Controls {
     this.held.add(code);
     if (this.keys.jump.includes(code)) this.jumpQueued = true;
     const w = WEAPON_KEYS.indexOf(code);
-    if (w >= 0) this.weaponQueued = this.pickSlot(w);
+    const n = w >= 0 ? this.pickSlot(w) : -1;
+    if (n >= 0) this.weaponQueued = n;
   }
 
   release(code: string): void {
@@ -229,6 +242,10 @@ export class Controls {
     this.pitch = 0;
     this.out.mark = this.marked;
     this.marked = null;
+    this.out.item = this.item;
+    this.item = -1;
+    this.out.place = this.placed;
+    this.placed = null;
     return this.out;
   }
 

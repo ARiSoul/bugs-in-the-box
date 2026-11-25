@@ -1,5 +1,5 @@
 import { Flock, FLOCK_TICKS, steerFlock, type FlockInput } from './flock';
-import type { Item } from './items';
+import { ITEM_KINDS, type Item, type ItemKind } from './items';
 import { createRng } from '../terrain/noise';
 import { Bug, GRAVITY, type BugInput } from './bug';
 import { blastShare, CHARGE_TICKS, MIN_POWER, NO_INPUT, type Column, type Match, type MatchInput, type Unit } from './match';
@@ -133,6 +133,7 @@ export class Brain {
     o.faceX = o.faceZ = 0;
     o.jump = o.run = o.fire = false;
     o.weapon = -1;
+    o.item = -1;
     o.pitch = 0;
     o.mark = null;
     this.match = match;
@@ -151,6 +152,7 @@ export class Brain {
     if (match.phase !== 'aim' || (!u.bug.grounded && this.state !== 'walk' && this.state !== 'fetch')) return o;
     switch (this.state) {
       case 'look':
+        if (this.timer === LOOK_TICKS) this.useKept(match, u);
         if (--this.timer <= 0 && !this.seekBox(match, u) && !this.seekWall(match, u)) this.think(match, u);
         break;
       case 'wall':
@@ -192,6 +194,15 @@ export class Brain {
     this.walls = this.rng() < WALL_MOOD;
     this.hides = this.rng() < HIDE_MOOD;
     this.webWorth = this.rng() < WEB_MOOD ? 24 : 12;
+  }
+
+  /** An item its team keeps, if now is the time for one. */
+  private useKept(match: Match, u: Unit): void {
+    if (match.usedItem) return;
+    const bag = match.bag[u.team];
+    const hurt = u.bug.health < u.bug.species.health * 0.65;
+    const k: ItemKind | '' = hurt && bag.patch ? 'patch' : bag.overclock && !u.boost ? 'overclock' : bag.fuse && !u.fuse ? 'fuse' : '';
+    if (k !== '') this.out.item = ITEM_KINDS.indexOf(k);
   }
 
   private work(): void {

@@ -74,6 +74,8 @@ export interface Weapon {
   /** Shelter: how much of a blow it keeps off (0..1), and how much in all before it breaks. */
   readonly cover?: number;
   readonly coverHealth?: number;
+  /** Built, hidden in: how far from the bug it may be put. */
+  readonly reach: number;
   /** Render only. */
   readonly color: number;
 }
@@ -96,6 +98,7 @@ const BASE = {
   webRadius: 0,
   webTurns: 0,
   sceneTicks: 0,
+  reach: 0,
 } as const;
 
 /** A drop of molten solder, flung hard. Explodes on impact; the wind pushes it. */
@@ -263,23 +266,23 @@ const WORK = { ...BASE, found: true, start: 2 } as const;
  * the aim; building does not end the turn. Every species' wall and bridge are the same shape (see `build.ts`); they look
  * their own. Hiding takes the shot's place.
  */
-export const RAMPART: Weapon = { ...WORK, id: 'rampart', name: 'Rampart', kind: 'wall', species: 'ant', color: 0xd9a85c };
-export const LIVING_BRIDGE: Weapon = { ...WORK, id: 'living-bridge', name: 'Living Bridge', kind: 'bridge', species: 'ant', color: 0xd9774a };
-export const ANTHILL: Weapon = { ...WORK, id: 'anthill', name: 'Anthill', kind: 'shelter', species: 'ant', cover: 0.65, coverHealth: 45, color: 0xc98a4a };
+export const RAMPART: Weapon = { ...WORK, id: 'rampart', name: 'Rampart', kind: 'wall', reach: 13, species: 'ant', color: 0xd9a85c };
+export const LIVING_BRIDGE: Weapon = { ...WORK, id: 'living-bridge', name: 'Living Bridge', kind: 'bridge', reach: 9, species: 'ant', color: 0xd9774a };
+export const ANTHILL: Weapon = { ...WORK, id: 'anthill', name: 'Anthill', kind: 'shelter', reach: 9, species: 'ant', cover: 0.65, coverHealth: 45, color: 0xc98a4a };
 
 /** A spider's wall also catches the first CATCHES shots of the others that get to it. */
-export const SILK_CURTAIN: Weapon = { ...WORK, id: 'silk-curtain', name: 'Silk Curtain', kind: 'wall', species: 'spider', color: 0xf2f2ee };
-export const SILK_SPAN: Weapon = { ...WORK, id: 'silk-span', name: 'Silk Span', kind: 'bridge', species: 'spider', color: 0xe2e6ea };
-export const SILK_FUNNEL: Weapon = { ...WORK, id: 'silk-funnel', name: 'Silk Funnel', kind: 'shelter', species: 'spider', cover: 0.55, coverHealth: 50, color: 0xd6dce2 };
+export const SILK_CURTAIN: Weapon = { ...WORK, id: 'silk-curtain', name: 'Silk Curtain', kind: 'wall', reach: 13, species: 'spider', color: 0xf2f2ee };
+export const SILK_SPAN: Weapon = { ...WORK, id: 'silk-span', name: 'Silk Span', kind: 'bridge', reach: 9, species: 'spider', color: 0xe2e6ea };
+export const SILK_FUNNEL: Weapon = { ...WORK, id: 'silk-funnel', name: 'Silk Funnel', kind: 'shelter', reach: 9, species: 'spider', cover: 0.55, coverHealth: 50, color: 0xd6dce2 };
 export const CATCHES = 2;
 
-export const SHIELD_WALL: Weapon = { ...WORK, id: 'shield-wall', name: 'Shield Wall', kind: 'wall', species: 'cockroach', color: 0xe0863c };
-export const SCALE_WALK: Weapon = { ...WORK, id: 'scale-walk', name: 'Scale Walk', kind: 'bridge', species: 'cockroach', color: 0xc9702c };
-export const HUSK: Weapon = { ...WORK, id: 'husk', name: 'Husk', kind: 'shelter', species: 'cockroach', cover: 0.5, coverHealth: 60, color: 0xb8622a };
+export const SHIELD_WALL: Weapon = { ...WORK, id: 'shield-wall', name: 'Shield Wall', kind: 'wall', reach: 13, species: 'cockroach', color: 0xe0863c };
+export const SCALE_WALK: Weapon = { ...WORK, id: 'scale-walk', name: 'Scale Walk', kind: 'bridge', reach: 9, species: 'cockroach', color: 0xc9702c };
+export const HUSK: Weapon = { ...WORK, id: 'husk', name: 'Husk', kind: 'shelter', reach: 9, species: 'cockroach', cover: 0.5, coverHealth: 60, color: 0xb8622a };
 
-export const COMB_WALL: Weapon = { ...WORK, id: 'comb-wall', name: 'Comb Wall', kind: 'wall', species: 'bee', color: 0xffc04a };
-export const COMB_SPAN: Weapon = { ...WORK, id: 'comb-span', name: 'Comb Span', kind: 'bridge', species: 'bee', color: 0xffb02a };
-export const WAX_NEST: Weapon = { ...WORK, id: 'wax-nest', name: 'Wax Nest', kind: 'shelter', species: 'bee', cover: 0.6, coverHealth: 50, color: 0xffd070 };
+export const COMB_WALL: Weapon = { ...WORK, id: 'comb-wall', name: 'Comb Wall', kind: 'wall', reach: 13, species: 'bee', color: 0xffc04a };
+export const COMB_SPAN: Weapon = { ...WORK, id: 'comb-span', name: 'Comb Span', kind: 'bridge', reach: 9, species: 'bee', color: 0xffb02a };
+export const WAX_NEST: Weapon = { ...WORK, id: 'wax-nest', name: 'Wax Nest', kind: 'shelter', reach: 9, species: 'bee', cover: 0.6, coverHealth: 50, color: 0xffd070 };
 
 export const WEAPONS: readonly Weapon[] = [SOLDER_BLOB, CAPACITOR, SHORT_CIRCUIT, SOLDERING_IRON, WEB_SHOT, WEB_BOW, ANT_COLUMN, BLACKOUT_SWARM, THERMAL_PASTE, QUEENS_FLIGHT, RAMPART, LIVING_BRIDGE, ANTHILL, SILK_CURTAIN, SILK_SPAN, SILK_FUNNEL, SHIELD_WALL, SCALE_WALK, HUSK, COMB_WALL, COMB_SPAN, WAX_NEST];
 

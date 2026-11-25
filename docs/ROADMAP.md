@@ -60,7 +60,7 @@ Goal now: a PC demo first, as a proof of concept. The phone items below are post
 - [ ] A match takes a frozen, numbered set of settings (as it takes a seed): every client must simulate with the same
 - [ ] An admin page that edits a set live (first local, in dev; then behind a server with accounts and roles, with history and undo). Numbers of the simulation change from the next match on; looks, sounds and texts at once
 
-## One linked engine, RPG style (proposed, waits for the owner's answer)
+## One linked engine, RPG style (begun: one list of actions with tags, quick slots, an inventory, kept items)
 
 Everything that affects something else goes through the same five pieces, as data in the settings registry:
 

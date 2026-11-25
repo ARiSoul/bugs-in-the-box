@@ -220,3 +220,47 @@ describe('models', () => {
     }
   }, 30000);
 });
+
+describe('putting things down with the pointer', () => {
+  const put = (m: Match, w: Weapon, p: readonly number[]): MatchEvent[] => {
+    run(m, 1, { weapon: at(w) });
+    return run(m, 1, { place: p as never });
+  };
+  it('a wall where it is pointed at, within reach, once a turn', () => {
+    const t = plain();
+    const m = setup(t);
+    expect(put(m, RAMPART, [38, 10, 32, 1, 0, 0]).some((e) => e.type === 'noRoom')).toBe(true);
+    expect(put(m, RAMPART, [20, 10, 42, 0, 0, 1]).some((e) => e.type === 'built')).toBe(true);
+    expect(t.sample(20, 12, 42)).toBeLessThan(0);
+    expect(t.sample(24, 12, 42)).toBeLessThan(0);
+    expect(m.weapon).toBe(0);
+    const out: number[] = [];
+    expect(m.tryPlace(m.units[0], RAMPART, [20, 10, 24, 0, 0, 1], out)).toBe('once a turn');
+  });
+  it('a bridge from one end to the other', () => {
+    const t = gap();
+    const m = setup(t);
+    m.units[0].bug.drop(t, 18, 32);
+    run(m, 60, { faceX: 1 });
+    const out: number[] = [];
+    expect(m.tryPlace(m.units[0], LIVING_BRIDGE, [22, 20, 32, 2, 0, 0], out)).toBe('too short');
+    expect(put(m, LIVING_BRIDGE, [22, 20, 32, 12, 0, 0]).some((e) => e.type === 'built')).toBe(true);
+    const b = m.units[0].bug;
+    for (let k = 0; k < 220; k++) m.step({ ...NO_INPUT, move: 1, faceX: 1 });
+    expect(b.x).toBeGreaterThan(33);
+    expect(b.y).toBeGreaterThan(20);
+  });
+  it('a shelter: the bug runs there and hides; not where it cannot get to', () => {
+    const m = setup(gap());
+    m.units[0].bug.drop(m.field, 18, 32);
+    run(m, 60, { faceX: 1 });
+    const out: number[] = [];
+    expect(m.tryPlace(m.units[0], ANTHILL, [26, 10, 32, 0, 0, 0], out)).not.toBe('');
+    put(m, ANTHILL, [16, 20, 38, 0, 0, 0]);
+    expect(m.going).not.toBeNull();
+    const e = run(m, 240);
+    expect(e.some((q) => q.type === 'hide')).toBe(true);
+    const b = m.units[0].bug;
+    expect(Math.hypot(b.x - 16, b.z - 38)).toBeLessThan(1.5);
+  });
+});

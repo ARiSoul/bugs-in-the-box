@@ -5,9 +5,10 @@ import { rot, rotate2 } from './math';
 import { Projectile } from './projectile';
 import { dropNear } from './spawn';
 import { MARCHER, type BugSpecies } from './species';
-import { bridgePieces, laid, PIECE, toPiece, wallPieces } from './build';
+import { before, bridgePieces, laid, PIECE, SPAN, SPANS, toPiece, wallPieces, type Site } from './build';
 import { Flock, layRings, type FlockInput, type Ring } from './flock';
-import { BOX, Items, type Item, type ItemKind } from './items';
+import { BAG_SPACES, KEPT } from './actions';
+import { BOX, ITEM_KINDS, Items, type Item, type ItemKind } from './items';
 import { CATCHES, DUD, hasWeapon, SILK_CURTAIN, WORKS, RING_DAMAGE, WEAPONS, type Weapon } from './weapons';
 
 /**
@@ -185,7 +186,18 @@ export interface MatchInput {
   pitch?: number;
   /** In a brood's stance: the spot under the player's pointer. */
   mark?: readonly [number, number, number] | null;
+  /**
+   * Put what is picked (a wall, a bridge, a shelter) there: a place on a surface, and a way: what a wall faces, from a
+   * bridge's near end to its far one (as long as it is to be).
+   */
+  place?: Place | null;
+  /** Use an item the team keeps (an index into ITEM_KINDS, -1 or nothing: none). */
+  item?: number;
 }
+
+export type Place = readonly [number, number, number, number, number, number];
+/** Why something cannot be put somewhere. */
+export type NoPlace = '' | 'too far' | 'no ground' | 'no room' | 'once a turn' | 'too short' | 'no way there';
 
 export const NO_INPUT: Readonly<MatchInput> = Object.freeze({ move: 0, turn: 0, faceX: 0, faceZ: 0, jump: false, run: false, aim: 0, fire: false, weapon: -1 });
 
@@ -211,7 +223,8 @@ export type MatchEvent =
   | { type: 'ring'; index: number; x: number; y: number; z: number }
   | { type: 'sting'; x: number; y: number; z: number; unit: number; rings: number }
   | { type: 'box'; id: number }
-  | { type: 'open'; unit: number; kind: ItemKind; x: number; y: number; z: number; id: number; gain: number }
+  | { type: 'open'; unit: number; kind: ItemKind; x: number; y: number; z: number; id: number; gain: number; kept: boolean }
+  | { type: 'use'; unit: number; kind: ItemKind; gain: number }
   | { type: 'boxGone'; id: number; x: number; y: number; z: number }
   | { type: 'fuse'; unit: number }
   | { type: 'built'; unit: number; weapon: string; pieces: readonly number[] }
@@ -305,6 +318,11 @@ const SKILL_HIDE = 120;
 /** A curtain catches a shot this near to it. */
 const CURTAIN_NEAR = 0.45;
 const near = new Float64Array(3);
+const site: Site = { x: 0, y: 0, z: 0, nx: 0, ny: 1, nz: 0, fx: 1, fy: 0, fz: 0 };
+/** A bug walks at most this long to where it hides (ticks), and is there this near to it. */
+const GO_TICKS = 240;
+const GO_NEAR = 0.9;
+const goInput: BugInput = { move: 1, turn: 0, jump: false, run: true, faceX: 0, faceZ: 0 };
 /** A bug keeps this much room from what is built. */
 const BUILD_ROOM = 0.15;
 const COS45 = 0.7071067811865476;
@@ -348,6 +366,8 @@ export interface MatchOptions {
   spawnLevels?: boolean;
   /** A turntable that turns between turns (see TurntableSpec). */
   turntable?: TurntableSpec;
+  /** Spaces each team has for items it keeps (0: whatever is in a box takes effect at once). */
+  bag?: number;
   /** The quarter turns it has made before this match (a map that an earlier match was fought on). */
   turned?: number;
   /** Boxes turn up on the map (default true; not where the tests place the bugs). */
@@ -376,6 +396,11 @@ export class Match {
   readonly stock: number[][];
   /** How often each team may still build or hide, whatever kind. */
   readonly works: number[];
+  /** The items each team keeps, and whether one was used this turn. */
+  readonly bag: Partial<Record<ItemKind, number>>[];
+  usedItem = false;
+  /** The active bug is on its way to hide: where, in what, and how long it may still take. */
+  going: { x: number; y: number; z: number; w: Weapon; left: number } | null = null;
   /** Curtains of silk that still catch shots of other teams: how many. */
   readonly curtains: { readonly team: number; readonly pieces: number[]; left: number }[] = [];
   /** What happened during the last `step` (cleared at the start of every step). */
@@ -464,6 +489,7 @@ export class Match {
     this.items = new Items(field, this.luck, options.spawnLevels === true, options.confine ?? null);
     this.stock = teams.map((t) => WEAPONS.map((w) => (w.species === undefined || w.species === t.species.id ? (w.start ?? 0) : 0)));
     this.works = teams.map(() => WORKS);
+    this.bag = teams.map(() => ({}));
     this.skill = teams.map(() => 0);
     if (options.placeBugs !== false) this.placeBugs();
     this.beginTurn(0);
@@ -659,7 +685,16 @@ export class Match {
     if (this.stance && input.pitch) this.tilt(unit, input.pitch > PITCH_MAX ? PITCH_MAX : input.pitch < -PITCH_MAX ? -PITCH_MAX : input.pitch);
     if (input.aim !== 0) this.tilt(unit, input.aim * AIM_RATE * ramp(this.aimHeld) * DT * (this.stance ? STANCE_RATE : 1));
     this.turnTicks--;
+    if (input.item !== undefined && input.item >= 0 && input.item < ITEM_KINDS.length && !this.charging) this.useItem(unit, ITEM_KINDS[input.item]);
     const w = this.currentWeapon;
+    if (this.going) {
+      if (input.weapon >= 0 || input.jump || (fireDown && this.going.left < GO_TICKS - 1)) this.going = null;
+      else return this.goHide(unit);
+    }
+    if (input.place && !this.charging && unit.bug.grounded && w.start !== undefined) {
+      this.putAt(unit, w, input.place);
+      return this.going ? this.goHide(unit) : IDLE;
+    }
     if (this.stance && w.kind === 'brood' && input.mark) this.setMark(unit, input.mark, w);
     if (this.charging) {
       if (input.fire) this.power += 1 / CHARGE_TICKS;
@@ -892,15 +927,23 @@ export class Match {
 
   // ---------------------------------------------------------------- building and hiding
 
-  /** The pieces a build weapon would lay now, for this unit (none: no room). */
+  /** The pieces a build weapon would lay right before the unit (a bridge: along its aim); none: no room. */
   piecesFor(u: Unit, w: Weapon, out: number[]): number[] {
     const b = u.bug;
-    if (w.kind === 'wall') wallPieces(this.field, b, out);
+    before(b, site);
+    if (w.kind === 'wall') wallPieces(this.field, site, out);
     else {
+      site.x = b.x - b.nx * b.species.radius;
+      site.y = b.y - b.ny * b.species.radius;
+      site.z = b.z - b.nz * b.species.radius;
       const [dx, dy, dz] = this.aimDirection(u, aimed);
-      bridgePieces(this.field, b, dx, dy, dz, out);
+      bridgePieces(this.field, site, dx, dy, dz, SPANS, out);
     }
-    // (not into a bug, a box, or where nobody may go)
+    return this.allowed(out);
+  }
+
+  /** What of the pieces may be laid: not into a bug, a box, or where nobody may go. */
+  private allowed(out: number[]): number[] {
     let n = 0;
     for (let i = 0; i < out.length; i += PIECE) {
       if (this.options.confine && !this.options.confine(out[i], out[i + 1], out[i + 2])) continue;
@@ -912,6 +955,111 @@ export class Match {
     // (next to nothing left of it)
     if (laid(this.field, out) < 3) out.length = 0;
     return out;
+  }
+
+  /** The surface at a place, as a site: level ground stays level. False: there is none. */
+  private siteAt(x: number, y: number, z: number): boolean {
+    const d = surfaceDistance(this.field, x, y, z, near);
+    if (!(d < 1 && d > -1)) return false;
+    const level = near[1] > 0.6;
+    site.x = x;
+    site.y = y;
+    site.z = z;
+    site.nx = level ? 0 : near[0];
+    site.ny = level ? 1 : near[1];
+    site.nz = level ? 0 : near[2];
+    return true;
+  }
+
+  /** What putting a weapon at a place comes to: why not, or '' and (a wall, a bridge) its pieces in `out`. */
+  tryPlace(u: Unit, w: Weapon, p: Place, out: number[]): NoPlace {
+    out.length = 0;
+    const b = u.bug;
+    const [x, y, z] = p;
+    if (!p.every(Number.isFinite)) return 'no ground';
+    if (w.kind !== 'shelter' && this.built) return 'once a turn';
+    const dx = x - b.x;
+    const dy = y - b.y;
+    const dz = z - b.z;
+    if (dx * dx + dy * dy + dz * dz > w.reach * w.reach) return 'too far';
+    if (!this.siteAt(x, y, z)) return 'no ground';
+    if (w.kind === 'shelter') return u.web >= 0 ? 'no room' : this.walksTo(u, x, y, z) ? '' : 'no way there';
+    let [fx, fy, fz] = [p[3], p[4], p[5]];
+    const far = Math.sqrt(fx * fx + fy * fy + fz * fz);
+    const up = fx * site.nx + fy * site.ny + fz * site.nz;
+    let tx = fx - site.nx * up;
+    let ty = fy - site.ny * up;
+    let tz = fz - site.nz * up;
+    const l = Math.sqrt(tx * tx + ty * ty + tz * tz);
+    if (l < 1e-3) return 'too short';
+    tx /= l;
+    ty /= l;
+    tz /= l;
+    site.fx = tx;
+    site.fy = ty;
+    site.fz = tz;
+    if (w.kind === 'wall') wallPieces(this.field, site, out);
+    else {
+      const count = Math.min(SPANS, Math.ceil(far / SPAN));
+      if (count < 4) return 'too short';
+      fx /= far;
+      fy /= far;
+      fz /= far;
+      bridgePieces(this.field, site, fx, fy, fz, count, out);
+    }
+    return this.allowed(out).length > 0 ? '' : 'no room';
+  }
+
+  /** Whether the bug gets to a place by running straight at it. */
+  private walksTo(u: Unit, x: number, y: number, z: number): boolean {
+    const b = new Bug(u.bug.species);
+    b.copy(u.bug);
+    for (let n = 0; n < GO_TICKS; n++) {
+      const near2 = this.towards(b, x, y, z);
+      if (near2) return true;
+      b.step(this.field, goInput);
+      if (!b.alive || b.airTicks > 22 || (b.justLanded && b.lastImpact > FALL_SAFE_SPEED)) return false;
+    }
+    return false;
+  }
+
+  /** Set the input that runs a bug at a place; true: it is there. */
+  private towards(b: Bug, x: number, y: number, z: number): boolean {
+    const dx = x - b.x;
+    const dz = z - b.z;
+    const dy = y - (b.y - b.ny * b.species.radius);
+    const l = Math.sqrt(dx * dx + dz * dz);
+    if (l < GO_NEAR && dy < 2 && dy > -2 && b.grounded) return true;
+    goInput.faceX = l > 0.05 ? dx / l : 0;
+    goInput.faceZ = l > 0.05 ? dz / l : 0;
+    return false;
+  }
+
+  private putAt(u: Unit, w: Weapon, p: Place): void {
+    const pieces: number[] = [];
+    if (this.tryPlace(u, w, p, pieces) !== '') {
+      this.events.push({ type: 'noRoom', unit: u.id });
+      return;
+    }
+    if (w.kind === 'shelter') this.going = { x: p[0], y: p[1], z: p[2], w, left: GO_TICKS };
+    else this.lay(u, w, pieces);
+  }
+
+  /** One tick of a bug on its way to hide. */
+  private goHide(u: Unit): Readonly<BugInput> {
+    const g = this.going;
+    if (!g) return IDLE;
+    if (this.towards(u.bug, g.x, g.y, g.z)) {
+      this.going = null;
+      this.shelter(u, g.w);
+      return IDLE;
+    }
+    if (--g.left <= 0 || this.turnTicks <= 0) {
+      this.going = null;
+      if (this.turnTicks <= 0) this.endAim();
+      return IDLE;
+    }
+    return goInput;
   }
 
   private roomFor(p: readonly number[], i: number): boolean {
@@ -935,7 +1083,11 @@ export class Match {
       this.events.push({ type: 'noRoom', unit: u.id });
       return;
     }
-    this.field.deposit(pieces);
+    this.lay(u, w, pieces);
+  }
+
+  private lay(u: Unit, w: Weapon, pieces: readonly number[]): void {
+    this.field.deposit?.(pieces);
     this.built = true;
     this.stock[u.team][WEAPONS.indexOf(w)]--;
     this.works[u.team]--;
@@ -1184,6 +1336,7 @@ export class Match {
 
   /** Time ran out, or the active bug got hurt or died: no more aiming this turn. */
   private endAim(): void {
+    this.going = null;
     this.charging = false;
     this.stance = false;
     this.phase = 'flight';
@@ -1350,6 +1503,8 @@ export class Match {
         u.extra = 0;
         this.hard = 1;
         this.built = false;
+        this.usedItem = false;
+        this.going = null;
         this.bare(u, false);
         // (springs wear off as their bug's turns go by)
         for (const q of this.units) {
@@ -1502,12 +1657,39 @@ export class Match {
 
   private open(u: Unit, it: Item): void {
     this.items.remove(it);
+    const kept = this.keeps(u.team, it.kind);
+    // (the event first: what it does may end the turn, or the bug)
+    const e = { type: 'open' as const, unit: u.id, kind: it.kind, x: it.x, y: it.y, z: it.z, id: it.id, gain: 0, kept };
+    this.events.push(e);
+    if (kept) this.bag[u.team][it.kind] = (this.bag[u.team][it.kind] ?? 0) + 1;
+    else e.gain = this.effect(u, it.kind, it.x, it.y, it.z);
+  }
+
+  /** Whether the team keeps what it found: one of those that are, and there is a space for it. */
+  private keeps(team: number, kind: ItemKind): boolean {
+    if (!KEPT.includes(kind)) return false;
+    const bag = this.bag[team];
+    const taken = KEPT.filter((k) => (bag[k] ?? 0) > 0).length + (this.stock[team][PASTE] > 0 ? 1 : 0);
+    return (bag[kind] ?? 0) > 0 || taken < (this.options.bag ?? BAG_SPACES);
+  }
+
+  /** Use an item the team keeps: one a turn. */
+  private useItem(u: Unit, kind: ItemKind): void {
+    const bag = this.bag[u.team];
+    const n = bag[kind] ?? 0;
+    if (this.usedItem || n <= 0) return;
+    this.usedItem = true;
+    bag[kind] = n - 1;
+    const e = { type: 'use' as const, unit: u.id, kind, gain: 0 };
+    this.events.push(e);
+    e.gain = this.effect(u, kind, u.bug.x, u.bug.y, u.bug.z);
+  }
+
+  /** What is in a box takes effect; returns what it gave. */
+  private effect(u: Unit, kind: ItemKind, x: number, y: number, z: number): number {
     const b = u.bug;
     let gain = 0;
-    // (the event first: what it does may end the turn, or the bug)
-    const e = { type: 'open' as const, unit: u.id, kind: it.kind, x: it.x, y: it.y, z: it.z, id: it.id, gain: 0 };
-    this.events.push(e);
-    switch (it.kind) {
+    switch (kind) {
       case 'battery':
         this.load(u.team, BATTERY);
         break;
@@ -1543,10 +1725,10 @@ export class Match {
         break;
       }
       case 'dud':
-        this.explode(it.x, it.y, it.z, DUD);
+        this.explode(x, y, z, DUD);
         break;
     }
-    e.gain = gain;
+    return gain;
   }
 
   /** The nearest enemy in reach is pulled over. */

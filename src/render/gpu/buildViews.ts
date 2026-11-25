@@ -1,11 +1,13 @@
 import * as THREE from 'three/webgpu';
 import { abs, attribute, clamp, float, floor, mix, normalView, positionGeometry, positionViewDirection, pow, smoothstep, uniform, uniformArray } from 'three/tsl';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { APART, COLUMNS, DECK_UNDER, PIECE, shifted, SPAN, SPANS, WALL_DEEP } from '../../game/build';
 import type { Match, MatchEvent, Unit } from '../../game/match';
 import { WEAPONS } from '../../game/weapons';
 import type { BuildReply } from '../../workers/build.worker';
 import type { BugView } from '../BugView';
 import { outOf } from './buildModels';
+import type { Placing } from '../../input/placing';
 
 type F = THREE.Node<'float'>;
 type V3 = THREE.Node<'vec3'>;
@@ -139,9 +141,9 @@ export class BuildViews {
   private readonly ghostOut = uniform(new THREE.Vector3(0, 0, 1));
   private readonly ghostEnds = uniform(new THREE.Vector4());
   private readonly ghostFrame = newFrame();
-  private ghostKey = '';
-  private ghostRoom = false;
-  private readonly pieces: number[] = [];
+  /** How far from the bug it may be put; the spot under the pointer. */
+  private readonly ring: THREE.Mesh;
+  private readonly spot: THREE.Mesh;
   private readonly built: Built[] = [];
   /** What was built before its model was made. */
   private waiting: { weapon: string; frame: Frame; turns: boolean }[] = [];
@@ -194,6 +196,18 @@ export class BuildViews {
       this.ghost.visible = false;
       this.ghost.renderOrder = 6;
       this.root.add(this.ghost);
+    }
+    {
+      const dashes: THREE.BufferGeometry[] = [];
+      for (let k = 0; k < 48; k++) dashes.push(new THREE.RingGeometry(0.985, 1, 3, 1, (k / 48) * Math.PI * 2, (Math.PI * 2 * 0.6) / 48).rotateX(-Math.PI / 2));
+      this.ring = new THREE.Mesh(mergeGeometries(dashes), new THREE.MeshBasicNodeMaterial({ color: 0x5cc8ff, transparent: true, opacity: 0.55, depthWrite: false, depthTest: false, side: THREE.DoubleSide, fog: false }));
+      this.spot = new THREE.Mesh(new THREE.RingGeometry(0.5, 0.62, 32).rotateX(-Math.PI / 2), new THREE.MeshBasicNodeMaterial({ color: 0x5cc8ff, transparent: true, opacity: 0.9, depthWrite: false, depthTest: false, side: THREE.DoubleSide, fog: false }));
+      for (const o of [this.ring, this.spot]) {
+        o.frustumCulled = false;
+        o.renderOrder = 7;
+        o.visible = false;
+        this.root.add(o);
+      }
     }
     const g = new THREE.IcosahedronGeometry(1, 0);
     this.flakes = new THREE.InstancedMesh(g, new THREE.MeshStandardNodeMaterial({ roughness: 0.7 }), FLAKES);
@@ -263,8 +277,7 @@ export class BuildViews {
   clear(species: readonly string[]): void {
     for (const s of this.shelters) this.root.remove(s.mesh);
     this.shelters.length = 0;
-    this.ghost.visible = false;
-    this.ghostKey = '';
+    this.ghost.visible = this.ring.visible = this.spot.visible = false;
     for (const b of this.bits) b.t = b.life;
     this.blasts.length = 0;
     this.turned = 0;
@@ -587,9 +600,9 @@ export class BuildViews {
 
   // ---------------------------------------------------------------- every frame
 
-  /** `mine`: a player (not the computer) has the turn and the view. */
-  update(match: Match, views: readonly BugView[], mine: boolean, dt: number, time: number): void {
-    this.showGhost(match, mine, time);
+  /** `placing`: what the player is placing (null: nobody is). */
+  update(match: Match, views: readonly BugView[], placing: Placing | null, dt: number, time: number): void {
+    this.showGhost(match, placing, time);
     this.turn(match);
     for (let k = 0; k < this.blasts.length; k += 4) this.blow(this.blasts[k], this.blasts[k + 1], this.blasts[k + 2], this.blasts[k + 3]);
     this.blasts.length = 0;
@@ -639,35 +652,85 @@ export class BuildViews {
     }
   }
 
-  private showGhost(match: Match, mine: boolean, time: number): void {
-    const w = match.currentWeapon;
+  private showGhost(match: Match, placing: Placing | null, time: number): void {
+    const s = placing?.shown ?? null;
     const u = match.activeUnit;
     const b = u.bug;
-    const model = this.models.get(w.id);
-    const on = mine && match.phase === 'aim' && b.alive && b.grounded && (w.kind === 'wall' || w.kind === 'bridge') && model !== undefined;
-    this.ghost.visible = on;
-    if (!on) {
-      this.ghostKey = '';
+    const model = s ? this.models.get(s.w.id) : undefined;
+    const going = match.going;
+    this.ghost.visible = model !== undefined;
+    this.ring.visible = this.spot.visible = false;
+    if (going) {
+      // (where it is going to hide)
+      const g = this.models.get(going.w.id);
+      if (!g) return;
+      this.ghost.geometry = g;
+      this.ghost.visible = true;
+      this.ghostShelter(b.x, b.z, going.x, going.y, going.z, b.species.radius);
+      this.ghostColor.value.set(...GHOST[0]);
       return;
     }
+    if (!s || !model) return;
+    // (a bridge's near end: the rest of it comes with its far one)
+    const ok = s.why === '' || (s.w.kind === 'bridge' && !placing?.first && s.why === 'no room');
     this.ghostBeat.value = 0.5 + 0.5 * Math.sin(time * 5);
-    const key = `${w.id}|${b.x.toFixed(3)}|${b.y.toFixed(3)}|${b.z.toFixed(3)}|${b.fx.toFixed(4)}|${b.fz.toFixed(4)}|${u.aimV.toFixed(4)}|${match.built}|${match.turnNumber}`;
-    if (key !== this.ghostKey) {
-      this.ghostKey = key;
-      match.piecesFor(u, w, this.pieces);
-      this.ghostRoom = this.pieces.length > 0;
-      // (no more this turn: in red)
-      this.ghostColor.value.set(...GHOST[match.built ? 1 : 0]);
-      if (this.ghostRoom) {
-        const f = this.ghostFrame;
-        frameOf(this.pieces, w.kind === 'wall', f);
-        f.feet.forEach((v, i) => (this.ghostFeet.array[i] as THREE.Vector3).copy(v));
-        this.ghostUp.value.copy(f.up);
-        this.ghostOut.value.copy(f.out);
-        this.ghostEnds.value.set(f.x0, f.x1, f.first, f.gap);
+    this.ghostColor.value.set(...GHOST[ok ? 0 : 1]);
+    this.ghost.geometry = model;
+    const [x, y, z, fx, fy, fz] = s.place;
+    const f = this.ghostFrame;
+    if (s.w.kind === 'shelter') this.ghostShelter(b.x, b.z, x, y, z, b.species.radius);
+    else if (s.pieces.length > 0) {
+      frameOf(s.pieces, s.w.kind === 'wall', f);
+      this.setGhost();
+    } else {
+      // (no room for it: where it would be, flat)
+      const l = Math.hypot(fx, fz) || 1;
+      f.up.set(0, 1, 0);
+      if (s.w.kind === 'wall') {
+        f.out.set(fx / l, 0, fz / l);
+        f.first = (-(COLUMNS - 1) / 2) * APART;
+        f.gap = APART;
+      } else {
+        f.out.set(-fz / l, 0, fx / l).negate();
+        f.first = 0;
+        f.gap = (SPANS * SPAN) / (STATIONS - 1);
       }
-      this.ghost.geometry = model;
+      this.a.crossVectors(f.up, f.out);
+      f.feet.forEach((v, i) => v.set(x, y + (s.w.kind === 'bridge' ? 0.7 : 0), z).addScaledVector(this.a, f.first + i * f.gap));
+      f.x0 = -99;
+      f.x1 = s.w.kind === 'wall' ? 99 : Math.max(2, Math.hypot(fx, fy, fz));
+      this.setGhost();
     }
-    this.ghost.visible = this.ghostRoom;
+    // ---- how far it may be, and the spot itself
+    this.ring.visible = !(s.w.kind === 'bridge' && placing?.first);
+    this.ring.position.set(b.x - b.nx * (b.species.radius - 0.12), b.y - b.ny * (b.species.radius - 0.12), b.z - b.nz * (b.species.radius - 0.12));
+    this.ring.quaternion.setFromUnitVectors(UP, this.p.set(b.nx, b.ny, b.nz));
+    this.ring.scale.setScalar(s.w.reach);
+    this.spot.visible = true;
+    this.spot.position.set(x, y + 0.12, z);
+    (this.spot.material as THREE.MeshBasicNodeMaterial).color.setHex(ok ? 0x5cc8ff : 0xff5a45);
+  }
+
+  /** The ghost is a shelter, for a bug of this radius that comes from (bx, bz). */
+  private ghostShelter(bx: number, bz: number, x: number, y: number, z: number, r: number): void {
+    const f = this.ghostFrame;
+    const l = Math.hypot(x - bx, z - bz);
+    f.up.set(0, r, 0);
+    f.out.set(l > 0.5 ? ((x - bx) / l) * r : 0, 0, l > 0.5 ? ((z - bz) / l) * r : r);
+    this.a.set(f.out.z, 0, -f.out.x);
+    f.first = -6;
+    f.gap = 2;
+    f.feet.forEach((v, i) => v.set(x, y, z).addScaledVector(this.a, f.first + i * f.gap));
+    f.x0 = -99;
+    f.x1 = 99;
+    this.setGhost();
+  }
+
+  private setGhost(): void {
+    const f = this.ghostFrame;
+    f.feet.forEach((v, i) => (this.ghostFeet.array[i] as THREE.Vector3).copy(v));
+    this.ghostUp.value.copy(f.up);
+    this.ghostOut.value.copy(f.out);
+    this.ghostEnds.value.set(f.x0, f.x1, f.first, f.gap);
   }
 }

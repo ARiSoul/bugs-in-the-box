@@ -43,12 +43,38 @@ export function shifted(slot: number, n: number): number {
   return slot === 0 ? END : slot === n - 1 ? -END : 0;
 }
 
-/** The pieces of a wall before the bug, standing on what is there (u up, v to its side). None: no place for it. */
-export function wallPieces(field: TerrainField, b: Bug, out: number[]): number[] {
-  out.length = 0;
+/** Where a wall is to stand, or a bridge to begin: a place on a surface, what is up there, and which way (square to up, unit). */
+export interface Site {
+  x: number;
+  y: number;
+  z: number;
+  nx: number;
+  ny: number;
+  nz: number;
+  fx: number;
+  fy: number;
+  fz: number;
+}
+
+/** The site of a wall right before the bug. */
+export function before(b: Bug, s: Site): Site {
   b.direction(1, 0, dir);
-  const [fx, fy, fz] = dir;
-  const { nx, ny, nz } = b;
+  s.nx = b.nx;
+  s.ny = b.ny;
+  s.nz = b.nz;
+  s.fx = dir[0];
+  s.fy = dir[1];
+  s.fz = dir[2];
+  s.x = b.x - b.nx * b.species.radius + s.fx * AHEAD;
+  s.y = b.y - b.ny * b.species.radius + s.fy * AHEAD;
+  s.z = b.z - b.nz * b.species.radius + s.fz * AHEAD;
+  return s;
+}
+
+/** The pieces of a wall, standing on what is there (u up, v to its side; it bulges towards f). None: no place for it. */
+export function wallPieces(field: TerrainField, o: Readonly<Site>, out: number[]): number[] {
+  out.length = 0;
+  const { fx, fy, fz, nx, ny, nz } = o;
   // (to its side)
   const sx = ny * fz - nz * fy;
   const sy = nz * fx - nx * fz;
@@ -57,16 +83,17 @@ export function wallPieces(field: TerrainField, b: Bug, out: number[]): number[]
   const u = half - WALL_THICK;
   for (let c = 0; c < COLUMNS; c++) {
     const i = c - (COLUMNS - 1) / 2;
-    const on = AHEAD - BEND * i * i;
-    const x = b.x + fx * on + sx * i * APART;
-    const y = b.y + fy * on + sy * i * APART;
-    const z = b.z + fz * on + sz * i * APART;
+    const on = -BEND * i * i;
+    // (a little over the ground there)
+    const x = o.x + nx + fx * on + sx * i * APART;
+    const y = o.y + ny + fy * on + sy * i * APART;
+    const z = o.z + nz + fz * on + sz * i * APART;
     if (field.sample(x + nx * 2, y + ny * 2, z + nz * 2) < 0) continue;
     const t = field.raycast(x + nx * 2, y + ny * 2, z + nz * 2, -nx, -ny, -nz, 5.5);
     if (t <= 0) continue;
     const end = shifted(c, COLUMNS);
     const v = APART * 0.5 + 0.1 - (end < 0 ? -end : end);
-    // (its middle over the ground, which is 2 - t over the bug's own middle)
+    // (its middle over the ground, which is 2 - t over that)
     const h = 2 - t + half - WALL_DEEP;
     out.push(x + nx * h + sx * end, y + ny * h + sy * end, z + nz * h + sz * end, nx * u, ny * u, nz * u, sx * v, sy * v, sz * v, WALL_THICK, c);
   }
@@ -74,10 +101,10 @@ export function wallPieces(field: TerrainField, b: Bug, out: number[]): number[]
   return out;
 }
 
-/** The pieces of a bridge from the bug's feet along (dx, dy, dz) (unit), as far as it goes or until it meets something (u along it, v across). */
-export function bridgePieces(field: TerrainField, b: Bug, dx: number, dy: number, dz: number, out: number[]): number[] {
+/** The pieces of a bridge from a site along (dx, dy, dz) (unit), `count` of them or until it meets something (u along it, v across). */
+export function bridgePieces(field: TerrainField, o: Readonly<Site>, dx: number, dy: number, dz: number, count: number, out: number[]): number[] {
   out.length = 0;
-  const { nx, ny, nz } = b;
+  const { nx, ny, nz } = o;
   // (no steeper than a bug walks at ease)
   const up = dx * nx + dy * ny + dz * nz;
   const most = up > STEEP ? STEEP : up < -STEEP ? -STEEP : up;
@@ -100,16 +127,15 @@ export function bridgePieces(field: TerrainField, b: Bug, dx: number, dy: number
   const ox = nx * flat - tx * most;
   const oy = ny * flat - ty * most;
   const oz = nz * flat - tz * most;
-  // (its deck is level with the bug's feet where it begins)
-  const low = b.species.radius;
+  // (its deck is level with the ground where it begins)
   let n = 0;
-  for (let c = 0; c < SPANS; c++) {
+  for (let c = 0; c < count; c++) {
     const end = shifted(c, SPANS);
     const u = SPAN * 0.5 + 0.12 - (end < 0 ? -end : end);
     const s = 0.95 + c * SPAN + (most > 0 ? most * 0.6 : 0) + end;
-    const x = b.x - nx * low + ax * s - ox * (DECK_THICK + DECK_UNDER);
-    const y = b.y - ny * low + ay * s - oy * (DECK_THICK + DECK_UNDER);
-    const z = b.z - nz * low + az * s - oz * (DECK_THICK + DECK_UNDER);
+    const x = o.x + ax * s - ox * (DECK_THICK + DECK_UNDER);
+    const y = o.y + ay * s - oy * (DECK_THICK + DECK_UNDER);
+    const z = o.z + az * s - oz * (DECK_THICK + DECK_UNDER);
     n++;
     out.push(x, y, z, ax * u, ay * u, az * u, sx * DECK_WIDE, sy * DECK_WIDE, sz * DECK_WIDE, DECK_THICK, c);
     // (it has got to something)

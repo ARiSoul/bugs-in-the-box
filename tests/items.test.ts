@@ -8,7 +8,7 @@ import { flat } from './helpers/worlds';
 
 const make = (extra = {}): Match => {
   const t = flat(10);
-  const m = new Match(t, [{ name: 'Red', species: ANT, color: 0, size: 1 }, { name: 'Blue', species: SPIDER, color: 0, size: 1 }], 1, { placeBugs: false, ...extra });
+  const m = new Match(t, [{ name: 'Red', species: ANT, color: 0, size: 1 }, { name: 'Blue', species: SPIDER, color: 0, size: 1 }], 1, { placeBugs: false, bag: 0, ...extra });
   m.units[0].bug.drop(t, 20, 32);
   m.units[1].bug.drop(t, 44, 32);
   for (let n = 0; n < TICK_RATE * 2; n++) m.step(NO_INPUT);
@@ -119,6 +119,30 @@ describe('boxes', () => {
     expect(g.units[1].bug.vx).toBeLessThan(-3);
     const d = opened('dud');
     expect(d.units[0].bug.health).toBeLessThan(ANT.health);
+  });
+
+  it('what is kept is used later, one a turn, and only as many kinds as there are spaces', () => {
+    const m = make({ bag: 2 });
+    const b = m.units[0].bug;
+    const open = (kind: ItemKind): void => {
+      put(m, kind, b.x + 1, b.y, b.z);
+      m.step(NO_INPUT);
+    };
+    b.health = 40;
+    open('patch');
+    open('patch');
+    open('fuse');
+    expect(m.bag[0]).toEqual({ patch: 2, fuse: 1 });
+    expect(b.health).toBe(40);
+    // (no space: at once)
+    open('spring');
+    expect(b.leap).toBeGreaterThan(1.3);
+    m.step({ ...NO_INPUT, item: ITEM_KINDS.indexOf('patch') });
+    expect(m.events.some((e) => e.type === 'use' && e.kind === 'patch')).toBe(true);
+    expect(b.health).toBeGreaterThan(70);
+    m.step({ ...NO_INPUT, item: ITEM_KINDS.indexOf('fuse') });
+    expect(m.units[0].fuse).toBe(false);
+    expect(m.bag[0]).toEqual({ patch: 1, fuse: 1 });
   });
 
   it('a blast destroys a box, and one that loses its ground falls', () => {

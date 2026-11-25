@@ -21,6 +21,9 @@ import { BowScene } from './render/gpu/bowScene';
 import { BroodScene } from './render/gpu/broodScene';
 import { FlockScene } from './render/gpu/flockScene';
 import { ColumnScene } from './render/gpu/columnScene';
+import { itemIndex } from './game/actions';
+import { Inventory } from './ui/inventory';
+import { Placing } from './input/placing';
 import { BuildViews } from './render/gpu/buildViews';
 import { WebViews } from './render/webs';
 import { DrawnGround } from './render/drawnGround';
@@ -31,14 +34,15 @@ import { MeshWorkers, type MeshBatch } from './render/MeshWorkers';
 import { FloatingTexts, UnitLabel } from './render/labels';
 import { ProjectileViews } from './render/projectiles';
 import { dress, type Face } from './render/gpu/heroDress';
-import { ITEM_LOOKS, ItemViews } from './render/gpu/itemViews';
+import { ITEM_LOOKS } from './render/gpu/itemLooks';
+import { ItemViews } from './render/gpu/itemViews';
 import { Heroes } from './render/gpu/heroes';
 import { createGpuStage } from './render/gpu/gpuStage';
 import type { Stage, StageOptions } from './render/stage';
 import { createLayout } from './terrain/generators/types';
 import { scenarioById, type Scenario } from './terrain/scenarios';
 import { Terrain } from './terrain/Terrain';
-import { Hud, type HudState } from './ui/hud';
+import { HAND, Hud, type HudState } from './ui/hud';
 import { EndScreen, SetupScreen, type SetupChoice } from './ui/setup';
 import { setupKeysMenu } from './ui/keys';
 import { SoundMenu } from './ui/sound';
@@ -101,6 +105,9 @@ const brood = new BroodScene(stage.scene, stage.fx, bow.light);
 const flock = new FlockScene(stage.scene, stage.fx, bow.light);
 /** The special attack whose scene has the view now, if any. */
 const inScene = (): BowScene | ColumnScene | BroodScene | FlockScene | null => (bow.camera.active ? bow : antColumn.camera.active ? antColumn : brood.camera.active ? brood : flock.camera.active ? flock : null);
+/** What the player builds follows the pointer, until a click puts it down. */
+const placing = new Placing();
+const places = (): boolean => !brain() && !debugCamera && !menus.setup && !menus.over && match.phase === 'aim' && !match.going && match.activeUnit.bug.alive && Placing.takes(match.currentWeapon);
 /** The player marks a spot for a brood. */
 const marking = (): boolean => !brain() && match.stance && match.phase === 'aim' && match.currentWeapon.kind === 'brood' && brood.camera.active;
 const follow = new FollowCamera(stage.camera, stage.controls);
@@ -276,11 +283,17 @@ function handleEvents(events: readonly MatchEvent[]): void {
     switch (e.type) {
       case 'open': {
         const look = ITEM_LOOKS[e.kind];
-        const what = e.kind === 'patch' ? `+${e.gain}` : look.name;
+        const what = e.kept ? `${look.name} kept` : e.kind === 'patch' ? `+${e.gain}` : look.name;
         texts.spawn(what, parseInt(look.color.slice(1), 16), at.set(e.x, e.y + 2.2, e.z), 1.5);
-        hud.found(match, e.unit, e.kind, look);
+        hud.found(match, e.unit, e.kind, look, e.kept);
         if (e.kind === 'dud') break;
         flashes.spawn(at.set(e.x, e.y, e.z), 0.9);
+        break;
+      }
+      case 'use': {
+        const look = ITEM_LOOKS[e.kind];
+        const b = match.units[e.unit].bug;
+        texts.spawn(e.kind === 'patch' ? `+${e.gain}` : look.name, parseInt(look.color.slice(1), 16), at.set(b.x, b.y + 3, b.z), 1.5);
         break;
       }
       case 'fuse':
@@ -405,8 +418,18 @@ const soundMenu = new SoundMenu(sound);
 const controls = new Controls(window, (code) => {
   if (code === 'KeyN') newMatch(seed);
   else if (code === 'KeyM') soundMenu.toggle();
+  else if (code === 'KeyI') inventory.toggle();
 });
 controls.pickSlot = (n) => hud.pick(n);
+const inventory = new Inventory(
+  {
+    weapon: (i) => controls.selectWeapon(i),
+    item: (a) => a.item && controls.useItem(itemIndex(a.item)),
+    drop: () => controls.selectWeapon(match.kept[match.activeUnit.team]),
+  },
+  HAND,
+);
+hud.addInventory(inventory);
 controls.bindButtons(hud.pad);
 setupKeysMenu(controls);
 if (hooks.fly) {
@@ -821,10 +844,27 @@ canvas.addEventListener('pointerdown', (e) => {
     if (e.button === 0 && !match.flock) controls.click();
     return;
   }
-  if (e.button === 2) orbiting = true;
+  if (places() && e.button === 0) {
+    const p = placing.click();
+    if (p) {
+      controls.placeAt(p);
+      placing.clear();
+    } else if (placing.shown && placing.shown.why !== '') texts.spawn(placing.shown.why, 0xff8a6a, at.set(placing.shown.place[0], placing.shown.place[1] + 2, placing.shown.place[2]));
+  }
+  if (e.button === 2) {
+    orbiting = true;
+    rightFrom.x = e.clientX;
+    rightFrom.y = e.clientY;
+  }
 });
+/** Where the right button went down: let go there, it drops what is being placed. */
+const rightFrom = { x: 0, y: 0 };
 window.addEventListener('pointerup', (e) => {
   if (e.button !== 2 || !orbiting) return;
+  if (places() && Math.hypot(e.clientX - rightFrom.x, e.clientY - rightFrom.y) < 6 && !placing.back()) {
+    placing.clear();
+    controls.selectWeapon(match.kept[match.activeUnit.team]);
+  }
   orbiting = false;
   orbitTail = ORBIT_TAIL;
 });
@@ -832,10 +872,16 @@ window.addEventListener('pointerup', (e) => {
 const SIGHT_SPEED = 0.0022;
 /** Where the pointer is, for the spot it marks. */
 const pointer = { clientX: -1, clientY: -1 };
+/** The pointer is on the cards, not on the map. */
+let overHud = false;
+window.addEventListener('pointermove', (e) => {
+  overHud = e.target !== canvas;
+});
 canvas.addEventListener(
   'wheel',
   (e) => {
     if (marking()) brood.camera.zoomBy(Math.exp(e.deltaY * 0.001));
+    else if (places()) placing.turn(Math.sign(e.deltaY));
   },
   { passive: true },
 );
@@ -1117,6 +1163,10 @@ function frame(now: number): void {
     if (p) controls.markAt(p.x, p.y, p.z);
   }
   brood.pan = marking() ? controls.moveHeld : 0;
+  // (the wheel turns what is placed, not the view)
+  stage.controls.enableZoom = !places();
+  if (!places() || inMenu) placing.clear();
+  else placing.update(match, match.activeUnit, match.currentWeapon, pointer.clientX < 0 || overHud ? null : pickTerrain(pointer, canvas, stage.camera, terrain));
   let faced = false;
   // (a special attack slows the match for a moment: the same ticks, later)
   const scaled = dt * Math.min(bow.timeScale, antColumn.timeScale, brood.timeScale, flock.timeScale);
@@ -1193,7 +1243,7 @@ function frame(now: number): void {
   }
   placeSight();
   itemViews.update(match, scaled, now / 1000);
-  buildViews.update(match, bugViews.map((v) => v.view), !brain() && !debugCamera && !inMenu && !menus.over, scaled, now / 1000);
+  buildViews.update(match, bugViews.map((v) => v.view), !brain() && !debugCamera && !inMenu && !menus.over ? placing : null, scaled, now / 1000);
   webViews.update(match, ground, (i, out) => out.copy(bugViews[i].view.root.position), now);
   const active = bugViews[match.active];
   aim.update(match, active.view.root.position, active.height, now, stage.camera.position.distanceTo(active.view.root.position));
