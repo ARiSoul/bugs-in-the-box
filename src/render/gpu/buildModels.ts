@@ -865,6 +865,13 @@ function silkFunnel(): Model {
       last = p;
     }
   }
+  // (loose silk at its mouth: short loops sagging from it)
+  for (let k = 0; k < 11; k++) {
+    const a0 = 0.15 + rnd(k + 0.15) * 2.85;
+    const a1 = a0 + 0.25 + 0.3 * rnd(k + 0.25);
+    const at = (a: number): V => [Math.cos(a) * (MR + 0.04), MY + Math.sin(a) * (MR + 0.04), MZ + 0.06];
+    s.line(sag(at(a0), at(a1), 0.12 + 0.22 * rnd(k + 0.35), 6), 0.014 + 0.006 * rnd(k + 0.45), dim(SILK, 1.12));
+  }
   // an apron of threads before it
   for (let k = 0; k <= 30; k++) {
     const a = -1.15 + (k / 30) * 2.3;
@@ -1240,6 +1247,42 @@ function waxNest(): Model {
       const z = (v / (h || 1)) * Math.sin(h) * A[2] * 0.95;
       if (z > 0.4 && Math.abs(x) < 1.25 && y < 2.2) continue;
       honey(s, x, y, z, 0.17, 0.17, 0.17, dim(HONEY, 0.8 + 0.5 * w));
+    }
+  // its front, round the door: cells built on it, wall by wall (the field is too coarse for them)
+  const FC = 0.26;
+  const on = (x: number, y: number, out: number): V | null => {
+    const k = 1 - (x / A[0]) ** 2 - (y / A[1]) ** 2;
+    return k > 0 ? [x, y, A[2] * Math.sqrt(k) + out] : null;
+  };
+  const corner = (cx: number, cy: number, i: number): [number, number] => [cx + FC * Math.cos(Math.PI / 6 + (i * Math.PI) / 3), cy + FC * Math.sin(Math.PI / 6 + (i * Math.PI) / 3)];
+  for (let r = 0; r < 12; r++)
+    for (let q = -8; q <= 8; q++) {
+      const cx = FC * Math.sqrt(3) * (q + (r % 2) / 2);
+      const cy = 0.2 + FC * 1.5 * r;
+      const m = Math.hypot(cx, cy - DY) * 0.45 + inHex(cx, cy - DY) * 0.55;
+      // (on the door's frame, its flat face; beyond it, the dome where its top's cells do not reach)
+      const frame = m > 0.99 && m < 1.24;
+      const c = frame ? ([cx, cy, 1.97] as V) : on(cx, cy, 0);
+      if (!c || (!frame && (c[2] < 1.05 || m < 1.42 || cy > 2.25 || Math.abs(cx) > 1.62))) continue;
+      const w = rnd(cx * 5.3 + cy * 11.7);
+      // the walls, pale wax standing out of it
+      s.rough = 0.35;
+      s.glow = 0.2;
+      for (let i = 0; i < 3; i++) {
+        const [ax, ay] = corner(cx, cy, i);
+        const [bx, by] = corner(cx, cy, i + 1);
+        const pa = frame ? ([ax, ay, 1.99] as V) : on(ax, ay, 0.02);
+        const pb = frame ? ([bx, by, 1.99] as V) : on(bx, by, 0.02);
+        if (pa && pb) s.rod(pa, pb, 0.032, wax(1.2 + 0.15 * rnd(cx + cy * 3 + i)), 4);
+      }
+      // what is in it: dark old wax at its bottom, honey, or a pale cap
+      const n = 1 / Math.hypot(c[0] / A[0] ** 2, c[1] / A[1] ** 2, c[2] / A[2] ** 2);
+      const nx = frame ? 0 : (c[0] / A[0] ** 2) * n;
+      const ny = frame ? 0 : (c[1] / A[1] ** 2) * n;
+      const nz = frame ? 1 : (c[2] / A[2] ** 2) * n;
+      if (w < 0.15) s.ball(c[0] + nx * 0.015, c[1] + ny * 0.015, c[2] + nz * 0.015, FC * 0.8, FC * 0.8, 0.03, wax(1.3), 6, 3);
+      else if (w < 0.38) honey(s, c[0] - nx * 0.02, c[1] - ny * 0.02, c[2] - nz * 0.02, FC * 0.72, FC * 0.72, 0.06, dim(HONEY, 0.75 + 0.6 * rnd(cx * 3 + cy)));
+      else s.ball(c[0] + nx * 0.005, c[1] + ny * 0.005, c[2] + nz * 0.005, FC * 0.74, FC * 0.74, 0.012, wax(0.55, 0.9), 6, 3);
     }
   return s.done();
 }
