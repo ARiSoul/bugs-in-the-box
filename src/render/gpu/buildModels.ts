@@ -131,12 +131,14 @@ class Soup {
   readonly i: number[] = [];
   rough = 0.6;
   glow = 0;
+  /** How light comes through it: 0 not at all, 1 silk, 2 thin shell, 3 wax (kept with its roughness, as `rough + 2 * lit`). */
+  lit = 0;
 
   private vertex(x: number, y: number, z: number, nx: number, ny: number, nz: number, c: V): void {
     this.p.push(x, y, z);
     this.n.push(nx, ny, nz);
     this.c.push(c[0], c[1], c[2]);
-    this.l.push(this.rough, this.glow);
+    this.l.push(this.rough + 2 * this.lit, this.glow);
   }
 
   /** The surface of a field (negative inside) within a box, in cells of `h`. The field is no steeper than 1 (about). */
@@ -640,6 +642,7 @@ const felt = (u: number, v: number, w: number): V => {
 
 function silkCurtain(): Model {
   const s = new Soup();
+  s.lit = 1;
   s.rough = 0.42;
   s.glow = 0.1;
   const posts: readonly V[] = [-5.2, -2.6, 0, 2.6, 5.2].map((x, k) => [x, [4.9, 5.5, 5.15, 5.6, 4.9][k], 0] as const);
@@ -716,6 +719,7 @@ function silkCurtain(): Model {
 
 function silkSpan(): Model {
   const s = new Soup();
+  s.lit = 1;
   s.rough = 0.4;
   s.glow = 0.2;
   // a felted deck, flat where it is walked on; its edges turn up a little, its belly hangs
@@ -798,6 +802,7 @@ function silkSpan(): Model {
 
 function silkFunnel(): Model {
   const s = new Soup();
+  s.lit = 1;
   s.rough = 0.3;
   s.glow = 0.16;
   const MY = 1.02;
@@ -1033,7 +1038,7 @@ function husk(): Model {
       const inside = Math.hypot(x / rx, y / ry, z / rz) < 0.95 && z < 1.9 ? 0.25 : 1;
       // (amber and pale where it is thin, dark brown to its edges and the split)
       const split = ss(0.25, 0.08, Math.abs(x)) * ss(0.9, 1.2, y);
-      const amber: V = [tone[0] * 0.6 + 0.2, tone[1] * 0.6 + 0.085, tone[2] * 0.6 + 0.018];
+      const amber: V = [tone[0] * 0.8 + 0.08, tone[1] * 0.8 + 0.03, tone[2] * 0.8 + 0.006];
       return dim(amber, (1.0 + 0.14 * noise(x * 2, y, z * 4) + 0.05 * Math.sin(x * 18)) * (1 - 0.62 * e) * (1 - 0.5 * split) * (1 + 0.35 * ss(1.0, 1.45, y)) * inside);
     });
   }
@@ -1056,9 +1061,12 @@ const wax = (k: number, deep = 0): V => [WAX[0] * k * (1 - 0.55 * deep), WAX[1] 
 const HONEY: V = [0.62, 0.17, 0.006];
 /** Honey in a cell: a lens of it. */
 function honey(s: Soup, x: number, y: number, z: number, rx: number, ry: number, rz: number, tone: V = HONEY): void {
+  const was = s.lit;
+  s.lit = 3;
   s.rough = 0.1;
   s.glow = 0.5;
   s.ball(x, y, z, rx, ry, rz, tone, 10, 7);
+  s.lit = was;
   s.rough = 0.4;
   s.glow = 0.2;
 }
@@ -1072,6 +1080,7 @@ function drip(s: Soup, x: number, y: number, z: number, l: number): void {
 
 function combWall(): Model {
   const s = new Soup();
+  s.lit = 3;
   s.rough = 0.52;
   s.glow = 0.2;
   const C = 0.56;
@@ -1116,6 +1125,7 @@ function combWall(): Model {
 
 function combSpan(): Model {
   const s = new Soup();
+  s.lit = 3;
   s.rough = 0.62;
   s.glow = 0.2;
   const C = 0.46;
@@ -1162,6 +1172,7 @@ function combSpan(): Model {
 
 function waxNest(): Model {
   const s = new Soup();
+  s.lit = 3;
   s.rough = 0.28;
   s.glow = 0.2;
   const A: V = [2.2, 2.45, 2.2];
@@ -1181,7 +1192,7 @@ function waxNest(): Model {
       const t = ss(0, 0.045, CELL * 0.866 - h[2]);
       const off = 1 - ss(0.9, 1.35, z) * ss(1.55, 1.25, Math.abs(x)) * ss(2.3, 2.05, y);
       // (open cells cut in, a few capped flat; thin walls between)
-      d += (full(h[0], h[1]) ? 0 : 0.14 * t) * off;
+      d += (full(h[0], h[1]) ? 0 : 0.2 * t) * off;
     }
     d = smin(d, smax(Math.hypot(x, z) - 2.5 - 0.16 * noise(x, 2, z), y - 0.2, 0.2), 0.3);
     const h = inHex(x, y - DY);

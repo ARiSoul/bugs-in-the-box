@@ -203,12 +203,23 @@ export class BuildViews {
     // ---- one material for all of it: what a vertex is of is in `look` (how rough, how much light at its rim, when it grows)
     // (a rim light below 0 is a dark shell: it gives back little of what is round it, so it stays dark under its gloss)
     {
-      const m = new THREE.MeshStandardNodeMaterial({ vertexColors: true, side: THREE.DoubleSide });
+      // (light comes through silk, thin shell and wax: a scattering of each light seen from behind; `look.x` keeps which, as
+      // `rough + 2 * lit`)
+      const m = new THREE.MeshSSSNodeMaterial({ vertexColors: true, side: THREE.DoubleSide });
       const look = attribute('look', 'vec3') as unknown as V3;
+      const lit = floor(look.x.mul(0.5)) as unknown as F;
       const rim = pow(float(1).sub(abs(normalView.dot(positionViewDirection))), 2) as unknown as F;
       const grown = uniform(1).onObjectUpdate(({ object }) => (object?.userData.grown as number | undefined) ?? 1) as unknown as F;
       const base = attribute('color', 'vec3') as unknown as V3;
-      m.roughnessNode = look.x;
+      m.roughnessNode = look.x.sub(lit.mul(2));
+      // (silk 0.9, shell 1.8 (none uses it: shell looked like plastic), wax 1.2)
+      const through = step(0.5, lit).mul(0.9).add(step(1.5, lit).mul(0.9)).sub(step(2.5, lit).mul(0.6)) as unknown as F;
+      m.thicknessColorNode = base.mul(through);
+      m.thicknessDistortionNode = float(0.2);
+      m.thicknessAmbientNode = float(0.12);
+      m.thicknessAttenuationNode = float(0.9);
+      m.thicknessPowerNode = float(2.5);
+      m.thicknessScaleNode = float(3);
       m.maskNode = look.z.lessThan(grown);
       // (what has just come is warm for a moment)
       const fresh = smoothstep(0.12, 0, grown.sub(look.z)).mul(smoothstep(1.2, 1, grown));
