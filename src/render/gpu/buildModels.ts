@@ -503,11 +503,10 @@ function rampart(): Model {
 }
 
 /** A small ant, a few hundred triangles. */
-function smallAnt(): Soup {
+function smallAnt(body: V = [0.13, 0.03, 0.012]): Soup {
   const s = new Soup();
   s.rough = 0.34;
   s.glow = 0.12;
-  const body: V = [0.13, 0.03, 0.012];
   const leg: V = [0.075, 0.024, 0.012];
   s.ball(0, 0.04, -0.82, 0.4, 0.36, 0.56, body, 8, 6);
   s.ball(0, 0.02, 0, 0.23, 0.22, 0.38, dim(body, 1.2), 7, 5);
@@ -534,7 +533,11 @@ function smallAnt(): Soup {
 
 function livingBridge(): Model {
   const s = new Soup();
-  const ant = smallAnt();
+  // (not all alike: red brown, near black, a few redder)
+  const ants = [smallAnt(), smallAnt([0.035, 0.012, 0.008]), smallAnt([0.27, 0.06, 0.016]), smallAnt([0.1, 0.035, 0.018])];
+  const pick = (k: number): Soup => { const r = rnd(k + 0.77); return ants[r < 0.32 ? 1 : r < 0.5 ? 2 : r < 0.68 ? 3 : 0]; };
+  /** A few are bigger: soldiers among them. */
+  const big = (k: number): number => (rnd(k + 0.19) < 0.09 ? 1.3 : 1);
   // those it is walked on: rows of them along the span, head to tail, their backs the deck
   for (let l = 0; l < 5; l++)
     for (let i = -1; i < 16; i++) {
@@ -542,7 +545,7 @@ function livingBridge(): Model {
       const z = (l - 2) * 0.96 + 0.12 * (rnd(i + l * 5 + 9) - 0.5);
       if (x < 0.5 || (x > LONG - 0.2 && rnd(i * 3 + l + 4) < 0.5)) continue;
       const turn = 0.9 * (rnd(x * 7 + l) - 0.5);
-      s.put(ant, along(x, -0.3 - 0.03 * rnd(i * 3 + l + 5) - 0.5 * Math.max(0, Math.max(-x, x - LONG)), z, l % 2 ? 1 : -1, 0, turn, 0.82 * (0.88 + 0.24 * rnd(i * 11 + l)), (l - 2) * -0.1), 0.78 + 0.4 * rnd(i * 2 + l * 9 + 3));
+      s.put(pick(i * 7 + l * 3), along(x, -0.3 - 0.03 * rnd(i * 3 + l + 5) - 0.5 * Math.max(0, Math.max(-x, x - LONG)), z, l % 2 ? 1 : -1, 0, turn, 0.82 * (0.8 + 0.36 * rnd(i * 11 + l)) * big(i * 7 + l * 3), (l - 2) * -0.1), 0.78 + 0.4 * rnd(i * 2 + l * 9 + 3));
     }
   // those that hang on them: chains, down to an arch that is deep at its ends
   const arch = (x: number): number => { const t = Math.abs((x / LONG) * 2 - 1); return -0.75 - 1.75 * t ** 2.2; };
@@ -552,7 +555,7 @@ function livingBridge(): Model {
     const y = -0.62 + down * (arch(x) + 0.62);
     const edge = rnd(i + 0.95) < 0.55;
     const z = edge ? (rnd(i + 0.8) < 0.5 ? -1 : 1) * (DECK - 0.35) * (1 - 0.2 * down) : (rnd(i + 0.8) - 0.5) * 2 * (DECK - 0.6);
-    s.put(ant, along(x, y, z, rnd(i + 2) - 0.5, (rnd(i + 3) - 0.5) * 1.1, (rnd(i + 5) - 0.5) * 0.9, 0.74 * (0.88 + 0.24 * rnd(i + 9)), Math.PI * (0.65 + 0.7 * rnd(i + 6))), 0.62 + 0.36 * rnd(i + 8));
+    s.put(pick(i * 13 + 1), along(x, y, z, rnd(i + 2) - 0.5, (rnd(i + 3) - 0.5) * 1.1, (rnd(i + 5) - 0.5) * 0.9, 0.74 * (0.88 + 0.24 * rnd(i + 9)), Math.PI * (0.65 + 0.7 * rnd(i + 6))), 0.62 + 0.36 * rnd(i + 8));
   }
   // (what is between them)
   s.rough = 0.8;
@@ -650,7 +653,7 @@ function silkCurtain(): Model {
   s.field(
     (x, y, z) => {
       let d = 9;
-      for (const [a, h] of posts) d = Math.min(d, smax(Math.hypot(x - a - 0.08 * Math.sin(y * 1.4 + a), z) - (0.2 + 0.5 * Math.exp(-Math.max(0, y) * 1.8) + 0.08 * Math.exp(-(((y - h + 0.3) / 0.35) ** 2))) + 0.025 * Math.sin(y * 21 + 2 * Math.atan2(z, x - a)) + 0.04 * noise(x * 3, y * 2, z * 3), y - h, 0.2));
+      for (const [a, h] of posts) d = Math.min(d, smax(Math.hypot(x - a - 0.08 * Math.sin(y * 1.4 + a), z) - (0.2 + 0.22 * Math.exp(-Math.max(0, y) * 3) + 0.08 * Math.exp(-(((y - h + 0.3) / 0.35) ** 2))) + 0.025 * Math.sin(y * 21 + 2 * Math.atan2(z, x - a)) + 0.04 * noise(x * 3, y * 2, z * 3), y - h, 0.2));
       return d * 0.8;
     },
     [-6.2, -0.5, -1],
@@ -662,7 +665,13 @@ function silkCurtain(): Model {
   for (const [a, h] of posts)
     for (const [dx, dz] of a === 0 ? [[0.5, -2.6]] : [[Math.sign(a) * 0.9, 2.3], [Math.sign(a) * 0.5, -2.5]]) {
       s.line(sag([a, h - 0.25, 0], [a + dx, 0.02, dz], 0.1), 0.028, SILK);
-      s.ball(a + dx, 0.05, dz, 0.26, 0.08, 0.26, SILK, 12, 5);
+      // (made fast with a knot and threads fanned out over the ground)
+      s.ball(a + dx, 0.04, dz, 0.1, 0.06, 0.1, dim(SILK, 0.9), 8, 4);
+      for (let f = 0; f < 6; f++) {
+        const t = f * 1.047 + rnd(a + dz + f) * 0.8;
+        const l = 0.18 + 0.22 * rnd(a * 3 + f + dz);
+        s.line([[a + dx, 0.03, dz], [a + dx + Math.cos(t) * l * 0.5, 0.025, dz + Math.sin(t) * l * 0.5 + 0.03], [a + dx + Math.cos(t) * l, 0.015, dz + Math.sin(t) * l]], 0.012, dim(SILK, 0.95), 4);
+      }
     }
   return s.done();
 }
