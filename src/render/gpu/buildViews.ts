@@ -43,7 +43,7 @@ const BITS: Record<string, readonly number[]> = { ant: [0x6b4a2e, 0xb08a55, 0x4a
 const INSIDE: Record<string, readonly [readonly [number, number, number], readonly [number, number, number], number, number]> = {
   ant: [[0.14, 0.07, 0.03], [0.4, 0.24, 0.11], 0.95, 0.9],
   spider: [[0.42, 0.4, 0.37], [0.78, 0.76, 0.7], 0.6, 1.1],
-  cockroach: [[0.3, 0.16, 0.07], [0.62, 0.4, 0.2], 0.55, 1.1],
+  cockroach: [[0.1, 0.03, 0.008], [0.55, 0.24, 0.07], 0.35, 1.1],
   bee: [[0.3, 0.09, 0.004], [0.82, 0.35, 0.025], 0.35, 0.9],
 };
 /** Its skin where a hole cuts it: how thick, and what colour. */
@@ -183,7 +183,7 @@ export class BuildViews {
   private readonly flakes: THREE.InstancedMesh;
   /** What lies on the ground after a blast. */
   private readonly debris: THREE.InstancedMesh;
-  private readonly pieces: { at: THREE.Vector3; v: THREE.Vector3; t: number; size: number; still: boolean }[] = [];
+  private readonly pieces: { at: THREE.Vector3; v: THREE.Vector3; t: number; size: number; still: boolean; strand: boolean }[] = [];
   private nextPiece = 0;
   private field: TerrainField | null = null;
   private readonly bits: { at: THREE.Vector3; v: THREE.Vector3; t: number; life: number; size: number }[] = [];
@@ -271,7 +271,7 @@ export class BuildViews {
     for (let i = 0; i < DEBRIS; i++) {
       this.debris.setColorAt(i, new THREE.Color(0xffffff));
       this.debris.setMatrixAt(i, new THREE.Matrix4().makeScale(0, 0, 0));
-      this.pieces.push({ at: new THREE.Vector3(), v: new THREE.Vector3(), t: DEBRIS_LIFE, size: 0, still: false });
+      this.pieces.push({ at: new THREE.Vector3(), v: new THREE.Vector3(), t: DEBRIS_LIFE, size: 0, still: false, strand: false });
     }
     this.debris.visible = false;
     this.root.add(this.debris);
@@ -410,7 +410,10 @@ export class BuildViews {
     p.at.set(x, y, z).addScaledVector(p.v, r * 0.9);
     p.v.normalize().multiplyScalar(2 + 4 * Math.random());
     p.t = 0;
-    p.size = 0.05 + 0.13 * Math.random() ** 2;
+    // (silk breaks into tufts of thread that drift down; the rest into chunks)
+    p.strand = species === 'spider';
+    p.size = p.strand ? 0.12 + 0.16 * Math.random() : 0.07 + 0.2 * Math.random() ** 2;
+    if (p.strand) p.v.multiplyScalar(0.45);
     p.still = false;
     const c = BITS[species];
     this.debris.setColorAt(i, new THREE.Color(c[(i * 7) % c.length]).multiplyScalar(0.75 + 0.3 * Math.random()));
@@ -432,7 +435,8 @@ export class BuildViews {
       p.t += dt;
       n++;
       if (!p.still) {
-        p.v.y -= 20 * dt;
+        p.v.y -= (p.strand ? 6 : 20) * dt;
+        if (p.strand) p.v.multiplyScalar(1 - 2.5 * dt);
         const ox = p.at.x;
         const oy = p.at.y;
         const oz = p.at.z;
@@ -449,7 +453,8 @@ export class BuildViews {
       if (p.t > DEBRIS_LIFE - 2) moved = true;
       if (!moved) return;
       this.q.setFromEuler(this.e.set(i * 1.7, i * 2.3, i * 0.9));
-      this.debris.setMatrixAt(i, this.m.compose(p.at, this.q, this.s.set(k, k * 0.6, k * 0.85)));
+      if (p.strand) this.q.setFromEuler(this.e.set(i * 0.31, i * 2.3, 1.45 + i * 0.07));
+      this.debris.setMatrixAt(i, this.m.compose(p.at, this.q, p.strand ? this.s.set(k * 2.4, k * 0.09, k * 0.09) : this.s.set(k, k * 0.6, k * 0.85)));
     });
     this.debris.visible = n > 0;
     if (moved) this.debris.instanceMatrix.needsUpdate = true;
@@ -734,7 +739,9 @@ export class BuildViews {
         // (an ant's wall: wood above, soil under it; the rest lighter towards the skin)
         const w = b.species === 'ant' ? ss(1.9, 2.6, q[4] + g * 0.4) * 0.75 + 0.25 * g : g * 0.6 + 0.4 * Math.min(1, Math.max(0, 1 + q[3] * 2));
         // (broken stakes side by side)
-        const stakes = b.species === 'ant' ? 0.62 + 0.5 * Math.abs(Math.sin((q[0] * side3.x + q[2] * side3.z) * 6.5)) * (0.7 + 0.6 * g) : 1;
+        const core = Math.abs(Math.sin((q[0] * side3.x + q[2] * side3.z) * 6.5));
+        // (each cut through: dark bark, then rings, pale at its heart)
+        const stakes = b.species === 'ant' ? (0.45 + 0.7 * ss(0.15, 0.45, core) * (0.85 + 0.15 * Math.sin(core * 26 + g * 2)) + 0.25 * ss(0.85, 1, core)) * (0.8 + 0.4 * g) : 1;
         let s = (0.75 + 0.35 * Math.min(1, Math.max(0, 1 + q[3]))) * stakes;
         let blend = w;
         let shine = glow;
@@ -746,6 +753,12 @@ export class BuildViews {
           blend = 0.85 - 0.6 * wall;
           shine = glow * (1 - 0.6 * wall);
           rg = 0.42 + 0.4 * wall;
+        } else if (b.species === 'cockroach') {
+          // (layer on layer of shell, dark between them)
+          const layer = 0.5 + 0.5 * Math.sin(-q[3] * 21 + g * 1.2 + q[4] * 0.6);
+          blend = ss(0.15, 0.85, layer) * 0.85 + 0.15 * g;
+          rg = 0.25 + 0.45 * (1 - layer);
+          shine = glow * (0.4 + 0.6 * layer);
         } else if (living) {
           // (round backs, one by one)
           const a = Math.sin(q[0] * 3.1 + q[2] * 1.7) * Math.sin(q[1] * 3.7 - q[2] * 2.3);
@@ -777,7 +790,7 @@ export class BuildViews {
     if (b.species === 'spider' && rim.length >= 8) {
       const n = rim.length / 4;
       const dn = f.up;
-      for (let k = 0; k < 16; k++) {
+      for (let k = 0; k < 28; k++) {
         const i = Math.floor(Math.random() * n) * 4;
         const a = [rim[i], rim[i + 1], rim[i + 2]];
         let e: number[];
@@ -796,8 +809,9 @@ export class BuildViews {
           e = [rim[j], rim[j + 1], rim[j + 2]];
         } else {
           // (broken: towards the middle, and down)
-          const t = 0.25 + 0.4 * Math.random();
-          e = [a[0] + (x - a[0]) * t - dn.x * r * 0.5 * t, a[1] + (y - a[1]) * t - dn.y * r * 0.5 * t, a[2] + (z - a[2]) * t - dn.z * r * 0.5 * t];
+          const t = 0.2 + 0.35 * Math.random();
+          const fall = r * (0.5 + 0.9 * Math.random());
+          e = [a[0] + (x - a[0]) * t - dn.x * fall, a[1] + (y - a[1]) * t - dn.y * fall, a[2] + (z - a[2]) * t - dn.z * fall];
         }
         const lx = rim[i + 3];
         const slot = isWall ? Math.min(COLUMNS - 1, Math.max(0, Math.round((lx - f.first) / f.gap))) : Math.min(SPANS - 1, Math.max(0, Math.floor(lx / SPAN)));
