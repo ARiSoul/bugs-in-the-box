@@ -437,6 +437,14 @@ function rampart(): Model {
     const t = (rnd(i + 0.5) - 0.5) * 3.1;
     s.lump(end ? Math.sign(a) * (5 + 1.15 * Math.cos(t) + 0.4 * (r - 2.05)) : a * 6, k * 0.4, end ? Math.sin(t) * r : e * r, k, dim(EARTH[(Math.floor((a + 1) * 2.5) + (rnd(i + 4) < 0.3 ? 1 : 0)) % 4], 0.9 + 0.25 * rnd(i + 3)), i);
   }
+  // (and loose past its edge)
+  for (let i = 0; i < 140; i++) {
+    const a = rnd(i + 0.13) * 2 - 1;
+    const e = rnd(i + 0.27) < 0.5 ? 1 : -1;
+    const r = 2.7 + 1.1 * rnd(i + 0.37) ** 1.5;
+    const k = 0.04 + 0.07 * rnd(i + 0.83) ** 2;
+    s.lump(a * 6.2, k * 0.35, e * r, k, dim(EARTH[i % 6], 0.75 + 0.3 * rnd(i + 5)), i + 500);
+  }
   // splinters of wood in two rows, edge to edge: none quite like the next, leaning out, a few gone
   for (let i = 0; i < 46; i++) {
     const row = i % 2;
@@ -544,7 +552,8 @@ function livingBridge(): Model {
       const x = 0.2 + (i + (l % 2) * 0.5) * 0.98 + 0.12 * (rnd(i * 5 + l + 9) - 0.5);
       const z = (l - 2) * 0.96 + 0.12 * (rnd(i + l * 5 + 9) - 0.5);
       if (x < 0.5 || (x > LONG - 0.2 && rnd(i * 3 + l + 4) < 0.5)) continue;
-      const turn = 0.9 * (rnd(x * 7 + l) - 0.5);
+      // (along the span, near enough: a deck, not a heap)
+      const turn = 0.3 * (rnd(x * 7 + l) - 0.5);
       s.put(pick(i * 7 + l * 3), along(x, -0.3 - 0.03 * rnd(i * 3 + l + 5) - 0.5 * Math.max(0, Math.max(-x, x - LONG)), z, l % 2 ? 1 : -1, 0, turn, 0.82 * (0.8 + 0.36 * rnd(i * 11 + l)) * big(i * 7 + l * 3), (l - 2) * -0.1), 0.78 + 0.4 * rnd(i * 2 + l * 9 + 3));
     }
   // those that hang on them: chains, down to an arch that is deep at its ends
@@ -560,7 +569,7 @@ function livingBridge(): Model {
   // (what is between them)
   s.rough = 0.8;
   s.glow = 0;
-  s.field((x, y, z) => smax(smax(Math.max(y + 0.36, Math.min(arch(x) + 0.5, -1.0) - y), Math.abs(z) - DECK + 0.8, 0.3), Math.abs(x - LONG / 2) - LONG / 2 + 0.9, 0.4) + 0.12 * noise(x * 2, y * 2, z * 2), [-0.1, -2.8, -2.4], [LONG + 0.1, 0, 2.4], 0.16, () => [0.02, 0.006, 0.003]);
+  s.field((x, y, z) => smax(smax(Math.max(y + 0.36, Math.min(arch(x) + 0.5, -1.0) - y), Math.abs(z) - DECK + 0.5, 0.3), Math.abs(x - LONG / 2) - LONG / 2 + 0.9, 0.4) + 0.12 * noise(x * 2, y * 2, z * 2), [-0.1, -2.8, -2.4], [LONG + 0.1, 0, 2.4], 0.16, () => [0.02, 0.006, 0.003]);
   return s.done();
 }
 
@@ -727,7 +736,7 @@ function silkSpan(): Model {
   for (const e of [-1, 1]) {
     for (let j = 0; j < 3; j++) s.line(path(110, 0, LONG, (x) => { const p = deck(x, e); return [x, p[1] + 0.065 * Math.sin(x * 5 + j * 2.094), p[2] + 0.065 * Math.cos(x * 5 + j * 2.094)] as const; }), 0.06, dim(SILK, 0.95 + 0.12 * j), 5);
     // a rail of cable along each side, hung from its edge by threads
-    const rail = (x: number): V => { const p = deck(x, e); return [x, p[1] + 0.5 - 0.12 * Math.sin((x / LONG) * Math.PI) + 0.05 * Math.sin(x * 1.7 + e), p[2] * 1.04]; };
+    const rail = (x: number): V => { const p = deck(x, e); return [x, p[1] + 0.06 + (0.44 - 0.12 * Math.sin((x / LONG) * Math.PI)) * ss(0, 1.4, Math.min(x, LONG - x)) + 0.05 * Math.sin(x * 1.7 + e), p[2] * 1.04]; };
     s.line(path(90, 0.15, LONG - 0.15, (x) => rail(x)), 0.045, dim(SILK, 1.1), 6);
     for (let k = 0; k < 19; k++) {
       if (rnd(k * 5 + e + 0.5) < 0.5) continue;
@@ -907,9 +916,9 @@ function shieldWall(): Model {
 }
 
 /** A plate of a back, across z, its far edge over the next one. */
-function tergite(tone: V): Soup {
+function tergite(tone: V, rough = 0.13): Soup {
   const s = new Soup();
-  s.rough = 0.13;
+  s.rough = rough;
   s.glow = -0.2;
   const W = DECK + 0.05;
   const f: Field = (x, y, z) => {
@@ -932,11 +941,11 @@ function tergite(tone: V): Soup {
 
 function scaleWalk(): Model {
   const s = new Soup();
-  const plates = CHITIN.map(tergite);
+  const plates = [...CHITIN.map((c) => tergite(c)), ...CHITIN.map((c) => tergite(c, 0.32))];
   const n = 13;
   for (let i = 0; i < n; i++) {
     const x = 0.65 + (i / (n - 1)) * (LONG - 1.3);
-    s.put(plates[i % 3], pose(x, 0, 0), 0.8 + 0.3 * rnd(i));
+    s.put(plates[(i * 7) % 6], pose(x, 0, 0), 0.72 + 0.42 * rnd(i));
     const out = Math.abs(i - (n - 1) / 2) / ((n - 1) / 2);
     const e = i < (n - 1) / 2 ? -1 : 1;
     for (const k of [-1, 1]) {
@@ -1011,10 +1020,10 @@ const WAX: V = [0.6, 0.27, 0.035];
 const wax = (k: number, deep = 0): V => [WAX[0] * k * (1 - 0.55 * deep), WAX[1] * k * (1 - 0.72 * deep), WAX[2] * k * (1 - 0.85 * deep)];
 const HONEY: V = [0.62, 0.17, 0.006];
 /** Honey in a cell: a lens of it. */
-function honey(s: Soup, x: number, y: number, z: number, rx: number, ry: number, rz: number): void {
+function honey(s: Soup, x: number, y: number, z: number, rx: number, ry: number, rz: number, tone: V = HONEY): void {
   s.rough = 0.1;
   s.glow = 0.5;
-  s.ball(x, y, z, rx, ry, rz, HONEY, 10, 7);
+  s.ball(x, y, z, rx, ry, rz, tone, 10, 7);
   s.rough = 0.4;
   s.glow = 0.2;
 }
@@ -1060,7 +1069,12 @@ function combWall(): Model {
       const a = h[0];
       const b = h[1];
       if (Math.abs(a) > W || b > top(a) || kind(a, b) !== 1) continue;
-      for (const e of [-1, 1]) honey(s, a, b, e * (0.5 + 0.22 * rnd(a * 7 + b * 3)), C * 0.86, C * 0.95, 0.3);
+      // (none filled quite like the next: lighter, darker, higher, lower)
+      for (const e of [-1, 1]) {
+        const v = rnd(a * 5 + b * 11 + e);
+        const tone: V = [HONEY[0] * (0.75 + 0.45 * v), HONEY[1] * (0.6 + 1.2 * v), HONEY[2] * (0.5 + 2 * v)];
+        honey(s, a, b - 0.08 * rnd(a + b + e), e * (0.42 + 0.34 * rnd(a * 7 + b * 3 + e)), C * 0.86, C * (0.8 + 0.15 * v), 0.3, tone);
+      }
       if (rnd(a * 3 + b) < 0.1) for (const e of [-1, 1]) drip(s, a + 0.1, b - C * 0.6, e * (T + 0.03), 0.35 + 0.5 * rnd(a + b * 3));
     }
   return s.done();
@@ -1093,7 +1107,8 @@ function combSpan(): Model {
     const h = hexAt(x, z, 0.5);
     const rimmed = y > -0.15 ? 1 - 0.35 * ss(0.12, 0.0, Math.abs(h[2] - 0.433)) : 1;
     const cup = y > -0.15 ? 0.35 * ss(0.3, 0.05, h[2]) : 0;
-    return wax((0.8 + 0.2 * noise(x, y, z)) * rimmed, Math.max(deep, cup + 0.12));
+    const own = y > -0.15 ? 0.84 + 0.3 * rnd(h[0] * 3.1 + h[1] * 7.3) : 1;
+    return wax((0.8 + 0.2 * noise(x, y, z)) * rimmed * own, Math.max(deep, cup + 0.12));
   });
   for (let r = -6; r < 1; r++)
     for (let q = -14; q < 34; q++) {

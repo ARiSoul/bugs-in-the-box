@@ -708,6 +708,10 @@ export class BuildViews {
         // (shell breaks in chips: its cut steps, not smooth)
         const dent = Math.min(0.14, Math.max(0, -d) * 0.22) * (0.55 + 0.45 * rough);
         let k = reach * (1 - (b.species === 'cockroach' ? Math.round(dent * 30) / 30 : dent));
+        if (b.species === 'ant') {
+          // (stakes break in splinters)
+          k -= reach * 0.05 * Math.abs(Math.sin(u * 31 + v * 7) * Math.sin(v * 23 - u * 5));
+        }
         if (b.species === 'bee') {
           // (each cell a pit: its honey lies deeper than its wax walls)
           const px = x + ux * reach;
@@ -773,7 +777,7 @@ export class BuildViews {
         // (broken stakes side by side)
         const core = Math.abs(Math.sin((q[0] * side3.x + q[2] * side3.z) * 6.5));
         // (each cut through: dark bark, then rings, pale at its heart)
-        const stakes = b.species === 'ant' ? (0.45 + 0.7 * ss(0.15, 0.45, core) * (0.85 + 0.15 * Math.sin(core * 26 + g * 2)) + 0.25 * ss(0.85, 1, core)) * (0.8 + 0.4 * g) : 1;
+        const stakes = b.species === 'ant' ? 0.8 * (0.45 + 0.7 * ss(0.15, 0.45, core) * (0.85 + 0.15 * Math.sin(core * 26 + g * 2)) + 0.25 * ss(0.85, 1, core)) * (0.8 + 0.4 * g) : 1;
         let s = (0.75 + 0.35 * Math.min(1, Math.max(0, 1 + q[3]))) * stakes;
         let blend = w;
         let shine = glow;
