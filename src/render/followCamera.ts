@@ -126,6 +126,27 @@ export class FollowCamera {
     this.glideTime = seconds;
   }
 
+  /**
+   * Look down on the target at least this steeply (`elevation`, radians over the level) and from at least this far,
+   * eased: to see a way laid on the ground (a burrow's) from above, not along it.
+   */
+  overlook(elevation: number, distance: number, dt: number, fx = 0, fz = 0): void {
+    this.offset.copy(this.camera.position).sub(this.controls.target);
+    this.sph.setFromVector3(this.offset);
+    const phi = Math.PI / 2 - elevation;
+    const k = 1 - Math.exp(-dt * 5);
+    // (from behind the way (fx, fz), turned a little aside: the way runs across the view, not up it)
+    if (fx !== 0 || fz !== 0) {
+      let d = Math.atan2(-fx, -fz) + 0.55 - this.sph.theta;
+      while (d > Math.PI) d -= Math.PI * 2;
+      while (d < -Math.PI) d += Math.PI * 2;
+      this.sph.theta += d * k;
+    }
+    if (this.sph.phi > phi) this.sph.phi += (phi - this.sph.phi) * k;
+    if (this.sph.radius < distance) this.sph.radius += (distance - this.sph.radius) * k;
+    this.camera.position.copy(this.controls.target).add(this.offset.setFromSpherical(this.sph));
+  }
+
   /** Turn the view about the target by `radians` (with the bug, so it stays behind it). */
   turnWith(radians: number): void {
     this.offset.copy(this.camera.position).sub(this.controls.target).applyAxisAngle(UP, radians);

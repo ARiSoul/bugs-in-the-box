@@ -36,7 +36,7 @@ const GHOST: readonly (readonly [number, number, number])[] = [[0.02, 0.22, 1], 
 /** How a bug sits in its shelter (in its radius): how far forward, how large. */
 const SEAT: Record<string, readonly [number, number]> = { anthill: [0.62, 0.92], 'silk-funnel': [0.62, 0.62], husk: [0.95, 0.82], 'wax-nest': [0.35, 0.78] };
 /** What flies off of each species' work. */
-const BITS: Record<string, readonly number[]> = { ant: [0x6b4a2e, 0xb08a55, 0x4a3423], spider: [0xd8d4ca, 0xb9b6ae], cockroach: [0x8a3d12, 0x5a240a, 0xc98a4a], bee: [0xd9942a, 0xb86a10, 0xffc040], husk: [0x8a5a2a, 0x5c3814, 0xb07a40], ember: [0xff8a2a, 0x3a2418, 0x1a1210], air: [0xe8f8ff, 0x9fe8ff, 0xffffff] };
+const BITS: Record<string, readonly number[]> = { ant: [0x6b4a2e, 0xb08a55, 0x4a3423], spider: [0xd8d4ca, 0xb9b6ae], cockroach: [0x8a3d12, 0x5a240a, 0xc98a4a], bee: [0xd9942a, 0xb86a10, 0xffc040], husk: [0x8a5a2a, 0x5c3814, 0xb07a40], dust: [0xb8a68c, 0x9c8a70, 0xcdbda2], dirt: [0x5e4a36, 0x3b2f24, 0x80684c, 0x4a3d30], ember: [0xff8a2a, 0x3a2418, 0x1a1210], air: [0xe8f8ff, 0x9fe8ff, 0xffffff] };
 
 /** What each is made of inside: two colours, how rough, how much light comes through. */
 // (the light of its own is more than the skin's: inside a hole the sun hardly reaches)
@@ -385,7 +385,17 @@ export class BuildViews {
       const l = Math.hypot(e.x2 - e.x1, e.y2 - e.y1, e.z2 - e.z1);
       const n = Math.max(1, Math.ceil(l / (e.radius * 0.5)));
       for (let i = 0; i <= n; i++) this.blasts.push(e.x1 + ((e.x2 - e.x1) * i) / n, e.y1 + ((e.y2 - e.y1) * i) / n, e.z1 + ((e.z2 - e.z1) * i) / n, e.radius);
-    } else if (e.type === 'hide') this.hide(match.units[e.unit], e.weapon);
+    } else if (e.type === 'burrow') {
+      // (what is built on its way goes; earth thrown up out of the hole it goes into)
+      const p = e.path;
+      for (let k = 0; k + 3 < p.length; k += 3) {
+        const l = Math.hypot(p[k + 3] - p[k], p[k + 4] - p[k + 1], p[k + 5] - p[k + 2]);
+        const n = Math.max(1, Math.ceil(l / (e.radius * 0.5)));
+        for (let i = 0; i <= n; i++) this.blasts.push(p[k] + ((p[k + 3] - p[k]) * i) / n, p[k + 1] + ((p[k + 4] - p[k + 1]) * i) / n, p[k + 2] + ((p[k + 5] - p[k + 2]) * i) / n, e.radius);
+      }
+      this.spoil(this.p.set(p[3] * 0.4 + p[0] * 0.6, p[4] * 0.4 + p[1] * 0.6, p[5] * 0.4 + p[2] * 0.6), 26, 10);
+    } else if (e.type === 'emerge') this.spoil(this.p.set(e.x, e.y, e.z), 70, 22, 9.5);
+    else if (e.type === 'hide') this.hide(match.units[e.unit], e.weapon);
     else if (e.type === 'bared') {
       const s = this.shelters.find((q) => q.unit === e.unit && q.gone < 0);
       if (!s) return;
@@ -405,6 +415,18 @@ export class BuildViews {
   /** A puff of air behind a bug that bursts. */
   trail(at: THREE.Vector3): void {
     this.bit(at, 'air', 0.6, 0.5, 0.09);
+  }
+
+  /** A puff of dust off the ground (an ant going under it). */
+  dust(x: number, y: number, z: number, n: number): void {
+    for (let k = 0; k < n * 6; k++) this.bit(this.s.set(x, y + 0.1, z), 'dust', 1.6 + n * 0.8, 0.7, 0.15 + 0.04 * n);
+  }
+
+  /** Earth thrown up out of a hole: a spray, and clods that fall round it and stay a while. */
+  private spoil(at: THREE.Vector3, spray: number, clods: number, speed = 6.5): void {
+    const { x, y, z } = at;
+    for (let k = 0; k < spray; k++) this.bit(this.s.set(x, y, z), 'dirt', speed, 0.9, 0.12 + 0.06 * (k % 3));
+    for (let k = 0; k < clods; k++) this.drop(x, y + 0.3, z, 1.2, 'dirt', false, 0.65);
   }
 
   private bit(at: THREE.Vector3, species: string, speed: number, spread: number, size: number): void {

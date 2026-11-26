@@ -38,6 +38,8 @@ import { CHASE_ELEVATION, FollowCamera } from './render/followCamera';
 import { MeshWorkers, type MeshBatch } from './render/MeshWorkers';
 import { FloatingTexts, UnitLabel } from './render/labels';
 import { ProjectileViews } from './render/projectiles';
+import { BurrowViews } from './render/burrows';
+import { BUILT, COLLIDER, MATERIAL_RGB } from './terrain/materials';
 import { dress, type Face } from './render/gpu/heroDress';
 import { ITEM_LOOKS } from './render/gpu/itemLooks';
 import { ItemViews } from './render/gpu/itemViews';
@@ -118,6 +120,29 @@ const flashes = new ExplosionFlashes(stage.scene);
 const lines = new LineFlashes(stage.scene);
 const texts = new FloatingTexts(stage.hud);
 const projectiles = new ProjectileViews(stage.scene);
+const burrows = new BurrowViews(stage.scene);
+const burrowWay: number[] = [];
+/** The way up out of a burrow, drawn when the ant breaks through (x, y, z twice, and the radius). */
+let burrowUp: number[] = [];
+burrows.puff = (x, y, z, n) => buildViews.dust(x, y, z, n);
+// (the colour of what is under a place: the first solid cell down from it)
+burrows.groundColor = (x, y, z) => {
+  const i = Math.round(x);
+  const k = Math.round(z);
+  if (i < 0 || k < 0 || i >= terrain.sx || k >= terrain.sz) return [0.3, 0.27, 0.24];
+  for (let j = Math.min(terrain.sy - 1, Math.round(y) + 1); j >= 0; j--) {
+    if (terrain.sample(i, j, k) >= 0) continue;
+    const m = terrain.material[terrain.idx(i, j, k)];
+    return m === COLLIDER || m === BUILT ? [0.2, 0.2, 0.21] : (MATERIAL_RGB[m] ?? [0.3, 0.27, 0.24]);
+  }
+  return [0.3, 0.27, 0.24];
+};
+burrows.rest = (ox, oy, oz, dx, dy, dz, maxT) => ground.rest(ox, oy, oz, dx, dy, dz, maxT);
+/** A camera shake left (s): an ant breaking out of the ground. */
+let shake = 0;
+/** After an ant is out of its burrow: how long the view still holds both holes (s), and its way. */
+let burrowAfter = 0;
+let burrowPath: number[] = [];
 const liftUp = new THREE.Vector3();
 const aim = new AimView(stage.scene);
 const webViews = new WebViews(stage.scene);
@@ -260,6 +285,7 @@ function newTeams(s: number, turns = 0): void {
   webViews.clear();
   itemViews.clear();
   buildViews.clear(match.teams.map((t) => t.species.id));
+  burrows.clear();
   bow.clear();
   antColumn.clear();
   brood.clear();
@@ -321,7 +347,13 @@ function handleEvents(events: readonly MatchEvent[]): void {
   for (const e of events) {
     itemViews.on(e);
     buildViews.on(e, match);
-    if (e.type === 'explosion' || e.type === 'dig' || e.type === 'built' || e.type === 'worn' || e.type === 'pieceGone' || e.type === 'regrown') minimap.touch();
+    burrows.on(e, match);
+    if (e.type === 'emerge') {
+      shake = 0.32;
+      burrowAfter = 1.4;
+    }
+    if (e.type === 'burrow') burrowPath = e.path.slice();
+    if (e.type === 'explosion' || e.type === 'dig' || e.type === 'burrow' || e.type === 'built' || e.type === 'worn' || e.type === 'pieceGone' || e.type === 'regrown') minimap.touch();
     switch (e.type) {
       case 'open': {
         const look = ITEM_LOOKS[e.kind];
@@ -381,6 +413,26 @@ function handleEvents(events: readonly MatchEvent[]): void {
         break;
       case 'arc':
         lines.arc(at.set(e.x1, e.y1, e.z1), at2.set(e.x2, e.y2, e.z2));
+        break;
+      case 'burrow':
+        // (a tunnel under the ground: no beam, the walls of it shaded as a tunnel's)
+        // (its way up is not there yet: it breaks through at the end)
+        for (let k = 0; k + 6 < e.path.length; k += 3) {
+          const p = e.path;
+          stage.craters.addTunnel(p[k], p[k + 1], p[k + 2], p[k + 3], p[k + 4], p[k + 5], e.radius);
+          ground.addTunnel(p[k], p[k + 1], p[k + 2], p[k + 3], p[k + 4], p[k + 5], e.radius);
+          ground.dropLoose(p[k], p[k + 1], p[k + 2], e.radius + 2);
+        }
+        burrowUp = [...e.path.slice(6, 12), e.radius];
+        break;
+      case 'emerge':
+        if (burrowUp.length === 7) {
+          const p = burrowUp;
+          stage.craters.addTunnel(p[0], p[1], p[2], p[3], p[4], p[5], p[6]);
+          ground.addTunnel(p[0], p[1], p[2], p[3], p[4], p[5], p[6]);
+          ground.dropLoose(p[3], p[4], p[5], p[6] + 2);
+          minimap.touch();
+        }
         break;
       case 'dig':
         lines.beam(at.set(e.x1, e.y1, e.z1), at2.set(e.x2, e.y2, e.z2));
@@ -1331,6 +1383,14 @@ function frame(now: number): void {
     v.view.held = u.web >= 0 ? 1 : 0;
     v.view.cracked = u.bug.species.shell === true && !u.shell;
     v.view.update(u.bug, alpha, scaled, ground);
+    // (an ant under the ground: head down on its way in, up on its way out)
+    const under = match.underground;
+    if (under && under.unit === i) {
+      const p = under.path;
+      const k = under.s < Math.hypot(p[3] - p[0], p[4] - p[1], p[5] - p[2]) ? 0 : under.s > under.end - Math.hypot(p[9] - p[6], p[10] - p[7], p[11] - p[8]) ? 6 : 3;
+      const dy = (p[k + 4] - p[k + 1]) / (Math.hypot(p[k + 3] - p[k], p[k + 4] - p[k + 1], p[k + 5] - p[k + 2]) || 1);
+      v.view.root.rotateX(-Math.asin(Math.max(-1, Math.min(1, dy))) * 0.85);
+    }
     // (it blinks; dead, its lids are shut; about to shoot, its jaws open)
     v.blink -= scaled;
     if (v.blink < -0.16) v.blink = 1.5 + Math.random() * 4;
@@ -1406,7 +1466,20 @@ function frame(now: number): void {
     else if (deathFocus >= 0 && match.phase === 'settle') target.copy(bugViews[deathFocus].view.root.position);
     else if (match.activeUnit.bug.alive) target.copy(active.view.root.position);
     else tracking = false;
+    // (a burrow being aimed: the view between the ant and where it comes up, from above)
+    const under = match.underground;
+    if (burrowAfter > 0) burrowAfter = Math.max(0, burrowAfter - dt);
+    const holding = under !== null || (burrowAfter > 0 && burrowPath.length === 12);
+    const burrowing = tracking && ((match.phase === 'aim' && match.currentWeapon.kind === 'burrow') || holding) && match.activeUnit.bug.alive;
+    if (burrowing) {
+      const p = under ? under.path : holding ? burrowPath : match.burrowPath(match.activeUnit, match.charging ? match.power : 0, burrowWay);
+      // (between where it went in and where it comes out)
+      // (a little towards the way out and up the screen: the cards cover its foot)
+      if (holding) target.set(p[0] * 0.42 + p[9] * 0.58, p[1] * 0.42 + p[10] * 0.58 - 1.2, p[2] * 0.42 + p[11] * 0.58);
+      else target.lerp(at.set(p[9], p[10], p[11]), 0.45);
+    }
     if (tracking) follow.update(target, dt);
+    if (burrowing) follow.overlook(holding ? 0.95 : 0.85, holding ? 29 : 21, dt, match.activeUnit.bug.hx, match.activeUnit.bug.hz);
   }
 
   // wind arrow in screen space: project the wind onto the camera's ground-plane axes
@@ -1470,6 +1543,14 @@ function frame(now: number): void {
   lines.update(now);
   texts.update(now);
   placeLabels();
+  burrows.update(match, scaled);
+  if (shake > 0) {
+    const k = shake * shake * 1.6;
+    stage.camera.position.x += (Math.random() - 0.5) * k;
+    stage.camera.position.y += (Math.random() - 0.5) * k;
+    stage.camera.position.z += (Math.random() - 0.5) * k;
+    shake = Math.max(0, shake - dt);
+  }
   stage.render(renderSeconds(now), renderStep(dt));
   perf?.record(interval);
   if (now - lastFps > 500) {
@@ -1578,6 +1659,7 @@ function placeLabels(): void {
     v.label.update(v.view.root.position, v.height * v.view.root.scale.y, u.bug.health, u.bug.alive, dist, u.bug.alive && occluded(v.view.root.position, dist), i === match.active);
     // (its own name is in the way of what it points at)
     if (i === match.active && (antColumn.camera.active || flock.camera.active)) v.label.sprite.visible = false;
+    if (match.underground?.unit === i) v.label.sprite.visible = false;
     // (the swarm flies to its rings: what hangs over the one they lead to hides them)
     if (i !== match.active && flock.camera.active && (flock.hidesNames(match) || (match.flock && u.team === match.activeUnit.team))) v.label.sprite.visible = false;
     // (over its crown, where what it flies to is)

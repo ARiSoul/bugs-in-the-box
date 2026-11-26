@@ -26,7 +26,7 @@ Ants, spiders, cockroaches and made-up creatures. Technical idea: one configurab
 Special abilities per species (for when each bug gets its proper treatment; to tune later):
 
 - **Spider:** spins webs. A web can trap enemies, or let the spider lower itself safely from a tall drop on a thread instead of falling (no fall damage).
-- **Ant, Burrow (in the game):** it digs a tunnel as wide as itself along its aim and is carried out through it. Three a match, once a turn; the turn goes on.
+- **Ant, Burrow (in the game):** charged like a shot for its length (7 to 20), it digs down into the ground before it, goes along under the surface and comes up further on, the way it faces. Spoil round both holes, a heaved ridge over the tunnel, dust as it goes. Three a match, once a turn; the turn goes on.
 - **Cockroach, Hard Shell (in the game):** the first blow that would kill it leaves it at 1 health, once a match, and cracks its shell. Leaving the map still kills it.
 - **Cockroach, Glide:** it opens its wings in the air and glides: no fall damage, and the wind carries it.
 - **Cockroach, Flatten:** it presses itself against the surface until its next turn: half damage, and blasts do not throw it.

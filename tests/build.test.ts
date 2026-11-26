@@ -289,27 +289,41 @@ describe('burst', () => {
 });
 
 describe('burrow', () => {
-  it('an ant digs through a wall along its aim and comes out on its far side; three a match, once a turn; ants only', () => {
-    // (a wall 4 thick across the way, at x 24..28)
+  it('an ant charges it, goes down under the ground, along, and comes up further on: under a wall, out on its far side', () => {
+    // (a wall 4 thick across the way, at x 24..28, on ground at y 10)
     const t = world(4, 2, 2, (i, j) => Math.min(j - 10, Math.abs(i - 26) - 2));
     const m = setup(t, ANT, SPIDER);
     const u = m.units[0];
     const b = u.bug;
-    u.aimH = 1;
-    u.aimV = 0.05;
-    const y = b.y;
+    // (its aim up in the air does not matter: it goes the way it faces)
+    u.aimH = 0.7;
+    u.aimV = 0.7;
     const h = b.health;
-    expect(t.sample(26, y, 32)).toBeLessThan(0);
-    const events = use(m, BURROW);
+    run(m, 1, { weapon: at(BURROW) });
+    const path = m.burrowPath(u, 0.5, []);
+    expect(path.length).toBe(12);
+    // (down, along under the ground, up again beyond the wall)
+    expect(path[4]).toBeLessThan(10);
+    expect(path[7]).toBeLessThan(10);
+    expect(path[9]).toBeGreaterThan(29);
+    expect(path[10]).toBeGreaterThan(10);
+    const events: MatchEvent[] = [];
+    for (let k = 0; k < 200 && m.power < 0.5; k++) events.push(...run(m, 1, { fire: true }));
+    events.push(...run(m, 1));
     expect(events.some((e) => e.type === 'burrow')).toBe(true);
-    expect(events.some((e) => e.type === 'dig')).toBe(true);
+    expect(events.some((e) => e.type === 'dig')).toBe(false);
     expect(m.phase).toBe('aim');
-    run(m, 120);
-    expect(t.sample(26, y, 32)).toBeGreaterThan(0);
+    // (under the wall, open; the wall over it stands)
+    expect(t.sample(26, 7.2, 32)).toBeGreaterThan(0);
+    expect(t.sample(26, 12, 32)).toBeLessThan(0);
+    const later = run(m, 240);
+    expect(later.some((e) => e.type === 'emerge')).toBe(true);
     expect(b.x).toBeGreaterThan(28.5);
     expect(b.grounded).toBe(true);
     expect(b.health).toBe(h);
-    const again = use(m, BURROW);
+    // (again in the same turn: no)
+    run(m, 1, { weapon: at(BURROW) });
+    const again = [...run(m, 3, { fire: true }), ...run(m, 2)];
     expect(again.some((e) => e.type === 'noRoom')).toBe(true);
     expect(m.usesLeft(0, at(BURROW))).toBe(2);
     expect(m.works[0]).toBe(WORKS);

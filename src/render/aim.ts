@@ -3,6 +3,8 @@ import type { Match } from '../game/match';
 
 /** Length of the aim pointer. Fixed on purpose: it shows the direction only, never the range. */
 const LENGTH = 3.2;
+/** Dots along where a burrow would go. */
+const DOTS = 42;
 
 /**
  * Aim helpers: a short pointer from the active bug along the aim direction (no trajectory, so it
@@ -14,6 +16,13 @@ export class AimView {
   private readonly dir = new Float64Array(3);
   private readonly v = new THREE.Vector3();
   private static readonly UP = new THREE.Vector3(0, 1, 0);
+  /** A burrow's way: dots down, along under the ground and up, and a ring where it comes out. */
+  private readonly dots: THREE.InstancedMesh;
+  private readonly ring: THREE.Mesh;
+  private readonly start: THREE.Mesh;
+  private readonly path: number[] = [];
+  private readonly m = new THREE.Matrix4();
+  private readonly c = new THREE.Color();
 
   constructor(scene: THREE.Scene) {
     const mat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85, depthTest: false });
@@ -29,22 +38,44 @@ export class AimView {
       new THREE.MeshBasicMaterial({ color: 0xffe066 }),
     );
     scene.add(this.marker);
+
+    const dot = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9, depthTest: false });
+    this.dots = new THREE.InstancedMesh(new THREE.SphereGeometry(0.13, 8, 6), dot, DOTS);
+    this.dots.renderOrder = 10;
+    this.dots.frustumCulled = false;
+    this.dots.visible = false;
+    scene.add(this.dots);
+    this.ring = new THREE.Mesh(new THREE.TorusGeometry(1.25, 0.09, 6, 32).rotateX(Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xffd27a, transparent: true, opacity: 0.95, depthTest: false }));
+    this.ring.renderOrder = 10;
+    this.ring.visible = false;
+    scene.add(this.ring);
+    this.start = new THREE.Mesh(new THREE.TorusGeometry(1.7, 0.07, 6, 32).rotateX(Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xffd27a, transparent: true, opacity: 0.6, depthTest: false }));
+    this.start.renderOrder = 10;
+    this.start.visible = false;
+    scene.add(this.start);
   }
 
   hide(): void {
-    this.pointer.visible = this.marker.visible = false;
+    this.pointer.visible = this.marker.visible = this.dots.visible = this.ring.visible = this.start.visible = false;
   }
 
   /** `bugPosition`: interpolated render position of the active bug. */
   update(match: Match, bugPosition: THREE.Vector3, labelHeight: number, now: number, cameraDistance: number): void {
     const unit = match.activeUnit;
-    const aiming = match.phase === 'aim' && unit.bug.alive;
+    const aiming = match.phase === 'aim' && unit.bug.alive && match.underground === null;
     // (a special attack has a view and a sight of its own)
     if (aiming && match.currentWeapon.sceneTicks > 0) {
       this.pointer.visible = this.marker.visible = false;
       return;
     }
     this.pointer.visible = aiming;
+    // (a burrow: where it goes, not which way it points; longer as it is charged)
+    const burrow = aiming && match.currentWeapon.kind === 'burrow';
+    this.dots.visible = this.ring.visible = this.start.visible = burrow;
+    if (burrow) {
+      this.pointer.visible = false;
+      this.showBurrow(match, now);
+    }
     // (near enough, it needs no mark)
     this.marker.visible = aiming && cameraDistance > 24;
     if (!aiming) return;
@@ -55,5 +86,49 @@ export class AimView {
     this.pointer.position.copy(bugPosition).addScaledVector(this.v, unit.bug.species.radius * 0.6);
 
     this.marker.position.set(bugPosition.x, bugPosition.y + labelHeight + 1.4 + Math.sin(now / 180) * 0.25, bugPosition.z);
+  }
+
+  private showBurrow(match: Match, now: number): void {
+    const u = match.activeUnit;
+    const p = match.burrowPath(u, match.charging ? match.power : 0, this.path);
+    let total = 0;
+    for (let k = 0; k + 3 < p.length; k += 3) total += Math.hypot(p[k + 3] - p[k], p[k + 4] - p[k + 1], p[k + 5] - p[k + 2]);
+    // (the dots run along it, slowly)
+    const shift = (now / 900) % 1;
+    for (let i = 0; i < DOTS; i++) {
+      let s = ((i + shift) / DOTS) * total;
+      let k = 0;
+      for (; k + 6 < p.length; k += 3) {
+        const l = Math.hypot(p[k + 3] - p[k], p[k + 4] - p[k + 1], p[k + 5] - p[k + 2]);
+        if (s <= l) break;
+        s -= l;
+      }
+      const l = Math.hypot(p[k + 3] - p[k], p[k + 4] - p[k + 1], p[k + 5] - p[k + 2]) || 1;
+      const f = Math.min(1, s / l);
+      let x = p[k] + (p[k + 3] - p[k]) * f;
+      let y = p[k + 1] + (p[k + 4] - p[k + 1]) * f;
+      let z = p[k + 2] + (p[k + 5] - p[k + 2]) * f;
+      // (laid on the ground over where it goes: what the player reads is the way over the top)
+      const b = u.bug;
+      const t = match.field.raycast(x + b.nx * 6, y + b.ny * 6, z + b.nz * 6, -b.nx, -b.ny, -b.nz, 12);
+      if (t >= 0) {
+        x += b.nx * (6 - t + 0.08);
+        y += b.ny * (6 - t + 0.08);
+        z += b.nz * (6 - t + 0.08);
+      }
+      const dash = i % 3 === 2 ? 0.45 : 1;
+      this.m.makeScale(dash, 0.45 * dash, dash).setPosition(x, y, z);
+      this.dots.setMatrixAt(i, this.m);
+      this.dots.setColorAt(i, this.c.set(0xffd27a));
+    }
+    this.dots.instanceMatrix.needsUpdate = true;
+    if (this.dots.instanceColor) this.dots.instanceColor.needsUpdate = true;
+    const b = u.bug;
+    this.ring.position.set(p[9] - b.nx * b.species.radius * 0.9, p[10] - b.ny * b.species.radius * 0.9, p[11] - b.nz * b.species.radius * 0.9);
+    // (and a ring where it goes in, at its feet)
+    this.start.position.set(p[0] - b.nx * b.species.radius * 0.9, p[1] - b.ny * b.species.radius * 0.9, p[2] - b.nz * b.species.radius * 0.9);
+    this.start.quaternion.setFromUnitVectors(AimView.UP, this.v.set(b.nx, b.ny, b.nz));
+    this.ring.quaternion.setFromUnitVectors(AimView.UP, this.v.set(b.nx, b.ny, b.nz));
+    this.ring.scale.setScalar(1 + 0.08 * Math.sin(now / 160));
   }
 }

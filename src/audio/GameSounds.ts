@@ -227,7 +227,11 @@ export class GameSounds {
         engine.play('zap', { at: e });
         break;
       case 'burrow':
-        engine.play('lob', { at: match.units[e.unit].bug, rate: 1.2, level: 0.8 });
+        engine.play('burrow', { at: match.units[e.unit].bug, rate: 0.85, level: 1.1 });
+        break;
+      case 'emerge':
+        engine.play('burrow', { at: e, rate: 1.15, level: 0.9 });
+        engine.play('slam', { at: e, rate: 1.3, level: 0.45 });
         break;
       case 'burst':
         engine.play('lob', { at: match.units[e.unit].bug, rate: 1.7, level: 1.2 });

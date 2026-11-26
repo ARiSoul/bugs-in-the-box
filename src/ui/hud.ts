@@ -334,7 +334,11 @@ export class Hud {
         ? 'point at a spot nearer to it'
         : brood
           ? 'point at a spot, click (or the fire key) to call them · W/S move, right drag turns the view'
-          : match.phase === 'aim'
+          : match.underground
+            ? ''
+            : match.phase === 'aim' && match.currentWeapon.kind === 'burrow'
+              ? `<b>${match.currentWeapon.name}</b> hold fire: how far · it goes the way it faces`
+              : match.phase === 'aim'
             ? `<b>${match.currentWeapon.name}</b> aim ${((Math.atan2(u.aimV, u.aimH) * 180) / Math.PI).toFixed(1)}°${u.bug.species.flight ? ` · ${u.bug.flying ? 'run: up, jump: let go' : u.bug.grounded ? 'jump twice: fly' : 'jump: fly'} · breath ${Math.round((u.bug.breath / (u.bug.species.flight * TICK_RATE)) * 100)}%` : ''}`
             : '';
     if (aim && match.phase === 'aim' && match.currentWeapon.start === undefined && !match.stance) {

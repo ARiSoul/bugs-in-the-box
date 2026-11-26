@@ -255,7 +255,9 @@ export type MatchEvent =
   | { type: 'tired'; x: number; y: number; z: number }
   | { type: 'burst'; unit: number }
   /** An ant dug along its aim and runs through (the tunnel itself comes as a `dig`). */
-  | { type: 'burrow'; unit: number }
+  | { type: 'burrow'; unit: number; path: number[]; radius: number }
+  /** The ant is out of its tunnel. */
+  | { type: 'emerge'; unit: number; x: number; y: number; z: number }
   | { type: 'heal'; unit: number; amount: number }
   | { type: 'use'; unit: number; kind: ItemKind; gain: number }
   | { type: 'boxGone'; id: number; x: number; y: number; z: number }
@@ -310,8 +312,16 @@ const SKILL_TURN = 200;
 const BURST_TICKS = 50;
 /** How high over an ant's back a lifted block is held (and thrown from). */
 export const LIFT_HIGH = 1.6;
-/** How fast a burrowing ant runs through its tunnel. */
-const BURROW_SPEED = 13;
+/** A burrow: how fast an ant goes through it, how short and how long it may be, how deep and how steep, the hop out. */
+const BURROW_SPEED = 8;
+export const BURROW_SHORT = 7;
+export const BURROW_LONG = 20;
+const BURROW_DEEP = 1.9;
+const BURROW_SLOPE = 2.6;
+const BURROW_HOP = 5;
+/** How far under the top it waits, and for how many ticks. */
+const BURROW_UNDER = 1.4;
+const BURROW_HOLD = 10;
 export const BURST_AT = WEAPONS.findIndex((w) => w.kind === 'burst');
 
 /** Set a bug off as a burst does, along (dx, dy, dz) (unit). */
@@ -469,7 +479,13 @@ export class Match {
   private burstTurn = -1;
   private burrowTurn = -1;
   /** An ant running through the tunnel it dug: from where, which way, how far it has gone, how far it goes. */
-  private burrowing: { unit: Unit; x: number; y: number; z: number; dx: number; dy: number; dz: number; s: number; end: number } | null = null;
+  private burrowing: { unit: Unit; path: number[]; s: number; end: number; hold: number; radius: number } | null = null;
+
+  /** An ant under the ground now: which, its way, how far along it is (render only reads it); null: none. */
+  get underground(): { readonly unit: number; readonly path: readonly number[]; readonly s: number; readonly end: number } | null {
+    const r = this.burrowing;
+    return r ? { unit: r.unit.id, path: r.path, s: r.s, end: r.end } : null;
+  }
   private readonly soft = new Set<number>();
   /** How much of its bite the swarm on its way still has. */
   private tired = 1;
@@ -784,16 +800,15 @@ export class Match {
       if (input.fire) this.power += 1 / CHARGE_TICKS;
       if (!input.fire || this.power >= 1) {
         if (this.power > 1) this.power = 1;
-        this.fire(unit, w);
+        if (w.kind === 'burrow') {
+          this.charging = false;
+          this.burrow(unit, w, this.power);
+        } else this.fire(unit, w);
       }
       return this.stance ? this.onTheSpot(input) : IDLE;
     }
     if (fireDown && w.kind === 'burst') {
       this.burst(unit);
-      return IDLE;
-    }
-    if (fireDown && w.kind === 'burrow') {
-      this.burrow(unit, w);
       return IDLE;
     }
     if (fireDown && unit.bug.grounded) {
@@ -1979,8 +1994,47 @@ export class Match {
     this.events.push({ type: 'dig', x1: x, y1: y, z1: z, x2: x, y2: y, z2: z, radius: w.tunnelRadius });
   }
 
-  /** An ant digs along its aim and runs out through what it dug. Once a turn; the turn goes on. */
-  private burrow(u: Unit, w: Weapon): void {
+  /**
+   * Where an ant charged this much (0..1) would burrow: down into the ground before it, along under it, and up again
+   * further on, where the ground is. Four points (x, y, z each) written into `out`. Its aim's slope does not count: it
+   * goes the way it faces.
+   */
+  burrowPath(u: Unit, power: number, out: number[]): number[] {
+    const b = u.bug;
+    const r = b.species.radius;
+    // (the way it faces, along what it stands on)
+    let fx = b.hx;
+    let fy = b.hy;
+    let fz = b.hz;
+    const d = fx * b.nx + fy * b.ny + fz * b.nz;
+    fx -= d * b.nx;
+    fy -= d * b.ny;
+    fz -= d * b.nz;
+    const l = Math.sqrt(fx * fx + fy * fy + fz * fz) || 1;
+    fx /= l;
+    fy /= l;
+    fz /= l;
+    const len = BURROW_SHORT + (BURROW_LONG - BURROW_SHORT) * (power < 0 ? 0 : power > 1 ? 1 : power);
+    const deep = r + BURROW_DEEP;
+    // (where it comes up: the ground over the far end, along what it stands on)
+    const ex = b.x + fx * len;
+    const ey = b.y + fy * len;
+    const ez = b.z + fz * len;
+    const t = this.field.raycast(ex + b.nx * 8, ey + b.ny * 8, ez + b.nz * 8, -b.nx, -b.ny, -b.nz, 18);
+    const up = t >= 0 ? 8 - t + r : 0;
+    const ox = ex + b.nx * up;
+    const oy = ey + b.ny * up;
+    const oz = ez + b.nz * up;
+    out.length = 0;
+    out.push(b.x, b.y, b.z);
+    out.push(b.x + fx * BURROW_SLOPE - b.nx * deep, b.y + fy * BURROW_SLOPE - b.ny * deep, b.z + fz * BURROW_SLOPE - b.nz * deep);
+    out.push(ox - fx * BURROW_SLOPE - b.nx * deep, oy - fy * BURROW_SLOPE - b.ny * deep, oz - fz * BURROW_SLOPE - b.nz * deep);
+    out.push(ox, oy, oz);
+    return out;
+  }
+
+  /** An ant burrows (charged this much): down, along under the ground, up again. Once a turn; the turn goes on. */
+  private burrow(u: Unit, w: Weapon, power: number): void {
     const i = WEAPONS.indexOf(w);
     const b = u.bug;
     if (this.burrowTurn === this.turnNumber || this.usesLeft(u.team, i) <= 0 || u.web >= 0 || u.cover || !b.alive || !b.grounded) {
@@ -1989,30 +2043,74 @@ export class Match {
     }
     this.burrowTurn = this.turnNumber;
     this.stock[u.team][i]--;
-    this.dig(u, w);
-    // (through it, carried along it: it comes out at its end)
-    const [dx, dy, dz] = this.aimDirection(u, aimed);
-    this.burrowing = { unit: u, x: b.x, y: b.y, z: b.z, dx, dy, dz, s: 0, end: w.tunnelLength - b.species.radius * 0.5 };
+    const path = this.burrowPath(u, power, []);
+    // (the tunnel, all of it at once: as wide as the ant, and a little more)
+    let total = 0;
+    for (let k = 0; k + 3 < path.length; k += 3) {
+      const dx = path[k + 3] - path[k];
+      const dy = path[k + 4] - path[k + 1];
+      const dz = path[k + 5] - path[k + 2];
+      const l = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      total += l;
+      const n = Math.max(1, Math.ceil(l / (w.tunnelRadius * 0.5)));
+      // (the way up is dug only as far as under the top: it breaks through when it gets there)
+      const last = k + 6 >= path.length ? Math.floor(n * 0.1) : n;
+      for (let s = k === 0 ? Math.floor(n * 0.3) : 0; s <= last; s++) this.field.carve(path[k] + (dx * s) / n, path[k + 1] + (dy * s) / n, path[k + 2] + (dz * s) / n, w.tunnelRadius);
+      for (let s = 0; s <= n; s += 2) this.react(path[k] + (dx * s) / n, path[k + 1] + (dy * s) / n, path[k + 2] + (dz * s) / n, w.tunnelRadius, tagsOf(w.id));
+    }
+    // (the hole it goes in by: a slope down into it, not a pit)
+    this.field.carve(path[0] * 0.55 + path[3] * 0.45, path[1] * 0.55 + path[4] * 0.45, path[2] * 0.55 + path[5] * 0.45, w.tunnelRadius * 0.8);
+    this.burrowing = { unit: u, path, s: 0, end: total, hold: BURROW_HOLD, radius: w.tunnelRadius };
     this.soft.add(u.id);
-    this.events.push({ type: 'burrow', unit: u.id });
-    if (this.phase === 'aim') this.weapon = this.keptBy(u);
+    this.events.push({ type: 'burrow', unit: u.id, path: path.slice(), radius: w.tunnelRadius });
   }
 
   /** One tick of an ant's run through its tunnel; false once it is out (it goes on by its own physics). */
   private carryThrough(r: NonNullable<Match['burrowing']>): boolean {
     const b = r.unit.bug;
-    r.s = Math.min(r.end, r.s + BURROW_SPEED * DT);
-    b.x = r.x + r.dx * r.s;
-    b.y = r.y + r.dy * r.s;
-    b.z = r.z + r.dz * r.s;
+    // (where it was a tick ago: the view goes between the two)
+    b.px = b.x;
+    b.py = b.y;
+    b.pz = b.z;
+    // (just under the top, it waits a moment: then it breaks out)
+    if (r.s >= r.end - BURROW_UNDER && r.hold > 0) r.hold--;
+    else r.s = Math.min(r.end, r.s + BURROW_SPEED * DT);
+    // (where along the path that is)
+    let left = r.s;
+    const p = r.path;
+    let k = 0;
+    let dx = 0;
+    let dy = 0;
+    let dz = 0;
+    for (; k + 3 < p.length; k += 3) {
+      dx = p[k + 3] - p[k];
+      dy = p[k + 4] - p[k + 1];
+      dz = p[k + 5] - p[k + 2];
+      const l = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      if (left <= l || k + 6 >= p.length) {
+        const f = l > 0 ? Math.min(1, left / l) : 1;
+        b.x = p[k] + dx * f;
+        b.y = p[k + 1] + dy * f;
+        b.z = p[k + 2] + dz * f;
+        break;
+      }
+      left -= l;
+    }
     b.vx = b.vy = b.vz = 0;
     b.grounded = false;
     if (r.s < r.end && b.alive) return true;
-    // (out: on with what was left of its speed, and it lands softly)
-    b.vx = r.dx * BURROW_SPEED * 0.4;
-    b.vy = r.dy * BURROW_SPEED * 0.4;
-    b.vz = r.dz * BURROW_SPEED * 0.4;
+    // (it breaks through: the rest of the way up, and a slope out of it)
+    const p6 = r.path;
+    for (let s = 1; s <= 10; s++) this.field.carve(p6[6] + ((p6[9] - p6[6]) * s) / 10, p6[7] + ((p6[10] - p6[7]) * s) / 10, p6[8] + ((p6[11] - p6[8]) * s) / 10, r.radius);
+    this.field.carve(p6[9] * 0.5 + p6[6] * 0.5, p6[10] * 0.5 + p6[7] * 0.5, p6[11] * 0.5 + p6[8] * 0.5, r.radius);
+    // (out: a little hop up out of the hole, and it lands softly)
+    b.vx = b.nx * BURROW_HOP;
+    b.vy = b.ny * BURROW_HOP;
+    b.vz = b.nz * BURROW_HOP;
+    this.events.push({ type: 'emerge', unit: r.unit.id, x: b.x, y: b.y, z: b.z });
     this.burrowing = null;
+    // (out: back to what it had in hand)
+    if (this.phase === 'aim') this.weapon = this.keptBy(r.unit);
     return false;
   }
 
