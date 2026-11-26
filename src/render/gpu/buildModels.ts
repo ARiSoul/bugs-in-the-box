@@ -653,7 +653,7 @@ function silkCurtain(): Model {
   s.field(
     (x, y, z) => {
       let d = 9;
-      for (const [a, h] of posts) d = Math.min(d, smax(Math.hypot(x - a - 0.08 * Math.sin(y * 1.4 + a), z) - (0.2 + 0.22 * Math.exp(-Math.max(0, y) * 3) + 0.08 * Math.exp(-(((y - h + 0.3) / 0.35) ** 2))) + 0.025 * Math.sin(y * 21 + 2 * Math.atan2(z, x - a)) + 0.04 * noise(x * 3, y * 2, z * 3), y - h, 0.2));
+      for (const [a, h] of posts) d = Math.min(d, smax(Math.hypot(x - a - 0.08 * Math.sin(y * 1.4 + a), z) - (0.2 + 0.07 * Math.exp(-Math.max(0, y) * 4) + 0.08 * Math.exp(-(((y - h + 0.3) / 0.35) ** 2))) + 0.025 * Math.sin(y * 21 + 2 * Math.atan2(z, x - a)) + 0.04 * noise(x * 3, y * 2, z * 3), y - h, 0.2));
       return d * 0.8;
     },
     [-6.2, -0.5, -1],
@@ -835,7 +835,7 @@ function shield(w: number, h: number, dome: number, tone: V, spots: boolean, poi
     const v = y / h;
     // (a pointed oval: narrow to its lower tip)
     const out = (Math.hypot(u * (1 + 0.15 * v) / (1 - point * Math.max(0, -v) ** 1.6), v * 0.98) - 0.82) * 1.1;
-    const c = dome * (1 - u * u * 1.1 - v * v * 0.9) + 0.04 * Math.exp(-((x / 0.09) ** 2));
+    const c = dome * (1 - u * u * 1.1 - v * v * 0.9) + 0.018 * Math.exp(-((x / 0.16) ** 2));
     const edge = 0.03 * Math.exp(-(((out + 0.05) / 0.06) ** 2));
     return smax(out, Math.abs(z - c) - 0.065 - edge, 0.05) * 0.75;
   };
@@ -867,7 +867,8 @@ function spiny(s: Soup, a: V, b: V, r: number, spines: number): void {
 
 function shieldWall(): Model {
   const s = new Soup();
-  const plates = CHITIN.map((c) => shield(1.4, 1.85, 0.2, c, false));
+  // (wide and round like the shield behind a cockroach's head, a little narrower to its lower edge)
+  const plates = CHITIN.map((c) => shield(1.55, 1.3, 0.22, c, false, 0.18));
   for (const side of [1, -1])
     for (let r = 0; r < 3; r++)
       for (let i = 0; i < 8 - (r % 2); i++) {

@@ -853,6 +853,46 @@ export class BuildViews {
         }
       }
     }
+    // (honey: it runs out of broken cells and hangs in drops)
+    if (b.species === 'bee' && rim.length >= 8) {
+      const n = rim.length / 4;
+      const dn = f.up;
+      for (let k = 0; k < 14; k++) {
+        const i = Math.floor(Math.random() * n) * 4;
+        const a = [rim[i], rim[i + 1], rim[i + 2]];
+        // (only where it can hang: not on the top of it)
+        if ((a[0] - x) * dn.x + (a[1] - y) * dn.y + (a[2] - z) * dn.z > r * 0.3) continue;
+        const l = r * (0.3 + 0.7 * Math.random());
+        const lx = rim[i + 3];
+        const slot = isWall ? Math.min(COLUMNS - 1, Math.max(0, Math.round((lx - f.first) / f.gap))) : Math.min(SPANS - 1, Math.max(0, Math.floor(lx / SPAN)));
+        e1.set(1, 0, 0).cross(dn).normalize();
+        if (e1.lengthSq() < 0.5) e1.set(0, 0, 1);
+        const S = 6;
+        for (const side of [e1.clone(), e2.crossVectors(dn, e1).normalize().clone()]) {
+          n3.crossVectors(side, dn).normalize();
+          for (let s = 0; s < S; s++) {
+            const t0 = s / S;
+            const t1 = (s + 1) / S;
+            // (thin as it runs, a round drop at its end)
+            const w0 = 0.03 + 0.05 * Math.max(0, t0 - 0.6) * (1 - t0) * 25;
+            const w1 = 0.03 + 0.05 * Math.max(0, t1 - 0.6) * (1 - t1) * 25;
+            const quad = [
+              [a[0] - side.x * w0 - dn.x * l * t0, a[1] - side.y * w0 - dn.y * l * t0, a[2] - side.z * w0 - dn.z * l * t0],
+              [a[0] + side.x * w0 - dn.x * l * t0, a[1] + side.y * w0 - dn.y * l * t0, a[2] + side.z * w0 - dn.z * l * t0],
+              [a[0] + side.x * w1 - dn.x * l * t1, a[1] + side.y * w1 - dn.y * l * t1, a[2] + side.z * w1 - dn.z * l * t1],
+              [a[0] - side.x * w1 - dn.x * l * t1, a[1] - side.y * w1 - dn.y * l * t1, a[2] - side.z * w1 - dn.z * l * t1],
+            ];
+            for (const v of [0, 1, 2, 0, 2, 3]) {
+              pos.push(quad[v][0], quad[v][1], quad[v][2]);
+              nor.push(n3.x, n3.y, n3.z);
+              col.push(0.62, 0.27, 0.02);
+              look.push(0.08, 0.9, 0);
+              capSlots.push(slot);
+            }
+          }
+        }
+      }
+    }
     if (pos.length === 0) return;
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pos), 3));
