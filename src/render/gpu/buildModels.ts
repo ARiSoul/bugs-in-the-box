@@ -581,7 +581,7 @@ function livingBridge(): Model {
 function anthill(): Model {
   const s = new Soup();
   s.rough = 0.93;
-  const mouth: Field = (x, y, z) => capsule(x, y, z, [0, 0.45, -1.2], [0, 1.15, 2.2], 1.02, 1.1);
+  const mouth: Field = (x, y, z) => capsule(x, y, z, [0, 0.45, -1.2], [0, 1.15, 2.2], 1.02, 1.1) + 0.09 * noise(x * 3.3, y * 3.3, z * 3.3) + 0.05 * noise(x * 7, y * 7, z * 7);
   const hill: Field = (x, y, z) => {
     const r = Math.hypot(x, z * 0.95);
     let d = (y + 0.3 - 2.95 * Math.exp(-((r / 2.15) ** 2.4))) * 0.58;
@@ -812,7 +812,7 @@ function silkFunnel(): Model {
     let d = (Math.hypot(x / 2.5, y / 2.55, (z + 0.55) / 2.75) - 1) * 2.3;
     for (const [px, pz, h] of [[-1.4, -0.4, 2.65], [1.45, -0.5, 2.45], [0, -1.8, 2.8], [0, 0.6, 2.85]]) d = smin(d, Math.hypot(x - px, z - pz) - 0.015 - 0.2 * Math.max(0, h + 0.25 - y) + Math.max(0, y - h + 0.05) * 3, 0.4);
     const q = Math.hypot(x, y - MY) - MR;
-    d = smin(d, Math.hypot(q, z - MZ) - 0.2, 0.75);
+    d = smin(d, Math.hypot(q, z - MZ) - 0.2 - 0.07 * Math.sin(Math.atan2(y - MY, x) * 3 + 1) - 0.04 * noise(x * 2, y * 2, 4), 0.75);
     d = smin(d, y + 0.28 - 0.6 * Math.exp(-Math.max(0, Math.hypot(x, z) - 2.2) * 1.6), 0.5);
     const a = Math.atan2(x, z);
     d += 0.016 * noise(a * 16 + y * 3, y * 2.5, 3) + 0.016 * noise(a * 3, y * 13 + a * 4, 8) + 0.05 * noise(x * 1.5, y * 1.5, z * 1.5);
@@ -825,7 +825,9 @@ function silkFunnel(): Model {
   s.field(f, [-3.6, -0.12, -3.8], [3.6, 3.2, 3.2], 0.07, (x, y, z, _a, ny) => {
     const a = Math.atan2(x, z);
     const inside = Math.hypot(x, y - MY) < MR && z < MZ + 0.1 && (z > 0.9 || Math.hypot(x / 2.5, y / 2.55, (z + 0.55) / 2.75) < 0.95) ? Math.max(0.05, 0.5 - (MZ - z) * 0.42) : 1;
-    return dim(SILK, (0.62 + 0.2 * noise(a * 16 + y * 3, y * 2.5, 3) + 0.22 * noise(a * 3, y * 13 + a * 4, 8) + 0.1 * noise(x * 4, y * 4, z * 4)) * inside * (0.85 + 0.15 * ny));
+    // (laid in fibres, layer on layer, running round it and down)
+    const fibre = 0.1 * Math.sin(a * 46 + y * 5 + 3 * noise(a * 4, y * 2, 1)) + 0.07 * Math.sin(a * 13 - y * 17 + 2 * noise(a, y * 3, 2));
+    return dim(SILK, (0.62 + 0.2 * noise(a * 16 + y * 3, y * 2.5, 3) + 0.22 * noise(a * 3, y * 13 + a * 4, 8) + 0.1 * noise(x * 4, y * 4, z * 4) + fibre) * inside * inside * (inside < 1 ? 1.6 : 1) * (0.85 + 0.15 * ny));
   });
   floor(s, 0.3, 1.75, [0.1, 0.095, 0.085]);
   // threads wound round it: from a point inside, out to its skin
@@ -1008,7 +1010,7 @@ function scaleWalk(): Model {
 
 function husk(): Model {
   const s = new Soup();
-  s.rough = 0.2;
+  s.rough = 0.13;
   s.glow = 0.16;
   const rx = 2.0;
   const ry = 1.5;
@@ -1039,7 +1041,7 @@ function husk(): Model {
       // (amber and pale where it is thin, dark brown to its edges and the split)
       const split = ss(0.25, 0.08, Math.abs(x)) * ss(0.9, 1.2, y);
       const amber: V = [tone[0] * 0.8 + 0.08, tone[1] * 0.8 + 0.03, tone[2] * 0.8 + 0.006];
-      return dim(amber, (1.0 + 0.14 * noise(x * 2, y, z * 4) + 0.05 * Math.sin(x * 18)) * (1 - 0.62 * e) * (1 - 0.5 * split) * (1 + 0.35 * ss(1.0, 1.45, y)) * inside);
+      return dim(amber, (1.0 + 0.14 * noise(x * 2, y, z * 4) + 0.05 * Math.sin(x * 18) + 0.07 * noise(x * 14, y * 14, z * 14) + 0.05 * Math.sin(z * 40 + 2 * noise(x * 3, y, z))) * (1 - 0.62 * e) * (1 - 0.5 * split) * (1 + 0.35 * ss(1.0, 1.45, y)) * inside);
     });
   }
   // (the hollow legs it left, short stubs at its rim)
@@ -1206,7 +1208,7 @@ function waxNest(): Model {
     const inside = inHex(x, y - DY) < 0.97 && z < 2.1 && (z > 1.3 || Math.hypot(x / A[0], y / A[1], z / A[2]) < 0.9) ? Math.max(0.12, 0.62 - (1.9 - z) * 0.28) : 1;
     // (pale wax at the rims, deeper amber down in the cells)
     const open = (1 - ss(0.9, 1.35, z) * ss(1.55, 1.25, Math.abs(x)) * ss(2.3, 2.05, y)) * (full(c[0], c[1]) ? 0 : 1);
-    return wax((0.82 + 0.2 * noise(x * 1.5, y, z)) * (1 + 0.3 * (1 - ss(0, 0.035, e))) * tone * inside, 0.55 * ss(0.03, 0.1, e) * open);
+    return wax((0.82 + 0.2 * noise(x * 1.5, y, z)) * (1 + 0.3 * (1 - ss(0, 0.035, e))) * tone * inside, 0.85 * ss(0.025, 0.09, e) * open);
   });
   for (let r = -4; r <= 4; r++)
     for (let q = -6; q <= 6; q++) {
