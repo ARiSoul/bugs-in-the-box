@@ -35,7 +35,7 @@ const INSIDE: Record<string, readonly [readonly [number, number, number], readon
   ant: [[0.14, 0.07, 0.03], [0.4, 0.24, 0.11], 0.95, 0.9],
   spider: [[0.42, 0.4, 0.37], [0.78, 0.76, 0.7], 0.6, 1.1],
   cockroach: [[0.3, 0.16, 0.07], [0.62, 0.4, 0.2], 0.55, 1.1],
-  bee: [[0.42, 0.16, 0.012], [0.86, 0.42, 0.05], 0.35, 1.5],
+  bee: [[0.3, 0.09, 0.004], [0.82, 0.35, 0.025], 0.35, 0.9],
 };
 /** Its skin where a hole cuts it: how thick, and what colour. */
 const SKIN: Record<string, readonly [number, readonly [number, number, number]]> = {
@@ -470,10 +470,30 @@ export class BuildViews {
         idx[n + 2] = l;
         n += 3;
       }
+      // (to the sphere along its own surface, not off it: a thin sheet keeps a clean edge)
+      const nor = g.getAttribute('normal') as THREE.BufferAttribute | undefined;
       for (const v of moved) {
-        const dx = p[v * 3] - c.x;
-        const dy = p[v * 3 + 1] - c.y;
-        const dz = p[v * 3 + 2] - c.z;
+        let dx = p[v * 3] - c.x;
+        let dy = p[v * 3 + 1] - c.y;
+        let dz = p[v * 3 + 2] - c.z;
+        let h = 0;
+        if (nor) {
+          const nx = nor.getX(v);
+          const ny = nor.getY(v);
+          const nz = nor.getZ(v);
+          h = dx * nx + dy * ny + dz * nz;
+          if (Math.abs(h) < r * 0.9) {
+            dx -= h * nx;
+            dy -= h * ny;
+            dz -= h * nz;
+            const l = Math.hypot(dx, dy, dz) || 1;
+            const k = Math.sqrt(r * r - h * h) / l;
+            p[v * 3] = c.x + dx * k + h * nx;
+            p[v * 3 + 1] = c.y + dy * k + h * ny;
+            p[v * 3 + 2] = c.z + dz * k + h * nz;
+            continue;
+          }
+        }
         const l = Math.hypot(dx, dy, dz) || 1;
         p[v * 3] = c.x + (dx / l) * r;
         p[v * 3 + 1] = c.y + (dy / l) * r;
@@ -592,6 +612,8 @@ export class BuildViews {
     const n3 = new THREE.Vector3();
     const e1 = new THREE.Vector3();
     const e2 = new THREE.Vector3();
+    /** Where it comes out at the skin (and its slot): loose threads go from there. */
+    const rim: number[] = [];
     /** Triangles of what of (i, j, k) is inside: cut where it comes out. */
     const tri = (ids: readonly number[]): void => {
       const poly: number[][] = [];
@@ -603,7 +625,9 @@ export class BuildViews {
         if (a <= 0) poly.push([at[i * 3], at[i * 3 + 1], at[i * 3 + 2], a, high[i]]);
         if (a <= 0 !== c <= 0) {
           const t = a / (a - c);
-          poly.push([0, 1, 2].map((k) => at[i * 3 + k] + (at[j * 3 + k] - at[i * 3 + k]) * t).concat([0, high[i] + (high[j] - high[i]) * t]));
+          const q = [0, 1, 2].map((k) => at[i * 3 + k] + (at[j * 3 + k] - at[i * 3 + k]) * t).concat([0, high[i] + (high[j] - high[i]) * t]);
+          poly.push(q);
+          rim.push(q[0], q[1], q[2], locals[i]);
         }
       }
       if (poly.length < 3) return;
@@ -613,7 +637,9 @@ export class BuildViews {
       e2.set(poly[2][0] - poly[0][0], poly[2][1] - poly[0][1], poly[2][2] - poly[0][2]);
       n3.crossVectors(e1, e2).normalize();
       p3.set(x - poly[0][0], y - poly[0][1], z - poly[0][2]).normalize();
-      if (n3.dot(p3) < 0) n3.negate();
+      // (its winding must face where its normal does: both sides are drawn, and the back one is lit as from behind)
+      const flip = n3.dot(p3) < 0;
+      if (flip) n3.negate();
       if (n3.lengthSq() < 0.5) n3.copy(p3);
       n3.lerp(p3, 0.45).normalize();
       const put = (q: readonly number[]): void => {
@@ -644,14 +670,16 @@ export class BuildViews {
         // (where it cuts the skin: the skin's thickness, as a rim)
         const edge = thick > 0 ? ss(-thick, -thick * 0.35, q[3]) : 0;
         if (edge > 0) s = s * (1 - edge) + edge;
+        // (and with no skin, a lighter lip where the light still reaches)
+        else s *= 1 + 0.35 * ss(-0.35, -0.03, q[3]);
         for (let k = 0; k < 3; k++) col.push(((c0[k] + (c1[k] - c0[k]) * blend) * (1 - edge) + skin[k] * edge) * s);
         look.push(rg, shine * (1 - 0.6 * edge), 0);
         capSlots.push(slot + (q[4] > SMOTHERED - 0.2 ? 64 : 0));
       };
       for (let n = 1; n + 1 < poly.length; n++) {
         put(poly[0]);
-        put(poly[n]);
-        put(poly[n + 1]);
+        put(poly[flip ? n + 1 : n]);
+        put(poly[flip ? n : n + 1]);
       }
     };
     for (let j = 0; j < H; j++)
@@ -660,6 +688,69 @@ export class BuildViews {
         tri([a, a + 1, a + W + 1]);
         tri([a + 1, a + W + 2, a + W + 1]);
       }
+    // (silk: loose threads across the hole, some broken and hanging)
+    if (b.species === 'spider' && rim.length >= 8) {
+      const n = rim.length / 4;
+      const dn = f.up;
+      for (let k = 0; k < 16; k++) {
+        const i = Math.floor(Math.random() * n) * 4;
+        const a = [rim[i], rim[i + 1], rim[i + 2]];
+        let e: number[];
+        if (k < 7) {
+          // (across, to the far side)
+          let best = 0;
+          let j = i;
+          for (let m = 0; m < 6; m++) {
+            const o = Math.floor(Math.random() * n) * 4;
+            const d2 = (rim[o] - a[0]) ** 2 + (rim[o + 1] - a[1]) ** 2 + (rim[o + 2] - a[2]) ** 2;
+            if (d2 > best) {
+              best = d2;
+              j = o;
+            }
+          }
+          e = [rim[j], rim[j + 1], rim[j + 2]];
+        } else {
+          // (broken: towards the middle, and down)
+          const t = 0.25 + 0.4 * Math.random();
+          e = [a[0] + (x - a[0]) * t - dn.x * r * 0.5 * t, a[1] + (y - a[1]) * t - dn.y * r * 0.5 * t, a[2] + (z - a[2]) * t - dn.z * r * 0.5 * t];
+        }
+        const lx = rim[i + 3];
+        const slot = isWall ? Math.min(COLUMNS - 1, Math.max(0, Math.round((lx - f.first) / f.gap))) : Math.min(SPANS - 1, Math.max(0, Math.floor(lx / SPAN)));
+        const len = Math.hypot(e[0] - a[0], e[1] - a[1], e[2] - a[2]);
+        if (len < 0.3) continue;
+        const sag = len * (0.08 + 0.12 * Math.random());
+        const w = 0.012 + 0.014 * Math.random();
+        const tone = 0.8 + 0.25 * Math.random();
+        const S = 8;
+        const pt = (t: number): number[] => {
+          const h = 4 * t * (1 - t) * sag;
+          return [a[0] + (e[0] - a[0]) * t - dn.x * h, a[1] + (e[1] - a[1]) * t - dn.y * h, a[2] + (e[2] - a[2]) * t - dn.z * h];
+        };
+        // (two thin ribbons, crossed: a thread from any side)
+        e1.set(e[0] - a[0], e[1] - a[1], e[2] - a[2]).normalize();
+        for (const side of [e2.crossVectors(e1, dn).normalize().clone(), dn.clone()]) {
+          if (side.lengthSq() < 0.5) continue;
+          n3.crossVectors(e1, side).normalize();
+          for (let s = 0; s < S; s++) {
+            const p0 = pt(s / S);
+            const p1 = pt((s + 1) / S);
+            const quad = [
+              [p0[0] - side.x * w, p0[1] - side.y * w, p0[2] - side.z * w],
+              [p0[0] + side.x * w, p0[1] + side.y * w, p0[2] + side.z * w],
+              [p1[0] + side.x * w, p1[1] + side.y * w, p1[2] + side.z * w],
+              [p1[0] - side.x * w, p1[1] - side.y * w, p1[2] - side.z * w],
+            ];
+            for (const v of [0, 1, 2, 0, 2, 3]) {
+              pos.push(quad[v][0], quad[v][1], quad[v][2]);
+              nor.push(n3.x, n3.y, n3.z);
+              for (let c = 0; c < 3; c++) col.push(skin[c] * tone);
+              look.push(0.45, 0.6, 0);
+              capSlots.push(slot);
+            }
+          }
+        }
+      }
+    }
     if (pos.length === 0) return;
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pos), 3));

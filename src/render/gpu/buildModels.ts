@@ -435,7 +435,7 @@ function rampart(): Model {
     const k = 0.07 + 0.1 * rnd(i + 0.8) ** 2;
     const end = Math.abs(a) > 0.86;
     const t = (rnd(i + 0.5) - 0.5) * 3.1;
-    s.lump(end ? Math.sign(a) * (5 + 1.15 * Math.cos(t) + 0.4 * (r - 2.05)) : a * 6, k * 0.4, end ? Math.sin(t) * r : e * r, k, dim(EARTH[(i * 7) % 4], 0.9 + 0.25 * rnd(i + 3)), i);
+    s.lump(end ? Math.sign(a) * (5 + 1.15 * Math.cos(t) + 0.4 * (r - 2.05)) : a * 6, k * 0.4, end ? Math.sin(t) * r : e * r, k, dim(EARTH[(Math.floor((a + 1) * 2.5) + (rnd(i + 4) < 0.3 ? 1 : 0)) % 4], 0.9 + 0.25 * rnd(i + 3)), i);
   }
   // splinters of wood in two rows, edge to edge: none quite like the next, leaning out, a few gone
   for (let i = 0; i < 46; i++) {
@@ -447,8 +447,8 @@ function rampart(): Model {
     const tilt = (rnd(i + 7) - 0.5) * 0.3;
     const lean = (row ? -1 : 1) * (0.07 + 0.26 * rnd(i + 11));
     const t = WOOD[(i * 3 + row) % 5];
-    const n = 9;
-    const rows = 7;
+    const n = 14;
+    const rows = 9;
     const from = s.p.length / 3;
     for (let j = 0; j <= rows; j++)
       for (let k = 0; k <= n; k++) {
@@ -462,7 +462,7 @@ function rampart(): Model {
         s.p.push(x + Math.cos(a) * w * (j === rows ? 0.5 : 1) + tilt * v * len, h, z0 + Math.sin(a) * w * (j === rows ? 0.5 : 1) + lean * v * v * len);
         s.n.push(Math.cos(a), 0.06, Math.sin(a));
         s.c.push(t[0] * c, t[1] * c, t[2] * c);
-        s.l.push(0.8, 0.02);
+        s.l.push(0.62, 0.04);
       }
     for (let j = 0; j < rows; j++)
       for (let k = 0; k < n; k++) {
@@ -474,7 +474,7 @@ function rampart(): Model {
     for (let k = 1; k + 1 < n; k++) s.i.push(top, top + k + 1, top + k);
   }
   // bits of leaf, cut round, pressed on both sides
-  const green: readonly V[] = [[0.1, 0.19, 0.03], [0.17, 0.22, 0.035], [0.22, 0.17, 0.03]];
+  const green: readonly V[] = [[0.07, 0.14, 0.025], [0.1, 0.16, 0.03], [0.15, 0.15, 0.028]];
   s.rough = 0.55;
   s.glow = 0.12;
   for (let i = 0; i < 12; i++) {
@@ -497,7 +497,7 @@ function rampart(): Model {
       4,
       (u, v) => dim(t, 0.75 + 0.35 * v + 0.2 * noise(u * 20, v * 3, i)),
     );
-    s.put(q, pose(x, y, side * (1.1 - 0.06 * (y - 1.9)), -0.1 + 0.3 * (rnd(i + 2) - 0.5), (side > 0 ? 0 : Math.PI) + 0.6 * (rnd(i + 4) - 0.5), rnd(i + 9) * 6.28, 0.85 + 0.45 * rnd(i + 6)));
+    s.put(q, pose(x, y, side * (1.3 - 0.06 * (y - 1.9)), -0.1 + 0.3 * (rnd(i + 2) - 0.5), (side > 0 ? 0 : Math.PI) + 0.6 * (rnd(i + 4) - 0.5), rnd(i + 9) * 6.28, 0.85 + 0.45 * rnd(i + 6)));
   }
   return s.done();
 }
@@ -788,23 +788,24 @@ const LEG: V = [0.085, 0.024, 0.007];
 const rim = (c: V, k: number): V => [c[0] * (1 + k * 0.55), c[1] * (1 + k * 1.15), c[2] * (1 + k * 1.6)];
 
 /** A shield: wide, domed, with a pale rim, a ridge down its middle and two dark spots. */
-function shield(w: number, h: number, dome: number, tone: V, spots: boolean): Soup {
+function shield(w: number, h: number, dome: number, tone: V, spots: boolean, point = 0.6): Soup {
   const s = new Soup();
   s.rough = 0.26;
   s.glow = 0.16;
   const f: Field = (x, y, z) => {
     const u = x / w;
     const v = y / h;
-    const out = (Math.hypot(u * (1 + 0.22 * v), v * 0.98) - 0.82) * 1.1;
-    const c = dome * (1 - u * u * 1.1 - v * v * 0.9) + 0.05 * Math.exp(-((x / 0.1) ** 2));
-    const edge = 0.06 * Math.exp(-(((out + 0.07) / 0.08) ** 2));
-    return smax(out, Math.abs(z - c) - 0.085 - edge, 0.07) * 0.75;
+    // (a pointed oval: narrow to its lower tip)
+    const out = (Math.hypot(u * (1 + 0.15 * v) / (1 - point * Math.max(0, -v) ** 1.6), v * 0.98) - 0.82) * 1.1;
+    const c = dome * (1 - u * u * 1.1 - v * v * 0.9) + 0.04 * Math.exp(-((x / 0.09) ** 2));
+    const edge = 0.03 * Math.exp(-(((out + 0.05) / 0.06) ** 2));
+    return smax(out, Math.abs(z - c) - 0.065 - edge, 0.05) * 0.75;
   };
   s.field(f, [-w * 1.15, -h * 1.05, -0.8], [w * 1.15, h * 1.05, dome + 0.4], 0.1, (x, y) => {
     const u = x / w;
     const v = y / h;
-    const e = Math.hypot(u * (1 + 0.22 * v), v * 0.98);
-    const k = (0.85 + 0.14 * noise(x * 2, y * 2, 2) + 0.07 * Math.sin(y * 20 + 2 * noise(x, y, 5)) + 0.18 * v);
+    const e = Math.hypot(u * (1 + 0.15 * v) / (1 - point * Math.max(0, -v) ** 1.6), v * 0.98);
+    const k = (0.86 + 0.08 * noise(x * 2, y * 2, 2) + 0.04 * Math.sin(y * 20 + 2 * noise(x, y, 5)) + 0.16 * v);
     return dim(rim(tone, ss(0.66, 0.79, e)), k);
   });
   // (faint marks, not eyes)
@@ -827,8 +828,8 @@ function spiny(s: Soup, a: V, b: V, r: number, spines: number): void {
 
 function shieldWall(): Model {
   const s = new Soup();
-  const plates = CHITIN.map((c) => shield(1.4, 1.75, 0.3, c, false));
-  const spotted = CHITIN.map((c, k) => shield(1.4, 1.75, 0.3, c, k === 2));
+  const plates = CHITIN.map((c) => shield(1.4, 1.85, 0.2, c, false));
+  const spotted = CHITIN.map((c, k) => shield(1.4, 1.85, 0.2, c, k === 2));
   for (const side of [1, -1])
     for (let r = 0; r < 3; r++)
       for (let i = 0; i < 8 - (r % 2); i++) {
@@ -897,7 +898,7 @@ function scaleWalk(): Model {
     }
   }
   // a shield at its far end
-  const end = shield(1.9, 1.35, 0.16, CHITIN[1], true);
+  const end = shield(1.9, 1.35, 0.16, CHITIN[1], true, 0);
   s.put(end, pose(LONG - 0.15, -0.16, 0, -Math.PI / 2, -Math.PI / 2, 0, 0.98, 0.9, 0.8), 0.8);
   // its belly
   s.rough = 0.45;
