@@ -608,7 +608,7 @@ function anthill(): Model {
     const h = 0.3 + 2.1 * rnd(i + 0.44);
     const r = 2.15 * Math.pow(Math.max(0.02, -Math.log(Math.max(0.01, (h + 0.3) / 2.95))), 1 / 2.4);
     if (Math.sin(a) > 0.55 && Math.abs(Math.cos(a)) < 0.6 && h < 2) continue;
-    const k = 0.12 + 0.12 * rnd(i + 0.55);
+    const k = 0.16 + 0.16 * rnd(i + 0.55);
     s.lump(Math.cos(a) * r, h, Math.sin(a) * r * 1.05, k, dim(EARTH[i % 6], 0.7 + 0.35 * ss(0.3, 2.4, h)), i + 700);
   }
   // (fine crumbs heaped round its crater)
@@ -1043,7 +1043,7 @@ function husk(): Model {
   const s = new Soup();
   s.lit = 2;
   s.rough = 0.24;
-  s.glow = 0.4;
+  s.glow = 0.6;
   const rx = 2.0;
   const ry = 1.5;
   const rz = 2.85;
@@ -1211,7 +1211,7 @@ function combSpan(): Model {
 function waxNest(): Model {
   const s = new Soup();
   s.lit = 3;
-  s.rough = 0.28;
+  s.rough = 0.4;
   s.glow = 0.2;
   const A: V = [2.2, 2.45, 2.2];
   // hexagons, laid round from its top
@@ -1272,7 +1272,9 @@ function waxNest(): Model {
     if (Math.cos(a) > 0.82) continue;
     const r = 2.35 + 0.25 * rnd(i + 0.5);
     const k = 0.16 + 0.12 * rnd(i + 0.7);
-    s.ball(Math.sin(a) * r, k * 0.45, Math.cos(a) * r, k * 1.3, k * 0.6, k, wax(0.62 + 0.25 * rnd(i + 0.9), 0.35), 6, 3);
+    // (old wax: greyed, less of its colour)
+    const w = wax(0.62 + 0.25 * rnd(i + 0.9), 0.35);
+    s.ball(Math.sin(a) * r, k * 0.45, Math.cos(a) * r, k * 1.3, k * 0.6, k, [w[0] * 0.75 + 0.06, w[1] * 0.75 + 0.05, w[2] * 0.75 + 0.035], 6, 3);
   }
   s.rough = 0.28;
   s.glow = 0.2;
