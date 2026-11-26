@@ -584,7 +584,9 @@ function anthill(): Model {
   const mouth: Field = (x, y, z) => capsule(x, y, z, [0, 0.45, -1.2], [0, 1.15, 2.2], 1.02, 1.1) + 0.09 * noise(x * 3.3, y * 3.3, z * 3.3) + 0.05 * noise(x * 7, y * 7, z * 7);
   const hill: Field = (x, y, z) => {
     const r = Math.hypot(x, z * 0.95);
-    let d = (y + 0.3 - 2.95 * Math.exp(-((r / 2.15) ** 2.4))) * 0.58;
+    // (slumped, uneven; two smaller mounds against its sides)
+    const side = 1.05 * Math.exp(-(((x - 1.55) ** 2 + (z + 1.25) ** 2) / 0.75)) + 0.8 * Math.exp(-(((x + 1.6) ** 2 + (z + 0.7) ** 2) / 0.6));
+    let d = (y + 0.3 - 2.95 * Math.exp(-((r / 2.15) ** 2.4)) * (1 + 0.12 * noise(x * 0.8, 3, z * 0.8)) - side) * 0.58;
     const q = Math.hypot(Math.hypot(x, y - 1.15) - 1.3, (z - 1.2 + 0.25 * (1.15 - y)) * 0.85);
     d = smin(d, Math.max(q - 0.44 - (y > 1.5 ? 0.12 : 0), 0.05 - y), 0.5);
     // (a crater on top, its rim raised, a hole down it)
@@ -843,7 +845,7 @@ function silkFunnel(): Model {
     const a = Math.atan2(x, z);
     const inside = Math.hypot(x, y - MY) < MR && z < MZ + 0.1 && (z > 0.9 || Math.hypot(x / 2.5, y / 2.55, (z + 0.55) / 2.75) < 0.95) ? Math.max(0.05, 0.5 - (MZ - z) * 0.42) : 1;
     // (laid in fibres, layer on layer, running round it and down)
-    const fibre = 0.05 * Math.sin(a * 46 + y * 5 + 3 * noise(a * 4, y * 2, 1)) + 0.04 * Math.sin(a * 13 - y * 17 + 2 * noise(a, y * 3, 2));
+    const fibre = 0.05 * Math.sin(a * 46 + y * 5 + 3 * noise(a * 4, y * 2, 1)) + 0.04 * Math.sin(a * 13 - y * 17 + 2 * noise(a, y * 3, 2)) - 0.16 * ss(0.75, 0.95, Math.sin(y * 7 + a * 1.5 + 2 * noise(a * 2, y, 5)));
     return dim(SILK, (0.74 + 0.08 * noise(a * 16 + y * 3, y * 2.5, 3) + 0.08 * noise(a * 3, y * 13 + a * 4, 8) + 0.05 * noise(x * 4, y * 4, z * 4) + fibre) * inside * inside * (inside < 1 ? 1.6 : 1) * (0.85 + 0.15 * ny));
   });
   floor(s, 0.3, 1.75, [0.1, 0.095, 0.085]);
@@ -874,7 +876,7 @@ function silkFunnel(): Model {
     }
   }
   // (its mouth, bound round and round: a dense, bright rim)
-  for (let j = 0; j < 4; j++) s.line(path(40, -0.05, Math.PI + 0.05, (a) => [Math.cos(a) * (MR + 0.02 + 0.03 * Math.sin(a * 5 + j * 1.7)), MY + Math.sin(a) * (MR + 0.02 + 0.03 * Math.sin(a * 5 + j * 1.7)), MZ + 0.04 + 0.03 * Math.cos(a * 3 + j)] as const), 0.022, dim(SILK, 1.2 + 0.05 * j));
+  for (let j = 0; j < 4; j++) s.line(path(40, -0.05, Math.PI + 0.05, (a) => [Math.cos(a) * (MR - 0.06 + 0.03 * Math.sin(a * 5 + j * 1.7)), MY + Math.sin(a) * (MR - 0.06 + 0.03 * Math.sin(a * 5 + j * 1.7)), MZ + 0.15 + 0.03 * Math.cos(a * 3 + j)] as const), 0.022, dim(SILK, 1.2 + 0.05 * j));
   // (loose silk at its mouth: short loops sagging from it)
   for (let k = 0; k < 11; k++) {
     const a0 = 0.15 + rnd(k + 0.15) * 2.85;
@@ -1040,8 +1042,8 @@ const EXUVIA: readonly V[] = [[0.36, 0.2, 0.075], [0.3, 0.16, 0.055], [0.42, 0.2
 function husk(): Model {
   const s = new Soup();
   s.lit = 2;
-  s.rough = 0.3;
-  s.glow = 0.08;
+  s.rough = 0.24;
+  s.glow = 0.24;
   const rx = 2.0;
   const ry = 1.5;
   const rz = 2.85;
@@ -1067,7 +1069,7 @@ function husk(): Model {
     s.field(f, [-2.4, -0.1, k === 0 ? -3.1 : Math.max(-3.1, z0 - 0.8)], [2.4, 1.9, Math.min(3.1, z0 + 1.2)], 0.07, (x, y, z) => {
       const b = z + 0.3 * (x / rx) ** 2 - z0;
       const e = Math.max(clamp(1 - Math.abs(b) / 0.16), clamp((0.26 - y) / 0.12));
-      const inside = Math.hypot(x / rx, y / ry, z / rz) < 0.95 && z < 1.9 ? 0.25 : 1;
+      const inside = Math.hypot(x / rx, y / ry, z / rz) < 0.95 && z < 1.9 ? 0.12 : 1;
       // (amber and pale where it is thin, dark brown to its edges and the split)
       const split = ss(0.25, 0.08, Math.abs(x)) * ss(0.9, 1.2, y);
       return dim(tone, (1.0 + 0.14 * noise(x * 2, y, z * 4) + 0.05 * Math.sin(x * 18) + 0.07 * noise(x * 14, y * 14, z * 14) + 0.05 * Math.sin(z * 40 + 2 * noise(x * 3, y, z))) * (1 - 0.8 * e) * (1 - 0.6 * split) * (1 + 0.35 * ss(1.0, 1.45, y)) * inside);
@@ -1082,6 +1084,7 @@ function husk(): Model {
       // (thin, bent at the knee, pale where they were thin)
       const knee: V = [b[0], b[1] + 0.22, b[2]];
       s.rod(a, knee, 0.055, dim(EXUVIA[1], 0.9), 6, 0.8);
+      s.ball(knee[0], knee[1], knee[2], 0.06, 0.06, 0.06, dim(EXUVIA[1], 0.7), 6, 4);
       s.rod(knee, [b[0] + e * 0.4, 0.02, b[2] + 0.25 * (rnd(z + e * 2) - 0.3)], 0.035, EXUVIA[2], 5, 0.5);
     }
   return s.done();
@@ -1256,8 +1259,8 @@ function waxNest(): Model {
       const y = Math.cos(h) * A[1] * 0.95;
       const z = (v / (h || 1)) * Math.sin(h) * A[2] * 0.95;
       if (z > 0.4 && Math.abs(x) < 1.25 && y < 2.2) continue;
-      // (down in the cell, level with its rim at most: no beads on it)
-      honey(s, x * 0.985, y * 0.985, z * 0.985, 0.15, 0.15, 0.15, dim(HONEY, 0.8 + 0.5 * w));
+      // (down in the cell, flat: no beads on it)
+      honey(s, x * 0.975, y * 0.975, z * 0.975, 0.14, 0.05, 0.14, dim(HONEY, 0.8 + 0.5 * w));
     }
   // its front, round the door: cells built on it, wall by wall (the field is too coarse for them)
   const FC = 0.26;
