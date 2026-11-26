@@ -564,7 +564,8 @@ export class BuildViews {
         const l = idx[k + 2];
         if (inside[i] && inside[j] && inside[l]) continue;
         // (silk frays: what the blast touched is gone, not drawn up to its edge)
-        if (b.species === 'spider' && (inside[i] || inside[j] || inside[l])) continue;
+        // (and shell breaks in chips, not up to a smooth edge)
+        if ((b.species === 'spider' || b.species === 'cockroach') && (inside[i] || inside[j] || inside[l])) continue;
         for (const v of [i, j, l])
           if (inside[v] === 1) {
             inside[v] = 2;
@@ -780,7 +781,7 @@ export class BuildViews {
         const stakes = b.species === 'ant' ? 0.8 * (0.45 + 0.7 * ss(0.15, 0.45, core) * (0.85 + 0.15 * Math.sin(core * 26 + g * 2)) + 0.5 * ss(0.85, 1, core)) * (0.8 + 0.4 * g) : 1;
         let s = (0.75 + 0.35 * Math.min(1, Math.max(0, 1 + q[3]))) * stakes;
         // (an ant's earth: pebbles in it, damp and darker deep in)
-        if (b.species === 'ant' && q[4] < 2.2) s *= (0.7 + 0.45 * Math.max(0, Math.sin(q[0] * 13.1 + q[1] * 7.7) * Math.sin(q[1] * 11.3 + q[2] * 12.9))) * (0.75 + 0.25 * Math.min(1, Math.max(0, 1 + q[3] * 1.5)));
+        if (b.species === 'ant' && q[4] < 2.2) s *= (0.65 + 0.55 * (((Math.sin(Math.floor(q[0] * 5) * 12.99 + Math.floor(q[1] * 5) * 78.23 + Math.floor(q[2] * 5) * 37.72) * 43758.5) % 1 + 1) % 1)) * (0.75 + 0.25 * Math.min(1, Math.max(0, 1 + q[3] * 1.5)));
         let blend = w;
         let shine = glow;
         let rg = rough;

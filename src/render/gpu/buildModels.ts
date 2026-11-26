@@ -427,7 +427,8 @@ function rampart(): Model {
   s.rough = 0.92;
   const H = (x: number): number => (2.3 + 0.25 * Math.sin(x * 1.3)) * 1;
   const bank: Field = (x, y, z) => (y + 0.1 - (H(x) + 0.25) * Math.exp(-(z * z + 3 * Math.max(0, Math.abs(x) - 5.0) ** 2) / 1.9)) * 0.6;
-  s.field(soil(bank, 2.6, 0.17), [-6.5, -0.5, -3.1], [6.5, 3.1, 3.1], 0.085, soilPaint(2.6));
+  // (dark where the stakes go in, paler and drier to its rim)
+  s.field(soil(bank, 2.6, 0.17), [-6.5, -0.5, -3.1], [6.5, 3.1, 3.1], 0.085, soilPaint(2.6, (x, y, z) => (1 - 0.45 * Math.exp(-((Math.abs(z) - 0.42) ** 2) / 0.12) * ss(1.3, 2.1, y)) * (1 + 0.22 * ss(0.5, 0.05, y))));
   for (let i = 0; i < 230; i++) {
     const a = rnd(i + 0.1) * 2 - 1;
     const e = rnd(i + 0.2) < 0.5 ? 1 : -1;
@@ -556,7 +557,7 @@ function livingBridge(): Model {
       if (x < 0.5 || (x > LONG - 0.2 && rnd(i * 3 + l + 4) < 0.5)) continue;
       // (along the span, near enough: a deck, not a heap)
       const turn = 0.3 * (rnd(x * 7 + l) - 0.5);
-      s.put(pick(i * 7 + l * 3), along(x, -0.3 - 0.1 * Math.sin(Math.PI * clamp(x / LONG)) - 0.03 * rnd(i * 3 + l + 5) - 0.5 * Math.max(0, Math.max(-x, x - LONG)), z, l % 2 ? 1 : -1, 0, turn, 0.82 * (0.8 + 0.36 * rnd(i * 11 + l)) * big(i * 7 + l * 3) * (l === 0 || l === 4 ? 1.15 : 1), (l - 2) * -0.1), (0.88 + 0.4 * rnd(i * 2 + l * 9 + 3)) * (l === 0 || l === 4 ? 1.08 : 1));
+      s.put(pick(i * 7 + l * 3), along(x, -0.3 - 0.1 * Math.sin(Math.PI * clamp(x / LONG)) - 0.03 * rnd(i * 3 + l + 5) - 0.5 * Math.max(0, Math.max(-x, x - LONG)), z, 1, 0, turn, 0.82 * (0.8 + 0.36 * rnd(i * 11 + l)) * big(i * 7 + l * 3) * (l === 0 || l === 4 ? 1.15 : 1), (l - 2) * -0.1), (0.88 + 0.4 * rnd(i * 2 + l * 9 + 3)) * (l === 0 || l === 4 ? 1.08 : 1));
     }
   // those that hang on them: chains, down to an arch that is deep at its ends
   const arch = (x: number): number => { const t = Math.abs((x / LONG) * 2 - 1); return -0.75 - 1.75 * t ** 2.2; };
@@ -663,6 +664,7 @@ function silkCurtain(): Model {
       const lean = (rnd(k + side * 7) - 0.5) * 0.16;
       s.line(path(9, 0, 1, (v) => { const p = at(clamp(k / 120 + lean * (1 - v) * v * 2), v); return [p[0], p[1], p[2] + side * 0.025] as const; }), 0.014 + 0.016 * rnd(k), dim(SILK, 0.8 + 0.5 * rnd(k + 4)));
     }
+    s.line(path(80, 0, 1, (u) => { const p = at(u, 0.035); return [p[0], p[1], p[2] + side * 0.035] as const; }), 0.035, dim(SILK, 1.18));
     for (let k = 1; k <= 17; k++) s.line(path(64, 0, 1, (u) => { const p = at(u, Math.min(1, k / 17 + 0.02 * Math.sin(u * 40 + k * 3))); return [p[0], p[1], p[2] + side * 0.03] as const; }), 0.016, dim(SILK, 1.05));
     for (let i = 0; i < 4; i++) for (let k = 0; k < 4; k++) s.line(path(12, i / 4, (i + 1) / 4, (u) => { const p = at(u, 1 - 0.03 * k); return [p[0], p[1], p[2] + side * 0.03] as const; }), 0.045 - 0.008 * k, SILK);
   }
@@ -710,7 +712,7 @@ function silkSpan(): Model {
   const edge = DECK + 0.1;
   const deck = (x: number, v: number): V => [x, 0.4 * Math.abs(v) ** 9 + 0.012, v * edge];
   const belly = (x: number, v: number): V => [x, 0.4 * Math.abs(v) ** 9 - 0.08 - (1 - v ** 4) * (0.22 + 0.14 * Math.sin((x / LONG) * Math.PI) + 0.04 * Math.sin(x * 2.1 + v * 3)), v * edge];
-  s.sheet((u, v) => deck(u * LONG, 1 - 2 * v), 100, 26, (u, v) => dim(felt(u * 30, v * 9, 1), 0.72));
+  s.sheet((u, v) => deck(u * LONG, 1 - 2 * v), 100, 26, (u, v) => dim(felt(u * 30, v * 9, 1), 0.72 * (0.88 + 0.12 * Math.sin(u * 7.3 + 1) + 0.06 * Math.sin(u * 17.1)) * (1 - 0.14 * Math.exp(-(((v - 0.5) / 0.18) ** 2)))));
   // (its belly is a net of threads: the light comes through it)
   for (let k = 0; k <= 12; k++) {
     const v = -1 + k / 6;
@@ -763,8 +765,8 @@ function silkSpan(): Model {
         continue;
       }
       const p = on(x, -0.95 + k * 0.2375);
-      const q: V = [x + e * (0.35 + 0.3 * rnd(k + e + 2)) * (k === 0 || k === 8 ? 1.6 : 1), p[1] - (e > 0 ? 0.35 : 0.04), p[2] * (k === 0 || k === 8 ? 1.6 : 1.15)];
-      s.line(sag(p, q, 0.04, 4), 0.022, SILK, 5);
+      const q: V = [x + e * (0.5 + 0.35 * rnd(k + e + 2)) * (k === 0 || k === 8 ? 1.6 : 1), p[1] - (e > 0 ? 0.35 : 0.04), p[2] * (k === 0 || k === 8 ? 1.6 : 1.15)];
+      s.line(sag(p, q, 0.04, 4), 0.03, SILK, 5);
       s.ball(q[0], q[1], q[2], 0.08, 0.05, 0.08, dim(SILK, 0.9), 8, 4);
       for (let f = 0; f < 5; f++) {
         const t = f * 1.256 + rnd(k + f + e) * 0.9;
@@ -947,7 +949,7 @@ function tergite(tone: V, rough = 0.13): Soup {
     // (red amber in its middle, near black at its edges, in the shadow of the one over it at its front; fine pits all over it)
     const a = 0.55 * Math.exp(-((z / 1.5) ** 2));
     const c: V = [(tone[0] + (0.5 - tone[0]) * a) * 1.1, (tone[1] + (0.085 - tone[1]) * a) * 0.8, (tone[2] + (0.014 - tone[2]) * a) * 0.8];
-    return dim(c, (0.8 + 0.08 * noise(x * 1.2, y, z * 0.7) - 0.12 * Math.max(0, noise(x * 9, y * 9, z * 9))) * (1 - 0.7 * k) * (1 - 0.68 * ss(-0.1, -0.6, x + bow)));
+    return dim(c, (0.8 + 0.08 * noise(x * 1.2, y, z * 0.7) - 0.12 * Math.max(0, noise(x * 9, y * 9, z * 9))) * (1 - 0.7 * k) * (1 - 0.68 * ss(-0.1, -0.6, x + bow)) * (1 + 1.4 * ss(0.6, 0.67, x + bow) * ss(0.76, 0.69, x + bow)));
   });
 }
 
@@ -957,7 +959,7 @@ function scaleWalk(): Model {
   const n = 13;
   for (let i = 0; i < n; i++) {
     const x = 0.65 + (i / (n - 1)) * (LONG - 1.3);
-    s.put(plates[(i * 7) % 6], pose(x, 0, 0), 0.8 + 0.26 * rnd(i * 13.7 + 2.1));
+    s.put(plates[(i * 7) % 6], pose(x, 0.04 * (rnd(i + 4.1) - 0.5), 0, 0.05 * (rnd(i + 5.3) - 0.5), 0.05 * (rnd(i + 6.7) - 0.5), 0.07 * (rnd(i + 7.9) - 0.5)), 0.8 + 0.26 * rnd(i * 13.7 + 2.1));
     const out = Math.abs(i - (n - 1) / 2) / ((n - 1) / 2);
     const e = i < (n - 1) / 2 ? -1 : 1;
     for (const k of [-1, 1]) {
