@@ -1017,16 +1017,20 @@ function scaleWalk(): Model {
   return s.done();
 }
 
+/** A shed skin: paler than the living shell, thin enough for light to come through. */
+const EXUVIA: readonly V[] = [[0.36, 0.2, 0.075], [0.3, 0.16, 0.055], [0.42, 0.25, 0.1]];
+
 function husk(): Model {
   const s = new Soup();
-  s.rough = 0.13;
-  s.glow = 0.16;
+  s.lit = 2;
+  s.rough = 0.3;
+  s.glow = 0.08;
   const rx = 2.0;
   const ry = 1.5;
   const rz = 2.85;
   for (let k = 0; k < 7; k++) {
     const z0 = -2.55 + k * 0.75;
-    const tone = CHITIN[k % 3];
+    const tone = EXUVIA[k % 3];
     // (one plate pushed out of line as it was shed)
     const shed = k === 3 ? 0.1 : 0;
     const f: Field = (x, y0, z) => {
@@ -1049,8 +1053,7 @@ function husk(): Model {
       const inside = Math.hypot(x / rx, y / ry, z / rz) < 0.95 && z < 1.9 ? 0.25 : 1;
       // (amber and pale where it is thin, dark brown to its edges and the split)
       const split = ss(0.25, 0.08, Math.abs(x)) * ss(0.9, 1.2, y);
-      const amber: V = [tone[0] * 0.62 + 0.03, tone[1] * 0.55 + 0.008, tone[2] * 0.5 + 0.002];
-      return dim(amber, (1.0 + 0.14 * noise(x * 2, y, z * 4) + 0.05 * Math.sin(x * 18) + 0.07 * noise(x * 14, y * 14, z * 14) + 0.05 * Math.sin(z * 40 + 2 * noise(x * 3, y, z))) * (1 - 0.62 * e) * (1 - 0.5 * split) * (1 + 0.35 * ss(1.0, 1.45, y)) * inside);
+      return dim(tone, (1.0 + 0.14 * noise(x * 2, y, z * 4) + 0.05 * Math.sin(x * 18) + 0.07 * noise(x * 14, y * 14, z * 14) + 0.05 * Math.sin(z * 40 + 2 * noise(x * 3, y, z))) * (1 - 0.8 * e) * (1 - 0.6 * split) * (1 + 0.35 * ss(1.0, 1.45, y)) * inside);
     });
   }
   // (the hollow legs it left, short stubs at its rim)
@@ -1061,8 +1064,8 @@ function husk(): Model {
       s.rough = 0.3;
       // (thin, bent at the knee, pale where they were thin)
       const knee: V = [b[0], b[1] + 0.22, b[2]];
-      s.rod(a, knee, 0.055, dim(CHITIN[2], 1.1), 6, 0.8);
-      s.rod(knee, [b[0] + e * 0.4, 0.02, b[2] + 0.25 * (rnd(z + e * 2) - 0.3)], 0.035, dim(CHITIN[2], 1.35), 5, 0.5);
+      s.rod(a, knee, 0.055, dim(EXUVIA[1], 0.9), 6, 0.8);
+      s.rod(knee, [b[0] + e * 0.4, 0.02, b[2] + 0.25 * (rnd(z + e * 2) - 0.3)], 0.035, EXUVIA[2], 5, 0.5);
     }
   return s.done();
 }

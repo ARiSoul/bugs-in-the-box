@@ -36,7 +36,7 @@ const GHOST: readonly (readonly [number, number, number])[] = [[0.02, 0.22, 1], 
 /** How a bug sits in its shelter (in its radius): how far forward, how large. */
 const SEAT: Record<string, readonly [number, number]> = { anthill: [0.62, 0.92], 'silk-funnel': [0.62, 0.62], husk: [0.95, 0.82], 'wax-nest': [0.35, 0.78] };
 /** What flies off of each species' work. */
-const BITS: Record<string, readonly number[]> = { ant: [0x6b4a2e, 0xb08a55, 0x4a3423], spider: [0xd8d4ca, 0xb9b6ae], cockroach: [0x8a3d12, 0x5a240a, 0xc98a4a], bee: [0xd9942a, 0xb86a10, 0xffc040], ember: [0xff8a2a, 0x3a2418, 0x1a1210], air: [0xe8f8ff, 0x9fe8ff, 0xffffff] };
+const BITS: Record<string, readonly number[]> = { ant: [0x6b4a2e, 0xb08a55, 0x4a3423], spider: [0xd8d4ca, 0xb9b6ae], cockroach: [0x8a3d12, 0x5a240a, 0xc98a4a], bee: [0xd9942a, 0xb86a10, 0xffc040], husk: [0x8a5a2a, 0x5c3814, 0xb07a40], ember: [0xff8a2a, 0x3a2418, 0x1a1210], air: [0xe8f8ff, 0x9fe8ff, 0xffffff] };
 
 /** What each is made of inside: two colours, how rough, how much light comes through. */
 // (the light of its own is more than the skin's: inside a hole the sun hardly reaches)
@@ -212,7 +212,7 @@ export class BuildViews {
       const grown = uniform(1).onObjectUpdate(({ object }) => (object?.userData.grown as number | undefined) ?? 1) as unknown as F;
       const base = attribute('color', 'vec3') as unknown as V3;
       m.roughnessNode = look.x.sub(lit.mul(2));
-      // (silk 0.9, shell 1.8 (none uses it: shell looked like plastic), wax 1.2)
+      // (silk 0.9, a shed skin 1.8 (a live shell does not: it looked like plastic), wax 1.2)
       const through = step(0.5, lit).mul(0.9).add(step(1.5, lit).mul(0.9)).sub(step(2.5, lit).mul(0.6)) as unknown as F;
       m.thicknessColorNode = base.mul(through);
       m.thicknessDistortionNode = float(0.2);
@@ -392,9 +392,11 @@ export class BuildViews {
       s.gone = 0;
       const r = match.units[e.unit].bug.species.radius;
       this.p.copy(s.mesh.position).addScaledVector(this.s.copy(UP).applyQuaternion(s.mesh.quaternion), r);
-      for (let k = 0; k < (e.broken ? 40 : 10); k++) this.bit(this.p, s.species, e.broken ? 11 : 5, r * 1.6, 0.17);
+      // (a cockroach's shelter is its shed skin: its own colour)
+      const bits = s.species === 'cockroach' ? 'husk' : s.species;
+      for (let k = 0; k < (e.broken ? 40 : 10); k++) this.bit(this.p, bits, e.broken ? 11 : 5, r * 1.6, 0.17);
       // (broken, it comes apart its own way: earth, torn silk, shell plates, lumps of wax and honey)
-      if (e.broken) for (let k = 0; k < (s.species === 'spider' ? 20 : 28); k++) this.drop(this.p.x, this.p.y, this.p.z, r * 1.4, s.species, s.species === 'cockroach' || (s.species === 'bee' && k % 2 === 0), s.species === 'ant' ? 0.4 : 1);
+      if (e.broken) for (let k = 0; k < (s.species === 'spider' ? 20 : 28); k++) this.drop(this.p.x, this.p.y, this.p.z, r * 1.4, bits, s.species === 'cockroach' || (s.species === 'bee' && k % 2 === 0), s.species === 'ant' ? 0.4 : 1);
     } else if (e.type === 'caught') {
       for (let k = 0; k < 14; k++) this.bit(this.p.set(e.x, e.y, e.z), 'spider', 4, 0.3, 0.08);
     }
@@ -1054,7 +1056,7 @@ export class BuildViews {
         }
       }
       this.p.set(cx, cy, cz).applyMatrix4(s.mesh.matrixWorld);
-      for (let k = 0; k < 6; k++) this.drop(this.p.x, this.p.y, this.p.z, 0.3, s.species, s.species === 'cockroach', s.species === 'ant' ? 0.4 : 1);
+      for (let k = 0; k < 6; k++) this.drop(this.p.x, this.p.y, this.p.z, 0.3, s.species === 'cockroach' ? 'husk' : s.species, s.species === 'cockroach', s.species === 'ant' ? 0.4 : 1);
     }
     let n = 0;
     for (let k = 0; k < idx.length; k += 3) {
