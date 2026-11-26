@@ -688,7 +688,9 @@ export class BuildViews {
         const l = local(reach);
         const d = outOf(weapon, l[0], l[1], l[2]);
         // (it meets the skin at the sphere itself; inside it is uneven)
-        const k = reach * (1 - Math.min(0.14, Math.max(0, -d) * 0.22) * (0.55 + 0.45 * rough));
+        // (shell breaks in chips: its cut steps, not smooth)
+        const dent = Math.min(0.14, Math.max(0, -d) * 0.22) * (0.55 + 0.45 * rough);
+        const k = reach * (1 - (b.species === 'cockroach' ? Math.round(dent * 30) / 30 : dent));
         at.push(x + ux * k, y + uy * k, z + uz * k);
         deep.push(d);
         high.push(l[1]);
@@ -753,15 +755,18 @@ export class BuildViews {
         let rg = rough;
         if (b.species === 'bee') {
           // (broken cells: wax walls, honey in them)
-          const h = hexAt(q[0] * side3.x + q[2] * side3.z, q[1], 0.5);
-          const wall = ss(0.34, 0.42, h[2]);
-          blend = 0.85 - 0.6 * wall;
-          shine = glow * (1 - 0.6 * wall);
-          rg = 0.42 + 0.4 * wall;
+          // (a bridge's cut is seen from above: its cells lie across it)
+          const h = isWall ? hexAt(q[0] * side3.x + q[2] * side3.z, q[1], 0.5) : hexAt(q[0] * side3.x + q[2] * side3.z, q[0] * f.out.x + q[1] * f.out.y + q[2] * f.out.z, 0.5);
+          const wall = ss(0.33, 0.38, h[2]);
+          // (wax walls pale; in the cells, wet honey, deeper to their middles)
+          blend = 0.95 - 0.75 * wall;
+          s *= 1 - 0.35 * (1 - wall) * ss(0.33, 0.05, h[2]);
+          shine = glow * (1 - 0.7 * wall);
+          rg = 0.1 + 0.6 * wall;
         } else if (b.species === 'cockroach') {
           // (layer on layer of shell, dark between them)
           const layer = 0.5 + 0.5 * Math.sin(-q[3] * 38 + g * 1.2 + q[4] * 0.6);
-          blend = ss(0.35, 0.65, layer) * 0.9 + 0.1 * g;
+          blend = ss(0.46, 0.54, layer) * 0.9 + 0.1 * g;
           rg = 0.25 + 0.45 * (1 - layer);
           shine = glow * (0.4 + 0.6 * layer);
         } else if (living) {

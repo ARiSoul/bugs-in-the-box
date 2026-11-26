@@ -637,11 +637,12 @@ function silkCurtain(): Model {
       const y = -0.5 + v * (top(x) + 0.5);
       const t = ((x + 5.2) / 2.6) % 1;
       const belly = Math.sin(Math.PI * Math.abs(t)) ** 2;
-      const z = side * ((0.84 + 0.24 * belly) * (1 - 0.4 * v ** 8) + 0.75 * Math.exp(-Math.max(0, y) * 2.2));
+      const z = side * ((0.84 + 0.24 * belly) * (1 - 0.4 * v ** 8) + 0.32 * Math.exp(-Math.max(0, y) * 3));
       const e = Math.min(1, Math.min(u, 1 - u) * 30);
       return [x, y, z * (0.25 + 0.75 * Math.sqrt(e)) + 0.05 * noise(x * 1.2, y * 0.6, side)];
     };
-    s.sheet((u, v) => at(side > 0 ? u : 1 - u, v), 120, 34, (u, v) => felt(u * 26, v * 12, side));
+    // (greyer where it meets the ground: dust in it)
+    s.sheet((u, v) => at(side > 0 ? u : 1 - u, v), 120, 34, (u, v) => dim(felt(u * 26, v * 12, side), 0.72 + 0.28 * ss(0.02, 0.16, v)));
     for (let k = 0; k <= 120; k++) {
       const lean = (rnd(k + side * 7) - 0.5) * 0.16;
       s.line(path(9, 0, 1, (v) => { const p = at(clamp(k / 120 + lean * (1 - v) * v * 2), v); return [p[0], p[1], p[2] + side * 0.025] as const; }), 0.014 + 0.016 * rnd(k), dim(SILK, 0.8 + 0.5 * rnd(k + 4)));
@@ -662,6 +663,15 @@ function silkCurtain(): Model {
     (x, y, z) => dim(SILK, 0.72 + 0.2 * Math.sin(y * 34 + x * 6 + 4 * noise(x * 2, y * 2, z))),
   );
   // guys, each on a pad
+  // (its hem: threads loose along the ground)
+  for (const side of [-1, 1])
+    for (let k = 0; k < 70; k++) {
+      const x = -5.2 + (k / 69) * 10.4 + 0.1 * (rnd(k + side) - 0.5);
+      const z = side * (1.05 + 0.1 * rnd(k * 3 + side));
+      const l = 0.15 + 0.35 * rnd(k + side * 9);
+      const t = (rnd(k * 7 + side) - 0.5) * 1.2;
+      s.line([[x, 0.12, z], [x + Math.sin(t) * l * 0.5, 0.03, z + side * l * 0.5], [x + Math.sin(t) * l, 0.012, z + side * l * Math.cos(t)]], 0.01 + 0.008 * rnd(k + 0.4), dim(SILK, 0.75 + 0.3 * rnd(k + 2)), 4);
+    }
   for (const [a, h] of posts)
     for (const [dx, dz] of a === 0 ? [[0.5, -2.6]] : [[Math.sign(a) * 0.9, 2.3], [Math.sign(a) * 0.5, -2.5]]) {
       s.line(sag([a, h - 0.25, 0], [a + dx, 0.02, dz], 0.1), 0.028, SILK);
