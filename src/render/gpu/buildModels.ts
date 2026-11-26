@@ -418,7 +418,7 @@ const soil = (f: Field, g: number, deep: number): Field => (x, y, z) => {
 const soilPaint = (g: number, k: (x: number, y: number, z: number) => number = () => 1): Paint => (x, y, z) => {
   const c = cellular(x * g, y * g, z * g);
   const t = EARTH[Math.floor(c[2] * EARTH.length)];
-  const s = (0.3 + 0.7 * ss(0, 0.28, c[1] - c[0])) * (0.8 + 0.4 * ((c[2] * 13.7) % 1)) * k(x, y, z);
+  const s = (0.45 + 0.55 * ss(0, 0.28, c[1] - c[0])) * (0.88 + 0.24 * ((c[2] * 13.7) % 1)) * k(x, y, z);
   return [t[0] * s, t[1] * s, t[2] * s];
 };
 
@@ -435,15 +435,17 @@ function rampart(): Model {
     const k = 0.07 + 0.1 * rnd(i + 0.8) ** 2;
     const end = Math.abs(a) > 0.86;
     const t = (rnd(i + 0.5) - 0.5) * 3.1;
-    s.lump(end ? Math.sign(a) * (5 + 1.15 * Math.cos(t) + 0.4 * (r - 2.05)) : a * 6, k * 0.4, end ? Math.sin(t) * r : e * r, k, dim(EARTH[i % 6], 0.75 + 0.45 * rnd(i + 3)), i);
+    s.lump(end ? Math.sign(a) * (5 + 1.15 * Math.cos(t) + 0.4 * (r - 2.05)) : a * 6, k * 0.4, end ? Math.sin(t) * r : e * r, k, dim(EARTH[(i * 7) % 4], 0.9 + 0.25 * rnd(i + 3)), i);
   }
-  // splinters of wood in two rows, edge to edge
+  // splinters of wood in two rows, edge to edge: none quite like the next, leaning out, a few gone
   for (let i = 0; i < 46; i++) {
     const row = i % 2;
+    if (i === 9 || i === 24 || i === 37) continue;
     const x = -5.35 + (i / 45) * 10.7 + (rnd(i) - 0.5) * 0.1;
-    const len = (row ? 5.35 : 4.75) + (rnd(i + 3) - 0.5) * 0.8 - 0.012 * x * x;
+    const len = ((row ? 5.35 : 4.75) - 0.012 * x * x) * (0.62 + 0.62 * rnd(i + 3) ** 0.8);
     const z0 = row ? -0.42 : 0.42;
-    const tilt = (rnd(i + 7) - 0.5) * 0.1;
+    const tilt = (rnd(i + 7) - 0.5) * 0.3;
+    const lean = (row ? -1 : 1) * (0.07 + 0.26 * rnd(i + 11));
     const t = WOOD[(i * 3 + row) % 5];
     const n = 9;
     const rows = 7;
@@ -454,8 +456,10 @@ function rampart(): Model {
         const a = (k / n) * Math.PI * 2;
         const w = (0.4 - 0.25 * v ** 3) * (1 + 0.2 * noise(Math.cos(a) * 2 + i * 9, v * 1.4, Math.sin(a) * 2));
         const h = v * len + (j === rows ? 0.16 * Math.cos(a + i) + 0.08 * Math.cos(a * 3) : 0) - 0.3;
-        const c = 0.72 + 0.3 * noise(Math.cos(a) * 3.5 + i * 5, v * 0.9, Math.sin(a) * 3.5) + 0.22 * noise(a * 7 + i * 3, v * 1.6, 3);
-        s.p.push(x + Math.cos(a) * w * (j === rows ? 0.5 : 1) + tilt * v * len, h, z0 + Math.sin(a) * w * (j === rows ? 0.5 : 1) + (row ? 0.04 : -0.18) * v);
+        // (the split face, pale; its end, dark)
+        const face = 1 + 0.35 * clamp(Math.sin(a + i) * 2);
+        const c = (0.72 + 0.3 * noise(Math.cos(a) * 3.5 + i * 5, v * 0.9, Math.sin(a) * 3.5) + 0.22 * noise(a * 7 + i * 3, v * 1.6, 3)) * face * (1 - 0.5 * ss(0.72, 1, v));
+        s.p.push(x + Math.cos(a) * w * (j === rows ? 0.5 : 1) + tilt * v * len, h, z0 + Math.sin(a) * w * (j === rows ? 0.5 : 1) + lean * v * v * len);
         s.n.push(Math.cos(a), 0.06, Math.sin(a));
         s.c.push(t[0] * c, t[1] * c, t[2] * c);
         s.l.push(0.8, 0.02);
@@ -473,10 +477,10 @@ function rampart(): Model {
   const green: readonly V[] = [[0.1, 0.19, 0.03], [0.17, 0.22, 0.035], [0.22, 0.17, 0.03]];
   s.rough = 0.55;
   s.glow = 0.12;
-  for (let i = 0; i < 24; i++) {
+  for (let i = 0; i < 12; i++) {
     const side = i % 2 ? 1 : -1;
-    const x = -4.4 + (Math.floor(i / 2) / 11) * 8.8 + (rnd(i) - 0.5) * 0.8;
-    const y = 1.9 + 2.1 * rnd(i + 3) ** 1.6;
+    const x = [-3.9, -3.5, -0.8, -0.4, 2.6, 3.1][Math.floor(i / 2)] + (rnd(i) - 0.5) * 0.9;
+    const y = 1.7 + 1.6 * rnd(i + 3) ** 1.6;
     const q = new Soup();
     q.rough = 0.55;
     q.glow = 0.12;
@@ -493,7 +497,7 @@ function rampart(): Model {
       4,
       (u, v) => dim(t, 0.75 + 0.35 * v + 0.2 * noise(u * 20, v * 3, i)),
     );
-    s.put(q, pose(x, y, side * (1.08 - 0.06 * (y - 1.9)), -0.1 + 0.3 * (rnd(i + 2) - 0.5), (side > 0 ? 0 : Math.PI) + 0.6 * (rnd(i + 4) - 0.5), rnd(i + 9) * 6.28, 0.45 + 0.6 * rnd(i + 6)));
+    s.put(q, pose(x, y, side * (1.1 - 0.06 * (y - 1.9)), -0.1 + 0.3 * (rnd(i + 2) - 0.5), (side > 0 ? 0 : Math.PI) + 0.6 * (rnd(i + 4) - 0.5), rnd(i + 9) * 6.28, 0.85 + 0.45 * rnd(i + 6)));
   }
   return s.done();
 }
@@ -531,28 +535,29 @@ function smallAnt(): Soup {
 function livingBridge(): Model {
   const s = new Soup();
   const ant = smallAnt();
-  // those it is walked on: their backs are the deck
+  // those it is walked on: rows of them along the span, head to tail, their backs the deck
   for (let l = 0; l < 5; l++)
     for (let i = -1; i < 16; i++) {
-      const x = 0.2 + (i + (l % 2) * 0.5) * 0.98 + 0.25 * (rnd(i * 5 + l + 9) - 0.5);
-      const z = (l - 2) * 0.96 + 0.25 * (rnd(i + l * 5 + 9) - 0.5);
+      const x = 0.2 + (i + (l % 2) * 0.5) * 0.98 + 0.12 * (rnd(i * 5 + l + 9) - 0.5);
+      const z = (l - 2) * 0.96 + 0.12 * (rnd(i + l * 5 + 9) - 0.5);
       if (x < 0.5 || (x > LONG - 0.2 && rnd(i * 3 + l + 4) < 0.5)) continue;
-      s.put(ant, along(x, -0.3 - 0.05 * rnd(i * 3 + l + 5) - 0.5 * Math.max(0, Math.max(-x, x - LONG)), z, rnd(i * 3 + l * 7) < 0.5 ? 1 : -1, 0, 1.1 * (rnd(x * 7 + l) - 0.5), 0.82, (l - 2) * -0.1), 0.45 + 1.15 * rnd(i * 2 + l * 9 + 3) ** 1.5);
+      const turn = 0.9 * (rnd(x * 7 + l) - 0.5);
+      s.put(ant, along(x, -0.3 - 0.03 * rnd(i * 3 + l + 5) - 0.5 * Math.max(0, Math.max(-x, x - LONG)), z, l % 2 ? 1 : -1, 0, turn, 0.82 * (0.88 + 0.24 * rnd(i * 11 + l)), (l - 2) * -0.1), 0.78 + 0.4 * rnd(i * 2 + l * 9 + 3));
     }
-  // those that hang on them: a vault, deeper at its ends
-  for (let i = 0; i < 130; i++) {
+  // those that hang on them: chains, down to an arch that is deep at its ends
+  const arch = (x: number): number => { const t = Math.abs((x / LONG) * 2 - 1); return -0.75 - 1.75 * t ** 2.2; };
+  for (let i = 0; i < 150; i++) {
     const x = 0.35 + rnd(i) * (LONG - 0.7);
-    const t = Math.abs((x / LONG) * 2 - 1);
-    const down = rnd(i + 0.4);
-    const y = -0.62 - down * (0.65 + 1.1 * t ** 3);
+    const down = i < 70 ? 0.82 + 0.18 * rnd(i + 0.4) : rnd(i + 0.4);
+    const y = -0.62 + down * (arch(x) + 0.62);
     const edge = rnd(i + 0.95) < 0.55;
     const z = edge ? (rnd(i + 0.8) < 0.5 ? -1 : 1) * (DECK - 0.35) * (1 - 0.2 * down) : (rnd(i + 0.8) - 0.5) * 2 * (DECK - 0.6);
-    s.put(ant, along(x, y, z, rnd(i + 2) - 0.5, (rnd(i + 3) - 0.5) * 1.1, (rnd(i + 5) - 0.5) * 0.9, 0.74, Math.PI * (0.65 + 0.7 * rnd(i + 6))), 0.6 + 0.5 * rnd(i + 8));
+    s.put(ant, along(x, y, z, rnd(i + 2) - 0.5, (rnd(i + 3) - 0.5) * 1.1, (rnd(i + 5) - 0.5) * 0.9, 0.74 * (0.88 + 0.24 * rnd(i + 9)), Math.PI * (0.65 + 0.7 * rnd(i + 6))), 0.62 + 0.36 * rnd(i + 8));
   }
   // (what is between them)
   s.rough = 0.8;
   s.glow = 0;
-  s.field((x, y, z) => smax(smax(Math.abs(y + 0.9) - 0.45, Math.abs(z) - DECK + 1.0, 0.3), Math.abs(x - LONG / 2) - LONG / 2 + 0.9, 0.4) + 0.12 * noise(x * 2, y * 2, z * 2), [-0.1, -1.8, -2.4], [LONG + 0.1, 0, 2.4], 0.16, () => [0.02, 0.006, 0.003]);
+  s.field((x, y, z) => smax(smax(Math.max(y + 0.45, Math.min(arch(x) + 0.5, -1.0) - y), Math.abs(z) - DECK + 1.0, 0.3), Math.abs(x - LONG / 2) - LONG / 2 + 0.9, 0.4) + 0.12 * noise(x * 2, y * 2, z * 2), [-0.1, -2.8, -2.4], [LONG + 0.1, 0, 2.4], 0.16, () => [0.02, 0.006, 0.003]);
   return s.done();
 }
 
@@ -669,18 +674,26 @@ function silkSpan(): Model {
   // a felted deck, flat where it is walked on; its edges turn up a little, its belly hangs
   const edge = DECK + 0.1;
   const deck = (x: number, v: number): V => [x, 0.4 * Math.abs(v) ** 9 + 0.012, v * edge];
-  const belly = (x: number, v: number): V => [x, 0.4 * Math.abs(v) ** 9 - 0.08 - (1 - v ** 4) * (1.2 + 0.25 * Math.abs(Math.sin(x * 0.66)) + 0.07 * Math.sin(x * 2.1 + v * 3)), v * edge];
+  const belly = (x: number, v: number): V => [x, 0.4 * Math.abs(v) ** 9 - 0.08 - (1 - v ** 4) * (0.42 + 0.2 * Math.sin((x / LONG) * Math.PI) + 0.05 * Math.sin(x * 2.1 + v * 3)), v * edge];
   s.sheet((u, v) => deck(u * LONG, 1 - 2 * v), 100, 26, (u, v) => dim(felt(u * 30, v * 9, 1), 0.72));
   s.sheet((u, v) => belly(u * LONG, 2 * v - 1), 80, 18, (u, v) => dim(felt(u * 24, v * 9, 2), 0.8));
   for (const u of [0, 1]) s.sheet((a, b) => { const p = deck(u * LONG, 2 * a - 1); const q = belly(u * LONG, 2 * a - 1); return [p[0], p[1] + (q[1] - p[1]) * (u ? 1 - b : b), p[2]]; }, 20, 2, (a, b) => felt(a * 9, b, 3));
   const on = (x: number, v: number): V => { const p = deck(x, v); return [p[0], p[1] + 0.022, p[2]]; };
-  for (let k = 0; k <= 10; k++) s.line(path(34, 0, LONG, (x) => on(x, Math.max(-1, Math.min(1, -1 + k / 5 + 0.05 * Math.sin(x * 0.9 + k * 2))))), 0.04, dim(SILK, 1.3));
+  for (let k = 0; k <= 6; k++) s.line(path(34, 0, LONG, (x) => on(x, Math.max(-1, Math.min(1, -1 + k / 3 + 0.06 * Math.sin(x * 0.9 + k * 2))))), 0.028, dim(SILK, 1.2));
   for (let k = 0; k < 46; k++) {
     const x = rnd(k) * LONG;
     const d = (rnd(k + 0.4) - 0.5) * 4;
     s.line(path(10, -1, 1, (v) => on(Math.max(0, Math.min(LONG, x + d * v)), v)), 0.013 + 0.012 * rnd(k + 7), dim(SILK, 1.05));
   }
-  for (let k = 0; k <= 22; k++) for (let j = 0; j < 10; j++) s.line(path(4, -1 + j / 5, -0.8 + j / 5, (v) => on(Math.max(0, Math.min(LONG, (k / 22) * LONG + 0.16 * (1 - (v * 10 + 9 - j * 2) ** 2))), v)), 0.038, dim(SILK, 1.3));
+  for (let k = 0; k <= 22; k++) for (let j = 0; j < 10; j++) s.line(path(4, -1 + j / 5, -0.8 + j / 5, (v) => on(Math.max(0, Math.min(LONG, (k / 22) * LONG + 0.16 * (1 - (v * 10 + 9 - j * 2) ** 2) + 0.12 * (rnd(k * 10 + j) - 0.5))), v)), 0.024 + 0.012 * rnd(k + j * 23), dim(SILK, 1.15));
+  // threads hanging under it, a few loose
+  for (let k = 0; k < 40; k++) {
+    const x = 0.4 + rnd(k + 0.21) * (LONG - 0.8);
+    const v = (rnd(k + 0.33) - 0.5) * 1.7;
+    const p = belly(x, v);
+    const l = 0.2 + 0.7 * rnd(k + 0.47) ** 2;
+    s.line([p, [p[0] + 0.05, p[1] - l * 0.5, p[2]], [p[0] + 0.12 * (rnd(k) - 0.5), p[1] - l, p[2] + 0.1]], 0.012, dim(SILK, 1.1), 4);
+  }
   for (const e of [-1, 1]) {
     for (let j = 0; j < 3; j++) s.line(path(110, 0, LONG, (x) => { const p = deck(x, e); return [x, p[1] + 0.065 * Math.sin(x * 5 + j * 2.094), p[2] + 0.065 * Math.cos(x * 5 + j * 2.094)] as const; }), 0.06, dim(SILK, 0.95 + 0.12 * j), 5);
     // it is made fast at both ends
@@ -694,7 +707,7 @@ function silkSpan(): Model {
         continue;
       }
       const p = on(x, -0.95 + k * 0.2375);
-      const q: V = [x + e * (0.7 + 0.6 * rnd(k + e + 2)), p[1] - (e > 0 ? 0.35 : 0.04), p[2] * 1.15];
+      const q: V = [x + e * (0.7 + 0.6 * rnd(k + e + 2)) * (k === 0 || k === 8 ? 1.9 : 1), p[1] - (e > 0 ? 0.35 : 0.04), p[2] * (k === 0 || k === 8 ? 1.6 : 1.15)];
       s.line(sag(p, q, 0.06, 4), 0.06, SILK, 5);
       s.ball(q[0], q[1], q[2], 0.22, 0.08, 0.22, SILK, 10, 5);
     }
@@ -777,7 +790,7 @@ const rim = (c: V, k: number): V => [c[0] * (1 + k * 0.55), c[1] * (1 + k * 1.15
 /** A shield: wide, domed, with a pale rim, a ridge down its middle and two dark spots. */
 function shield(w: number, h: number, dome: number, tone: V, spots: boolean): Soup {
   const s = new Soup();
-  s.rough = 0.36;
+  s.rough = 0.26;
   s.glow = 0.16;
   const f: Field = (x, y, z) => {
     const u = x / w;
@@ -794,7 +807,8 @@ function shield(w: number, h: number, dome: number, tone: V, spots: boolean): So
     const k = (0.85 + 0.14 * noise(x * 2, y * 2, 2) + 0.07 * Math.sin(y * 20 + 2 * noise(x, y, 5)) + 0.18 * v);
     return dim(rim(tone, ss(0.66, 0.79, e)), k);
   });
-  if (spots) for (const e of [-1, 1]) s.ball(e * 0.3 * w, 0.2 * h, dome * (1 - 0.1 - 0.036) + 0.075, 0.15 * w, 0.17 * h, 0.03, [0.02, 0.006, 0.003], 18, 8);
+  // (faint marks, not eyes)
+  if (spots) for (const e of [-1, 1]) s.ball(e * 0.3 * w, 0.2 * h, dome * (1 - 0.1 - 0.036) + 0.07, 0.17 * w, 0.2 * h, 0.03, dim(tone, 0.55), 18, 8);
   return s;
 }
 /** A leg's segment: thick to thin, with spines. */
@@ -814,13 +828,14 @@ function spiny(s: Soup, a: V, b: V, r: number, spines: number): void {
 function shieldWall(): Model {
   const s = new Soup();
   const plates = CHITIN.map((c) => shield(1.4, 1.75, 0.3, c, false));
-  const spotted = CHITIN.map((c, k) => shield(1.4, 1.75, 0.3, c, k !== 1));
+  const spotted = CHITIN.map((c, k) => shield(1.4, 1.75, 0.3, c, k === 2));
   for (const side of [1, -1])
     for (let r = 0; r < 3; r++)
       for (let i = 0; i < 8 - (r % 2); i++) {
         const x = (i - (7 - (r % 2)) / 2) * 1.36;
         // (each over its neighbour, each row over the one under it)
-        s.put((r === 2 ? spotted : plates)[(i * 2 + r) % 3], pose(x, 1.05 + r * 1.42, side * (0.5 + r * 0.1), -0.11, side > 0 ? 0.2 : Math.PI + 0.2, (rnd(i + r * 9 + side) - 0.5) * 0.06), 0.85 + 0.3 * rnd(i * 3 + r + side));
+        const big = 0.86 + 0.24 * rnd(i * 5 + r * 3 + side * 7);
+        s.put((r === 2 && rnd(i + r + side * 3) < 0.4 ? spotted : plates)[(i * 2 + r) % 3], pose(x + (rnd(i * 2 + r + side) - 0.5) * 0.25, 1.05 + r * 1.42 + (big - 1) * 0.8, side * (0.5 + r * 0.1 + (1.1 - big) * 0.3), -0.11 + (rnd(i + r * 4 + side) - 0.5) * 0.2, (side > 0 ? 0.2 : Math.PI + 0.2) + (rnd(i * 7 + r + side) - 0.5) * 0.28, (rnd(i + r * 9 + side) - 0.5) * 0.28, big), 0.85 + 0.3 * rnd(i * 3 + r + side));
       }
   for (const e of [-1, 1]) for (let r = 0; r < 3; r++) s.put(plates[(r + 1) % 3], pose(e * (5.5 + 0.06 * r), 1.05 + r * 1.42, 0, -0.08, e * (Math.PI / 2), 0, 0.62, 0.98, 1), 0.95);
   // what holds it up, between the two
@@ -872,9 +887,10 @@ function scaleWalk(): Model {
     const e = i < (n - 1) / 2 ? -1 : 1;
     for (const k of [-1, 1]) {
       // legs folded under it, longer towards its ends
+      const j = rnd(i * 2 + k + 5) - 0.5;
       const a: V = [x, -0.4, k * 1.2];
-      const b: V = [x + e * 0.25, -0.95 - 0.35 * out, k * (1.95 - 0.15 * out)];
-      const c: V = [x + e * (0.75 + 0.3 * out), -1.65 - 1.0 * out ** 2, k * (1.0 + 0.4 * out)];
+      const b: V = [x + e * 0.25 + j * 0.3, -0.95 - 0.35 * out + j * 0.2, k * (1.95 - 0.15 * out + j * 0.25)];
+      const c: V = [x + e * (0.75 + 0.3 * out) + j * 0.5, -1.65 - 1.0 * out ** 2 - j * 0.3, k * (1.0 + 0.4 * out - j * 0.3)];
       spiny(s, a, b, 0.21, 2);
       spiny(s, b, c, 0.15, 4);
       s.rod(c, [c[0] + e * 0.35, c[1] - 0.05, c[2] - k * 0.1], 0.05, dim(LEG, 0.8), 5, 0.4);
@@ -1011,17 +1027,19 @@ function combSpan(): Model {
     if (y < -0.42) {
       const h = hexAt(x, y + 0.4, C);
       d = smax(d, -Math.max(h[2] - (C * 0.866 - 0.085), DECK - 0.5 - az), 0.05);
-    } else if (y > -0.2 && az < DECK - 0.3) {
+    } else if (y > -0.2 && az < DECK - 0.15) {
       const h = hexAt(x, z, 0.5);
-      d += 0.09 * Math.max(0, 1 - Math.abs(h[2] - 0.433) * 11);
+      d -= 0.07 * Math.max(0, 1 - Math.abs(h[2] - 0.433) * 9);
+      d += 0.05 * Math.max(0, 1 - h[2] / 0.36);
     }
     return smin(d, smax(Math.hypot(az - DECK + 0.1, y + 0.02 + 0.9 * over(x) ** 2) - 0.15, Math.abs(x - LONG / 2) - LONG / 2 - 0.2, 0.15), 0.1);
   };
   s.field(f, [-0.7, -2.8, -2.6], [LONG + 0.7, 0.4, 2.6], 0.09, (x, y, z) => {
     const deep = clamp((DECK - 0.1 - Math.abs(z)) / 0.4) * (y < -0.4 ? 1 : 0);
     const h = hexAt(x, z, 0.5);
-    const seam = y > -0.15 ? 0.55 + 0.45 * ss(0.0, 0.09, Math.abs(h[2] - 0.433)) : 1;
-    return wax((0.82 + 0.24 * noise(x, y, z)) * seam, deep);
+    const rimmed = y > -0.15 ? 1 - 0.35 * ss(0.12, 0.0, Math.abs(h[2] - 0.433)) : 1;
+    const cup = y > -0.15 ? 0.35 * ss(0.3, 0.05, h[2]) : 0;
+    return wax((0.8 + 0.2 * noise(x, y, z)) * rimmed, Math.max(deep, cup + 0.12));
   });
   for (let r = -6; r < 1; r++)
     for (let q = -14; q < 34; q++) {
@@ -1030,7 +1048,7 @@ function combSpan(): Model {
       if (a < 0.5 || a > LONG - 0.5 || b > -0.8 || b < under(a) + 0.3 || rnd(a * 3 + b * 7) > 0.4) continue;
       for (const e of [-1, 1]) honey(s, a, b, e * (DECK - 0.42), C * 0.84, C * 0.94, 0.26);
     }
-  for (const [x, l] of [[3.4, 0.5], [7.6, 0.75], [11.2, 0.4]]) for (const e of [-1, 1]) drip(s, x + e * 0.4, under(x + e * 0.4) + 0.4, e * (DECK - 0.35), l);
+  for (const [x, l] of [[2.2, 0.45], [3.4, 0.6], [5.5, 0.35], [7.6, 0.8], [9.4, 0.5], [11.2, 0.45], [12.6, 0.3]]) for (const e of [-1, 1]) drip(s, x + e * 0.4, under(x + e * 0.4) + 0.4, e * (DECK - 0.35 - 0.4 * rnd(x + e)), l * (0.8 + 0.5 * rnd(x * 3 + e)));
   return s.done();
 }
 
