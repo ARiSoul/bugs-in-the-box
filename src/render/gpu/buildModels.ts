@@ -585,10 +585,13 @@ function anthill(): Model {
     let d = (y + 0.3 - 2.95 * Math.exp(-((r / 2.15) ** 2.4))) * 0.58;
     const q = Math.hypot(Math.hypot(x, y - 1.15) - 1.3, (z - 1.2 + 0.25 * (1.15 - y)) * 0.85);
     d = smin(d, Math.max(q - 0.44 - (y > 1.5 ? 0.12 : 0), 0.05 - y), 0.5);
+    // (a crater on top, its rim raised, a hole down it)
+    d = smin(d, Math.hypot(Math.hypot(x, z) - 0.55, y - 2.55) - 0.2, 0.3);
+    d = smax(d, -Math.max(Math.hypot(x, z) - 0.27, 1.9 - y), 0.12);
     return d + 0.1 * noise(x * 1.6, y * 1.6, z * 1.6);
   };
-  const grains = soil(hill, 2.9, 0.14);
-  s.field((x, y, z) => smax(grains(x, y, z), -mouth(x, y, z) * 0.9, 0.12), [-3.7, -0.1, -3.7], [3.7, 3.4, 3.7], 0.068, soilPaint(2.9, (x, y, z) => (mouth(x, y, z) < 0.12 ? 0.1 + 0.5 * ss(0.4, 2.0, z) : 1)));
+  const grains = soil(hill, 3.5, 0.085);
+  s.field((x, y, z) => smax(grains(x, y, z), -mouth(x, y, z) * 0.9, 0.12), [-3.7, -0.1, -3.7], [3.7, 3.4, 3.7], 0.068, soilPaint(3.5, (x, y, z) => (mouth(x, y, z) < 0.12 ? 0.1 + 0.5 * ss(0.4, 2.0, z) : 1) * (y > 2.0 ? 0.15 + 0.85 * ss(0.3, 0.6, Math.hypot(x, z)) : 1)));
   for (let i = 0; i < 150; i++) {
     const a = rnd(i) * 6.28;
     const r = 2.9 + 1.3 * rnd(i + 0.4) ** 2;
@@ -604,7 +607,7 @@ function anthill(): Model {
     s.lump(Math.sin(a) * r * 0.8, 0.1, 0.8 + Math.cos(a) * r * 1.2, k, dim(EARTH[i % 6], 0.6), i);
   }
   // needles in it
-  for (let i = 0; i < 40; i++) {
+  for (let i = 0; i < 20; i++) {
     const a = rnd(i + 0.2) * 6.28;
     const r = 1.3 + 1.6 * rnd(i + 0.6);
     const x = Math.cos(a) * r;
@@ -613,8 +616,8 @@ function anthill(): Model {
     const y = 2.7 * Math.exp(-((r / 2.15) ** 2.4));
     const b = a + (rnd(i + 2) - 0.5) * 1.6;
     const t = dim(WOOD[i % 5], 0.7);
-    s.rod([x - Math.cos(b) * 0.45, y + 0.12, z - Math.sin(b) * 0.45], [x, y + 0.16, z], 0.045, t, 5);
-    s.rod([x, y + 0.16, z], [x + Math.cos(b) * 0.5, y - 0.28, z + Math.sin(b) * 0.5], 0.045, t, 5, 0.4);
+    s.rod([x - Math.cos(b) * 0.45, y + 0.08, z - Math.sin(b) * 0.45], [x, y + 0.1, z], 0.028, t, 5);
+    s.rod([x, y + 0.1, z], [x + Math.cos(b) * 0.5, y - 0.3, z + Math.sin(b) * 0.5], 0.028, t, 5, 0.4);
   }
   return s.done();
 }
@@ -788,8 +791,8 @@ function silkSpan(): Model {
 
 function silkFunnel(): Model {
   const s = new Soup();
-  s.rough = 0.48;
-  s.glow = 0.07;
+  s.rough = 0.3;
+  s.glow = 0.16;
   const MY = 1.02;
   const MR = 1.42;
   const MZ = 1.55;
@@ -801,6 +804,10 @@ function silkFunnel(): Model {
     d = smin(d, y + 0.28 - 0.6 * Math.exp(-Math.max(0, Math.hypot(x, z) - 2.2) * 1.6), 0.5);
     const a = Math.atan2(x, z);
     d += 0.016 * noise(a * 16 + y * 3, y * 2.5, 3) + 0.016 * noise(a * 3, y * 13 + a * 4, 8) + 0.05 * noise(x * 1.5, y * 1.5, z * 1.5);
+    // (it sags between the posts that hold it up)
+    let near = 9;
+    for (const [px, pz] of [[-1.4, -0.4], [1.45, -0.5], [0, -1.8], [0, 0.6]]) near = Math.min(near, Math.hypot(x - px, z - pz));
+    d += 0.2 * ss(0.5, 1.5, near) * ss(1.2, 2.3, y);
     return smax(smax(d, -smax(q + 0.17, -(z + 1.1), 0.2), 0.1), -0.1 - y, 0.05) * 0.75;
   };
   s.field(f, [-3.6, -0.12, -3.8], [3.6, 3.2, 3.2], 0.07, (x, y, z, _a, ny) => {
@@ -823,7 +830,7 @@ function silkFunnel(): Model {
     const t = hi + 0.035;
     return [dx * t, 0.5 + dy * t, -0.5 + dz * t];
   };
-  for (let k = 0; k < 150; k++) {
+  for (let k = 0; k < 60; k++) {
     const a0 = rnd(k + 0.1) * 6.28;
     const b0 = -0.1 + rnd(k + 0.2) * 1.2;
     const da = (rnd(k + 0.3) - 0.5) * 3.4;
@@ -840,13 +847,12 @@ function silkFunnel(): Model {
     const a = -1.15 + (k / 30) * 2.3;
     const r = 2.6 + 1.1 * rnd(k);
     const end: V = [Math.sin(a) * r * 1.2, 0.03, 0.9 + Math.cos(a) * r];
-    s.line(sag([Math.sin(a) * 1.25, 0.03, 1.75], end, -0.04, 5), 0.018, SILK);
-    s.ball(end[0], 0.01, end[2], 0.08, 0.03, 0.08, SILK, 7, 4);
+    // (greyer to its rim, where it is thinnest)
+    s.line(sag([Math.sin(a) * 1.25, 0.03, 1.75], end, -0.04, 5), 0.011, dim(SILK, 0.85));
   }
-  for (let j = 0; j < 6; j++) s.line(path(30, -1.1, 1.1, (a) => { const r = 1.75 + j * 0.28; return [Math.sin(a) * r * 1.15, 0.07 - j * 0.006, 0.95 + Math.cos(a) * r] as const; }), 0.014, SILK);
+  for (let j = 0; j < 6; j++) s.line(path(30, -1.1, 1.1, (a) => { const r = 1.75 + j * 0.28; return [Math.sin(a) * r * 1.15, 0.07 - j * 0.006, 0.95 + Math.cos(a) * r] as const; }), 0.011, dim(SILK, 1 - 0.08 * j));
   for (const [x, y, z, ex, ez] of [[-1.4, 2.82, -0.4, -3.7, 0.6], [1.45, 2.62, -0.5, 3.7, 0.2], [-1.4, 2.82, -0.4, -3.4, -2.2], [1.45, 2.62, -0.5, 3.4, -2.2], [0, 2.97, -1.8, 0.8, -4]] as const) {
-    s.line(sag([x, y, z], [ex, 0.02, ez], 0.12), 0.034, SILK);
-    s.ball(ex, 0, ez, 0.19, 0.06, 0.19, SILK, 10, 5);
+    s.line(sag([x, y, z], [ex, 0.02, ez], 0.12), 0.014, SILK);
   }
   return s.done();
 }
@@ -855,8 +861,6 @@ function silkFunnel(): Model {
 
 const CHITIN: readonly V[] = [[0.3, 0.074, 0.008], [0.2, 0.042, 0.006], [0.38, 0.105, 0.012]];
 const LEG: V = [0.085, 0.024, 0.007];
-/** Pale towards an edge (0..1). */
-const rim = (c: V, k: number): V => [c[0] * (1 + k * 0.55), c[1] * (1 + k * 1.15), c[2] * (1 + k * 1.6)];
 
 /** A shield: wide, domed, with a pale rim, a ridge down its middle and two dark spots. */
 function shield(w: number, h: number, dome: number, tone: V, spots: boolean, point = 0.6): Soup {
@@ -991,7 +995,7 @@ function scaleWalk(): Model {
 
 function husk(): Model {
   const s = new Soup();
-  s.rough = 0.36;
+  s.rough = 0.2;
   s.glow = 0.16;
   const rx = 2.0;
   const ry = 1.5;
@@ -999,7 +1003,10 @@ function husk(): Model {
   for (let k = 0; k < 7; k++) {
     const z0 = -2.55 + k * 0.75;
     const tone = CHITIN[k % 3];
-    const f: Field = (x, y, z) => {
+    // (one plate pushed out of line as it was shed)
+    const shed = k === 3 ? 0.1 : 0;
+    const f: Field = (x, y0, z) => {
+      const y = y0 - shed;
       const b = z + 0.3 * (x / rx) ** 2;
       const lift = 0.12 * (1 - (b - z0));
       const e = (Math.hypot(x / (rx + lift), y / (ry + lift), z / rz) - 1) * 1.45;
@@ -1008,23 +1015,28 @@ function husk(): Model {
       d = smax(d, k === 6 ? z0 - b : k === 0 ? b - z0 - 0.92 : Math.max(z0 - b, b - z0 - 0.92), 0.06);
       // its front edge is up: what hides looks out
       d = smax(d, -(Math.hypot(x / 1.2, (y - 0.05) / 1.16, (z - 2.75) / 1.5) - 1), 0.12);
-      return smax(d, 0.01 - y, 0.06) * 0.8;
+      // (split down its back, where the bug came out of it)
+      d = smax(d, -(Math.abs(x + 0.05 * Math.sin(z * 3)) - 0.07 - 0.05 * Math.abs(Math.sin(z * 9 + k))) * (y > 1.0 && z < 1.4 ? 1 : 0) - (y > 1.0 && z < 1.4 ? 0 : 1), 0.03);
+      return smax(d, 0.01 - y0, 0.06) * 0.8;
     };
     s.field(f, [-2.4, -0.1, k === 0 ? -3.1 : Math.max(-3.1, z0 - 0.8)], [2.4, 1.9, Math.min(3.1, z0 + 1.2)], 0.07, (x, y, z) => {
       const b = z + 0.3 * (x / rx) ** 2 - z0;
       const e = Math.max(clamp(1 - Math.abs(b) / 0.16), clamp((0.26 - y) / 0.12));
       const inside = Math.hypot(x / rx, y / ry, z / rz) < 0.95 && z < 1.9 ? 0.25 : 1;
-      return dim(rim(tone, e), (0.88 + 0.14 * noise(x * 2, y, z * 4) + 0.05 * Math.sin(x * 18)) * inside);
+      // (amber and pale where it is thin, dark brown to its edges and the split)
+      const split = ss(0.25, 0.08, Math.abs(x)) * ss(0.9, 1.2, y);
+      return dim(tone, (1.05 + 0.14 * noise(x * 2, y, z * 4) + 0.05 * Math.sin(x * 18)) * (1 - 0.45 * e) * (1 - 0.5 * split) * (1 + 0.35 * ss(1.0, 1.45, y)) * inside);
     });
   }
-  // (two dark spots on its front plate)
-  for (const e of [-1, 1]) {
-    const z = 1.5;
-    const x = e * 0.75;
-    const y = (ry + 0.07) * Math.sqrt(1 - (x / rx) ** 2 - (z / rz) ** 2);
-    s.rough = 0.4;
-    s.ball(x, y + 0.015, z, 0.3, 0.09, 0.26, [0.02, 0.006, 0.003], 18, 9);
-  }
+  // (the hollow legs it left, short stubs at its rim)
+  for (const e of [-1, 1])
+    for (const z of [-1.3, -0.2, 0.9]) {
+      const a: V = [e * rx * 0.93, 0.18, z];
+      const b: V = [e * (rx + 0.45), 0.05 + 0.1 * rnd(z + e), z + 0.25 * (rnd(z * 3 + e) - 0.5)];
+      s.rough = 0.3;
+      s.rod(a, b, 0.1, dim(CHITIN[2], 1.3), 6, 0.6);
+      s.rod(b, [b[0] + e * 0.35, 0.02, b[2] + 0.2], 0.065, dim(CHITIN[2], 1.45), 5, 0.5);
+    }
   return s.done();
 }
 
@@ -1141,7 +1153,7 @@ function combSpan(): Model {
 
 function waxNest(): Model {
   const s = new Soup();
-  s.rough = 0.42;
+  s.rough = 0.28;
   s.glow = 0.2;
   const A: V = [2.2, 2.45, 2.2];
   // hexagons, laid round from its top
@@ -1157,9 +1169,10 @@ function waxNest(): Model {
     let d = (Math.hypot(x / A[0], y / A[1], z / A[2]) - 1) * 2.2;
     if (Math.abs(d) < 0.5 && y > 0.05) {
       const h = cell(x, y, z);
-      const t = ss(0, 0.1, CELL * 0.866 - h[2]);
+      const t = ss(0, 0.045, CELL * 0.866 - h[2]);
       const off = 1 - ss(0.9, 1.35, z) * ss(1.55, 1.25, Math.abs(x)) * ss(2.3, 2.05, y);
-      d += (full(h[0], h[1]) ? 0.2 * t : -0.1 * t) * off;
+      // (open cells cut in, a few capped flat; thin walls between)
+      d += (full(h[0], h[1]) ? -0.03 * t : 0.14 * t) * off;
     }
     d = smin(d, smax(Math.hypot(x, z) - 2.5 - 0.16 * noise(x, 2, z), y - 0.2, 0.2), 0.3);
     const h = inHex(x, y - DY);
@@ -1171,7 +1184,9 @@ function waxNest(): Model {
     const e = CELL * 0.866 - c[2];
     const tone = 0.9 + 0.22 * rnd(c[0] * 7 + c[1] * 13);
     const inside = inHex(x, y - DY) < 0.97 && z < 2.1 && (z > 1.3 || Math.hypot(x / A[0], y / A[1], z / A[2]) < 0.9) ? Math.max(0.12, 0.62 - (1.9 - z) * 0.28) : 1;
-    return wax((0.82 + 0.2 * noise(x * 1.5, y, z)) * (1 - 0.5 * (1 - ss(0, 0.05, e)) * (1 - ss(0.9, 1.35, z) * ss(1.55, 1.25, Math.abs(x)) * ss(2.3, 2.05, y))) * tone * inside);
+    // (pale wax at the rims, deeper amber down in the cells)
+    const open = (1 - ss(0.9, 1.35, z) * ss(1.55, 1.25, Math.abs(x)) * ss(2.3, 2.05, y)) * (full(c[0], c[1]) ? 0 : 1);
+    return wax((0.82 + 0.2 * noise(x * 1.5, y, z)) * (1 + 0.3 * (1 - ss(0, 0.035, e))) * tone * inside, 0.55 * ss(0.03, 0.1, e) * open);
   });
   for (let r = -4; r <= 4; r++)
     for (let q = -6; q <= 6; q++) {
@@ -1180,12 +1195,14 @@ function waxNest(): Model {
       const h = Math.hypot(u, v);
       if (h > 1.35) continue;
       const c = hexAt(u, v, CELL);
-      if (!full(c[0], c[1])) continue;
-      const x = (u / (h || 1)) * Math.sin(h) * A[0] * 0.885;
-      const y = Math.cos(h) * A[1] * 0.885;
-      const z = (v / (h || 1)) * Math.sin(h) * A[2] * 0.885;
+      // (honey down in some open cells)
+      const w = rnd(c[0] * 5.3 + c[1] * 11.7);
+      if (w < 0.13 || w > 0.32) continue;
+      const x = (u / (h || 1)) * Math.sin(h) * A[0] * 0.95;
+      const y = Math.cos(h) * A[1] * 0.95;
+      const z = (v / (h || 1)) * Math.sin(h) * A[2] * 0.95;
       if (z > 0.4 && Math.abs(x) < 1.9) continue;
-      honey(s, x, y, z, 0.3, 0.3, 0.3);
+      honey(s, x, y, z, 0.17, 0.17, 0.17, dim(HONEY, 0.8 + 0.5 * w));
     }
   return s.done();
 }
