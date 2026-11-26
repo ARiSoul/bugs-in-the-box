@@ -304,6 +304,17 @@ export const SKILL_FULL = 1000;
 const SKILL_TURN = 200;
 /** Ticks a burst hardly falls. */
 const BURST_TICKS = 50;
+export const BURST_AT = WEAPONS.findIndex((w) => w.kind === 'burst');
+
+/** Set a bug off as a burst does, along (dx, dy, dz) (unit). */
+export function launch(b: Bug, dx: number, dy: number, dz: number): void {
+  const v = WEAPONS[BURST_AT].maxSpeed;
+  b.grounded = false;
+  b.vx = dx * v;
+  b.vy = dy * v + 3;
+  b.vz = dz * v;
+  b.floating = BURST_TICKS;
+}
 const SKILL_DONE = 2.5;
 const SKILL_TAKEN = 1.8;
 
@@ -1904,6 +1915,11 @@ export class Match {
     return null;
   }
 
+  /** Whether the unit may burst now. */
+  canBurst(u: Unit): boolean {
+    return this.burstTurn !== this.turnNumber && this.usesLeft(u.team, BURST_AT) > 0 && u.web < 0 && !u.cover && u.bug.alive;
+  }
+
   /** It throws itself along its aim: fast, far, and it lands softly. Once a turn; the turn goes on. */
   private burst(u: Unit): void {
     const i = WEAPONS.findIndex((w) => w.kind === 'burst');
@@ -1915,12 +1931,7 @@ export class Match {
     this.burstTurn = this.turnNumber;
     this.stock[u.team][i]--;
     const [dx, dy, dz] = this.aimDirection(u, aimed);
-    const v = WEAPONS[i].maxSpeed;
-    b.grounded = false;
-    b.vx = dx * v;
-    b.vy = dy * v + 3;
-    b.vz = dz * v;
-    b.floating = BURST_TICKS;
+    launch(b, dx, dy, dz);
     this.soft.add(u.id);
     this.events.push({ type: 'burst', unit: u.id });
     if (this.phase === 'aim') this.weapon = this.keptBy(u);

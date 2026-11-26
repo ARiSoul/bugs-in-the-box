@@ -25,6 +25,9 @@ let matches = 0;
 let ticks = 0;
 let turns = 0;
 let fell = 0;
+/** Bursts (in its turn, getting away) and what was built, by kind. */
+const bursts = [0, 0];
+const built: Record<string, number> = {};
 for (const sc of SCENARIOS) {
   if (only && sc.id !== only) continue;
   const terrain = new Terrain(...((sc.mapSize ?? [5, 3, 5]) as [number, number, number]));
@@ -65,7 +68,9 @@ for (const sc of SCENARIOS) {
             } else if (e.type === 'death') {
               if (m.units[e.unit].bug.y < -3) fell++;
               if (shot && m.units[e.unit].team !== unit.team) weapons[shot].kills++;
-            } else if (e.type === 'turn') {
+            } else if (e.type === 'burst') bursts[m.phase === 'aim' ? 0 : 1]++;
+            else if (e.type === 'built') built[e.weapon] = (built[e.weapon] ?? 0) + 1;
+            else if (e.type === 'turn') {
               turns++;
               shot = '';
             }
@@ -89,3 +94,4 @@ let all = 0;
 for (const w of Object.values(weapons)) all += w.shots;
 for (const [id, w] of Object.entries(weapons).sort((p, q) => q[1].shots - p[1].shots))
   console.log(id.padEnd(15), pct(w.shots, all).padStart(4), 'of shots · harm', (w.harm / w.shots).toFixed(1).padStart(5), '· hits', pct(w.hits, w.shots).padStart(4), '· kills', (w.kills / w.shots).toFixed(2), '· own', (w.own / w.shots).toFixed(1));
+console.log(`bursts ${(bursts[0] / matches).toFixed(2)} a match to get somewhere, ${(bursts[1] / matches).toFixed(2)} to get away · built a match: ${Object.entries(built).map(([k, v]) => `${k} ${(v / matches).toFixed(2)}`).join(' · ')}`);

@@ -3,6 +3,10 @@ import { Brain, SKILLS, type Skill } from '../src/game/brain';
 import { Match, NO_INPUT } from '../src/game/match';
 import { ANT, COCKROACH, SPIDER, type BugSpecies } from '../src/game/species';
 import { flat } from './helpers/worlds';
+import { WEAPONS } from '../src/game/weapons';
+import { pcCase } from '../src/terrain/generators/pcCase';
+import { createLayout } from '../src/terrain/generators/types';
+import { Terrain } from '../src/terrain/Terrain';
 
 const skill = (id: string): Skill => SKILLS.find((s) => s.id === id) as Skill;
 
@@ -100,5 +104,28 @@ describe('turns', () => {
     expect(m.activeUnit.team).toBe(1);
     m.step(NO_INPUT);
     expect(m.phase).toBe('aim');
+  });
+});
+
+describe('burst and bridges', () => {
+  it('gets somewhere with a burst and lays bridges, the same on every client', () => {
+    const t = new Terrain(5, 3, 5);
+    const play = (): string => {
+      pcCase(t, 1, createLayout());
+      const m = new Match(t, [{ name: 'A', species: ANT, color: 0, size: 3 }, { name: 'B', species: SPIDER, color: 0, size: 3 }], 31, { strictBounds: true });
+      const brains = [new Brain(skill('normal'), 2), new Brain(skill('normal'), 3)];
+      let bursts = 0;
+      let bridges = 0;
+      for (let n = 0; n < 60 * 60 * 12 && m.phase !== 'over'; n++) {
+        m.step(brains[m.activeUnit.team].next(m));
+        for (const e of m.events)
+          if (e.type === 'burst') bursts++;
+          else if (e.type === 'built' && WEAPONS.find((w) => w.id === e.weapon)?.kind === 'bridge') bridges++;
+      }
+      expect(bursts).toBeGreaterThan(0);
+      expect(bridges).toBeGreaterThan(0);
+      return m.units.map((u) => [u.bug.x, u.bug.y, u.bug.z, u.bug.health].join()).join('|');
+    };
+    expect(play()).toBe(play());
   });
 });

@@ -1,10 +1,10 @@
-import { PIECE, toPiece } from './build';
+import { PIECE, SPAN, SPANS, toPiece } from './build';
 import { wordFor } from './reactions';
 import { Flock, FLOCK_TICKS, steerFlock, type FlockInput } from './flock';
 import { ITEM_KINDS, type Item, type ItemKind } from './items';
 import { createRng } from '../terrain/noise';
 import { Bug, GRAVITY, type BugInput } from './bug';
-import { blastShare, CHARGE_TICKS, MIN_POWER, NO_INPUT, type Column, type Match, type MatchInput, type Unit } from './match';
+import { blastShare, BURST_AT, CHARGE_TICKS, launch, MIN_POWER, NO_INPUT, type Column, type Match, type MatchInput, type Place, type Unit } from './match';
 import { rot, rotate2 } from './math';
 import { Projectile } from './projectile';
 import { WEAPONS, type Weapon } from './weapons';
@@ -62,6 +62,14 @@ const WALL_MOOD = 0.3;
 const HIDE_MOOD = 0.5;
 const WALL_NEAR = 45;
 const FALLS = 12;
+/** Burst: the aims it tries; what a better place must be better by to be worth one; how long it may take to land (ticks). */
+const BURST_AIMS = [0.3, 0.55];
+const BURST_COST = 10;
+const BURST_NEAR = 8;
+const LANDS = 300;
+/** A bridge: how much nearer to an enemy its far end must be. */
+const BRIDGE_GAIN = 6;
+const LONG = SPANS * SPAN;
 /** It turns this fast (radians a tick). */
 const TURN = 0.045;
 const COS45 = 0.7071067811865476;
@@ -87,9 +95,11 @@ interface Spot {
   wz: number;
   ticks: number;
   best: number;
+  /** Not walked to: a burst gets it there, with this aim (along, up). */
+  burst?: readonly [number, number];
 }
 
-type State = 'look' | 'wall' | 'fetch' | 'think' | 'spots' | 'walk' | 'aim' | 'charge' | 'done';
+type State = 'look' | 'wall' | 'bridge' | 'flown' | 'fetch' | 'think' | 'spots' | 'walk' | 'aim' | 'charge' | 'done';
 
 const fly: FlockInput = { turn: 0, up: 0, faceX: 0, faceZ: 0, pitch: 0 };
 const dir = new Float64Array(3);
@@ -122,6 +132,10 @@ export class Brain {
   /** It means to build a wall, or to hide if it finds nothing good to shoot at. */
   private walls = false;
   private hides = false;
+  /** Getting away: a burst this way. A bridge it means to build. */
+  private away: readonly [number, number] | null = null;
+  private building: Place | null = null;
+  private readonly pieces: number[] = [];
 
   constructor(
     readonly skill: Skill,
@@ -138,6 +152,7 @@ export class Brain {
     o.item = -1;
     o.pitch = 0;
     o.mark = null;
+    o.place = null;
     this.match = match;
     if (match.turnNumber !== this.turn) this.reset(match);
     const u = match.activeUnit;
@@ -159,6 +174,13 @@ export class Brain {
         break;
       case 'wall':
         this.wall(match, u);
+        break;
+      case 'bridge':
+        this.lay(match, u);
+        break;
+      case 'flown':
+        // (landed: from here, then)
+        this.think(match, u);
         break;
       case 'fetch':
         this.fetch(match, u);
@@ -192,6 +214,8 @@ export class Brain {
     this.plan = null;
     this.hidden = null;
     this.hiding = false;
+    this.away = null;
+    this.building = null;
     this.specials = this.rng() < this.skill.special;
     this.walls = this.rng() < WALL_MOOD;
     this.hides = this.rng() < HIDE_MOOD;
@@ -435,7 +459,7 @@ export class Brain {
       this.walkTo = null;
       let best = this.bestOf(this.plans)?.score ?? 0;
       for (const s of this.spots)
-        if (s.best > best + 4) {
+        if (s.best > best + (s.burst ? BURST_COST : 4)) {
           best = s.best;
           this.walkTo = s;
         }
@@ -444,16 +468,24 @@ export class Brain {
       if (best <= 0 && near) {
         const d = (b: Bug): number => Math.sqrt((b.x - near.bug.x) * (b.x - near.bug.x) + (b.y - near.bug.y) * (b.y - near.bug.y) + (b.z - near.bug.z) * (b.z - near.bug.z));
         let least = d(u.bug) - 2;
-        for (const s of this.spots)
-          if (s.bug.ny >= 0.3 && d(s.bug) < least) {
-            least = d(s.bug);
+        for (const s of this.spots) {
+          const far = d(s.bug) + (s.burst ? BURST_NEAR : 0);
+          if (s.bug.ny >= 0.3 && far < least) {
+            least = far;
             this.walkTo = s;
           }
+        }
+        // (no nearer by walking: a bridge, if it has one, over what is in the way)
+        if (!this.walkTo && this.bridge(match, u, near)) return;
       }
       // (nor that: anywhere else it can stand)
       if (best <= 0 && !this.walkTo) {
-        const open = this.spots.filter((s) => s.bug.ny >= 0.64);
+        const open = this.spots.filter((s) => s.bug.ny >= 0.64 && !s.burst);
         this.walkTo = open[Math.floor(this.rng() * open.length)] ?? null;
+      }
+      if (this.walkTo?.burst) {
+        this.leap(this.walkTo, this.walkTo.burst);
+        return;
       }
       if (this.walkTo) {
         this.state = 'walk';
@@ -535,20 +567,58 @@ export class Brain {
     const enemies = this.enemies(match, u).slice(0, 2);
     for (const way of WAYS) {
       this.queue.push(() => {
-        for (const s of this.walkWay(match, u, way[0], way[1], 5)) {
-          this.spots.push(s);
-          const bugs = match.units.map((q) => (q === u ? s.bug : q.bug));
-          for (const e of enemies)
-            for (const index of [0, 1])
-              for (let k = 0; k < 7; k++)
-                this.queue.push(() => {
-                  const score = this.tryArc(match, u, s.bug, bugs, WEAPONS[index], index, e, k / 7, []);
-                  // (a shot that may change on the way counts less)
-                  if (score * 0.9 > s.best) s.best = score * 0.9;
-                });
-        }
+        for (const s of this.walkWay(match, u, way[0], way[1], 5)) this.rate(match, u, s, enemies);
       });
+      // (and where a burst would take it; the last one is kept for getting away)
+      if (match.canBurst(u) && match.usesLeft(u.team, BURST_AT) > 1)
+        for (const v of BURST_AIMS)
+          this.queue.push(() => {
+            const h = Math.sqrt(1 - v * v);
+            const at = this.flight(match, u, way[0], way[1], h, v);
+            if (at) this.rate(match, u, { bug: at, wx: way[0], wz: way[1], ticks: 0, best: 0, burst: [h, v] }, enemies);
+          });
     }
+  }
+
+  /** A place it could get to: the shots from there. */
+  private rate(match: Match, u: Unit, s: Spot, enemies: readonly Unit[]): void {
+    this.spots.push(s);
+    const bugs = match.units.map((q) => (q === u ? s.bug : q.bug));
+    for (const e of enemies)
+      for (const index of [0, 1])
+        for (let k = 0; k < 7; k++)
+          this.queue.push(() => {
+            const score = this.tryArc(match, u, s.bug, bugs, WEAPONS[index], index, e, k / 7, []);
+            // (a shot that may change on the way counts less)
+            if (score * 0.9 > s.best) s.best = score * 0.9;
+          });
+  }
+
+  /** Where a burst this way, with this aim, sets it down, in its head (null: not on its feet, or not at all). */
+  private flight(match: Match, u: Unit, wx: number, wz: number, aimH: number, aimV: number): Bug | null {
+    const b = new Bug(u.bug.species);
+    b.copy(u.bug);
+    b.fx = wx;
+    b.fz = wz;
+    b.direction(aimH, aimV, dir);
+    launch(b, dir[0], dir[1], dir[2]);
+    step.move = step.turn = step.faceX = step.faceZ = 0;
+    step.jump = step.run = false;
+    for (let n = 0; n < LANDS; n++) {
+      b.step(match.field, step);
+      if (!b.alive) return null;
+      if (n > 3 && b.grounded) return b.ny >= 0.5 && !match.units.some((q) => q !== u && q.bug.alive && near2(q.bug, b) < 9) ? b : null;
+    }
+    return null;
+  }
+
+  /** Off it goes: turned, aimed, and the burst. */
+  private leap(s: Spot, aim: readonly [number, number]): void {
+    this.plan = { weapon: BURST_AT, fx: s.wx, fz: s.wz, aimH: aim[0], aimV: aim[1], charge: 0, score: 0, target: -1, mark: null };
+    this.state = 'aim';
+    this.timer = 2;
+    this.tuned = true;
+    this.walks++;
   }
 
   /** Walk this way in its head: the places it comes by, as long as the way is safe. */
@@ -636,6 +706,53 @@ export class Brain {
     if (!this.turnTo(u.bug, dx / l, dz / l)) return;
     if (match.weapon !== index) this.out.weapon = index;
     else if (this.timer % 20 === 0) this.out.fire = true;
+  }
+
+  /** A bridge from where it stands, or from where it could walk to, whose far end is nearer to `e`: it means to lay that. */
+  private bridge(match: Match, u: Unit, e: Unit): boolean {
+    const index = WEAPONS.findIndex((w) => w.kind === 'bridge' && w.species === u.bug.species.id);
+    if (index < 0 || match.built || !match.canUse(u, index) || u.web >= 0) return false;
+    const w = WEAPONS[index];
+    const t = e.bug;
+    let least = Math.sqrt(near2(u.bug, t)) - BRIDGE_GAIN;
+    this.building = null;
+    for (const b of [u.bug, ...this.spots.filter((s) => !s.burst).map((s) => s.bug)]) {
+      const r = b.species.radius;
+      const x = b.x - b.nx * r;
+      const y = b.y - b.ny * r;
+      const z = b.z - b.nz * r;
+      const dx = t.x - x;
+      const dy = t.y - y;
+      const dz = t.z - z;
+      const l = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      if (l < 4) continue;
+      const k = Math.min(LONG, l) / l;
+      const place: Place = [x, y, z, dx * k, dy * k, dz * k];
+      if (match.tryPlace(u, w, place, this.pieces) !== '') continue;
+      const ex = x + dx * k - t.x;
+      const ey = y + dy * k - t.y;
+      const ez = z + dz * k - t.z;
+      const far = Math.sqrt(ex * ex + ey * ey + ez * ez);
+      if (far >= least) continue;
+      least = far;
+      this.building = place;
+    }
+    if (!this.building) return false;
+    this.state = 'bridge';
+    this.timer = 60;
+    return true;
+  }
+
+  private lay(match: Match, u: Unit): void {
+    const index = WEAPONS.findIndex((w) => w.kind === 'bridge' && w.species === u.bug.species.id);
+    if (--this.timer < 0 || match.built || !this.building) {
+      // (laid, or it could not: it thinks again, and may walk over it)
+      this.walks++;
+      this.think(match, u);
+      return;
+    }
+    if (match.weapon !== index) this.out.weapon = index;
+    else this.out.place = this.building;
   }
 
   /** Its way of hiding, if it has one and would rather do that now. */
@@ -763,7 +880,8 @@ export class Brain {
       return;
     }
     o.fire = true;
-    if (w.kind === 'flock') this.state = 'done';
+    if (w.kind === 'burst') this.state = 'flown';
+    else if (w.kind === 'flock') this.state = 'done';
     else if (w.kind === 'shelter') {
       // (no room for it here: a shot, then)
       this.hides = false;
@@ -913,6 +1031,26 @@ export class Brain {
           this.hidden = s;
           this.timer = s.ticks;
         }
+      // (seen wherever it walks: a burst away, if it has one, that lands where fewer see it)
+      if (best >= 10 && match.canBurst(u)) {
+        let least = best - 6;
+        for (const way of WAYS) {
+          const at = this.flight(match, u, way[0], way[1], u.aimH, u.aimV);
+          if (!at) continue;
+          const n = seen(at);
+          if (n >= least) continue;
+          least = n;
+          this.away = way;
+          this.hidden = null;
+        }
+      }
+    }
+    if (this.away) {
+      if (this.turnTo(u.bug, this.away[0], this.away[1])) {
+        this.out.weapon = BURST_AT;
+        this.away = null;
+      }
+      return;
     }
     if (!this.hidden) return;
     if (!this.turnTo(u.bug, this.hidden.wx, this.hidden.wz)) return;

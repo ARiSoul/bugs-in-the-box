@@ -51,7 +51,7 @@ Goal now: a PC demo first, as a proof of concept. The phone items below are post
 - [x] Desk (`?scenario=desk`): the owner's real desk from photos (an L-shaped standing desk, three curved monitors and two laptops with pictures on them, keyboards, vertical mice, two studio speakers, a bottle, small things, cables), at twice the scale on its own 10×3×5 map (`Scenario.mapSize`) so the bugs keep their size; visual critic to "none", detail critic (macro close-ups against the owner's photos) to "accept"
 - [x] Car Dashboard (`?scenario=car`): the owner's car from photos and a video, door to door, ignition on (lit instruments, flashing hazard button, the radio behind its cracked glass, a phone with a map), the steering wheel, the open glove box with its papers, on its own map (10x4x5)
 - [x] Cinematic camera in the menu, for every map (the scripted flight, with pause, skip and restart)
-- [ ] Building and hiding: a wall, a bridge and a shelter of each species' own, limits per kind and in all, the hand in three parts; the other ideas one prototype at a time (IDEAS); bridges for the computer; boxes that give more
+- [ ] Building and hiding: a wall, a bridge and a shelter of each species' own, limits per kind and in all, the hand in three parts; the other ideas one prototype at a time (IDEAS); boxes that give more
 - [ ] Abilities per species: spider done (Web Shot, the thread, Web Bow), the ant's first done (Ant Column; three more and an unlock system in IDEAS); the cockroach done (Hard Shell, Blackout Swarm; the other ideas in IDEAS); the bee done (flight, Queen's Flight); each team's species is picked in the menu
 
 ## Settings and admins (proposed)
@@ -77,7 +77,7 @@ To be decided: who evolves (recommended: the species, per player) · whether lev
 
 ## Backlog (from playing)
 
-- [x] **Burst** (every species, twice a match, once a turn, also while getting away): it throws itself along its aim, far and fast, and lands softly
+- [x] **Burst** (every species, twice a match, once a turn, also while getting away): it throws itself along its aim, far and fast, and lands softly; the computer uses it too, and lays bridges
 - [x] **Mini-map**: the ground from above, turned with the view, the bugs by team, the boxes
 - [ ] Perks for the mini-map: a ghost that does not show on the others' (`Minimap.shows`)
 - [ ] Reading time over the network: the pause is an event of the match's, with its limits
