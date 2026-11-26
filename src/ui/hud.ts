@@ -63,7 +63,7 @@ export interface HudState {
 
 /** The special attack of a team's species. */
 function specialOf(match: Match, team: number): number {
-  return WEAPONS.findIndex((w) => w.sceneTicks > 0 && w.species === match.teams[team].species.id);
+  return match.special(team);
 }
 
 interface TeamView {

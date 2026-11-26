@@ -1,7 +1,7 @@
 import type { BugSpecies } from '../game/species';
 import { SPECIES } from '../game/species';
 import { brings, type Gain, type Level } from '../game/progress';
-import { WEAPONS } from '../game/weapons';
+import { specialsOf } from '../game/weapons';
 import { SCENARIOS } from '../terrain/scenarios';
 import { letters } from './lettering';
 import { BUGS } from './emblems';
@@ -12,6 +12,8 @@ import { art } from './skillCard';
 export interface SetupChoice {
   scenario: string;
   species: [BugSpecies, BugSpecies];
+  /** Which of its species' special attacks each side takes (a weapon id; '': the first). */
+  specials: [string, string];
   players: [string, string];
   size: number;
   seconds: number;
@@ -49,10 +51,14 @@ const SECONDS = [15, 30, 45, 60];
 const WINDS: [number, string][] = [[0, 'Off'], [0.5, 'Breeze'], [1, 'Windy'], [1.6, 'Gale']];
 /** A line for each species, its own trait, its special attack in a few words. */
 const ABOUT: Record<string, [string, string, string]> = {
-  ant: ['Tough. Never alone.', 'The most health of all', 'March a column of workers at them'],
+  ant: ['Tough. Never alone.', 'The most health of all; Burrow', 'March a column of workers at them'],
   spider: ['Patient. Hard to corner.', 'Web Shot, and hangs by a thread', 'Draw a bow of silk, let the dart fly'],
   bee: ['Sweet. Until it is not.', 'Flies: 3 seconds a turn', 'Take the crown, fly the swarm yourself'],
   cockroach: ['Fast. Refuses to die.', 'Hard Shell: outlives one blow', 'Kill the lights, send in the brood'],
+};
+/** A line for each special attack that is not its species' first. */
+const SPECIAL_ABOUT: Record<string, string> = {
+  'titan-lift': 'Tear a block out of the ground, throw it at them',
 };
 /** A line for each device, and its colour. */
 const PLACES: Record<string, [string, string]> = {
@@ -268,9 +274,11 @@ export class SetupScreen {
     const c = this.choice;
     const s = c.species[i];
     const card = this.cards[i];
-    if (card.dataset.species !== s.id) {
+    if (card.dataset.species !== s.id || card.dataset.special !== c.specials[i]) {
       card.dataset.species = s.id;
-      const special = WEAPONS.find((w) => w.sceneTicks > 0 && w.species === s.id);
+      card.dataset.special = c.specials[i];
+      const own = specialsOf(s.id);
+      const special = own.find((w) => w.id === c.specials[i]) ?? own[0];
       const [line, gift, what] = ABOUT[s.id] ?? ['', '', ''];
       const bars: [string, number, number][] = [['Health', s.health / 125, s.health], ['Speed', s.walkSpeed / 7, s.walkSpeed], ['Jump', s.jumpSpeed / 10.5, s.jumpSpeed]];
       card.innerHTML =
@@ -278,10 +286,19 @@ export class SetupScreen {
         `<div class="name">${letters(SHORT[s.id], { fill: i ? '#8ccaff' : '#ff8676', drop: 7, outline: 11 })}</div><p>${line}</p>` +
         `<div class="stats">${bars.map(([n, v, k]) => `<div><em>${n}</em><i><u style="--v:${Math.min(1, v).toFixed(2)}"></u></i><strong>${k}</strong></div>`).join('')}</div>` +
         `<div class="trait"><em>Trait</em><span>${gift}</span></div>` +
-        (special ? `<div class="special"><span class="emblem" style="color:#${(special?.color ?? 0xffffff).toString(16).padStart(6, '0')}">${special ? art(special.id) : ''}</span><div><em>Special</em><b>${special?.name ?? ''}</b><span>${what}</span></div></div>` : `<div class="special"><div><em>Special</em><span>${what}</span></div></div>`) +
+        (special ? `<div class="special${own.length > 1 ? ' pick' : ''}"${own.length > 1 ? ` role="button" tabindex="0" title="Another special" aria-label="Special: ${special.name}. Pick another."` : ''}><span class="emblem" style="color:#${(special?.color ?? 0xffffff).toString(16).padStart(6, '0')}">${special ? art(special.id) : ''}</span><div><em>Special${own.length > 1 ? ` · ${own.indexOf(special) + 1}/${own.length}` : ''}</em><b>${special?.name ?? ''}</b><span>${special && special !== own[0] ? (SPECIAL_ABOUT[special.id] ?? '') : what}</span></div></div>` : `<div class="special"><div><em>Special</em><span>${what}</span></div></div>`) +
         `<button class="lv"></button>` +
         `<div class="who" role="group" aria-label="${SIDES[i]}: who plays"></div>`;
       for (const b of card.querySelectorAll<HTMLButtonElement>('.chips button')) b.addEventListener('click', () => this.pickSpecies(i, Number(b.dataset.k)));
+      const pick = card.querySelector<HTMLElement>('.special.pick');
+      const next = (): void => this.pickSpecial(i);
+      pick?.addEventListener('click', next);
+      pick?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          next();
+        }
+      });
       card.querySelector('.lv')?.addEventListener('click', () => this.hooks.onSpeciesPage(i));
       // (the bars grow again)
       card.classList.remove('fresh');
@@ -310,10 +327,20 @@ export class SetupScreen {
     );
   }
 
+  /** The next of its species' special attacks, for side `i`. */
+  private pickSpecial(i: number): void {
+    const own = specialsOf(this.choice.species[i].id);
+    const k = own.findIndex((w) => w.id === this.choice.specials[i]);
+    this.choice.specials[i] = own[(Math.max(0, k) + 1) % own.length].id;
+    this.hooks.onPick(true);
+    this.refresh();
+  }
+
   private pickSpecies(i: number, k: number): void {
     const s = SPECIES[(k + SPECIES.length) % SPECIES.length];
     if (s === this.choice.species[i]) return;
     this.choice.species[i] = s;
+    this.choice.specials[i] = '';
     this.hooks.onPick(true);
     this.hooks.onSpecies(i);
     this.refresh();

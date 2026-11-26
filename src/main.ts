@@ -10,7 +10,7 @@ import { PerfLog } from './debug/perf';
 import { viewsFor, type ScenarioViews } from './debug/views';
 import { Brain, SKILLS } from './game/brain';
 import { DT, GRAVITY, KILL_Y, TICK_RATE } from './game/bug';
-import { Match, NO_INPUT, type MatchEvent, type TeamSpec } from './game/match';
+import { LIFT_HIGH, Match, NO_INPUT, type MatchEvent, type TeamSpec } from './game/match';
 import { ANT, SPECIES, SPIDER, type BugSpecies } from './game/species';
 import { SOLDER_BLOB, WEAPONS } from './game/weapons';
 import { Controls } from './input/controls';
@@ -55,6 +55,8 @@ import { SoundMenu } from './ui/sound';
 /** The two teams, each of one species (chosen in the menu, kept in the address as `?teams=ant,spider`). */
 const PLURAL: Record<string, string> = { ant: 'Ants', spider: 'Spiders', cockroach: 'Cockroaches', bee: 'Bees' };
 const picked: BugSpecies[] = [ANT, SPIDER];
+/** Which special attack each team takes (`?specials=titan-lift,`; empty: its species' first). */
+const specials: [string, string] = ['', ''];
 /** Who plays each team: a player here ('human'), or the computer (a skill's id); `?players=human,normal`. */
 const players = ['human', 'normal'];
 let brains: (Brain | null)[] = [null, null];
@@ -75,8 +77,8 @@ function growthFor(side: number): Growth {
   return players[side] === 'human' ? profile.growth(picked[side].id) : computerGrowth(picked[side].id, levelFor(side, picked, players));
 }
 const teams = (): TeamSpec[] => [
-  { growth: growthFor(0), name: `Red ${PLURAL[picked[0].id]}`, species: picked[0], color: 0xff6b5e, size: rules.size },
-  { growth: growthFor(1), name: `Blue ${PLURAL[picked[1].id]}`, species: picked[1], color: 0x5fb0ff, size: rules.size },
+  { growth: growthFor(0), name: `Red ${PLURAL[picked[0].id]}`, species: picked[0], special: specials[0] || undefined, color: 0xff6b5e, size: rules.size },
+  { growth: growthFor(1), name: `Blue ${PLURAL[picked[1].id]}`, species: picked[1], special: specials[1] || undefined, color: 0x5fb0ff, size: rules.size },
 ];
 
 const canvas = document.getElementById('c') as HTMLCanvasElement;
@@ -85,6 +87,9 @@ const hooks = readHooks(params);
 (params.get('teams') ?? '').split(',').forEach((id, i) => {
   const s = SPECIES.find((q) => q.id === id);
   if (s && i < 2) picked[i] = s;
+});
+(params.get('specials') ?? '').split(',').forEach((id, i) => {
+  if (i < 2) specials[i] = id;
 });
 (params.get('players') ?? '').split(',').forEach((id, i) => {
   if (i < 2 && (id === 'human' || SKILLS.some((s) => s.id === id))) players[i] = id;
@@ -113,6 +118,7 @@ const flashes = new ExplosionFlashes(stage.scene);
 const lines = new LineFlashes(stage.scene);
 const texts = new FloatingTexts(stage.hud);
 const projectiles = new ProjectileViews(stage.scene);
+const liftUp = new THREE.Vector3();
 const aim = new AimView(stage.scene);
 const webViews = new WebViews(stage.scene);
 const itemViews = new ItemViews(stage.scene);
@@ -600,7 +606,7 @@ let bestHit = 0;
 const menuAt = new THREE.Vector3();
 const heroes = new Heroes(stage.menu);
 const flashEl = document.getElementById('flash') as HTMLElement;
-const choice: SetupChoice = { scenario: scenario.id, species: [picked[0], picked[1]], players: [players[0], players[1]], size: rules.size, seconds: rules.seconds, wind: rules.wind, seed, equal };
+const choice: SetupChoice = { scenario: scenario.id, species: [picked[0], picked[1]], specials: [specials[0], specials[1]], players: [players[0], players[1]], size: rules.size, seconds: rules.seconds, wind: rules.wind, seed, equal };
 const setup = new SetupScreen(choice, {
   level: (i) => levelFor(i, choice.species, choice.players),
   onSpeciesPage: (i) => speciesPage.open(choice.species[i].id),
@@ -671,7 +677,7 @@ function openSetup(): void {
     menus.meshed = workers === null;
     newMatch(seed);
   }
-  Object.assign(choice, { scenario: scenario.id, species: [picked[0], picked[1]], players: [players[0], players[1]], size: rules.size, seconds: rules.seconds, wind: rules.wind, seed, equal });
+  Object.assign(choice, { scenario: scenario.id, species: [picked[0], picked[1]], specials: [specials[0], specials[1]], players: [players[0], players[1]], size: rules.size, seconds: rules.seconds, wind: rules.wind, seed, equal });
   menus.setup = true;
   menus.starting = -1;
   menus.mapIn = -1;
@@ -695,6 +701,8 @@ function openSetup(): void {
 function startMatch(): void {
   picked[0] = choice.species[0];
   picked[1] = choice.species[1];
+  specials[0] = choice.specials[0];
+  specials[1] = choice.specials[1];
   players[0] = choice.players[0];
   players[1] = choice.players[1];
   rules.size = choice.size;
@@ -702,6 +710,8 @@ function startMatch(): void {
   rules.wind = choice.wind;
   equal = choice.equal;
   params.set('teams', picked.map((q) => q.id).join());
+  if (specials.some((s) => s)) params.set('specials', specials.join());
+  else params.delete('specials');
   params.set('players', players.join());
   params.set('size', String(rules.size));
   params.set('turn', String(rules.seconds));
@@ -1338,6 +1348,14 @@ function frame(now: number): void {
   brood.late();
   flock.late();
   projectiles.sync(match.projectiles, alpha, ground);
+  {
+    // (a Titan Lift: the block rises over the ant's back while it stands, and stays there while it aims)
+    const w = match.currentWeapon;
+    const holding = w.kind === 'lift' && (match.phase === 'special' || (match.phase === 'aim' && match.stance));
+    const u = match.activeUnit;
+    const rise = match.phase === 'special' ? 1 - match.specialTicks / w.sceneTicks : 1;
+    projectiles.hold(holding ? bugViews[match.active].view.root.position : null, liftUp.set(u.bug.nx, u.bug.ny, u.bug.nz), rise, u.bug.species.radius + LIFT_HIGH);
+  }
   // (the bars of a film, and no names: while it stands and aims, and once the hit is seen, the names are back)
   document.body.classList.toggle('special', sceneNow !== null && (!match.stance || sceneNow === flock) && !debugCamera);
   if (sceneNow) stage.hud.visible = (match.stance && sceneNow !== brood) || (sceneNow.hitFor > 0.5 && sceneNow.names) || (sceneNow === antColumn && antColumn.swarming && antColumn.names) || (sceneNow === flock && flock.flies);

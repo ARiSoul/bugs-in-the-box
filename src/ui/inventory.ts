@@ -52,6 +52,8 @@ export class Inventory {
   /** The player's experience with a species (null: no levels in this match). */
   experience: (team: number) => number | null = () => null;
   private species = '';
+  /** The special attack its team took (weapon index). */
+  private took = -1;
   private tab: Category = 'defence';
   private chosen = '';
   private open = false;
@@ -211,12 +213,21 @@ export class Inventory {
     const id = u.bug.species.id;
     const level = match.teams[u.team].growth?.level ?? 1;
     const count = levelAt(level).slots;
-    if (id !== this.species || count !== this.count) {
+    const took = match.special(u.team);
+    if (id !== this.species || count !== this.count || took !== this.took) {
       this.species = id;
+      this.took = took;
       this.count = count;
       const was = this.saved[id];
-      const first = firstSlots(id);
-      this.slots = Array.from({ length: count }, (_, i) => (Array.isArray(was) ? (typeof was[i] === 'string' ? was[i] : '') : (first[i] ?? '')));
+      const special = WEAPONS[match.special(u.team)]?.id;
+      const first = firstSlots(id, special);
+      // (a special attack in the slots is the one its team took)
+      const isSpecial = (s: string): boolean => {
+        const a = byId(s);
+        return a !== undefined && a.weapon >= 0 && WEAPONS[a.weapon].sceneTicks > 0;
+      };
+      const theirs = (s: string): string => (special && isSpecial(s) ? special : s);
+      this.slots = Array.from({ length: count }, (_, i) => theirs(Array.isArray(was) ? (typeof was[i] === 'string' ? was[i] : '') : (first[i] ?? '')));
       this.chosen = '';
     }
     const load = Math.floor((match.skill[u.team] / SKILL_FULL) * 50) / 50;

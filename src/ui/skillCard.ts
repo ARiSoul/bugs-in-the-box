@@ -8,6 +8,9 @@ const EMBLEMS: Record<string, string> = {
   // ants in a column, coming
   'ant-column':
     '<g><circle cx="24" cy="9" r="3.4" stroke="none" fill="currentColor"/><ellipse cx="24" cy="17" rx="3.2" ry="4.6" stroke="none" fill="currentColor"/><path d="m21 8-4-4m10 4 4-4M21 14l-6-2m6 5h-7m13-3 6-2m-6 5h7" stroke-width="1.7"/></g><g transform="translate(-13 18) scale(.95)"><circle cx="24" cy="9" r="3.4" stroke="none" fill="currentColor"/><ellipse cx="24" cy="17" rx="3.2" ry="4.6" stroke="none" fill="currentColor"/><path d="M21 14l-6-2m6 5h-7m13-3 6-2m-6 5h7" stroke-width="1.7"/></g><g transform="translate(15 18) scale(.95)"><circle cx="24" cy="9" r="3.4" stroke="none" fill="currentColor"/><ellipse cx="24" cy="17" rx="3.2" ry="4.6" stroke="none" fill="currentColor"/><path d="M21 14l-6-2m6 5h-7m13-3 6-2m-6 5h7" stroke-width="1.7"/></g><path d="m17 43 7 4 7-4" fill="none" stroke-width="2"/>',
+  // a block held high over an ant, cracks in it
+  'titan-lift':
+    '<path d="M9 6h30l-3 15H12z" stroke="none" fill="currentColor"/><path d="M18 9l3 5-2 4M30 8l-2 6 3 4" stroke="#000" stroke-width="1.4"/><path d="M17 22v6m14-6v6" stroke-width="2.6"/><ellipse cx="24" cy="34" rx="5" ry="4" stroke="none" fill="currentColor"/><circle cx="24" cy="27" r="3" stroke="none" fill="currentColor"/><path d="m19 34-7 4m17-4 7 4m-17 0-5 7m15-7 5 7" stroke-width="2"/><path d="M4 46h40" stroke-width="2.4"/>',
   // a crown over a comb's cell, bees about it
   'queens-flight':
     '<path d="M24 20l11 6.4v12.8L24 45.6l-11-6.4V26.4z" fill="none" stroke-width="2.6"/><path d="M24 26.5l5.6 3.2v6.4L24 39.3l-5.6-3.2v-6.4z" stroke="none" fill="currentColor"/><path d="M14 15 12 4l6.5 5L24 2l5.5 7L36 4l-2 11z" stroke="none" fill="currentColor"/><g stroke="none" fill="currentColor"><circle cx="5" cy="24" r="1.8"/><circle cx="43" cy="24" r="1.8"/><circle cx="6" cy="37" r="1.5"/><circle cx="42" cy="37" r="1.5"/><circle cx="4" cy="13" r="1.4"/><circle cx="44" cy="13" r="1.4"/></g>',

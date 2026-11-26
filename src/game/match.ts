@@ -11,7 +11,7 @@ import { KEPT, type Tag } from './actions';
 import { BURN_HURTS, HONEY_TURNS, HONEY_WIDE, reaction, SMOTHERED, tagsOf } from './reactions';
 import { levelAt, passive, type Growth, type Tally } from './progress';
 import { BOX, ITEM_KINDS, Items, type Item, type ItemKind } from './items';
-import { CATCHES, DUD, hasWeapon, SILK_CURTAIN, WORKS, RING_DAMAGE, WEAPONS, type Weapon } from './weapons';
+import { CATCHES, DUD, hasWeapon, SILK_CURTAIN, specialsOf, WORKS, RING_DAMAGE, WEAPONS, type Weapon } from './weapons';
 
 /**
  * One match: teams of bugs taking turns on a destructible map. Pure and deterministic like Bug:
@@ -153,6 +153,8 @@ export interface TeamSpec {
   readonly growth?: Growth;
   readonly name: string;
   readonly species: BugSpecies;
+  /** Which of its species' special attacks it takes (a weapon id; none: the first). */
+  readonly special?: string;
   /** Render only. */
   readonly color: number;
   readonly size: number;
@@ -306,6 +308,8 @@ export const SKILL_FULL = 1000;
 const SKILL_TURN = 200;
 /** Ticks a burst hardly falls. */
 const BURST_TICKS = 50;
+/** How high over an ant's back a lifted block is held (and thrown from). */
+export const LIFT_HIGH = 1.6;
 /** How fast a burrowing ant runs through its tunnel. */
 const BURROW_SPEED = 13;
 export const BURST_AT = WEAPONS.findIndex((w) => w.kind === 'burst');
@@ -843,7 +847,17 @@ export class Match {
 
   /** Whether the unit has weapon `index` (a special attack may still have to load). */
   has(u: Unit, index: number): boolean {
+    // (of its species' special attacks, only the one its team took)
+    if (WEAPONS[index].sceneTicks > 0 && index !== this.special(u.team)) return false;
     return hasWeapon(u.bug.species.id, WEAPONS[index]) || this.usesLeft(u.team, index) > 0;
+  }
+
+  /** The special attack a team took into the match (its weapon index; -1: its species has none). */
+  special(team: number): number {
+    const t = this.teams[team];
+    const own = specialsOf(t.species.id);
+    const w = own.find((q) => q.id === t.special) ?? own[0];
+    return w ? WEAPONS.indexOf(w) : -1;
   }
 
   /** How often a team may still use what it has only some of. */
@@ -1323,6 +1337,7 @@ export class Match {
     unit.boost = false;
     const index = WEAPONS.indexOf(w);
     if (!hasWeapon(unit.bug.species.id, w)) this.stock[unit.team][index]--;
+    if (w.kind === 'lift') this.tearOut(unit, w);
     if (w.kind === 'tunnel') this.dig(unit, w);
     else if (w.kind === 'trap') this.openWeb(unit.bug.x, unit.bug.y, unit.bug.z, w, false, unit.team);
     else if (w.kind === 'column') {
@@ -1690,10 +1705,12 @@ export class Match {
     const [dx, dy, dz] = this.aimDirection(u, aimed);
     const speed = (power < MIN_POWER ? MIN_POWER : power) * w.maxSpeed;
     const off = b.species.radius + 0.5;
+    // (a lifted block goes from over its head)
+    const up = w.kind === 'lift' ? b.species.radius + LIFT_HIGH : 0;
     return new Projectile(this.nextProjectileId++, w, b).launch(
-      b.x + dx * off,
-      b.y + dy * off,
-      b.z + dz * off,
+      b.x + dx * off + b.nx * up,
+      b.y + dy * off + b.ny * up,
+      b.z + dz * off + b.nz * up,
       dx * speed,
       dy * speed,
       dz * speed,
@@ -1948,6 +1965,18 @@ export class Match {
     this.soft.add(u.id);
     this.events.push({ type: 'burst', unit: u.id });
     if (this.phase === 'aim') this.weapon = this.keptBy(u);
+  }
+
+  /** The block an ant lifts: torn out of the ground just before it (what is built there goes with it). */
+  private tearOut(u: Unit, w: Weapon): void {
+    const b = u.bug;
+    const r = b.species.radius;
+    const x = b.x + b.hx * (r + w.tunnelRadius * 0.8) - b.nx * w.tunnelRadius * 0.45;
+    const y = b.y + b.hy * (r + w.tunnelRadius * 0.8) - b.ny * w.tunnelRadius * 0.45;
+    const z = b.z + b.hz * (r + w.tunnelRadius * 0.8) - b.nz * w.tunnelRadius * 0.45;
+    this.field.carve(x, y, z, w.tunnelRadius);
+    this.react(x, y, z, w.tunnelRadius, tagsOf(w.id));
+    this.events.push({ type: 'dig', x1: x, y1: y, z1: z, x2: x, y2: y, z2: z, radius: w.tunnelRadius });
   }
 
   /** An ant digs along its aim and runs out through what it dug. Once a turn; the turn goes on. */

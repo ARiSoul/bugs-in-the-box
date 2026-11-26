@@ -20,6 +20,8 @@ export type WeaponKind =
   | 'arrow'
   /** A column of small ants that charges over the surfaces, steered, and swarms the first enemy it meets. */
   | 'column'
+  /** A block torn out of the ground before the bug and thrown from over its head: it crushes where it lands. */
+  | 'lift'
   /** A swarm called in the dark, from everywhere, onto a marked spot: it covers every enemy near it. */
   | 'brood'
   /** A swarm the player flies through the air, through rings that make it stronger, into whatever it meets. */
@@ -293,10 +295,34 @@ export const WAX_NEST: Weapon = { ...WORK, id: 'wax-nest', name: 'Wax Nest', kin
 /** Every bug, a few times a match: it throws itself along its aim, far and fast, and lands softly. Also while it gets away. */
 export const BURST: Weapon = { ...BASE, id: 'burst', name: 'Burst', kind: 'burst', found: true, start: 2, alone: true, maxSpeed: 21, color: 0x9fe8ff };
 
+/**
+ * Ants only, a special attack (the other one a team of ants may take): it tears a block out of the ground before it,
+ * fifty times its weight, lifts it over its head and throws it. A hole where it stood, a crush where it lands.
+ */
+export const TITAN_LIFT: Weapon = {
+  ...BASE,
+  id: 'titan-lift',
+  name: 'Titan Lift',
+  kind: 'lift',
+  species: 'ant',
+  maxSpeed: 17,
+  gravityFactor: 1.15,
+  blastRadius: 4.4,
+  damage: 42,
+  tunnelRadius: 1.9,
+  sceneTicks: 72,
+  color: 0x9a7a52,
+};
+
 /** Ants only, a few times a match: it digs a tunnel as wide as it along its aim and runs out through it. Once a turn. */
 export const BURROW: Weapon = { ...BASE, id: 'burrow', name: 'Burrow', kind: 'burrow', species: 'ant', found: true, start: 3, alone: true, tunnelLength: 10, tunnelRadius: 1.7, color: 0xc98a4a };
 
-export const WEAPONS: readonly Weapon[] = [SOLDER_BLOB, CAPACITOR, SHORT_CIRCUIT, SOLDERING_IRON, WEB_SHOT, WEB_BOW, ANT_COLUMN, BLACKOUT_SWARM, THERMAL_PASTE, QUEENS_FLIGHT, RAMPART, LIVING_BRIDGE, ANTHILL, SILK_CURTAIN, SILK_SPAN, SILK_FUNNEL, SHIELD_WALL, SCALE_WALK, HUSK, COMB_WALL, COMB_SPAN, WAX_NEST, BURST, BURROW];
+export const WEAPONS: readonly Weapon[] = [SOLDER_BLOB, CAPACITOR, SHORT_CIRCUIT, SOLDERING_IRON, WEB_SHOT, WEB_BOW, ANT_COLUMN, BLACKOUT_SWARM, THERMAL_PASTE, QUEENS_FLIGHT, RAMPART, LIVING_BRIDGE, ANTHILL, SILK_CURTAIN, SILK_SPAN, SILK_FUNNEL, SHIELD_WALL, SCALE_WALK, HUSK, COMB_WALL, COMB_SPAN, WAX_NEST, BURST, BURROW, TITAN_LIFT];
+
+/** The special attacks a species may take into a match (a team takes one). */
+export function specialsOf(species: string): Weapon[] {
+  return WEAPONS.filter((w) => w.sceneTicks > 0 && w.species === species);
+}
 
 /** Whether a bug of this species has the weapon. */
 export function hasWeapon(species: string, w: Weapon): boolean {

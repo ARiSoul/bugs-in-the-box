@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { Match, NO_INPUT, type MatchEvent, type MatchInput } from '../src/game/match';
+import { Match, NO_INPUT, SKILL_FULL, type MatchEvent, type MatchInput } from '../src/game/match';
 import { ANT, BEE, COCKROACH, SPIDER, type BugSpecies } from '../src/game/species';
-import { BURROW, BURST, ANTHILL, LIVING_BRIDGE, RAMPART, SILK_CURTAIN, SOLDER_BLOB, WAX_NEST, WEAPONS, WORKS, type Weapon } from '../src/game/weapons';
+import { ANT_COLUMN, TITAN_LIFT, BURROW, BURST, ANTHILL, LIVING_BRIDGE, RAMPART, SILK_CURTAIN, SOLDER_BLOB, WAX_NEST, WEAPONS, WORKS, type Weapon } from '../src/game/weapons';
 import { BUILT } from '../src/terrain/materials';
 import type { Terrain } from '../src/terrain/Terrain';
 import { world } from './helpers/worlds';
@@ -315,5 +315,40 @@ describe('burrow', () => {
     expect(m.works[0]).toBe(WORKS);
     // (a spider has none)
     expect(m.usesLeft(1, at(BURROW))).toBe(0);
+  });
+});
+
+describe('titan lift', () => {
+  it('only a team that took it has it; it tears a block out before the ant, throws it from over its head, and crushes where it lands', () => {
+    const t = plain();
+    const m = new Match(t, [{ name: 'A', species: ANT, special: 'titan-lift', color: 0, size: 1 }, { name: 'B', species: ANT, color: 0, size: 1 }], 1, { placeBugs: false, wind: 0 });
+    m.units[0].bug.drop(t, 20, 32);
+    m.units[1].bug.drop(t, 40, 32);
+    run(m, 60, { faceX: 1 });
+    for (const u of m.units) u.bug.health = 100;
+    expect(m.special(0)).toBe(at(TITAN_LIFT));
+    expect(m.special(1)).toBe(at(ANT_COLUMN));
+    expect(m.has(m.units[0], at(ANT_COLUMN))).toBe(false);
+    expect(m.has(m.units[1], at(TITAN_LIFT))).toBe(false);
+    const u = m.units[0];
+    const b = u.bug;
+    m.skill[0] = SKILL_FULL;
+    // (before it, a little down: solid ground)
+    const fx = b.x + b.hx * 2.5;
+    expect(t.sample(fx, b.y - 1.2, b.z)).toBeLessThan(0);
+    run(m, 1, { weapon: at(TITAN_LIFT) });
+    run(m, TITAN_LIFT.sceneTicks + 4);
+    u.aimH = 0.75;
+    u.aimV = 0.66;
+    // (charged a while, then let go)
+    const events = [...run(m, 30, { fire: true }), ...run(m, 2)];
+    expect(events.some((e) => e.type === 'dig')).toBe(true);
+    expect(t.sample(fx, b.y - 1.2, b.z)).toBeGreaterThan(0);
+    const h = m.units[1].bug.health;
+    const later = run(m, 400);
+    expect(later.some((e) => e.type === 'explosion')).toBe(true);
+    // (used: the card emptied, and filled again only by what the blow did)
+    expect(m.skill[0]).toBeLessThan(SKILL_FULL / 2);
+    expect(m.units[1].bug.health).toBeLessThanOrEqual(h);
   });
 });
