@@ -674,9 +674,9 @@ function silkSpan(): Model {
   // a felted deck, flat where it is walked on; its edges turn up a little, its belly hangs
   const edge = DECK + 0.1;
   const deck = (x: number, v: number): V => [x, 0.4 * Math.abs(v) ** 9 + 0.012, v * edge];
-  const belly = (x: number, v: number): V => [x, 0.4 * Math.abs(v) ** 9 - 0.08 - (1 - v ** 4) * (0.42 + 0.2 * Math.sin((x / LONG) * Math.PI) + 0.05 * Math.sin(x * 2.1 + v * 3)), v * edge];
+  const belly = (x: number, v: number): V => [x, 0.4 * Math.abs(v) ** 9 - 0.08 - (1 - v ** 4) * (0.22 + 0.14 * Math.sin((x / LONG) * Math.PI) + 0.04 * Math.sin(x * 2.1 + v * 3)), v * edge];
   s.sheet((u, v) => deck(u * LONG, 1 - 2 * v), 100, 26, (u, v) => dim(felt(u * 30, v * 9, 1), 0.72));
-  s.sheet((u, v) => belly(u * LONG, 2 * v - 1), 80, 18, (u, v) => dim(felt(u * 24, v * 9, 2), 0.8));
+  s.sheet((u, v) => belly(u * LONG, 2 * v - 1), 80, 18, (u, v) => dim(felt(u * 24, v * 9, 2), 0.62));
   for (const u of [0, 1]) s.sheet((a, b) => { const p = deck(u * LONG, 2 * a - 1); const q = belly(u * LONG, 2 * a - 1); return [p[0], p[1] + (q[1] - p[1]) * (u ? 1 - b : b), p[2]]; }, 20, 2, (a, b) => felt(a * 9, b, 3));
   const on = (x: number, v: number): V => { const p = deck(x, v); return [p[0], p[1] + 0.022, p[2]]; };
   for (let k = 0; k <= 6; k++) s.line(path(34, 0, LONG, (x) => on(x, Math.max(-1, Math.min(1, -1 + k / 3 + 0.06 * Math.sin(x * 0.9 + k * 2))))), 0.028, dim(SILK, 1.2));
@@ -687,12 +687,14 @@ function silkSpan(): Model {
   }
   for (let k = 0; k <= 22; k++) for (let j = 0; j < 10; j++) s.line(path(4, -1 + j / 5, -0.8 + j / 5, (v) => on(Math.max(0, Math.min(LONG, (k / 22) * LONG + 0.16 * (1 - (v * 10 + 9 - j * 2) ** 2) + 0.12 * (rnd(k * 10 + j) - 0.5))), v)), 0.024 + 0.012 * rnd(k + j * 23), dim(SILK, 1.15));
   // threads hanging under it, a few loose
-  for (let k = 0; k < 40; k++) {
+  for (let k = 0; k < 22; k++) {
     const x = 0.4 + rnd(k + 0.21) * (LONG - 0.8);
     const v = (rnd(k + 0.33) - 0.5) * 1.7;
     const p = belly(x, v);
-    const l = 0.2 + 0.7 * rnd(k + 0.47) ** 2;
-    s.line([p, [p[0] + 0.05, p[1] - l * 0.5, p[2]], [p[0] + 0.12 * (rnd(k) - 0.5), p[1] - l, p[2] + 0.1]], 0.012, dim(SILK, 1.1), 4);
+    const l = 0.15 + 0.8 * rnd(k + 0.47) ** 2;
+    // (curling as it hangs, thinner to its end)
+    const c = (rnd(k + 0.6) - 0.5) * 0.4;
+    s.line([p, [p[0] + c * 0.4, p[1] - l * 0.3, p[2] + 0.04], [p[0] + c, p[1] - l * 0.65, p[2] - c * 0.3], [p[0] + c * 0.5, p[1] - l, p[2] + c * 0.6]], 0.009 + 0.006 * rnd(k + 0.9), dim(SILK, 1.1), 4);
   }
   for (const e of [-1, 1]) {
     for (let j = 0; j < 3; j++) s.line(path(110, 0, LONG, (x) => { const p = deck(x, e); return [x, p[1] + 0.065 * Math.sin(x * 5 + j * 2.094), p[2] + 0.065 * Math.cos(x * 5 + j * 2.094)] as const; }), 0.06, dim(SILK, 0.95 + 0.12 * j), 5);
@@ -877,8 +879,8 @@ function shieldWall(): Model {
 /** A plate of a back, across z, its far edge over the next one. */
 function tergite(tone: V): Soup {
   const s = new Soup();
-  s.rough = 0.5;
-  s.glow = 0.28;
+  s.rough = 0.24;
+  s.glow = -0.12;
   const W = DECK + 0.05;
   const f: Field = (x, y, z) => {
     const u = z / W;
@@ -892,7 +894,7 @@ function tergite(tone: V): Soup {
     const bow = 0.18 * (z / W) ** 2;
     const k = Math.max(ss(0.5, 0.7, x + bow), ss(2.05, 2.25, Math.abs(z)));
     // (fine pits all over it)
-    return dim(rim(tone, k), 0.72 + 0.06 * noise(x * 1.2, y, z * 0.7) - 0.1 * Math.max(0, noise(x * 9, y * 9, z * 9)) - 0.18 * Math.exp(-((z / 1.1) ** 2)));
+    return dim(rim(tone, k * 0.6), 0.6 + 0.06 * noise(x * 1.2, y, z * 0.7) - 0.1 * Math.max(0, noise(x * 9, y * 9, z * 9)) - 0.18 * Math.exp(-((z / 1.1) ** 2)));
   });
 }
 

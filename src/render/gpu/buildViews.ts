@@ -1,5 +1,5 @@
 import * as THREE from 'three/webgpu';
-import { abs, attribute, clamp, float, floor, mix, normalView, positionGeometry, positionViewDirection, pow, smoothstep, uniform, uniformArray, vec3 } from 'three/tsl';
+import { abs, attribute, clamp, float, floor, mix, normalView, positionGeometry, positionViewDirection, pow, smoothstep, step, uniform, uniformArray, vec3 } from 'three/tsl';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { APART, COLUMNS, DECK_UNDER, PIECE, shifted, SPAN, SPANS, WALL_DEEP } from '../../game/build';
 import type { TerrainField } from '../../game/field';
@@ -198,6 +198,7 @@ export class BuildViews {
   constructor(scene: THREE.Scene) {
     scene.add(this.root);
     // ---- one material for all of it: what a vertex is of is in `look` (how rough, how much light at its rim, when it grows)
+    // (a rim light below 0 is a dark shell: it gives back little of what is round it, so it stays dark under its gloss)
     {
       const m = new THREE.MeshStandardNodeMaterial({ vertexColors: true, side: THREE.DoubleSide });
       const look = attribute('look', 'vec3') as unknown as V3;
@@ -208,7 +209,8 @@ export class BuildViews {
       m.maskNode = look.z.lessThan(grown);
       // (what has just come is warm for a moment)
       const fresh = smoothstep(0.12, 0, grown.sub(look.z)).mul(smoothstep(1.2, 1, grown));
-      m.emissiveNode = base.mul(look.y).mul(rim.mul(1.6).add(0.12)).add(base.mul(fresh).mul(1.4));
+      m.aoNode = mix(float(0.22), float(1), step(0, look.y));
+      m.emissiveNode = base.mul(abs(look.y)).mul(rim.mul(1.6).add(0.12)).add(base.mul(fresh).mul(1.4));
       this.material = m;
     }
     // ---- where it would go: the model itself, bent over the ground it would stand on
