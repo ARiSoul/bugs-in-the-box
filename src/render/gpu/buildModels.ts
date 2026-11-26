@@ -553,14 +553,14 @@ function livingBridge(): Model {
     const x = 0.35 + rnd(i) * (LONG - 0.7);
     const down = i < 70 ? 0.82 + 0.18 * rnd(i + 0.4) : rnd(i + 0.4);
     const y = -0.62 + down * (arch(x) + 0.62);
-    const edge = rnd(i + 0.95) < 0.55;
-    const z = edge ? (rnd(i + 0.8) < 0.5 ? -1 : 1) * (DECK - 0.35) * (1 - 0.2 * down) : (rnd(i + 0.8) - 0.5) * 2 * (DECK - 0.6);
+    const edge = rnd(i + 0.95) < 0.45;
+    const z = edge ? (rnd(i + 0.8) < 0.5 ? -1 : 1) * (DECK - 0.75) * (1 - 0.2 * down) : (rnd(i + 0.8) - 0.5) * 2 * (DECK - 0.6);
     s.put(pick(i * 13 + 1), along(x, y, z, rnd(i + 2) - 0.5, (rnd(i + 3) - 0.5) * 1.1, (rnd(i + 5) - 0.5) * 0.9, 0.74 * (0.88 + 0.24 * rnd(i + 9)), Math.PI * (0.65 + 0.7 * rnd(i + 6))), 0.62 + 0.36 * rnd(i + 8));
   }
   // (what is between them)
   s.rough = 0.8;
   s.glow = 0;
-  s.field((x, y, z) => smax(smax(Math.max(y + 0.45, Math.min(arch(x) + 0.5, -1.0) - y), Math.abs(z) - DECK + 1.0, 0.3), Math.abs(x - LONG / 2) - LONG / 2 + 0.9, 0.4) + 0.12 * noise(x * 2, y * 2, z * 2), [-0.1, -2.8, -2.4], [LONG + 0.1, 0, 2.4], 0.16, () => [0.02, 0.006, 0.003]);
+  s.field((x, y, z) => smax(smax(Math.max(y + 0.36, Math.min(arch(x) + 0.5, -1.0) - y), Math.abs(z) - DECK + 0.8, 0.3), Math.abs(x - LONG / 2) - LONG / 2 + 0.9, 0.4) + 0.12 * noise(x * 2, y * 2, z * 2), [-0.1, -2.8, -2.4], [LONG + 0.1, 0, 2.4], 0.16, () => [0.02, 0.006, 0.003]);
   return s.done();
 }
 
@@ -654,7 +654,7 @@ function silkCurtain(): Model {
   s.field(
     (x, y, z) => {
       let d = 9;
-      for (const [a, h] of posts) d = Math.min(d, smax(Math.hypot(x - a - 0.08 * Math.sin(y * 1.4 + a), z) - (0.2 + 0.07 * Math.exp(-Math.max(0, y) * 4) + 0.08 * Math.exp(-(((y - h + 0.3) / 0.35) ** 2))) + 0.025 * Math.sin(y * 21 + 2 * Math.atan2(z, x - a)) + 0.04 * noise(x * 3, y * 2, z * 3), y - h, 0.2));
+      for (const [a, h] of posts) d = Math.min(d, smax(Math.hypot(x - a - 0.08 * Math.sin(y * 1.4 + a), z) - (0.2 + 0.07 * Math.exp(-Math.max(0, y) * 4) + 0.08 * Math.exp(-(((y - h + 0.3) / 0.35) ** 2))) + 0.018 * Math.sin(y * 21 + 2 * Math.atan2(z, x - a)) + 0.012 * noise(x * 3, y * 2, z * 3), y - h, 0.2));
       return d * 0.8;
     },
     [-6.2, -0.5, -1],

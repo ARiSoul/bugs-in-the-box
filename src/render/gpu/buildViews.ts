@@ -540,6 +540,22 @@ export class BuildViews {
         }
       }
       if (hit === 0) continue;
+      // (silk round a hole sags: nothing holds it up there now)
+      if (b.species === 'spider' && b.of) {
+        const dn = new THREE.Vector3().copy(b.of.frame.up).applyQuaternion(this.q.copy(b.mesh.quaternion).invert());
+        for (let k = 0; k < pos.count; k++) {
+          if (inside[k]) continue;
+          const dx = p[k * 3] - c.x;
+          const dy = p[k * 3 + 1] - c.y;
+          const dz = p[k * 3 + 2] - c.z;
+          const t = 1 - (Math.sqrt(dx * dx + dy * dy + dz * dz) - r) / (r * 0.7);
+          if (t <= 0) continue;
+          const drop = r * 0.28 * t * t;
+          p[k * 3] -= dn.x * drop;
+          p[k * 3 + 1] -= dn.y * drop;
+          p[k * 3 + 2] -= dn.z * drop;
+        }
+      }
       let n = 0;
       const moved: number[] = [];
       for (let k = 0; k < idx.length; k += 3) {
@@ -691,7 +707,15 @@ export class BuildViews {
         // (it meets the skin at the sphere itself; inside it is uneven)
         // (shell breaks in chips: its cut steps, not smooth)
         const dent = Math.min(0.14, Math.max(0, -d) * 0.22) * (0.55 + 0.45 * rough);
-        const k = reach * (1 - (b.species === 'cockroach' ? Math.round(dent * 30) / 30 : dent));
+        let k = reach * (1 - (b.species === 'cockroach' ? Math.round(dent * 30) / 30 : dent));
+        if (b.species === 'bee') {
+          // (each cell a pit: its honey lies deeper than its wax walls)
+          const px = x + ux * reach;
+          const py = y + uy * reach;
+          const pz = z + uz * reach;
+          const h = isWall ? hexAt(px * side.x + pz * side.z, py, 0.5) : hexAt(px * side.x + pz * side.z, px * f.out.x + py * f.out.y + pz * f.out.z, 0.5);
+          k += 0.16 * (1 - ss(0.3, 0.38, h[2]));
+        }
         at.push(x + ux * k, y + uy * k, z + uz * k);
         deep.push(d);
         high.push(l[1]);
