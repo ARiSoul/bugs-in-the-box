@@ -616,6 +616,14 @@ function anthill(): Model {
     const k = 0.035 + 0.04 * rnd(i + 0.81);
     s.lump(Math.cos(a) * r, 2.62 - 0.35 * (r - 0.45) + k * 0.3, Math.sin(a) * r, k, dim(EARTH[i % 6], 0.9 + 0.3 * rnd(i + 2)), i + 300);
   }
+  // (its foot: earth spilled round it, lump by lump)
+  for (let i = 0; i < 160; i++) {
+    const a = rnd(i + 0.91) * 6.28;
+    const r = 2.0 + 0.9 * rnd(i + 0.97) ** 0.7;
+    if (Math.sin(a) > 0.45 && Math.abs(Math.cos(a)) < 0.7) continue;
+    const k = 0.06 + 0.1 * rnd(i + 0.93) ** 1.5;
+    s.lump(Math.cos(a) * r, k * 0.45 + 0.25 * ss(2.7, 2.0, r), Math.sin(a) * r, k, dim(EARTH[(i * 3) % 6], 0.6 + 0.3 * rnd(i + 1.1)), i + 900);
+  }
   floor(s, 0.95, 1.9, [0.13, 0.07, 0.032]);
   s.rough = 0.93;
   for (let i = 0; i < 90; i++) {
@@ -865,6 +873,8 @@ function silkFunnel(): Model {
       last = p;
     }
   }
+  // (its mouth, bound round and round: a dense, bright rim)
+  for (let j = 0; j < 4; j++) s.line(path(40, -0.05, Math.PI + 0.05, (a) => [Math.cos(a) * (MR + 0.02 + 0.03 * Math.sin(a * 5 + j * 1.7)), MY + Math.sin(a) * (MR + 0.02 + 0.03 * Math.sin(a * 5 + j * 1.7)), MZ + 0.04 + 0.03 * Math.cos(a * 3 + j)] as const), 0.022, dim(SILK, 1.2 + 0.05 * j));
   // (loose silk at its mouth: short loops sagging from it)
   for (let k = 0; k < 11; k++) {
     const a0 = 0.15 + rnd(k + 0.15) * 2.85;
@@ -1246,7 +1256,8 @@ function waxNest(): Model {
       const y = Math.cos(h) * A[1] * 0.95;
       const z = (v / (h || 1)) * Math.sin(h) * A[2] * 0.95;
       if (z > 0.4 && Math.abs(x) < 1.25 && y < 2.2) continue;
-      honey(s, x, y, z, 0.17, 0.17, 0.17, dim(HONEY, 0.8 + 0.5 * w));
+      // (down in the cell, level with its rim at most: no beads on it)
+      honey(s, x * 0.985, y * 0.985, z * 0.985, 0.15, 0.15, 0.15, dim(HONEY, 0.8 + 0.5 * w));
     }
   // its front, round the door: cells built on it, wall by wall (the field is too coarse for them)
   const FC = 0.26;
@@ -1273,7 +1284,7 @@ function waxNest(): Model {
         const [bx, by] = corner(cx, cy, i + 1);
         const pa = frame ? ([ax, ay, 1.99] as V) : on(ax, ay, 0.02);
         const pb = frame ? ([bx, by, 1.99] as V) : on(bx, by, 0.02);
-        if (pa && pb) s.rod(pa, pb, 0.032, wax(1.2 + 0.15 * rnd(cx + cy * 3 + i)), 4);
+        if (pa && pb) s.rod(pa, pb, 0.045, wax(1.15 + 0.15 * rnd(cx + cy * 3 + i)), 4);
       }
       // what is in it: dark old wax at its bottom, honey, or a pale cap
       const n = 1 / Math.hypot(c[0] / A[0] ** 2, c[1] / A[1] ** 2, c[2] / A[2] ** 2);
@@ -1281,7 +1292,7 @@ function waxNest(): Model {
       const ny = frame ? 0 : (c[1] / A[1] ** 2) * n;
       const nz = frame ? 1 : (c[2] / A[2] ** 2) * n;
       if (w < 0.15) s.ball(c[0] + nx * 0.015, c[1] + ny * 0.015, c[2] + nz * 0.015, FC * 0.8, FC * 0.8, 0.03, wax(1.3), 6, 3);
-      else if (w < 0.38) honey(s, c[0] - nx * 0.02, c[1] - ny * 0.02, c[2] - nz * 0.02, FC * 0.72, FC * 0.72, 0.06, dim(HONEY, 0.75 + 0.6 * rnd(cx * 3 + cy)));
+      else if (w < 0.38) honey(s, c[0] - nx * 0.01, c[1] - ny * 0.01, c[2] - nz * 0.01, FC * 0.74, FC * 0.74, 0.025, dim(HONEY, 0.75 + 0.6 * rnd(cx * 3 + cy)));
       else s.ball(c[0] + nx * 0.005, c[1] + ny * 0.005, c[2] + nz * 0.005, FC * 0.74, FC * 0.74, 0.012, wax(0.55, 0.9), 6, 3);
     }
   return s.done();
