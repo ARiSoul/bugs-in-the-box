@@ -648,8 +648,9 @@ export class BuildViews {
     const { weapon, frame: f } = b.of;
     // (a mat of ants has no inside: the hole is just where they were)
     if (weapon === 'living-bridge') return;
-    const W = 56;
-    const H = 40;
+    // (fine enough for a comb's cells and a shell's layers to show)
+    const W = 112;
+    const H = 80;
     const at: number[] = [];
     const deep: number[] = [];
     const high: number[] = [];
@@ -757,7 +758,7 @@ export class BuildViews {
           // (broken cells: wax walls, honey in them)
           // (a bridge's cut is seen from above: its cells lie across it)
           const h = isWall ? hexAt(q[0] * side3.x + q[2] * side3.z, q[1], 0.5) : hexAt(q[0] * side3.x + q[2] * side3.z, q[0] * f.out.x + q[1] * f.out.y + q[2] * f.out.z, 0.5);
-          const wall = ss(0.33, 0.38, h[2]);
+          const wall = ss(0.35, 0.39, h[2]);
           // (wax walls pale; in the cells, wet honey, deeper to their middles)
           blend = 0.05 + 0.9 * wall;
           s *= 1 - 0.35 * (1 - wall) * ss(0.33, 0.05, h[2]);
@@ -766,7 +767,7 @@ export class BuildViews {
         } else if (b.species === 'cockroach') {
           // (layer on layer of shell, dark between them)
           const layer = 0.5 + 0.5 * Math.sin(-q[3] * 38 + g * 1.2 + q[4] * 0.6);
-          blend = ss(0.46, 0.54, layer) * 0.9 + 0.1 * g;
+          blend = ss(0.46, 0.54, layer) * 0.96 + 0.04 * g;
           rg = 0.25 + 0.45 * (1 - layer);
           shine = glow * (0.4 + 0.6 * layer);
         } else if (living) {

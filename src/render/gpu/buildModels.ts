@@ -728,7 +728,7 @@ function silkSpan(): Model {
     for (let j = 0; j < 3; j++) s.line(path(110, 0, LONG, (x) => { const p = deck(x, e); return [x, p[1] + 0.065 * Math.sin(x * 5 + j * 2.094), p[2] + 0.065 * Math.cos(x * 5 + j * 2.094)] as const; }), 0.06, dim(SILK, 0.95 + 0.12 * j), 5);
     // a rail of cable along each side, hung from its edge by threads
     const rail = (x: number): V => { const p = deck(x, e); return [x, p[1] + 0.5 - 0.12 * Math.sin((x / LONG) * Math.PI) + 0.05 * Math.sin(x * 1.7 + e), p[2] * 1.04]; };
-    for (let j = 0; j < 2; j++) s.line(path(90, 0.15, LONG - 0.15, (x) => { const p = rail(x); return [x, p[1] + 0.045 * Math.sin(x * 6 + j * 3.14), p[2] + 0.045 * Math.cos(x * 6 + j * 3.14)] as const; }), 0.05, dim(SILK, 1.05 + 0.1 * j), 5);
+    s.line(path(90, 0.15, LONG - 0.15, (x) => rail(x)), 0.045, dim(SILK, 1.1), 6);
     for (let k = 0; k < 19; k++) {
       if (rnd(k * 5 + e + 0.5) < 0.5) continue;
       const x = 0.4 + (k / 18) * (LONG - 0.8) + 0.45 * (rnd(k * 3 + e) - 0.5);
