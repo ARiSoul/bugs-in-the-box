@@ -43,6 +43,7 @@ export const ARMS: Record<string, string> = {
   // a nest with a door
   'wax-nest': '<path fill="currentColor" d="M3 43Q1 8 24 6q23 2 21 37z"/><path fill="var(--b)" d="M24 19l10 5.800v11.500L24 42l-10-5.700V24.800z"/><circle cx="20.500" cy="31" r="2.600" fill="currentColor"/><circle cx="27.500" cy="31" r="2.600" fill="currentColor"/><path fill="none" stroke="var(--b)" stroke-width="1.600" d="M24 7v8M14 11l3 6M34 11l-3 6M7 24l6 2M41 24l-6 2"/>',
   // a bug thrown fast, lines behind it
+  burrow: '<path fill="currentColor" d="M4 40c4-14 12-22 20-22s16 8 20 22z"/><path fill="none" stroke="#0b0b0b" stroke-width="4.5" stroke-linecap="round" d="M10 38c5-6 11-9 18-9"/><path fill="currentColor" d="M34 25l9 4-9 5z"/><path fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" d="M30 9l3 5M38 7l-1 6M23 11l4 4"/>',
   burst: '<path fill="currentColor" d="M30 14a9 9 0 1 1 0 18 9 9 0 1 1 0-18zM41 9l5-4-1 7zM42 34l5 4-7 1z"/><path fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" d="M3 17h14M6 23h11M2 29h15M9 35h9"/>',
   // a web
   'web-shot': '<path fill="none" stroke="currentColor" stroke-width="2.600" d="M24 4v40M4 24h40M10 10l28 28M38 10 10 38"/><path fill="none" stroke="currentColor" stroke-width="2.600" d="M24 12 33 15 36 24 33 33 24 36 15 33 12 24 15 15z"/><circle cx="24" cy="24" r="4.500" fill="currentColor"/>',

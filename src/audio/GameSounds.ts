@@ -226,6 +226,9 @@ export class GameSounds {
       case 'conducts':
         engine.play('zap', { at: e });
         break;
+      case 'burrow':
+        engine.play('lob', { at: match.units[e.unit].bug, rate: 1.2, level: 0.8 });
+        break;
       case 'burst':
         engine.play('lob', { at: match.units[e.unit].bug, rate: 1.7, level: 1.2 });
         engine.play('wings', { at: match.units[e.unit].bug, rate: 1.6, level: 0.6 });

@@ -12,6 +12,8 @@ export type WeaponKind =
   | 'grenade'
   /** No projectile: digs a straight tunnel along the aim, right away. */
   | 'tunnel'
+  /** Ants only: it digs along its aim and runs through what it dug, at once; the turn goes on. */
+  | 'burrow'
   /** Projectile that spreads a sticky web where it lands (no blast, the terrain stays). */
   | 'web'
   /** Projectile that hurts only the bug it hits, the more the faster it flies, and opens a web where it ends. */
@@ -291,7 +293,10 @@ export const WAX_NEST: Weapon = { ...WORK, id: 'wax-nest', name: 'Wax Nest', kin
 /** Every bug, a few times a match: it throws itself along its aim, far and fast, and lands softly. Also while it gets away. */
 export const BURST: Weapon = { ...BASE, id: 'burst', name: 'Burst', kind: 'burst', found: true, start: 2, alone: true, maxSpeed: 21, color: 0x9fe8ff };
 
-export const WEAPONS: readonly Weapon[] = [SOLDER_BLOB, CAPACITOR, SHORT_CIRCUIT, SOLDERING_IRON, WEB_SHOT, WEB_BOW, ANT_COLUMN, BLACKOUT_SWARM, THERMAL_PASTE, QUEENS_FLIGHT, RAMPART, LIVING_BRIDGE, ANTHILL, SILK_CURTAIN, SILK_SPAN, SILK_FUNNEL, SHIELD_WALL, SCALE_WALK, HUSK, COMB_WALL, COMB_SPAN, WAX_NEST, BURST];
+/** Ants only, a few times a match: it digs a tunnel as wide as it along its aim and runs out through it. Once a turn. */
+export const BURROW: Weapon = { ...BASE, id: 'burrow', name: 'Burrow', kind: 'burrow', species: 'ant', found: true, start: 3, alone: true, tunnelLength: 10, tunnelRadius: 1.7, color: 0xc98a4a };
+
+export const WEAPONS: readonly Weapon[] = [SOLDER_BLOB, CAPACITOR, SHORT_CIRCUIT, SOLDERING_IRON, WEB_SHOT, WEB_BOW, ANT_COLUMN, BLACKOUT_SWARM, THERMAL_PASTE, QUEENS_FLIGHT, RAMPART, LIVING_BRIDGE, ANTHILL, SILK_CURTAIN, SILK_SPAN, SILK_FUNNEL, SHIELD_WALL, SCALE_WALK, HUSK, COMB_WALL, COMB_SPAN, WAX_NEST, BURST, BURROW];
 
 /** Whether a bug of this species has the weapon. */
 export function hasWeapon(species: string, w: Weapon): boolean {

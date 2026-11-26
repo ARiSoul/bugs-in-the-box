@@ -252,6 +252,8 @@ export type MatchEvent =
   | { type: 'conducts'; x: number; y: number; z: number }
   | { type: 'tired'; x: number; y: number; z: number }
   | { type: 'burst'; unit: number }
+  /** An ant dug along its aim and runs through (the tunnel itself comes as a `dig`). */
+  | { type: 'burrow'; unit: number }
   | { type: 'heal'; unit: number; amount: number }
   | { type: 'use'; unit: number; kind: ItemKind; gain: number }
   | { type: 'boxGone'; id: number; x: number; y: number; z: number }
@@ -304,6 +306,8 @@ export const SKILL_FULL = 1000;
 const SKILL_TURN = 200;
 /** Ticks a burst hardly falls. */
 const BURST_TICKS = 50;
+/** How fast a burrowing ant runs through its tunnel. */
+const BURROW_SPEED = 13;
 export const BURST_AT = WEAPONS.findIndex((w) => w.kind === 'burst');
 
 /** Set a bug off as a burst does, along (dx, dy, dz) (unit). */
@@ -459,6 +463,9 @@ export class Match {
   private builtOnce = false;
   /** The turn a burst was used in; who lands softly. */
   private burstTurn = -1;
+  private burrowTurn = -1;
+  /** An ant running through the tunnel it dug: from where, which way, how far it has gone, how far it goes. */
+  private burrowing: { unit: Unit; x: number; y: number; z: number; dx: number; dy: number; dz: number; s: number; end: number } | null = null;
   private readonly soft = new Set<number>();
   /** How much of its bite the swarm on its way still has. */
   private tired = 1;
@@ -640,6 +647,8 @@ export class Match {
       const b = u.bug;
       // (what rides the turntable is moved by it, not by its own physics)
       if (this.phase === 'spin' && this.isCarried(u)) continue;
+      // (an ant in its tunnel is carried along it)
+      if (this.burrowing?.unit === u && this.carryThrough(this.burrowing)) continue;
       b.step(this.field, u === unit ? move : IDLE);
       if (b.justLanded && this.soft.delete(u.id)) {
         // (it meant to)
@@ -777,6 +786,10 @@ export class Match {
     }
     if (fireDown && w.kind === 'burst') {
       this.burst(unit);
+      return IDLE;
+    }
+    if (fireDown && w.kind === 'burrow') {
+      this.burrow(unit, w);
       return IDLE;
     }
     if (fireDown && unit.bug.grounded) {
@@ -1935,6 +1948,43 @@ export class Match {
     this.soft.add(u.id);
     this.events.push({ type: 'burst', unit: u.id });
     if (this.phase === 'aim') this.weapon = this.keptBy(u);
+  }
+
+  /** An ant digs along its aim and runs out through what it dug. Once a turn; the turn goes on. */
+  private burrow(u: Unit, w: Weapon): void {
+    const i = WEAPONS.indexOf(w);
+    const b = u.bug;
+    if (this.burrowTurn === this.turnNumber || this.usesLeft(u.team, i) <= 0 || u.web >= 0 || u.cover || !b.alive || !b.grounded) {
+      this.events.push({ type: 'noRoom', unit: u.id });
+      return;
+    }
+    this.burrowTurn = this.turnNumber;
+    this.stock[u.team][i]--;
+    this.dig(u, w);
+    // (through it, carried along it: it comes out at its end)
+    const [dx, dy, dz] = this.aimDirection(u, aimed);
+    this.burrowing = { unit: u, x: b.x, y: b.y, z: b.z, dx, dy, dz, s: 0, end: w.tunnelLength - b.species.radius * 0.5 };
+    this.soft.add(u.id);
+    this.events.push({ type: 'burrow', unit: u.id });
+    if (this.phase === 'aim') this.weapon = this.keptBy(u);
+  }
+
+  /** One tick of an ant's run through its tunnel; false once it is out (it goes on by its own physics). */
+  private carryThrough(r: NonNullable<Match['burrowing']>): boolean {
+    const b = r.unit.bug;
+    r.s = Math.min(r.end, r.s + BURROW_SPEED * DT);
+    b.x = r.x + r.dx * r.s;
+    b.y = r.y + r.dy * r.s;
+    b.z = r.z + r.dz * r.s;
+    b.vx = b.vy = b.vz = 0;
+    b.grounded = false;
+    if (r.s < r.end && b.alive) return true;
+    // (out: on with what was left of its speed, and it lands softly)
+    b.vx = r.dx * BURROW_SPEED * 0.4;
+    b.vy = r.dy * BURROW_SPEED * 0.4;
+    b.vz = r.dz * BURROW_SPEED * 0.4;
+    this.burrowing = null;
+    return false;
   }
 
   /** A team's turn comes: its shelters tend to who is in them, or beside them. */

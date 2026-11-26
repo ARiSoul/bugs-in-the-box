@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Match, NO_INPUT, type MatchEvent, type MatchInput } from '../src/game/match';
 import { ANT, BEE, COCKROACH, SPIDER, type BugSpecies } from '../src/game/species';
-import { BURST, ANTHILL, LIVING_BRIDGE, RAMPART, SILK_CURTAIN, SOLDER_BLOB, WAX_NEST, WEAPONS, WORKS, type Weapon } from '../src/game/weapons';
+import { BURROW, BURST, ANTHILL, LIVING_BRIDGE, RAMPART, SILK_CURTAIN, SOLDER_BLOB, WAX_NEST, WEAPONS, WORKS, type Weapon } from '../src/game/weapons';
 import { BUILT } from '../src/terrain/materials';
 import type { Terrain } from '../src/terrain/Terrain';
 import { world } from './helpers/worlds';
@@ -285,5 +285,35 @@ describe('burst', () => {
     expect(again.some((e) => e.type === 'noRoom'), JSON.stringify([m.phase, again.map((e) => e.type)])).toBe(true);
     expect(m.works[0]).toBe(WORKS);
     expect(m.usesLeft(0, at(BURST))).toBe(1);
+  });
+});
+
+describe('burrow', () => {
+  it('an ant digs through a wall along its aim and comes out on its far side; three a match, once a turn; ants only', () => {
+    // (a wall 4 thick across the way, at x 24..28)
+    const t = world(4, 2, 2, (i, j) => Math.min(j - 10, Math.abs(i - 26) - 2));
+    const m = setup(t, ANT, SPIDER);
+    const u = m.units[0];
+    const b = u.bug;
+    u.aimH = 1;
+    u.aimV = 0.05;
+    const y = b.y;
+    const h = b.health;
+    expect(t.sample(26, y, 32)).toBeLessThan(0);
+    const events = use(m, BURROW);
+    expect(events.some((e) => e.type === 'burrow')).toBe(true);
+    expect(events.some((e) => e.type === 'dig')).toBe(true);
+    expect(m.phase).toBe('aim');
+    run(m, 120);
+    expect(t.sample(26, y, 32)).toBeGreaterThan(0);
+    expect(b.x).toBeGreaterThan(28.5);
+    expect(b.grounded).toBe(true);
+    expect(b.health).toBe(h);
+    const again = use(m, BURROW);
+    expect(again.some((e) => e.type === 'noRoom')).toBe(true);
+    expect(m.usesLeft(0, at(BURROW))).toBe(2);
+    expect(m.works[0]).toBe(WORKS);
+    // (a spider has none)
+    expect(m.usesLeft(1, at(BURROW))).toBe(0);
   });
 });

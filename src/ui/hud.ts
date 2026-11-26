@@ -168,7 +168,7 @@ export class Hud {
       b.className = 'card';
       b.style.setProperty('--w', hex(w.color));
       const power = Math.min(5, Math.round((w.damage + w.arcDamage * 0.5) / 11));
-      b.innerHTML = `<em></em><svg viewBox="0 0 48 48" aria-hidden="true">${ARMS[w.id] ?? ''}</svg><span>${w.name}</span><div class="facts"><i title="damage">${'<u class="on"></u>'.repeat(power)}${'<u></u>'.repeat(5 - power)}</i><small>${w.kind === 'tunnel' ? 'digs' : w.kind === 'wall' || w.kind === 'bridge' ? 'builds' : w.kind === 'shelter' ? 'hides' : w.kind === 'grenade' ? 'bounces' : w.kind === 'web' || w.kind === 'trap' ? 'holds' : w.arcs ? 'arcs' : 'bursts'}${w.windFactor > 0.5 ? ' · wind' : ''}</small></div>`;
+      b.innerHTML = `<em></em><svg viewBox="0 0 48 48" aria-hidden="true">${ARMS[w.id] ?? ''}</svg><span>${w.name}</span><div class="facts"><i title="damage">${'<u class="on"></u>'.repeat(power)}${'<u></u>'.repeat(5 - power)}</i><small>${w.kind === 'tunnel' || w.kind === 'burrow' ? 'digs' : w.kind === 'wall' || w.kind === 'bridge' ? 'builds' : w.kind === 'shelter' ? 'hides' : w.kind === 'grenade' ? 'bounces' : w.kind === 'web' || w.kind === 'trap' ? 'holds' : w.arcs ? 'arcs' : 'bursts'}${w.windFactor > 0.5 ? ' · wind' : ''}</small></div>`;
       b.setAttribute('aria-label', w.name);
       b.addEventListener('click', () => {
         onWeapon(index);

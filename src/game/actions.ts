@@ -55,6 +55,7 @@ const ABOUT: Readonly<Record<string, readonly [string, ...Tag[]]>> = {
   'comb-wall': ['A wall of comb. Fire melts it into a puddle that holds the others.', 'wax', 'honey'],
   'comb-span': ['A bridge of comb. Fire melts it into a puddle that holds the others.', 'wax', 'honey'],
   'wax-nest': ['Keeps off 60% until it breaks.', 'wax'],
+  burrow: ['It digs along its aim and runs out through it. Three a match, once a turn; the turn goes on.', 'earth'],
   burst: ['It throws itself along its aim, far and fast, and lands softly. Twice a match; also while it gets away.', 'alive'],
   'thermal-paste': ['Smeared where you stand: others stick in it. It conducts shocks to all in it.', 'metal', 'sticky'],
   patch: ['Heals 40% of its health.', 'heal'],
@@ -68,7 +69,7 @@ const ITEM_NAMES: Partial<Record<ItemKind, string>> = { patch: 'Flux Patch', fus
 
 function categoryOf(w: Weapon): Category {
   if (w.kind === 'trap') return 'item';
-  if (w.kind === 'burst') return 'skill';
+  if (w.kind === 'burst' || w.kind === 'burrow') return 'skill';
   if (w.start !== undefined) return 'defence';
   if (w.sceneTicks > 0) return 'skill';
   return w.species ? 'special' : 'common';
