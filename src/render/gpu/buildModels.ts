@@ -874,14 +874,14 @@ function shieldWall(): Model {
       for (let i = 0; i < 8 - (r % 2); i++) {
         const x = (i - (7 - (r % 2)) / 2) * 1.36;
         // (each over its neighbour, each row over the one under it)
-        const big = 0.86 + 0.24 * rnd(i * 5 + r * 3 + side * 7);
-        s.put(plates[(i * 2 + r) % 3], pose(x + (rnd(i * 2 + r + side) - 0.5) * 0.25, 1.05 + r * 1.42 + (big - 1) * 0.8, side * (0.5 + r * 0.1 + (1.1 - big) * 0.3), -0.11 + (rnd(i + r * 4 + side) - 0.5) * 0.2, (side > 0 ? 0.2 : Math.PI + 0.2) + (rnd(i * 7 + r + side) - 0.5) * 0.28, (rnd(i + r * 9 + side) - 0.5) * 0.28, big), 0.85 + 0.3 * rnd(i * 3 + r + side));
+        const big = 0.8 + 0.36 * rnd(i * 5 + r * 3 + side * 7);
+        s.put(plates[(i * 2 + r) % 3], pose(x + (rnd(i * 2 + r + side) - 0.5) * 0.25, 1.05 + r * 1.42 + (big - 1) * 0.8, side * (0.5 + r * 0.1 + (1.1 - big) * 0.3), -0.11 + (rnd(i + r * 4 + side) - 0.5) * 0.2, (side > 0 ? 0.2 : Math.PI + 0.2) + (rnd(i * 7 + r + side) - 0.5) * 0.28, (rnd(i + r * 9 + side) - 0.5) * 0.28, big), 0.7 + 0.55 * rnd(i * 3 + r + side));
       }
   for (const e of [-1, 1]) for (let r = 0; r < 3; r++) s.put(plates[(r + 1) % 3], pose(e * (5.5 + 0.06 * r), 1.05 + r * 1.42, 0, -0.08, e * (Math.PI / 2), 0, 0.62, 0.98, 1), 0.95);
   // what holds it up, between the two
   for (let i = -3; i <= 3; i++) {
     const x = i * 1.55;
-    spiny(s, [x, 5.0, 0.1], [x + 0.1, 2.4, 0], 0.17, 4);
+    spiny(s, [x, 4.3, 0.1], [x + 0.1, 2.4, 0], 0.17, 4);
     spiny(s, [x + 0.1, 2.4, 0], [x - 0.05, -0.4, 0], 0.14, 4);
     s.rod([x - 0.8, 4.3, 0], [x + 0.8, 4.5, 0], 0.1, LEG, 6);
   }

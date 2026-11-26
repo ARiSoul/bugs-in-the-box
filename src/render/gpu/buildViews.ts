@@ -547,6 +547,8 @@ export class BuildViews {
         const j = idx[k + 1];
         const l = idx[k + 2];
         if (inside[i] && inside[j] && inside[l]) continue;
+        // (silk frays: what the blast touched is gone, not drawn up to its edge)
+        if (b.species === 'spider' && (inside[i] || inside[j] || inside[l])) continue;
         for (const v of [i, j, l])
           if (inside[v] === 1) {
             inside[v] = 2;
@@ -758,8 +760,8 @@ export class BuildViews {
           rg = 0.42 + 0.4 * wall;
         } else if (b.species === 'cockroach') {
           // (layer on layer of shell, dark between them)
-          const layer = 0.5 + 0.5 * Math.sin(-q[3] * 21 + g * 1.2 + q[4] * 0.6);
-          blend = ss(0.15, 0.85, layer) * 0.85 + 0.15 * g;
+          const layer = 0.5 + 0.5 * Math.sin(-q[3] * 38 + g * 1.2 + q[4] * 0.6);
+          blend = ss(0.35, 0.65, layer) * 0.9 + 0.1 * g;
           rg = 0.25 + 0.45 * (1 - layer);
           shine = glow * (0.4 + 0.6 * layer);
         } else if (living) {
