@@ -482,7 +482,7 @@ function rampart(): Model {
     for (let k = 1; k + 1 < n; k++) s.i.push(top, top + k + 1, top + k);
   }
   // bits of leaf, cut round, pressed on both sides
-  const green: readonly V[] = [[0.07, 0.14, 0.025], [0.1, 0.16, 0.03], [0.15, 0.15, 0.028]];
+  const green: readonly V[] = [[0.05, 0.1, 0.02], [0.08, 0.12, 0.024], [0.12, 0.11, 0.022], [0.06, 0.085, 0.03]];
   s.rough = 0.55;
   s.glow = 0.12;
   for (let i = 0; i < 12; i++) {
@@ -492,7 +492,7 @@ function rampart(): Model {
     const q = new Soup();
     q.rough = 0.55;
     q.glow = 0.12;
-    const t = green[i % 3];
+    const t = green[i % 4];
     q.sheet(
       (u, v) => {
         const a = 0.4 + u * 4.5;
@@ -554,7 +554,7 @@ function livingBridge(): Model {
       if (x < 0.5 || (x > LONG - 0.2 && rnd(i * 3 + l + 4) < 0.5)) continue;
       // (along the span, near enough: a deck, not a heap)
       const turn = 0.3 * (rnd(x * 7 + l) - 0.5);
-      s.put(pick(i * 7 + l * 3), along(x, -0.3 - 0.03 * rnd(i * 3 + l + 5) - 0.5 * Math.max(0, Math.max(-x, x - LONG)), z, l % 2 ? 1 : -1, 0, turn, 0.82 * (0.8 + 0.36 * rnd(i * 11 + l)) * big(i * 7 + l * 3), (l - 2) * -0.1), 0.78 + 0.4 * rnd(i * 2 + l * 9 + 3));
+      s.put(pick(i * 7 + l * 3), along(x, -0.3 - 0.1 * Math.sin(Math.PI * clamp(x / LONG)) - 0.03 * rnd(i * 3 + l + 5) - 0.5 * Math.max(0, Math.max(-x, x - LONG)), z, l % 2 ? 1 : -1, 0, turn, 0.82 * (0.8 + 0.36 * rnd(i * 11 + l)) * big(i * 7 + l * 3), (l - 2) * -0.1), 0.78 + 0.4 * rnd(i * 2 + l * 9 + 3));
     }
   // those that hang on them: chains, down to an arch that is deep at its ends
   const arch = (x: number): number => { const t = Math.abs((x / LONG) * 2 - 1); return -0.75 - 1.75 * t ** 2.2; };
@@ -651,7 +651,12 @@ function silkCurtain(): Model {
       return [x, y, z * (0.25 + 0.75 * Math.sqrt(e)) + 0.05 * noise(x * 1.2, y * 0.6, side)];
     };
     // (greyer where it meets the ground: dust in it)
-    s.sheet((u, v) => at(side > 0 ? u : 1 - u, v), 120, 34, (u, v) => dim(felt(u * 26, v * 12, side), 0.72 + 0.28 * ss(0.02, 0.16, v)));
+    s.sheet((u, v) => at(side > 0 ? u : 1 - u, v), 120, 34, (u, v) => {
+      // (greyer in its folds, by the posts)
+      const t = ((-5.35 + (side > 0 ? u : 1 - u) * 10.7 + 5.2) / 2.6) % 1;
+      const fold = 0.8 + 0.2 * Math.sin(Math.PI * Math.abs(t)) ** 2;
+      return dim(felt(u * 26, v * 12, side), (0.72 + 0.28 * ss(0.02, 0.16, v)) * fold);
+    });
     for (let k = 0; k <= 120; k++) {
       const lean = (rnd(k + side * 7) - 0.5) * 0.16;
       s.line(path(9, 0, 1, (v) => { const p = at(clamp(k / 120 + lean * (1 - v) * v * 2), v); return [p[0], p[1], p[2] + side * 0.025] as const; }), 0.014 + 0.016 * rnd(k), dim(SILK, 0.8 + 0.5 * rnd(k + 4)));
@@ -758,7 +763,12 @@ function silkSpan(): Model {
       const p = on(x, -0.95 + k * 0.2375);
       const q: V = [x + e * (0.7 + 0.6 * rnd(k + e + 2)) * (k === 0 || k === 8 ? 1.9 : 1), p[1] - (e > 0 ? 0.35 : 0.04), p[2] * (k === 0 || k === 8 ? 1.6 : 1.15)];
       s.line(sag(p, q, 0.06, 4), 0.06, SILK, 5);
-      s.ball(q[0], q[1], q[2], 0.22, 0.08, 0.22, SILK, 10, 5);
+      s.ball(q[0], q[1], q[2], 0.08, 0.05, 0.08, dim(SILK, 0.9), 8, 4);
+      for (let f = 0; f < 5; f++) {
+        const t = f * 1.256 + rnd(k + f + e) * 0.9;
+        const l = 0.15 + 0.25 * rnd(k * 3 + f + e);
+        s.line([q, [q[0] + Math.cos(t) * l * 0.5, q[1] - 0.01, q[2] + Math.sin(t) * l * 0.5], [q[0] + Math.cos(t) * l, q[1] - 0.025, q[2] + Math.sin(t) * l]], 0.012, dim(SILK, 0.95), 4);
+      }
     }
   }
   // dew on its threads
@@ -945,7 +955,7 @@ function scaleWalk(): Model {
   const n = 13;
   for (let i = 0; i < n; i++) {
     const x = 0.65 + (i / (n - 1)) * (LONG - 1.3);
-    s.put(plates[(i * 7) % 6], pose(x, 0, 0), 0.72 + 0.42 * rnd(i));
+    s.put(plates[(i * 7) % 6], pose(x, 0, 0), 0.72 + 0.42 * rnd(i * 13.7 + 2.1));
     const out = Math.abs(i - (n - 1) / 2) / ((n - 1) / 2);
     const e = i < (n - 1) / 2 ? -1 : 1;
     for (const k of [-1, 1]) {
@@ -1037,7 +1047,7 @@ function drip(s: Soup, x: number, y: number, z: number, l: number): void {
 
 function combWall(): Model {
   const s = new Soup();
-  s.rough = 0.4;
+  s.rough = 0.52;
   s.glow = 0.2;
   const C = 0.56;
   const W = 5.35;
@@ -1046,7 +1056,7 @@ function combWall(): Model {
   const kind = (x: number, y: number): number => (Math.abs(x) > W - 0.75 || y > top(x) - 0.95 || y < 0.6 ? 3 : noise(x * 0.5, y * 0.5, 4) > 0.22 ? 2 : noise(x * 0.55 + 9, y * 0.55, 1) > -0.05 ? 1 : 0);
   const f: Field = (x, y, z) => {
     const az = Math.abs(z);
-    let d = smax(smax(Math.abs(x) - W + 0.1 * noise(2, y, z), y - top(x), 0.45), az - T, 0.2) + 0.05 * noise(x * 1.3, y * 1.3, z * 1.3);
+    let d = smax(smax(Math.abs(x) - W + 0.1 * noise(2, y, z), y - top(x), 0.45), az - T, 0.2) + 0.05 * noise(x * 1.3, y * 1.3, z * 1.3) + 0.035 * noise(x * 3.7, y * 3.7, z * 3.7);
     d = smin(d, smax(az - T - 0.55 * Math.exp(-Math.max(0, y) * 2.6) * (1 + 0.5 * noise(x * 1.2, 1, z)), smax(Math.abs(x) - W - 0.35 * Math.exp(-Math.max(0, y) * 3) - 0.2 * noise(3, y, z), y - 0.7, 0.3), 0.3), 0.35);
     if (az > 0.3 && Math.abs(d) < 0.8) {
       const h = hexAt(x, y, C);
@@ -1075,7 +1085,6 @@ function combWall(): Model {
         const tone: V = [HONEY[0] * (0.75 + 0.45 * v), HONEY[1] * (0.6 + 1.2 * v), HONEY[2] * (0.5 + 2 * v)];
         honey(s, a, b - 0.08 * rnd(a + b + e), e * (0.42 + 0.34 * rnd(a * 7 + b * 3 + e)), C * 0.86, C * (0.8 + 0.15 * v), 0.3, tone);
       }
-      if (rnd(a * 3 + b) < 0.1) for (const e of [-1, 1]) drip(s, a + 0.1, b - C * 0.6, e * (T + 0.03), 0.35 + 0.5 * rnd(a + b * 3));
     }
   return s.done();
 }
@@ -1098,7 +1107,8 @@ function combSpan(): Model {
     } else if (y > -0.2 && az < DECK - 0.15) {
       const h = hexAt(x, z, 0.5);
       d -= 0.07 * Math.max(0, 1 - Math.abs(h[2] - 0.433) * 9);
-      d += 0.05 * Math.max(0, 1 - h[2] / 0.36);
+      // (a few cells capped: flat across)
+      if (rnd(h[0] * 3.1 + h[1] * 7.3) > 0.14) d += 0.05 * Math.max(0, 1 - h[2] / 0.36);
     }
     return smin(d, smax(Math.hypot(az - DECK + 0.1, y + 0.02 + 0.9 * over(x) ** 2) - 0.15, Math.abs(x - LONG / 2) - LONG / 2 - 0.2, 0.15), 0.1);
   };
@@ -1106,8 +1116,12 @@ function combSpan(): Model {
     const deep = clamp((DECK - 0.1 - Math.abs(z)) / 0.4) * (y < -0.4 ? 1 : 0);
     const h = hexAt(x, z, 0.5);
     const rimmed = y > -0.15 ? 1 - 0.35 * ss(0.12, 0.0, Math.abs(h[2] - 0.433)) : 1;
-    const cup = y > -0.15 ? 0.35 * ss(0.3, 0.05, h[2]) : 0;
-    const own = y > -0.15 ? 0.84 + 0.3 * rnd(h[0] * 3.1 + h[1] * 7.3) : 1;
+    const cell = rnd(h[0] * 3.1 + h[1] * 7.3);
+    const top = y > -0.15;
+    // (capped cells pale; some full of honey to their brims)
+    if (top && cell > 0.14 && cell < 0.27 && h[2] < 0.36) return dim(HONEY, 0.7 + 0.6 * rnd(h[0] + h[1] * 3));
+    const cup = top && cell > 0.14 ? 0.35 * ss(0.3, 0.05, h[2]) : 0;
+    const own = top ? (cell <= 0.14 ? 1.22 : 0.66 + 0.6 * rnd(h[0] * 5.7 + h[1] * 2.9)) : 1;
     return wax((0.8 + 0.2 * noise(x, y, z)) * rimmed * own, Math.max(deep, cup + 0.12));
   });
   for (let r = -6; r < 1; r++)
