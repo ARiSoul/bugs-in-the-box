@@ -94,6 +94,9 @@ interface Shelter {
   mesh: THREE.Mesh;
   t: number;
   gone: number;
+  /** What it kept off at first, and how worn it shows (0 whole, 1 cracked, 2 holed). */
+  full: number;
+  stage: number;
 }
 
 function newFrame(): Frame {
@@ -183,7 +186,7 @@ export class BuildViews {
   private readonly flakes: THREE.InstancedMesh;
   /** What lies on the ground after a blast. */
   private readonly debris: THREE.InstancedMesh;
-  private readonly pieces: { at: THREE.Vector3; v: THREE.Vector3; t: number; size: number; still: boolean; strand: boolean }[] = [];
+  private readonly pieces: { at: THREE.Vector3; v: THREE.Vector3; t: number; size: number; still: boolean; strand: boolean; plate: boolean }[] = [];
   private nextPiece = 0;
   private field: TerrainField | null = null;
   private readonly bits: { at: THREE.Vector3; v: THREE.Vector3; t: number; life: number; size: number }[] = [];
@@ -273,7 +276,7 @@ export class BuildViews {
     for (let i = 0; i < DEBRIS; i++) {
       this.debris.setColorAt(i, new THREE.Color(0xffffff));
       this.debris.setMatrixAt(i, new THREE.Matrix4().makeScale(0, 0, 0));
-      this.pieces.push({ at: new THREE.Vector3(), v: new THREE.Vector3(), t: DEBRIS_LIFE, size: 0, still: false, strand: false });
+      this.pieces.push({ at: new THREE.Vector3(), v: new THREE.Vector3(), t: DEBRIS_LIFE, size: 0, still: false, strand: false, plate: false });
     }
     this.debris.visible = false;
     this.root.add(this.debris);
@@ -335,7 +338,7 @@ export class BuildViews {
   /** A new match: nobody hides. */
   clear(species: readonly string[]): void {
     for (const b of this.built) b.id = -1;
-    for (const s of this.shelters) this.root.remove(s.mesh);
+    for (const s of this.shelters) this.remove(s.mesh);
     this.shelters.length = 0;
     this.ghost.visible = this.ring.visible = this.spot.visible = false;
     for (const b of this.bits) b.t = b.life;
@@ -379,6 +382,8 @@ export class BuildViews {
       const r = match.units[e.unit].bug.species.radius;
       this.p.copy(s.mesh.position).addScaledVector(this.s.copy(UP).applyQuaternion(s.mesh.quaternion), r);
       for (let k = 0; k < (e.broken ? 40 : 10); k++) this.bit(this.p, s.species, e.broken ? 11 : 5, r * 1.6, 0.17);
+      // (broken, it comes apart its own way: earth, torn silk, shell plates, lumps of wax and honey)
+      if (e.broken) for (let k = 0; k < (s.species === 'spider' ? 20 : 28); k++) this.drop(this.p.x, this.p.y, this.p.z, r * 1.4, s.species, s.species === 'cockroach' || (s.species === 'bee' && k % 2 === 0));
     } else if (e.type === 'caught') {
       for (let k = 0; k < 14; k++) this.bit(this.p.set(e.x, e.y, e.z), 'spider', 4, 0.3, 0.08);
     }
@@ -405,7 +410,7 @@ export class BuildViews {
   }
 
   /** A piece of what a blast broke: out of the hole, down to the ground, where it stays a while. */
-  private drop(x: number, y: number, z: number, r: number, species: string): void {
+  private drop(x: number, y: number, z: number, r: number, species: string, plate = false): void {
     const i = this.nextPiece++ % DEBRIS;
     const p = this.pieces[i];
     p.v.set(Math.random() - 0.5, Math.random() * 0.6, Math.random() - 0.5);
@@ -414,7 +419,8 @@ export class BuildViews {
     p.t = 0;
     // (silk breaks into tufts of thread that drift down; the rest into chunks)
     p.strand = species === 'spider';
-    p.size = p.strand ? 0.12 + 0.16 * Math.random() : 0.07 + 0.2 * Math.random() ** 2;
+    p.plate = plate;
+    p.size = p.strand ? 0.12 + 0.16 * Math.random() : plate ? 0.14 + 0.16 * Math.random() : 0.07 + 0.2 * Math.random() ** 2;
     if (p.strand) p.v.multiplyScalar(0.45);
     p.still = false;
     const c = BITS[species];
@@ -456,7 +462,7 @@ export class BuildViews {
       if (!moved) return;
       this.q.setFromEuler(this.e.set(i * 1.7, i * 2.3, i * 0.9));
       if (p.strand) this.q.setFromEuler(this.e.set(i * 0.31, i * 2.3, 1.45 + i * 0.07));
-      this.debris.setMatrixAt(i, this.m.compose(p.at, this.q, p.strand ? this.s.set(k * 2.4, k * 0.09, k * 0.09) : this.s.set(k, k * 0.6, k * 0.85)));
+      this.debris.setMatrixAt(i, this.m.compose(p.at, this.q, p.strand ? this.s.set(k * 2.4, k * 0.09, k * 0.09) : p.plate ? this.s.set(k * 1.3, k * 0.16, k) : this.s.set(k, k * 0.6, k * 0.85)));
     });
     this.debris.visible = n > 0;
     if (moved) this.debris.instanceMatrix.needsUpdate = true;
@@ -955,12 +961,98 @@ export class BuildViews {
   private hide(u: Unit, weapon: string): void {
     const g = this.models.get(weapon);
     if (!g) return;
-    const mesh = new THREE.Mesh(g, this.material);
+    // (its own copy: wear shows on it)
+    const mesh = new THREE.Mesh(g.clone(), this.material);
     mesh.castShadow = mesh.receiveShadow = true;
     mesh.frustumCulled = false;
     mesh.userData.grown = 0;
     this.root.add(mesh);
-    this.shelters.push({ unit: u.id, species: u.bug.species.id, mesh, t: 0, gone: -1 });
+    this.shelters.push({ unit: u.id, species: u.bug.species.id, mesh, t: 0, gone: -1, full: Math.max(1, u.coverLeft), stage: 0 });
+  }
+
+  /** Cracks in it: dark lines that branch over it, and the whole of it a little duller. */
+  private crack(s: Shelter): void {
+    const g = s.mesh.geometry;
+    const pos = g.getAttribute('position') as THREE.BufferAttribute;
+    const col = g.getAttribute('color') as THREE.BufferAttribute;
+    const n = new THREE.Vector3();
+    const t = new THREE.Vector3();
+    for (let c = 0; c < 4; c++) {
+      // (from a place on it high enough to be seen)
+      let at = 0;
+      for (let tries = 0; tries < 20; tries++) {
+        at = Math.floor(Math.random() * pos.count);
+        if (pos.getY(at) > 0.6) break;
+      }
+      const cx = pos.getX(at);
+      const cy = pos.getY(at);
+      const cz = pos.getZ(at);
+      n.set(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize();
+      t.set(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).cross(n).normalize();
+      const R = 1.4 + Math.random();
+      for (let k = 0; k < pos.count; k++) {
+        const dx = pos.getX(k) - cx;
+        const dy = pos.getY(k) - cy;
+        const dz = pos.getZ(k) - cz;
+        const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        if (d > R) continue;
+        const along = dx * t.x + dy * t.y + dz * t.z;
+        const off = dx * n.x + dy * n.y + dz * n.z + 0.18 * Math.sin(along * 7 + c) + 0.08 * Math.sin(along * 19);
+        const w = 0.035 + 0.05 * (1 - d / R);
+        if (Math.abs(off) < w) col.setXYZ(k, col.getX(k) * 0.22, col.getY(k) * 0.2, col.getZ(k) * 0.2);
+      }
+    }
+    for (let k = 0; k < col.count; k++) col.setXYZ(k, col.getX(k) * 0.88, col.getY(k) * 0.86, col.getZ(k) * 0.85);
+    col.needsUpdate = true;
+  }
+
+  /** Holes in it: pieces gone, scorched round, and fallen. */
+  private hole(s: Shelter): void {
+    const g = s.mesh.geometry;
+    const pos = g.getAttribute('position') as THREE.BufferAttribute;
+    const col = g.getAttribute('color') as THREE.BufferAttribute;
+    const index = g.getIndex() as THREE.BufferAttribute;
+    const idx = index.array;
+    const gone = new Uint8Array(pos.count);
+    s.mesh.updateMatrixWorld();
+    for (let h = 0; h < 3; h++) {
+      let at = 0;
+      for (let tries = 0; tries < 30; tries++) {
+        at = Math.floor(Math.random() * pos.count);
+        if (pos.getY(at) > 0.8) break;
+      }
+      const cx = pos.getX(at);
+      const cy = pos.getY(at);
+      const cz = pos.getZ(at);
+      const r = 0.45 + 0.35 * Math.random();
+      const seed = Math.random() * 9;
+      for (let k = 0; k < pos.count; k++) {
+        const dx = pos.getX(k) - cx;
+        const dy = pos.getY(k) - cy;
+        const dz = pos.getZ(k) - cz;
+        const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        const rr = r * jag(dx / (d || 1), dy / (d || 1), dz / (d || 1), seed);
+        if (d < rr) gone[k] = 1;
+        else if (d < rr * 1.6) {
+          const k2 = 0.35 + 0.65 * ((d - rr) / (rr * 0.6));
+          col.setXYZ(k, col.getX(k) * k2, col.getY(k) * k2, col.getZ(k) * k2);
+        }
+      }
+      this.p.set(cx, cy, cz).applyMatrix4(s.mesh.matrixWorld);
+      for (let k = 0; k < 6; k++) this.drop(this.p.x, this.p.y, this.p.z, 0.3, s.species, s.species === 'cockroach');
+    }
+    let n = 0;
+    for (let k = 0; k < idx.length; k += 3) {
+      if (gone[idx[k]] || gone[idx[k + 1]] || gone[idx[k + 2]]) continue;
+      idx[n] = idx[k];
+      idx[n + 1] = idx[k + 1];
+      idx[n + 2] = idx[k + 2];
+      n += 3;
+    }
+    for (let k = n; k < idx.length; k++) idx[k] = 0;
+    g.setDrawRange(0, n);
+    index.needsUpdate = true;
+    col.needsUpdate = true;
   }
 
   /** Before the bugs are posed: how each one sits. */
@@ -1012,8 +1104,19 @@ export class BuildViews {
       const s = this.shelters[i];
       s.t += dt;
       if (s.gone >= 0) s.gone += dt;
+      if (s.gone < 0) {
+        // (how worn it is shows: cracked at two thirds, holed at one)
+        const u = match.units[s.unit];
+        const left = u.cover ? u.coverLeft / s.full : 1;
+        const stage = left <= 1 / 3 ? 2 : left <= 2 / 3 ? 1 : 0;
+        while (s.stage < stage) {
+          s.stage++;
+          if (s.stage === 1) this.crack(s);
+          else this.hole(s);
+        }
+      }
       if (s.gone > GO) {
-        this.root.remove(s.mesh);
+        this.remove(s.mesh);
         this.shelters.splice(i, 1);
         continue;
       }
