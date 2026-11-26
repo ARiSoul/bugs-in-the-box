@@ -593,12 +593,21 @@ function anthill(): Model {
     return d + 0.1 * noise(x * 1.6, y * 1.6, z * 1.6);
   };
   const grains = soil(hill, 5.5, 0.06);
-  s.field((x, y, z) => smax(grains(x, y, z), -mouth(x, y, z) * 0.9, 0.12), [-3.7, -0.1, -3.7], [3.7, 3.4, 3.7], 0.068, soilPaint(5.5, (x, y, z) => (mouth(x, y, z) < 0.12 ? 0.1 + 0.5 * ss(0.4, 2.0, z) : 1) * (y > 2.0 ? 0.15 + 0.85 * ss(0.3, 0.6, Math.hypot(x, z)) : 1)));
+  s.field((x, y, z) => smax(grains(x, y, z), -mouth(x, y, z) * 0.9, 0.12), [-3.7, -0.1, -3.7], [3.7, 3.4, 3.7], 0.068, soilPaint(5.5, (x, y, z) => (0.68 + 0.5 * ss(0.1, 2.5, y)) * (mouth(x, y, z) < 0.12 ? 0.1 + 0.5 * ss(0.4, 2.0, z) : 1) * (y > 2.0 ? 0.15 + 0.85 * ss(0.3, 0.6, Math.hypot(x, z)) : 1)));
   for (let i = 0; i < 150; i++) {
     const a = rnd(i) * 6.28;
     const r = 2.9 + 1.3 * rnd(i + 0.4) ** 2;
     const k = 0.07 + 0.11 * rnd(i + 0.8) ** 2;
     s.lump(Math.cos(a) * r, k * 0.4, Math.sin(a) * r, k, dim(EARTH[i % 6], 0.7 + 0.5 * rnd(i + 3)), i);
+  }
+  // (pellets the ants carried up, stuck on it)
+  for (let i = 0; i < 70; i++) {
+    const a = rnd(i + 0.33) * 6.28;
+    const h = 0.3 + 2.1 * rnd(i + 0.44);
+    const r = 2.15 * Math.pow(Math.max(0.02, -Math.log(Math.max(0.01, (h + 0.3) / 2.95))), 1 / 2.4);
+    if (Math.sin(a) > 0.55 && Math.abs(Math.cos(a)) < 0.6 && h < 2) continue;
+    const k = 0.12 + 0.12 * rnd(i + 0.55);
+    s.lump(Math.cos(a) * r, h, Math.sin(a) * r * 1.05, k, dim(EARTH[i % 6], 0.7 + 0.35 * ss(0.3, 2.4, h)), i + 700);
   }
   // (fine crumbs heaped round its crater)
   for (let i = 0; i < 46; i++) {
@@ -803,7 +812,7 @@ function silkSpan(): Model {
 function silkFunnel(): Model {
   const s = new Soup();
   s.lit = 1;
-  s.rough = 0.3;
+  s.rough = 0.5;
   s.glow = 0.16;
   const MY = 1.02;
   const MR = 1.42;
@@ -826,8 +835,8 @@ function silkFunnel(): Model {
     const a = Math.atan2(x, z);
     const inside = Math.hypot(x, y - MY) < MR && z < MZ + 0.1 && (z > 0.9 || Math.hypot(x / 2.5, y / 2.55, (z + 0.55) / 2.75) < 0.95) ? Math.max(0.05, 0.5 - (MZ - z) * 0.42) : 1;
     // (laid in fibres, layer on layer, running round it and down)
-    const fibre = 0.1 * Math.sin(a * 46 + y * 5 + 3 * noise(a * 4, y * 2, 1)) + 0.07 * Math.sin(a * 13 - y * 17 + 2 * noise(a, y * 3, 2));
-    return dim(SILK, (0.62 + 0.2 * noise(a * 16 + y * 3, y * 2.5, 3) + 0.22 * noise(a * 3, y * 13 + a * 4, 8) + 0.1 * noise(x * 4, y * 4, z * 4) + fibre) * inside * inside * (inside < 1 ? 1.6 : 1) * (0.85 + 0.15 * ny));
+    const fibre = 0.05 * Math.sin(a * 46 + y * 5 + 3 * noise(a * 4, y * 2, 1)) + 0.04 * Math.sin(a * 13 - y * 17 + 2 * noise(a, y * 3, 2));
+    return dim(SILK, (0.74 + 0.08 * noise(a * 16 + y * 3, y * 2.5, 3) + 0.08 * noise(a * 3, y * 13 + a * 4, 8) + 0.05 * noise(x * 4, y * 4, z * 4) + fibre) * inside * inside * (inside < 1 ? 1.6 : 1) * (0.85 + 0.15 * ny));
   });
   floor(s, 0.3, 1.75, [0.1, 0.095, 0.085]);
   // threads wound round it: from a point inside, out to its skin
@@ -1040,7 +1049,7 @@ function husk(): Model {
       const inside = Math.hypot(x / rx, y / ry, z / rz) < 0.95 && z < 1.9 ? 0.25 : 1;
       // (amber and pale where it is thin, dark brown to its edges and the split)
       const split = ss(0.25, 0.08, Math.abs(x)) * ss(0.9, 1.2, y);
-      const amber: V = [tone[0] * 0.8 + 0.08, tone[1] * 0.8 + 0.03, tone[2] * 0.8 + 0.006];
+      const amber: V = [tone[0] * 0.62 + 0.03, tone[1] * 0.55 + 0.008, tone[2] * 0.5 + 0.002];
       return dim(amber, (1.0 + 0.14 * noise(x * 2, y, z * 4) + 0.05 * Math.sin(x * 18) + 0.07 * noise(x * 14, y * 14, z * 14) + 0.05 * Math.sin(z * 40 + 2 * noise(x * 3, y, z))) * (1 - 0.62 * e) * (1 - 0.5 * split) * (1 + 0.35 * ss(1.0, 1.45, y)) * inside);
     });
   }
@@ -1050,8 +1059,10 @@ function husk(): Model {
       const a: V = [e * rx * 0.93, 0.18, z];
       const b: V = [e * (rx + 0.45), 0.05 + 0.1 * rnd(z + e), z + 0.25 * (rnd(z * 3 + e) - 0.5)];
       s.rough = 0.3;
-      s.rod(a, b, 0.1, dim(CHITIN[2], 1.3), 6, 0.6);
-      s.rod(b, [b[0] + e * 0.35, 0.02, b[2] + 0.2], 0.065, dim(CHITIN[2], 1.45), 5, 0.5);
+      // (thin, bent at the knee, pale where they were thin)
+      const knee: V = [b[0], b[1] + 0.22, b[2]];
+      s.rod(a, knee, 0.055, dim(CHITIN[2], 1.1), 6, 0.8);
+      s.rod(knee, [b[0] + e * 0.4, 0.02, b[2] + 0.25 * (rnd(z + e * 2) - 0.3)], 0.035, dim(CHITIN[2], 1.35), 5, 0.5);
     }
   return s.done();
 }
@@ -1194,7 +1205,7 @@ function waxNest(): Model {
       const t = ss(0, 0.045, CELL * 0.866 - h[2]);
       const off = 1 - ss(0.9, 1.35, z) * ss(1.55, 1.25, Math.abs(x)) * ss(2.3, 2.05, y);
       // (open cells cut in, a few capped flat; thin walls between)
-      d += (full(h[0], h[1]) ? 0 : 0.2 * t) * off;
+      d += (full(h[0], h[1]) ? 0 : 0.3 * t) * off;
     }
     d = smin(d, smax(Math.hypot(x, z) - 2.5 - 0.16 * noise(x, 2, z), y - 0.2, 0.2), 0.3);
     const h = inHex(x, y - DY);
@@ -1204,7 +1215,8 @@ function waxNest(): Model {
   s.field(f, [-3.1, -0.12, -3.1], [3.1, 2.85, 3.1], 0.065, (x, y, z) => {
     const c = cell(x, y, z);
     const e = CELL * 0.866 - c[2];
-    const tone = 0.9 + 0.22 * rnd(c[0] * 7 + c[1] * 13);
+    // (old wax brown, new wax pale)
+    const tone = 0.62 + 0.6 * rnd(c[0] * 7 + c[1] * 13) ** 0.7 * (0.7 + 0.3 * noise(x * 0.8, y * 0.8, z * 0.8));
     const inside = inHex(x, y - DY) < 0.97 && z < 2.1 && (z > 1.3 || Math.hypot(x / A[0], y / A[1], z / A[2]) < 0.9) ? Math.max(0.12, 0.62 - (1.9 - z) * 0.28) : 1;
     // (pale wax at the rims, deeper amber down in the cells)
     const open = (1 - ss(0.9, 1.35, z) * ss(1.55, 1.25, Math.abs(x)) * ss(2.3, 2.05, y)) * (full(c[0], c[1]) ? 0 : 1);
