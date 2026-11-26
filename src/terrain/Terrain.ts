@@ -1,5 +1,5 @@
 import { CHUNK, DENSITY_CLAMP } from './constants';
-import { COLLIDER } from './materials';
+import { BUILT } from './materials';
 import { HIDDEN_CLEAR } from './sdf';
 
 /**
@@ -254,7 +254,7 @@ export class Terrain {
             const id = i + sx * (j + sy * k);
             // (clear samples round it too: a vertex of its body blends what all eight corners of its cell are of)
             if (dens[id] > 0 && d < HIDDEN_CLEAR) {
-              material[id] = COLLIDER;
+              material[id] = BUILT;
               scorch[id] = 0;
             }
             if (d < dens[id]) dens[id] = d;

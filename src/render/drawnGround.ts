@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { COLLIDER } from '../terrain/materials';
+import { BUILT, COLLIDER } from '../terrain/materials';
 import type { Terrain } from '../terrain/Terrain';
 
 /** Size of a lookup cell (world units). */
@@ -146,7 +146,8 @@ export class DrawnGround {
     const j = Math.round(y);
     const k = Math.round(z);
     if (i < 0 || j < 0 || k < 0 || i >= sx || j >= sy || k >= sz) return false;
-    return material[i + sx * (j + sy * k)] === COLLIDER;
+    const m = material[i + sx * (j + sy * k)];
+    return m === COLLIDER || m === BUILT;
   }
 
   /** First drawn surface between `from` and `to` along a short ray, or `NONE`. */

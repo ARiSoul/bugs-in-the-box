@@ -32,7 +32,7 @@ import {
   mx_noise_float,
   positionViewDirection,
 } from 'three/tsl';
-import { GLOW_FAN, GLOW_FUZZ, GLOW_GRAIN, GLOW_PEEL, GLOW_RGB, HIDDEN_ROUGHNESS } from '../../terrain/materials';
+import { BUILT_METAL, GLOW_FAN, GLOW_FUZZ, GLOW_GRAIN, GLOW_PEEL, GLOW_RGB, HIDDEN_ROUGHNESS } from '../../terrain/materials';
 import type { Craters } from './craters';
 import { Glow, MAX_FANS, hueColor } from './glow';
 
@@ -63,7 +63,8 @@ export function createTerrainMaterial(glow: Glow, craters: Craters): { material:
   const seen = pbr.x.lessThan((HIDDEN_ROUGHNESS + 1) / 2);
   m.maskNode = Fn(() => {
     const keep = seen.toVar();
-    If(keep.not(), () => {
+    // (what bugs build draws its own holes)
+    If(keep.not().and(pbr.y.greaterThan(BUILT_METAL)), () => {
       keep.assign(craters.onWall());
     });
     return keep;
@@ -109,7 +110,7 @@ export function createTerrainMaterial(glow: Glow, craters: Craters): { material:
     });
     return base;
   })();
-  m.metalnessNode = pbr.y;
+  m.metalnessNode = max(pbr.y, 0);
 
   // Hard edges: where the triangle's own normal disagrees strongly with the interpolated one, use it.
   // (Turned to face the camera: the sign of the screen-space derivatives differs between backends.)

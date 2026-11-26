@@ -7,7 +7,7 @@ import { SMOTHERED } from '../../game/reactions';
 import { WEAPONS } from '../../game/weapons';
 import type { BuildReply } from '../../workers/build.worker';
 import type { BugView } from '../BugView';
-import { outOf } from './buildModels';
+import { hexAt, outOf } from './buildModels';
 import type { Placing } from '../../input/placing';
 
 type F = THREE.Node<'float'>;
@@ -30,12 +30,22 @@ const SEAT: Record<string, readonly [number, number]> = { anthill: [0.62, 0.92],
 const BITS: Record<string, readonly number[]> = { ant: [0x6b4a2e, 0xb08a55, 0x4a3423], spider: [0xd8d4ca, 0xb9b6ae], cockroach: [0x8a3d12, 0x5a240a, 0xc98a4a], bee: [0xd9942a, 0xb86a10, 0xffc040], ember: [0xff8a2a, 0x3a2418, 0x1a1210], air: [0xe8f8ff, 0x9fe8ff, 0xffffff] };
 
 /** What each is made of inside: two colours, how rough, how much light comes through. */
+// (the light of its own is more than the skin's: inside a hole the sun hardly reaches)
 const INSIDE: Record<string, readonly [readonly [number, number, number], readonly [number, number, number], number, number]> = {
-  ant: [[0.12, 0.06, 0.025], [0.34, 0.2, 0.09], 0.95, 0.05],
-  spider: [[0.3, 0.29, 0.27], [0.52, 0.5, 0.46], 0.7, 0.1],
-  cockroach: [[0.16, 0.04, 0.009], [0.46, 0.14, 0.025], 0.8, 0.3],
-  bee: [[0.4, 0.15, 0.015], [0.7, 0.3, 0.035], 0.8, 0.4],
+  ant: [[0.14, 0.07, 0.03], [0.4, 0.24, 0.11], 0.95, 0.9],
+  spider: [[0.42, 0.4, 0.37], [0.78, 0.76, 0.7], 0.6, 1.1],
+  cockroach: [[0.3, 0.16, 0.07], [0.62, 0.4, 0.2], 0.55, 1.1],
+  bee: [[0.42, 0.16, 0.012], [0.86, 0.42, 0.05], 0.35, 1.5],
 };
+/** Its skin where a hole cuts it: how thick, and what colour. */
+const SKIN: Record<string, readonly [number, readonly [number, number, number]]> = {
+  ant: [0, [0, 0, 0]],
+  spider: [0.22, [0.9, 0.88, 0.82]],
+  cockroach: [0.16, [0.16, 0.035, 0.005]],
+  bee: [0.18, [0.36, 0.15, 0.015]],
+};
+/** A living bridge: the backs of ants, inside it too. */
+const ANTS: readonly [readonly [number, number, number], readonly [number, number, number]] = [[0.05, 0.012, 0.006], [0.2, 0.05, 0.02]];
 
 const ss = (a: number, b: number, x: number): number => {
   const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
@@ -523,6 +533,8 @@ export class BuildViews {
   private line(b: Built, x: number, y: number, z: number, r: number): void {
     if (!b.of) return;
     const { weapon, frame: f } = b.of;
+    // (a mat of ants has no inside: the hole is just where they were)
+    if (weapon === 'living-bridge') return;
     const W = 56;
     const H = 40;
     const at: number[] = [];
@@ -572,7 +584,9 @@ export class BuildViews {
     const nor: number[] = [];
     const col: number[] = [];
     const look: number[] = [];
-    const [c0, c1, rough, glow] = INSIDE[b.species];
+    const living = weapon === 'living-bridge';
+    const [c0, c1, rough, glow] = living ? [ANTS[0], ANTS[1], 0.75, 0.35] : INSIDE[b.species];
+    const [thick, skin] = living ? [0, [0, 0, 0] as const] : SKIN[b.species];
     const side3 = side.clone();
     const p3 = new THREE.Vector3();
     const n3 = new THREE.Vector3();
@@ -610,9 +624,28 @@ export class BuildViews {
         const w = b.species === 'ant' ? ss(1.9, 2.6, q[4] + g * 0.4) * 0.75 + 0.25 * g : g * 0.6 + 0.4 * Math.min(1, Math.max(0, 1 + q[3] * 2));
         // (broken stakes side by side)
         const stakes = b.species === 'ant' ? 0.62 + 0.5 * Math.abs(Math.sin((q[0] * side3.x + q[2] * side3.z) * 6.5)) * (0.7 + 0.6 * g) : 1;
-        const s = (0.75 + 0.35 * Math.min(1, Math.max(0, 1 + q[3]))) * stakes;
-        for (let k = 0; k < 3; k++) col.push((c0[k] + (c1[k] - c0[k]) * w) * s);
-        look.push(rough, glow, 0);
+        let s = (0.75 + 0.35 * Math.min(1, Math.max(0, 1 + q[3]))) * stakes;
+        let blend = w;
+        let shine = glow;
+        let rg = rough;
+        if (b.species === 'bee') {
+          // (broken cells: wax walls, honey in them)
+          const h = hexAt(q[0] * side3.x + q[2] * side3.z, q[1], 0.5);
+          const wall = ss(0.34, 0.42, h[2]);
+          blend = 0.85 - 0.6 * wall;
+          shine = glow * (1 - 0.6 * wall);
+          rg = 0.42 + 0.4 * wall;
+        } else if (living) {
+          // (round backs, one by one)
+          const a = Math.sin(q[0] * 3.1 + q[2] * 1.7) * Math.sin(q[1] * 3.7 - q[2] * 2.3);
+          blend = ss(0.1, 0.7, a) * 0.8 + 0.2 * g;
+          rg = 0.6 + 0.3 * (1 - blend);
+        }
+        // (where it cuts the skin: the skin's thickness, as a rim)
+        const edge = thick > 0 ? ss(-thick, -thick * 0.35, q[3]) : 0;
+        if (edge > 0) s = s * (1 - edge) + edge;
+        for (let k = 0; k < 3; k++) col.push(((c0[k] + (c1[k] - c0[k]) * blend) * (1 - edge) + skin[k] * edge) * s);
+        look.push(rg, shine * (1 - 0.6 * edge), 0);
         capSlots.push(slot + (q[4] > SMOTHERED - 0.2 ? 64 : 0));
       };
       for (let n = 1; n + 1 < poly.length; n++) {

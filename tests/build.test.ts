@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { Match, NO_INPUT, type MatchEvent, type MatchInput } from '../src/game/match';
 import { ANT, BEE, COCKROACH, SPIDER, type BugSpecies } from '../src/game/species';
 import { BURST, ANTHILL, LIVING_BRIDGE, RAMPART, SILK_CURTAIN, SOLDER_BLOB, WAX_NEST, WEAPONS, WORKS, type Weapon } from '../src/game/weapons';
-import { COLLIDER } from '../src/terrain/materials';
+import { BUILT } from '../src/terrain/materials';
 import type { Terrain } from '../src/terrain/Terrain';
 import { world } from './helpers/worlds';
 import { BUILD_MODELS, buildModel } from '../src/render/gpu/buildModels';
@@ -46,7 +46,7 @@ describe('building', () => {
     expect(use(m, RAMPART).some((e) => e.type === 'built')).toBe(true);
     expect(t.sample(24, 12, 32)).toBeLessThan(0);
     expect(t.sample(24, 13.5, 35)).toBeLessThan(0);
-    expect(t.material[t.idx(24, 12, 32)]).toBe(COLLIDER);
+    expect(t.material[t.idx(24, 12, 32)]).toBe(BUILT);
     expect(m.phase).toBe('aim');
     expect(m.weapon).toBe(1);
     expect(m.stock[0][at(RAMPART)]).toBe(1);

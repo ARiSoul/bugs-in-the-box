@@ -1,5 +1,5 @@
 import type { Match } from '../game/match';
-import { COLLIDER, MATERIAL_RGB } from '../terrain/materials';
+import { BUILT, COLLIDER, MATERIAL_RGB } from '../terrain/materials';
 import type { Terrain } from '../terrain/Terrain';
 
 /** Cells of the grid to a pixel of the map; seconds between two redraws of the ground after it changed. */
@@ -71,7 +71,7 @@ export class Minimap {
         const h = high[n] / t.sy;
         // (lit from the upper left: a slope towards it is lighter)
         const slope = (high[n] - high[Math.max(0, i - 1) + Math.max(0, k - 1) * w]) * 0.08;
-        const rgb = kind[n] === COLLIDER ? [0.32, 0.32, 0.34] : (MATERIAL_RGB[kind[n]] ?? [0.4, 0.4, 0.4]);
+        const rgb = kind[n] === COLLIDER || kind[n] === BUILT ? [0.32, 0.32, 0.34] : (MATERIAL_RGB[kind[n]] ?? [0.4, 0.4, 0.4]);
         const l = 0.35 + h * 0.9 + slope;
         for (let c = 0; c < 3; c++) img.data[o + c] = Math.max(0, Math.min(255, Math.round(255 * Math.pow(Math.min(1, rgb[c] * 0.6 + 0.12), 0.7) * l)));
         img.data[o + 3] = 235;

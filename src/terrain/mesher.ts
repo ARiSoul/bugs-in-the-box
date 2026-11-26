@@ -1,5 +1,5 @@
 import { CHUNK } from './constants';
-import { COLLIDER, MATERIAL_PBR } from './materials';
+import { BUILT, COLLIDER, MATERIAL_PBR } from './materials';
 import { shadeNoise, shadeVertex, shadeWithNoise } from './shading';
 import type { Terrain } from './Terrain';
 
@@ -260,11 +260,11 @@ export class ChunkMesher {
         let hides = false;
         for (let c = 0; c < 8 && !hides; c++) {
           const ci = c0 + (c & 1) + (c & 2 ? sx : 0) + (c & 4 ? sk : 0);
-          hides = dens[ci] < 0 && material[ci] === COLLIDER;
+          hides = dens[ci] < 0 && (material[ci] === COLLIDER || material[ci] === BUILT);
         }
         for (let c = 0; c < 8; c++) {
           const ci = c0 + (c & 1) + (c & 2 ? sx : 0) + (c & 4 ? sk : 0);
-          const air = hides || material[ci] === COLLIDER ? 0 : 0.3;
+          const air = hides || material[ci] === COLLIDER || material[ci] === BUILT ? 0 : 0.3;
           const w = (c & 1 ? fx : 1 - fx) * (c & 2 ? fy : 1 - fy) * (c & 4 ? fz : 1 - fz) * (dens[ci] < 0 ? 1 : air) + 1e-6;
           const cm = material[ci];
           shadeWithNoise(tc, 0, n, vnrm[l3 + 1], burn, cm);

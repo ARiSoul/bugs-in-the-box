@@ -1,5 +1,5 @@
 import * as THREE from 'three/webgpu';
-import { Fn, If, bool, cameraPosition, clamp, float, fract, frontFacing, length, max, mix, positionWorld, screenCoordinate, smoothstep, step, uniform } from 'three/tsl';
+import { Fn, If, bool, cameraPosition, clamp, float, fract, frontFacing, length, max, min, mix, positionWorld, screenCoordinate, smoothstep, step, uniform } from 'three/tsl';
 
 type F = THREE.Node<'float'>;
 type B = THREE.Node<'bool'>;
@@ -16,6 +16,8 @@ const LEFT = 0.08;
 const PITCH = 9;
 /** Seconds to fade. */
 const FADE = 0.16;
+/** Below the bug's feet by this, and lower than the camera, nothing is in the way (the ground it stands on, seen from above). */
+const UNDER = 0.9;
 /** Looking straight up, it is this much wider again; round where the aim goes. */
 const UP_WIDER = 2.2;
 const AHEAD_ROUND = 4;
@@ -90,7 +92,8 @@ export class SeeThrough {
     return Fn(() => {
       const keep = (was ?? bool(true)).toVar();
       If(this.amount.greaterThan(0.01), () => {
-        const open = max(this.open(this.at as unknown as THREE.Node<'vec3'>, ROUND), this.open(this.ahead as unknown as THREE.Node<'vec3'>, AHEAD_ROUND)).mul(this.amount);
+        const low = step(min(this.at.y, cameraPosition.y).sub(UNDER), positionWorld.y);
+        const open = max(this.open(this.at as unknown as THREE.Node<'vec3'>, ROUND), this.open(this.ahead as unknown as THREE.Node<'vec3'>, AHEAD_ROUND)).mul(this.amount).mul(low);
         const line = fract(screenCoordinate.x.add(screenCoordinate.y).div(PITCH));
         keep.assign(keep.and(line.lessThan(mix(float(1.01), float(LEFT), open))));
       });

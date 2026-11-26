@@ -102,7 +102,7 @@ function cellular(x: number, y: number, z: number): Float64Array {
 }
 /** The hexagon (pointed up, circumradius s) at (x, y): its middle, and how far from its middle to its side (0..0.866 s). */
 const hx = new Float64Array(3);
-function hexAt(x: number, y: number, s: number): Float64Array {
+export function hexAt(x: number, y: number, s: number): Float64Array {
   const q = ((Math.sqrt(3) / 3) * x - y / 3) / s;
   const r = ((2 / 3) * y) / s;
   let X = Math.round(q);
@@ -1122,12 +1122,13 @@ export function outOf(weapon: string, x: number, y: number, z: number): number {
       return Math.max(az - 0.78, y - 4.9, Math.abs(x) - 5.35);
     case 'comb-wall':
       return Math.max(az - 0.94, y - WALL_HIGH - 0.15 - 0.4 * Math.sin(x + 1) - 0.18 * Math.sin(x * 2.3) + 0.028 * x * x, Math.abs(x) - 5.25);
+    // (a bridge's hole goes through its deck: the wall of it is the deck's thickness, the ground shows under it)
     case 'living-bridge':
-      return Math.max(az - DECK + 0.45, y + 0.2, -1.5 - y);
+      return Math.max(az - DECK + 0.45, y + 0.2, -0.9 - y);
     case 'silk-span':
-      return Math.max(az - DECK, y + 0.03, -(1 - (z / DECK) ** 4) * 1.25 - 0.05 - y);
+      return Math.max(az - DECK, y + 0.03, -0.32 - y);
     case 'scale-walk':
-      return Math.max(az - DECK + 0.3, y + 0.1, -1.4 + 0.2 * az - y);
+      return Math.max(az - DECK + 0.3, y + 0.1, -0.55 - y);
     default:
       return Math.max(az - DECK + 0.1, y + 0.04, -1.4 - 0.9 * Math.abs((x / LONG) * 2 - 1) ** 3 - y);
   }
