@@ -1043,7 +1043,7 @@ function husk(): Model {
   const s = new Soup();
   s.lit = 2;
   s.rough = 0.24;
-  s.glow = 0.24;
+  s.glow = 0.4;
   const rx = 2.0;
   const ry = 1.5;
   const rz = 2.85;
@@ -1082,10 +1082,12 @@ function husk(): Model {
       const b: V = [e * (rx + 0.45), 0.05 + 0.1 * rnd(z + e), z + 0.25 * (rnd(z * 3 + e) - 0.5)];
       s.rough = 0.3;
       // (thin, bent at the knee, pale where they were thin)
-      const knee: V = [b[0], b[1] + 0.22, b[2]];
+      const knee: V = [b[0] + e * 0.1, b[1] + 0.4, b[2]];
       s.rod(a, knee, 0.055, dim(EXUVIA[1], 0.9), 6, 0.8);
       s.ball(knee[0], knee[1], knee[2], 0.06, 0.06, 0.06, dim(EXUVIA[1], 0.7), 6, 4);
-      s.rod(knee, [b[0] + e * 0.4, 0.02, b[2] + 0.25 * (rnd(z + e * 2) - 0.3)], 0.035, EXUVIA[2], 5, 0.5);
+      const foot: V = [b[0] + e * 0.6, 0.02, b[2] + 0.25 * (rnd(z + e * 2) - 0.3)];
+      s.rod(knee, foot, 0.035, EXUVIA[2], 5, 0.6);
+      s.rod(foot, [foot[0] + e * 0.22, 0.01, foot[2] + 0.12], 0.02, dim(EXUVIA[1], 0.8), 4, 0.5);
     }
   return s.done();
 }
@@ -1262,6 +1264,18 @@ function waxNest(): Model {
       // (down in the cell, flat: no beads on it)
       honey(s, x * 0.975, y * 0.975, z * 0.975, 0.14, 0.05, 0.14, dim(HONEY, 0.8 + 0.5 * w));
     }
+  // (its foot: lumps of old wax round it, faceted, dull)
+  s.rough = 0.62;
+  s.glow = 0.05;
+  for (let i = 0; i < 46; i++) {
+    const a = (i / 46) * 6.28 + 0.1 * rnd(i + 0.3);
+    if (Math.cos(a) > 0.82) continue;
+    const r = 2.35 + 0.25 * rnd(i + 0.5);
+    const k = 0.16 + 0.12 * rnd(i + 0.7);
+    s.ball(Math.sin(a) * r, k * 0.45, Math.cos(a) * r, k * 1.3, k * 0.6, k, wax(0.62 + 0.25 * rnd(i + 0.9), 0.35), 6, 3);
+  }
+  s.rough = 0.28;
+  s.glow = 0.2;
   // its front, round the door: cells built on it, wall by wall (the field is too coarse for them)
   const FC = 0.26;
   const on = (x: number, y: number, out: number): V | null => {
