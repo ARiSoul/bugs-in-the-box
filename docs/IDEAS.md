@@ -26,7 +26,7 @@ Ants, spiders, cockroaches and made-up creatures. Technical idea: one configurab
 Special abilities per species (for when each bug gets its proper treatment; to tune later):
 
 - **Spider:** spins webs. A web can trap enemies, or let the spider lower itself safely from a tall drop on a thread instead of falling (no fall damage).
-- **Ant:** to be defined (climbing walls is now every bug's: they all crawl on any surface).
+- **Ant, Burrow (in the game):** it digs a tunnel as wide as itself along its aim and is carried out through it. Three a match, once a turn; the turn goes on.
 - **Cockroach, Hard Shell (in the game):** the first blow that would kill it leaves it at 1 health, once a match, and cracks its shell. Leaving the map still kills it.
 - **Cockroach, Glide:** it opens its wings in the air and glides: no fall damage, and the wind carries it.
 - **Cockroach, Flatten:** it presses itself against the surface until its next turn: half damage, and blasts do not throw it.
@@ -36,9 +36,9 @@ Special skills as attacks, each with its own attack animation (a skill is a weap
 
 - **Spider web bow (in the game, as Web Bow):** the spider spins a web between two points and uses it as a bow: it pulls back and shoots, like an arrow. Aimed and charged like the other shots.
 - **Ant Column (in the game):** the ant calls its nest: a column of small ants charges over the terrain, steered by the player, swarms the first enemy it meets and digs the ground away under it.
-- **Titan Lift (ant):** it tears a block out of the terrain, fifty times its weight, lifts it over its head and throws it. A hole where it stood, a crush where it lands.
-- **Acid Charge (ant):** it bends its abdomen forward and shoots a jet of acid that eats the terrain for two turns and hurts whoever stands in it.
-- **Lightning Mandible (ant):** time stops, the mandibles open, and the ant itself is the shot: one straight dash that ends on the first bug and throws it far.
+- **Titan Lift (ant, in the game):** it tears a block out of the terrain, fifty times its weight, lifts it over its head and throws it. A hole where it stood, a crush where it lands. (Later: the block could stay on the map as new ground where it lands.)
+- **Acid Charge (ant, for later):** it bends its abdomen forward and shoots a jet of acid that eats the terrain for two turns and hurts whoever stands in it.
+- **Lightning Mandible (ant, for later):** time stops, the mandibles open, and the ant itself is the shot: one straight dash that ends on the first bug and throws it far.
 - **Blackout Swarm (cockroach, in the game):** it rubs its wings and the lights of the map fail; only eyes glow. The player marks a spot, cockroaches come from everywhere in the dark, and the light comes back on whoever they cover. Hurts every enemy in the area, hardly any crater.
 - **Last Nerve (cockroach):** it runs on without its head. The body runs blind, steered only in wide turns, and bursts at the end; the head stays behind and sees it all.
 - **Wing Storm (cockroach):** it opens its wings, takes off and beats up a gale: little damage, but it sweeps a whole cone of bugs away, off the map if they stand badly.
@@ -54,7 +54,7 @@ Special skills as attacks, each with its own attack animation (a skill is a weap
   - **levels**: bugs or squads gain experience and unlock skills;
   - **boxes** bought with what is earned by playing.
   - Balance is kept in two layers for this (`scripts/balance.ts`): the species are even with no specials at all, and the specials are even with each other. So a limit can be added without undoing the balance; the rarer they get, the stronger they may be.
-- **Unlocking and choosing skills:** more than one special per species; skills are unlocked by playing, and each squad chooses which ones it brings (a limit per squad, perhaps one per bug).
+- **Unlocking and choosing skills:** more than one special per species; skills are unlocked by playing, and each squad chooses which ones it brings (a limit per squad, perhaps one per bug). First step in the game: a team takes one of its species' specials into a match, picked on its setup card (`?specials=titan-lift,`).
 - More of the same kind: an attack that comes from the creature's body or habits, not a borrowed weapon.
 
 Technically these fit the existing data: a species already holds its physics numbers, so an ability would be one more field, with any new action sent as a turn event like a shot.

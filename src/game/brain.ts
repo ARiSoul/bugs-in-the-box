@@ -4,7 +4,7 @@ import { Flock, FLOCK_TICKS, steerFlock, type FlockInput } from './flock';
 import { ITEM_KINDS, type Item, type ItemKind } from './items';
 import { createRng } from '../terrain/noise';
 import { Bug, GRAVITY, type BugInput } from './bug';
-import { blastShare, BURST_AT, CHARGE_TICKS, launch, MIN_POWER, NO_INPUT, type Column, type Match, type MatchInput, type Place, type Unit } from './match';
+import { blastShare, BURST_AT, CHARGE_TICKS, launch, LIFT_HIGH, MIN_POWER, NO_INPUT, type Column, type Match, type MatchInput, type Place, type Unit } from './match';
 import { rot, rotate2 } from './math';
 import { Projectile } from './projectile';
 import { WEAPONS, type Weapon } from './weapons';
@@ -277,9 +277,11 @@ export class Brain {
     const tx = e.bug.x;
     const ty = e.bug.y - (w.kind === 'grenade' ? e.bug.species.radius * 0.5 : 0);
     const tz = e.bug.z;
-    let ox = b.x;
-    let oy = b.y;
-    let oz = b.z;
+    // (a lifted block leaves from over its back)
+    const up = w.kind === 'lift' ? b.species.radius + LIFT_HIGH : 0;
+    let ox = b.x + b.nx * up;
+    let oy = b.y + b.ny * up;
+    let oz = b.z + b.nz * up;
     const far = Math.sqrt((tx - ox) * (tx - ox) + (ty - oy) * (ty - oy) + (tz - oz) * (tz - oz));
     const least = far / w.maxSpeed;
     const time = least * 1.02 + part * part * (least + (w.kind === 'arrow' ? 0.4 : 2.2)) + 0.05;
@@ -291,9 +293,9 @@ export class Brain {
       vel[2] = (tz - oz) / time - 0.5 * gz * time;
       speed = Math.sqrt(vel[0] * vel[0] + vel[1] * vel[1] + vel[2] * vel[2]);
       if (speed < 1e-6) return -1e9;
-      ox = b.x + (vel[0] / speed) * out;
-      oy = b.y + (vel[1] / speed) * out;
-      oz = b.z + (vel[2] / speed) * out;
+      ox = b.x + (vel[0] / speed) * out + b.nx * up;
+      oy = b.y + (vel[1] / speed) * out + b.ny * up;
+      oz = b.z + (vel[2] / speed) * out + b.nz * up;
     }
     const charge = Math.round((speed / w.maxSpeed) * CHARGE_TICKS);
     if (charge > CHARGE_TICKS || charge < Math.ceil(MIN_POWER * CHARGE_TICKS)) return -1e9;
@@ -317,7 +319,8 @@ export class Brain {
   private shotScore(match: Match, u: Unit, b: Bug, bugs: readonly Bug[], w: Weapon, dx: number, dy: number, dz: number, charge: number): number {
     const speed = Math.max(MIN_POWER, charge / CHARGE_TICKS) * w.maxSpeed;
     const out = b.species.radius + 0.5;
-    const p = new Projectile(0, w, b).launch(b.x + dx * out, b.y + dy * out, b.z + dz * out, dx * speed, dy * speed, dz * speed);
+    const up = w.kind === 'lift' ? b.species.radius + LIFT_HIGH : 0;
+    const p = new Projectile(0, w, b).launch(b.x + dx * out + b.nx * up, b.y + dy * out + b.ny * up, b.z + dz * out + b.nz * up, dx * speed, dy * speed, dz * speed);
     for (let n = 0; n < FLIGHT; n++) {
       const r = p.step(match.field, match.windX, match.windZ, bugs, match.options.strictBounds === true);
       // (a curtain of silk catches it)

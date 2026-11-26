@@ -52,7 +52,7 @@ Goal now: a PC demo first, as a proof of concept. The phone items below are post
 - [x] Car Dashboard (`?scenario=car`): the owner's car from photos and a video, door to door, ignition on (lit instruments, flashing hazard button, the radio behind its cracked glass, a phone with a map), the steering wheel, the open glove box with its papers, on its own map (10x4x5)
 - [x] Cinematic camera in the menu, for every map (the scripted flight, with pause, skip and restart)
 - [ ] Building and hiding: a wall, a bridge and a shelter of each species' own, limits per kind and in all, the hand in three parts; the other ideas one prototype at a time (IDEAS); boxes that give more
-- [ ] Abilities per species: spider done (Web Shot, the thread, Web Bow), the ant's first done (Ant Column; three more and an unlock system in IDEAS); the cockroach done (Hard Shell, Blackout Swarm; the other ideas in IDEAS); the bee done (flight, Queen's Flight); each team's species is picked in the menu
+- [ ] Abilities per species: spider done (Web Shot, the thread, Web Bow), the ant's done (Ant Column and Titan Lift, its own Burrow; Acid Charge and Lightning Mandible for later, in IDEAS; a team takes one special, picked on its setup card; unlocking by playing still to come); the cockroach done (Hard Shell, Blackout Swarm; the other ideas in IDEAS); the bee done (flight, Queen's Flight); each team's species is picked in the menu
 
 ## Settings and admins (proposed)
 

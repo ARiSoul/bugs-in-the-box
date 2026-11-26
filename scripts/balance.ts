@@ -6,9 +6,13 @@ import { computerGrowth } from '../src/game/progress';
 import { Brain, SKILLS } from '../src/game/brain';
 import { Match } from '../src/game/match';
 import { SPECIES } from '../src/game/species';
+import { WEAPONS } from '../src/game/weapons';
 import { SCENARIOS } from '../src/terrain/scenarios';
 import { Terrain } from '../src/terrain/Terrain';
 
+/** Which special attack each species takes, where it has more than one: `SPECIALS=titan-lift npm run balance`. */
+const SPECIALS = (process.env.SPECIALS ?? '').split(',').filter(Boolean);
+const specialOf = (id: string): string | undefined => SPECIALS.find((w) => WEAPONS.some((q) => q.id === w && q.species === id));
 /** Levels of the two sides: `LEVELS=10,1 npm run balance`. */
 const LEVELS = (process.env.LEVELS ?? '1,1').split(',').map(Number);
 
@@ -39,8 +43,8 @@ for (const sc of SCENARIOS) {
         const m = new Match(
           terrain,
           [
-            { name: 'a', species: a, color: 0, size: 3, growth: computerGrowth(a.id, LEVELS[0]) },
-            { name: 'b', species: b, color: 0, size: 3, growth: computerGrowth(b.id, LEVELS[1]) },
+            { name: 'a', species: a, special: specialOf(a.id), color: 0, size: 3, growth: computerGrowth(a.id, LEVELS[0]) },
+            { name: 'b', species: b, special: specialOf(b.id), color: 0, size: 3, growth: computerGrowth(b.id, LEVELS[1]) },
           ],
           seed * 31,
           { strictBounds: sc.strictBounds, spawnLevels: sc.spawnLevels === true, turntable: sc.turntable?.(terrain.W, terrain.H, terrain.D), confine: sc.confine?.(terrain.W, terrain.H, terrain.D) },
