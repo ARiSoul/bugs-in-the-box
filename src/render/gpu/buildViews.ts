@@ -720,7 +720,8 @@ export class BuildViews {
           rim.push(q[0], q[1], q[2], locals[i]);
         }
       }
-      if (poly.length < 3) return;
+      // (silk is threads: a hole in it is open, only threads cross it)
+      if (poly.length < 3 || b.species === 'spider') return;
       const lx = locals[ids[0]];
       const slot = isWall ? Math.min(COLUMNS - 1, Math.max(0, Math.round((lx - f.first) / f.gap))) : Math.min(SPANS - 1, Math.max(0, Math.floor(lx / SPAN)));
       e1.set(poly[1][0] - poly[0][0], poly[1][1] - poly[0][1], poly[1][2] - poly[0][2]);
@@ -790,11 +791,11 @@ export class BuildViews {
     if (b.species === 'spider' && rim.length >= 8) {
       const n = rim.length / 4;
       const dn = f.up;
-      for (let k = 0; k < 28; k++) {
+      for (let k = 0; k < 44; k++) {
         const i = Math.floor(Math.random() * n) * 4;
         const a = [rim[i], rim[i + 1], rim[i + 2]];
         let e: number[];
-        if (k < 7) {
+        if (k < 10) {
           // (across, to the far side)
           let best = 0;
           let j = i;

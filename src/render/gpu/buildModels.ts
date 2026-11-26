@@ -847,14 +847,13 @@ function spiny(s: Soup, a: V, b: V, r: number, spines: number): void {
 function shieldWall(): Model {
   const s = new Soup();
   const plates = CHITIN.map((c) => shield(1.4, 1.85, 0.2, c, false));
-  const spotted = CHITIN.map((c, k) => shield(1.4, 1.85, 0.2, c, k === 2));
   for (const side of [1, -1])
     for (let r = 0; r < 3; r++)
       for (let i = 0; i < 8 - (r % 2); i++) {
         const x = (i - (7 - (r % 2)) / 2) * 1.36;
         // (each over its neighbour, each row over the one under it)
         const big = 0.86 + 0.24 * rnd(i * 5 + r * 3 + side * 7);
-        s.put((r === 2 && rnd(i + r + side * 3) < 0.4 ? spotted : plates)[(i * 2 + r) % 3], pose(x + (rnd(i * 2 + r + side) - 0.5) * 0.25, 1.05 + r * 1.42 + (big - 1) * 0.8, side * (0.5 + r * 0.1 + (1.1 - big) * 0.3), -0.11 + (rnd(i + r * 4 + side) - 0.5) * 0.2, (side > 0 ? 0.2 : Math.PI + 0.2) + (rnd(i * 7 + r + side) - 0.5) * 0.28, (rnd(i + r * 9 + side) - 0.5) * 0.28, big), 0.85 + 0.3 * rnd(i * 3 + r + side));
+        s.put(plates[(i * 2 + r) % 3], pose(x + (rnd(i * 2 + r + side) - 0.5) * 0.25, 1.05 + r * 1.42 + (big - 1) * 0.8, side * (0.5 + r * 0.1 + (1.1 - big) * 0.3), -0.11 + (rnd(i + r * 4 + side) - 0.5) * 0.2, (side > 0 ? 0.2 : Math.PI + 0.2) + (rnd(i * 7 + r + side) - 0.5) * 0.28, (rnd(i + r * 9 + side) - 0.5) * 0.28, big), 0.85 + 0.3 * rnd(i * 3 + r + side));
       }
   for (const e of [-1, 1]) for (let r = 0; r < 3; r++) s.put(plates[(r + 1) % 3], pose(e * (5.5 + 0.06 * r), 1.05 + r * 1.42, 0, -0.08, e * (Math.PI / 2), 0, 0.62, 0.98, 1), 0.95);
   // what holds it up, between the two
@@ -883,7 +882,8 @@ function tergite(tone: V): Soup {
   const W = DECK + 0.05;
   const f: Field = (x, y, z) => {
     const u = z / W;
-    const c = -0.1 - 0.9 * Math.max(0, Math.abs(u) - 0.72) ** 1.5 * 3 + 0.055 * x;
+    // (tilted up to its back edge, like a shingle, and domed across)
+    const c = -0.16 + 0.08 * (1 - u * u) - 0.9 * Math.max(0, Math.abs(u) - 0.72) ** 1.5 * 3 + 0.13 * x;
     const bow = 0.18 * u * u;
     const back = 0.028 * Math.exp(-(((x - 0.66 + bow) / 0.08) ** 2));
     return smax(smax(Math.abs(y - c) - 0.09 - back, Math.abs(z) - W + 0.12 * (x - 0.5) ** 2, 0.06), Math.abs(x + bow - 0.05) - 0.78, 0.12) * 0.8;
@@ -891,7 +891,8 @@ function tergite(tone: V): Soup {
   return s.field(f, [-1.2, -1.2, -2.6], [1.1, 0.3, 2.6], 0.095, (x, y, z) => {
     const bow = 0.18 * (z / W) ** 2;
     const k = Math.max(ss(0.5, 0.7, x + bow), ss(2.05, 2.25, Math.abs(z)));
-    return dim(rim(tone, k), 0.75 + 0.06 * noise(x * 1.2, y, z * 0.7) - 0.18 * Math.exp(-((z / 1.1) ** 2)));
+    // (fine pits all over it)
+    return dim(rim(tone, k), 0.72 + 0.06 * noise(x * 1.2, y, z * 0.7) - 0.1 * Math.max(0, noise(x * 9, y * 9, z * 9)) - 0.18 * Math.exp(-((z / 1.1) ** 2)));
   });
 }
 
@@ -916,7 +917,7 @@ function scaleWalk(): Model {
     }
   }
   // a shield at its far end
-  const end = shield(1.9, 1.35, 0.16, CHITIN[1], true, 0);
+  const end = shield(1.9, 1.35, 0.16, CHITIN[1], false, 0);
   s.put(end, pose(LONG - 0.15, -0.16, 0, -Math.PI / 2, -Math.PI / 2, 0, 0.98, 0.9, 0.8), 0.8);
   // its belly
   s.rough = 0.45;
