@@ -383,7 +383,7 @@ export class BuildViews {
       this.p.copy(s.mesh.position).addScaledVector(this.s.copy(UP).applyQuaternion(s.mesh.quaternion), r);
       for (let k = 0; k < (e.broken ? 40 : 10); k++) this.bit(this.p, s.species, e.broken ? 11 : 5, r * 1.6, 0.17);
       // (broken, it comes apart its own way: earth, torn silk, shell plates, lumps of wax and honey)
-      if (e.broken) for (let k = 0; k < (s.species === 'spider' ? 20 : 28); k++) this.drop(this.p.x, this.p.y, this.p.z, r * 1.4, s.species, s.species === 'cockroach' || (s.species === 'bee' && k % 2 === 0));
+      if (e.broken) for (let k = 0; k < (s.species === 'spider' ? 20 : 28); k++) this.drop(this.p.x, this.p.y, this.p.z, r * 1.4, s.species, s.species === 'cockroach' || (s.species === 'bee' && k % 2 === 0), s.species === 'ant' ? 0.4 : 1);
     } else if (e.type === 'caught') {
       for (let k = 0; k < 14; k++) this.bit(this.p.set(e.x, e.y, e.z), 'spider', 4, 0.3, 0.08);
     }
@@ -410,7 +410,7 @@ export class BuildViews {
   }
 
   /** A piece of what a blast broke: out of the hole, down to the ground, where it stays a while. */
-  private drop(x: number, y: number, z: number, r: number, species: string, plate = false): void {
+  private drop(x: number, y: number, z: number, r: number, species: string, plate = false, scale = 1): void {
     const i = this.nextPiece++ % DEBRIS;
     const p = this.pieces[i];
     p.v.set(Math.random() - 0.5, Math.random() * 0.6, Math.random() - 0.5);
@@ -421,6 +421,7 @@ export class BuildViews {
     p.strand = species === 'spider';
     p.plate = plate;
     p.size = p.strand ? 0.12 + 0.16 * Math.random() : plate ? 0.14 + 0.16 * Math.random() : 0.07 + 0.2 * Math.random() ** 2;
+    p.size *= scale;
     if (p.strand) p.v.multiplyScalar(0.45);
     p.still = false;
     const c = BITS[species];
@@ -998,8 +999,11 @@ export class BuildViews {
         if (d > R) continue;
         const along = dx * t.x + dy * t.y + dz * t.z;
         const off = dx * n.x + dy * n.y + dz * n.z + 0.18 * Math.sin(along * 7 + c) + 0.08 * Math.sin(along * 19);
-        const w = 0.035 + 0.05 * (1 - d / R);
-        if (Math.abs(off) < w) col.setXYZ(k, col.getX(k) * 0.22, col.getY(k) * 0.2, col.getZ(k) * 0.2);
+        const w = 0.05 + 0.07 * (1 - d / R);
+        if (Math.abs(off) >= w) continue;
+        // (shell whitens where it is strained; earth, silk and wax open dark)
+        if (s.species === 'cockroach') col.setXYZ(k, Math.min(1, col.getX(k) * 2.2 + 0.08), Math.min(1, col.getY(k) * 2.6 + 0.06), Math.min(1, col.getZ(k) * 3 + 0.03));
+        else col.setXYZ(k, col.getX(k) * 0.2, col.getY(k) * 0.19, col.getZ(k) * 0.19);
       }
     }
     for (let k = 0; k < col.count; k++) col.setXYZ(k, col.getX(k) * 0.88, col.getY(k) * 0.86, col.getZ(k) * 0.85);
@@ -1039,7 +1043,7 @@ export class BuildViews {
         }
       }
       this.p.set(cx, cy, cz).applyMatrix4(s.mesh.matrixWorld);
-      for (let k = 0; k < 6; k++) this.drop(this.p.x, this.p.y, this.p.z, 0.3, s.species, s.species === 'cockroach');
+      for (let k = 0; k < 6; k++) this.drop(this.p.x, this.p.y, this.p.z, 0.3, s.species, s.species === 'cockroach', s.species === 'ant' ? 0.4 : 1);
     }
     let n = 0;
     for (let k = 0; k < idx.length; k += 3) {
