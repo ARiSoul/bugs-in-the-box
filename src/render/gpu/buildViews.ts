@@ -2,6 +2,7 @@ import * as THREE from 'three/webgpu';
 import { abs, attribute, clamp, float, floor, mix, normalView, positionGeometry, positionViewDirection, pow, smoothstep, uniform, uniformArray, vec3 } from 'three/tsl';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { APART, COLUMNS, DECK_UNDER, PIECE, shifted, SPAN, SPANS, WALL_DEEP } from '../../game/build';
+import type { TerrainField } from '../../game/field';
 import type { Match, MatchEvent, Unit } from '../../game/match';
 import { SMOTHERED } from '../../game/reactions';
 import { WEAPONS } from '../../game/weapons';
@@ -20,6 +21,14 @@ const GO = 0.3;
 /** Places along a wall or a bridge whose ground is known. */
 const STATIONS = 7;
 const FLAKES = 90;
+/** What a blast leaves on the ground: how many pieces at most, how long they stay (s). */
+const DEBRIS = 220;
+const DEBRIS_LIFE = 40;
+/** A hole's edge: how uneven (of its radius). */
+const JAG = 0.1;
+/** How far a hole reaches this way (a unit vector), as a share of its radius: uneven, the same for its cut and its wall. */
+const jag = (ux: number, uy: number, uz: number, seed: number): number =>
+  1 + JAG * (0.6 * Math.sin(ux * 5.1 + uy * 2.3 + seed) * Math.sin(uz * 4.7 - uy * 3.1 + seed * 1.7) + 0.4 * Math.sin(ux * 11.3 - uz * 9.7 + uy * 7.1 + seed * 2.3));
 const FLAMES = 240;
 const FLAMES_EACH = 22;
 const GHOST: readonly (readonly [number, number, number])[] = [[0.02, 0.22, 1], [1, 0.03, 0.01]];
@@ -172,6 +181,11 @@ export class BuildViews {
   private turned = 0;
   private readonly shelters: Shelter[] = [];
   private readonly flakes: THREE.InstancedMesh;
+  /** What lies on the ground after a blast. */
+  private readonly debris: THREE.InstancedMesh;
+  private readonly pieces: { at: THREE.Vector3; v: THREE.Vector3; t: number; size: number; still: boolean }[] = [];
+  private nextPiece = 0;
+  private field: TerrainField | null = null;
   private readonly bits: { at: THREE.Vector3; v: THREE.Vector3; t: number; life: number; size: number }[] = [];
   private nextBit = 0;
   private readonly m = new THREE.Matrix4();
@@ -251,6 +265,16 @@ export class BuildViews {
       this.bits.push({ at: new THREE.Vector3(), v: new THREE.Vector3(), t: 9, life: 1, size: 0 });
     }
     this.root.add(this.flakes);
+    this.debris = new THREE.InstancedMesh(new THREE.DodecahedronGeometry(1, 0), new THREE.MeshStandardNodeMaterial({ roughness: 0.85 }), DEBRIS);
+    this.debris.frustumCulled = false;
+    this.debris.castShadow = this.debris.receiveShadow = true;
+    for (let i = 0; i < DEBRIS; i++) {
+      this.debris.setColorAt(i, new THREE.Color(0xffffff));
+      this.debris.setMatrixAt(i, new THREE.Matrix4().makeScale(0, 0, 0));
+      this.pieces.push({ at: new THREE.Vector3(), v: new THREE.Vector3(), t: DEBRIS_LIFE, size: 0, still: false });
+    }
+    this.debris.visible = false;
+    this.root.add(this.debris);
     // (both materials are drawn once from the start, too small to see: none is compiled when it is first needed)
     const speck = new THREE.BufferGeometry();
     for (const [k, n] of [['position', 3], ['normal', 3], ['color', 3], ['look', 3]] as const) speck.setAttribute(k, new THREE.BufferAttribute(new Float32Array(3 * n), n));
@@ -313,6 +337,7 @@ export class BuildViews {
     this.shelters.length = 0;
     this.ghost.visible = this.ring.visible = this.spot.visible = false;
     for (const b of this.bits) b.t = b.life;
+    for (const p of this.pieces) p.t = DEBRIS_LIFE;
     this.blasts.length = this.worn.length = this.lost.length = this.fires.length = 0;
     this.turned = 0;
     this.ask(species);
@@ -375,6 +400,59 @@ export class BuildViews {
     const c = BITS[species];
     this.flakes.setColorAt(i, new THREE.Color(c[i % c.length]));
     if (this.flakes.instanceColor) this.flakes.instanceColor.needsUpdate = true;
+  }
+
+  /** A piece of what a blast broke: out of the hole, down to the ground, where it stays a while. */
+  private drop(x: number, y: number, z: number, r: number, species: string): void {
+    const i = this.nextPiece++ % DEBRIS;
+    const p = this.pieces[i];
+    p.v.set(Math.random() - 0.5, Math.random() * 0.6, Math.random() - 0.5);
+    p.at.set(x, y, z).addScaledVector(p.v, r * 0.9);
+    p.v.normalize().multiplyScalar(2 + 4 * Math.random());
+    p.t = 0;
+    p.size = 0.05 + 0.13 * Math.random() ** 2;
+    p.still = false;
+    const c = BITS[species];
+    this.debris.setColorAt(i, new THREE.Color(c[(i * 7) % c.length]).multiplyScalar(0.75 + 0.3 * Math.random()));
+    if (this.debris.instanceColor) this.debris.instanceColor.needsUpdate = true;
+  }
+
+  private settle(dt: number): void {
+    let n = 0;
+    let moved = false;
+    this.pieces.forEach((p, i) => {
+      if (p.t >= DEBRIS_LIFE) {
+        if (p.size > 0) {
+          p.size = 0;
+          this.debris.setMatrixAt(i, this.m.makeScale(0, 0, 0));
+          moved = true;
+        }
+        return;
+      }
+      p.t += dt;
+      n++;
+      if (!p.still) {
+        p.v.y -= 20 * dt;
+        const ox = p.at.x;
+        const oy = p.at.y;
+        const oz = p.at.z;
+        p.at.addScaledVector(p.v, dt);
+        // (on something solid: it stops there, at the surface)
+        if (this.field && this.field.sample(p.at.x, p.at.y - p.size * 0.5, p.at.z) < 0) {
+          p.at.set(ox, oy, oz);
+          if (p.v.y < 0 && Math.abs(p.v.y) < 3) p.still = true;
+          p.v.set(p.v.x * 0.35, -p.v.y * 0.25, p.v.z * 0.35);
+        }
+        moved = true;
+      }
+      const k = p.size * Math.min(1, (DEBRIS_LIFE - p.t) * 0.5);
+      if (p.t > DEBRIS_LIFE - 2) moved = true;
+      if (!moved) return;
+      this.q.setFromEuler(this.e.set(i * 1.7, i * 2.3, i * 0.9));
+      this.debris.setMatrixAt(i, this.m.compose(p.at, this.q, this.s.set(k, k * 0.6, k * 0.85)));
+    });
+    this.debris.visible = n > 0;
+    if (moved) this.debris.instanceMatrix.needsUpdate = true;
   }
 
   // ---------------------------------------------------------------- walls and bridges
@@ -442,12 +520,14 @@ export class BuildViews {
       const p = pos.array;
       const idx = index.array;
       const inside = new Uint8Array(pos.count);
+      const seed = x * 1.31 + z * 0.73 + y * 0.37;
       let hit = 0;
       for (let k = 0; k < pos.count; k++) {
         const dx = p[k * 3] - c.x;
         const dy = p[k * 3 + 1] - c.y;
         const dz = p[k * 3 + 2] - c.z;
-        if (dx * dx + dy * dy + dz * dz < r * r) {
+        const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        if (d < r * jag(dx / (d || 1), dy / (d || 1), dz / (d || 1), seed)) {
           inside[k] = 1;
           hit++;
         }
@@ -476,18 +556,20 @@ export class BuildViews {
         let dx = p[v * 3] - c.x;
         let dy = p[v * 3 + 1] - c.y;
         let dz = p[v * 3 + 2] - c.z;
+        const d0 = Math.hypot(dx, dy, dz) || 1;
+        const rr = r * jag(dx / d0, dy / d0, dz / d0, seed);
         let h = 0;
         if (nor) {
           const nx = nor.getX(v);
           const ny = nor.getY(v);
           const nz = nor.getZ(v);
           h = dx * nx + dy * ny + dz * nz;
-          if (Math.abs(h) < r * 0.9) {
+          if (Math.abs(h) < rr * 0.9) {
             dx -= h * nx;
             dy -= h * ny;
             dz -= h * nz;
             const l = Math.hypot(dx, dy, dz) || 1;
-            const k = Math.sqrt(r * r - h * h) / l;
+            const k = Math.sqrt(rr * rr - h * h) / l;
             p[v * 3] = c.x + dx * k + h * nx;
             p[v * 3 + 1] = c.y + dy * k + h * ny;
             p[v * 3 + 2] = c.z + dz * k + h * nz;
@@ -495,16 +577,18 @@ export class BuildViews {
           }
         }
         const l = Math.hypot(dx, dy, dz) || 1;
-        p[v * 3] = c.x + (dx / l) * r;
-        p[v * 3 + 1] = c.y + (dy / l) * r;
-        p[v * 3 + 2] = c.z + (dz / l) * r;
+        p[v * 3] = c.x + (dx / l) * rr;
+        p[v * 3 + 1] = c.y + (dy / l) * rr;
+        p[v * 3 + 2] = c.z + (dz / l) * rr;
       }
       // (what is left over at the end: nothing)
       for (let k = n; k < idx.length; k++) idx[k] = 0;
       g.setDrawRange(0, n);
       pos.needsUpdate = true;
       index.needsUpdate = true;
-      this.line(b, c.x, c.y, c.z, r);
+      this.line(b, c.x, c.y, c.z, r, seed);
+      // (and pieces of it, that fall and stay)
+      if (b.of) for (let k = 0; k < 16; k++) this.drop(x, y, z, r, b.species);
       for (let k = 0; k < 22; k++) this.bit(this.s.set(x, y, z), b.species, 10, r * 0.7, 0.16);
     }
   }
@@ -550,7 +634,7 @@ export class BuildViews {
   }
 
   /** The wall of a hole: what is inside shows there. */
-  private line(b: Built, x: number, y: number, z: number, r: number): void {
+  private line(b: Built, x: number, y: number, z: number, r: number, seed: number): void {
     if (!b.of) return;
     const { weapon, frame: f } = b.of;
     // (a mat of ants has no inside: the hole is just where they were)
@@ -591,10 +675,11 @@ export class BuildViews {
           const dz = pz - p.z - (q.z - p.z) * t;
           return [f.first + (along / whole) * (STATIONS - 1) * f.gap, dx * f.up.x + dy * f.up.y + dz * f.up.z, dx * f.out.x + dy * f.out.y + dz * f.out.z];
         };
-        const l = local(r);
+        const reach = r * jag(ux, uy, uz, seed);
+        const l = local(reach);
         const d = outOf(weapon, l[0], l[1], l[2]);
         // (it meets the skin at the sphere itself; inside it is uneven)
-        const k = r * (1 - Math.min(0.14, Math.max(0, -d) * 0.22) * (0.55 + 0.45 * rough));
+        const k = reach * (1 - Math.min(0.14, Math.max(0, -d) * 0.22) * (0.55 + 0.45 * rough));
         at.push(x + ux * k, y + uy * k, z + uz * k);
         deep.push(d);
         high.push(l[1]);
@@ -813,6 +898,7 @@ export class BuildViews {
 
   /** `placing`: what the player is placing (null: nobody is). */
   update(match: Match, views: readonly BugView[], placing: Placing | null, dt: number, time: number): void {
+    this.field = match.field;
     this.showGhost(match, placing, time);
     this.turn(match);
     for (let k = 0; k < this.blasts.length; k += 4) this.blow(this.blasts[k], this.blasts[k + 1], this.blasts[k + 2], this.blasts[k + 3]);
@@ -849,6 +935,7 @@ export class BuildViews {
       this.q.setFromEuler(this.e.set(i + b.t * 9, i * 2 + b.t * 7, i));
       this.flakes.setMatrixAt(i, this.m.compose(b.at, this.q, this.s.set(k, k * 0.45, k * 0.8)));
     });
+    this.settle(dt);
     this.flakes.visible = n > 0;
     if (n > 0) this.flakes.instanceMatrix.needsUpdate = true;
   }

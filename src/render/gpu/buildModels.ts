@@ -669,8 +669,8 @@ function silkCurtain(): Model {
 
 function silkSpan(): Model {
   const s = new Soup();
-  s.rough = 0.45;
-  s.glow = 0.08;
+  s.rough = 0.4;
+  s.glow = 0.2;
   // a felted deck, flat where it is walked on; its edges turn up a little, its belly hangs
   const edge = DECK + 0.1;
   const deck = (x: number, v: number): V => [x, 0.4 * Math.abs(v) ** 9 + 0.012, v * edge];
@@ -696,6 +696,15 @@ function silkSpan(): Model {
   }
   for (const e of [-1, 1]) {
     for (let j = 0; j < 3; j++) s.line(path(110, 0, LONG, (x) => { const p = deck(x, e); return [x, p[1] + 0.065 * Math.sin(x * 5 + j * 2.094), p[2] + 0.065 * Math.cos(x * 5 + j * 2.094)] as const; }), 0.06, dim(SILK, 0.95 + 0.12 * j), 5);
+    // a rail of cable along each side, hung from its edge by threads
+    const rail = (x: number): V => { const p = deck(x, e); return [x, p[1] + 0.5 - 0.12 * Math.sin((x / LONG) * Math.PI) + 0.05 * Math.sin(x * 1.7 + e), p[2] * 1.04]; };
+    for (let j = 0; j < 2; j++) s.line(path(90, 0.15, LONG - 0.15, (x) => { const p = rail(x); return [x, p[1] + 0.045 * Math.sin(x * 6 + j * 3.14), p[2] + 0.045 * Math.cos(x * 6 + j * 3.14)] as const; }), 0.05, dim(SILK, 1.05 + 0.1 * j), 5);
+    for (let k = 0; k < 19; k++) {
+      const x = 0.4 + (k / 18) * (LONG - 0.8) + 0.12 * (rnd(k * 3 + e) - 0.5);
+      const p = deck(x, e * 0.97);
+      const q = rail(x + 0.25 * (rnd(k + e * 5) - 0.5));
+      s.line([[p[0], p[1] + 0.03, p[2]], [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2, (p[2] + q[2]) / 2 + e * 0.03], q], 0.016, dim(SILK, 1.1), 4);
+    }
     // it is made fast at both ends
     for (let k = 0; k <= 8; k++) {
       const x = e > 0 ? LONG : 0;
@@ -711,6 +720,14 @@ function silkSpan(): Model {
       s.line(sag(p, q, 0.06, 4), 0.06, SILK, 5);
       s.ball(q[0], q[1], q[2], 0.22, 0.08, 0.22, SILK, 10, 5);
     }
+  }
+  // dew on its threads
+  s.rough = 0.06;
+  s.glow = 0.6;
+  for (let k = 0; k < 34; k++) {
+    const p = on(0.3 + rnd(k + 0.71) * (LONG - 0.6), (rnd(k + 0.83) - 0.5) * 1.9);
+    const r = 0.025 + 0.035 * rnd(k + 0.91) ** 2;
+    s.ball(p[0], p[1] + r * 0.6, p[2], r, r * 0.85, r, [0.62, 0.66, 0.7], 8, 5);
   }
   return s.done();
 }
@@ -790,8 +807,8 @@ const rim = (c: V, k: number): V => [c[0] * (1 + k * 0.55), c[1] * (1 + k * 1.15
 /** A shield: wide, domed, with a pale rim, a ridge down its middle and two dark spots. */
 function shield(w: number, h: number, dome: number, tone: V, spots: boolean, point = 0.6): Soup {
   const s = new Soup();
-  s.rough = 0.26;
-  s.glow = 0.16;
+  s.rough = 0.17;
+  s.glow = 0.14;
   const f: Field = (x, y, z) => {
     const u = x / w;
     const v = y / h;
@@ -806,7 +823,8 @@ function shield(w: number, h: number, dome: number, tone: V, spots: boolean, poi
     const v = y / h;
     const e = Math.hypot(u * (1 + 0.15 * v) / (1 - point * Math.max(0, -v) ** 1.6), v * 0.98);
     const k = (0.86 + 0.08 * noise(x * 2, y * 2, 2) + 0.04 * Math.sin(y * 20 + 2 * noise(x, y, 5)) + 0.16 * v);
-    return dim(rim(tone, ss(0.66, 0.79, e)), k);
+    // (a deep shell, darker to its rim; light comes off it as a gloss, not from its colour)
+    return dim(tone, 0.78 * k * (1 - 0.4 * ss(0.6, 0.8, e)));
   });
   // (faint marks, not eyes)
   if (spots) for (const e of [-1, 1]) s.ball(e * 0.3 * w, 0.2 * h, dome * (1 - 0.1 - 0.036) + 0.07, 0.17 * w, 0.2 * h, 0.03, dim(tone, 0.55), 18, 8);
