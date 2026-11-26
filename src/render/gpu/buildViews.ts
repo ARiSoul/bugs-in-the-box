@@ -779,6 +779,8 @@ export class BuildViews {
         // (each cut through: dark bark, then rings, pale at its heart)
         const stakes = b.species === 'ant' ? 0.8 * (0.45 + 0.7 * ss(0.15, 0.45, core) * (0.85 + 0.15 * Math.sin(core * 26 + g * 2)) + 0.5 * ss(0.85, 1, core)) * (0.8 + 0.4 * g) : 1;
         let s = (0.75 + 0.35 * Math.min(1, Math.max(0, 1 + q[3]))) * stakes;
+        // (an ant's earth: pebbles in it, damp and darker deep in)
+        if (b.species === 'ant' && q[4] < 2.2) s *= (0.7 + 0.45 * Math.max(0, Math.sin(q[0] * 13.1 + q[1] * 7.7) * Math.sin(q[1] * 11.3 + q[2] * 12.9))) * (0.75 + 0.25 * Math.min(1, Math.max(0, 1 + q[3] * 1.5)));
         let blend = w;
         let shine = glow;
         let rg = rough;

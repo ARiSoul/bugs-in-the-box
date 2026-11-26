@@ -485,10 +485,11 @@ function rampart(): Model {
   const green: readonly V[] = [[0.05, 0.1, 0.02], [0.08, 0.12, 0.024], [0.12, 0.11, 0.022], [0.06, 0.085, 0.03]];
   s.rough = 0.55;
   s.glow = 0.12;
-  for (let i = 0; i < 12; i++) {
+  for (let i = 0; i < 24; i++) {
     const side = i % 2 ? 1 : -1;
-    const x = [-3.9, -3.5, -0.8, -0.4, 2.6, 3.1][Math.floor(i / 2)] + (rnd(i) - 0.5) * 0.9;
-    const y = 1.7 + 1.6 * rnd(i + 3) ** 1.6;
+    const x = -4.7 + (Math.floor(i / 2) / 11) * 9.4 + (rnd(i) - 0.5) * 0.7;
+    // (low, between the stakes, a few higher)
+    const y = 0.95 + 1.9 * rnd(i + 3) ** 2.2;
     const q = new Soup();
     q.rough = 0.55;
     q.glow = 0.12;
@@ -499,7 +500,8 @@ function rampart(): Model {
         const r = v * 0.72 * (1 + 0.04 * Math.sin(a * 9));
         const X = Math.cos(a) * r;
         const Y = Math.sin(a) * r;
-        return [X * 1.1, Y, 0.28 * X * X - 0.04 * Math.abs(Math.sin(Y * 6))];
+        // (folded along its middle, bent back along it)
+        return [X * 1.1, Y, 0.28 * X * X + 0.22 * Math.abs(X) + 0.12 * Y * Y - 0.04 * Math.abs(Math.sin(Y * 6))];
       },
       16,
       4,
@@ -554,7 +556,7 @@ function livingBridge(): Model {
       if (x < 0.5 || (x > LONG - 0.2 && rnd(i * 3 + l + 4) < 0.5)) continue;
       // (along the span, near enough: a deck, not a heap)
       const turn = 0.3 * (rnd(x * 7 + l) - 0.5);
-      s.put(pick(i * 7 + l * 3), along(x, -0.3 - 0.1 * Math.sin(Math.PI * clamp(x / LONG)) - 0.03 * rnd(i * 3 + l + 5) - 0.5 * Math.max(0, Math.max(-x, x - LONG)), z, l % 2 ? 1 : -1, 0, turn, 0.82 * (0.8 + 0.36 * rnd(i * 11 + l)) * big(i * 7 + l * 3), (l - 2) * -0.1), 0.78 + 0.4 * rnd(i * 2 + l * 9 + 3));
+      s.put(pick(i * 7 + l * 3), along(x, -0.3 - 0.1 * Math.sin(Math.PI * clamp(x / LONG)) - 0.03 * rnd(i * 3 + l + 5) - 0.5 * Math.max(0, Math.max(-x, x - LONG)), z, l % 2 ? 1 : -1, 0, turn, 0.82 * (0.8 + 0.36 * rnd(i * 11 + l)) * big(i * 7 + l * 3) * (l === 0 || l === 4 ? 1.15 : 1), (l - 2) * -0.1), (0.88 + 0.4 * rnd(i * 2 + l * 9 + 3)) * (l === 0 || l === 4 ? 1.08 : 1));
     }
   // those that hang on them: chains, down to an arch that is deep at its ends
   const arch = (x: number): number => { const t = Math.abs((x / LONG) * 2 - 1); return -0.75 - 1.75 * t ** 2.2; };
@@ -564,7 +566,7 @@ function livingBridge(): Model {
     const y = -0.62 + down * (arch(x) + 0.62);
     const edge = rnd(i + 0.95) < 0.45;
     const z = edge ? (rnd(i + 0.8) < 0.5 ? -1 : 1) * (DECK - 0.75) * (1 - 0.2 * down) : (rnd(i + 0.8) - 0.5) * 2 * (DECK - 0.6);
-    s.put(pick(i * 13 + 1), along(x, y, z, rnd(i + 2) - 0.5, (rnd(i + 3) - 0.5) * 1.1, (rnd(i + 5) - 0.5) * 0.9, 0.74 * (0.88 + 0.24 * rnd(i + 9)), Math.PI * (0.65 + 0.7 * rnd(i + 6))), 0.62 + 0.36 * rnd(i + 8));
+    s.put(pick(i * 13 + 1), along(x, y, z, rnd(i + 2) - 0.5, (rnd(i + 3) - 0.5) * 1.1, (rnd(i + 5) - 0.5) * 0.9, 0.74 * (0.88 + 0.24 * rnd(i + 9)), Math.PI * (0.65 + 0.7 * rnd(i + 6))), 0.42 + 0.3 * rnd(i + 8));
   }
   // (what is between them)
   s.rough = 0.8;
@@ -668,7 +670,7 @@ function silkCurtain(): Model {
   s.field(
     (x, y, z) => {
       let d = 9;
-      for (const [a, h] of posts) d = Math.min(d, smax(Math.hypot(x - a - 0.08 * Math.sin(y * 1.4 + a), z) - (0.2 + 0.07 * Math.exp(-Math.max(0, y) * 4) + 0.08 * Math.exp(-(((y - h + 0.3) / 0.35) ** 2))) + 0.018 * Math.sin(y * 21 + 2 * Math.atan2(z, x - a)) + 0.012 * noise(x * 3, y * 2, z * 3), y - h, 0.2));
+      for (const [a, h] of posts) d = Math.min(d, smax(Math.hypot(x - a - 0.08 * Math.sin(y * 1.4 + a), z) - (0.2 - 0.08 * Math.exp(-Math.max(0, y) * 3) + 0.08 * Math.exp(-(((y - h + 0.3) / 0.35) ** 2))) + 0.018 * Math.sin(y * 21 + 2 * Math.atan2(z, x - a)) + 0.012 * noise(x * 3, y * 2, z * 3), y - h, 0.2));
       return d * 0.8;
     },
     [-6.2, -0.5, -1],
@@ -761,8 +763,8 @@ function silkSpan(): Model {
         continue;
       }
       const p = on(x, -0.95 + k * 0.2375);
-      const q: V = [x + e * (0.7 + 0.6 * rnd(k + e + 2)) * (k === 0 || k === 8 ? 1.9 : 1), p[1] - (e > 0 ? 0.35 : 0.04), p[2] * (k === 0 || k === 8 ? 1.6 : 1.15)];
-      s.line(sag(p, q, 0.06, 4), 0.06, SILK, 5);
+      const q: V = [x + e * (0.35 + 0.3 * rnd(k + e + 2)) * (k === 0 || k === 8 ? 1.6 : 1), p[1] - (e > 0 ? 0.35 : 0.04), p[2] * (k === 0 || k === 8 ? 1.6 : 1.15)];
+      s.line(sag(p, q, 0.04, 4), 0.022, SILK, 5);
       s.ball(q[0], q[1], q[2], 0.08, 0.05, 0.08, dim(SILK, 0.9), 8, 4);
       for (let f = 0; f < 5; f++) {
         const t = f * 1.256 + rnd(k + f + e) * 0.9;
@@ -945,7 +947,7 @@ function tergite(tone: V, rough = 0.13): Soup {
     // (red amber in its middle, near black at its edges, in the shadow of the one over it at its front; fine pits all over it)
     const a = 0.55 * Math.exp(-((z / 1.5) ** 2));
     const c: V = [(tone[0] + (0.5 - tone[0]) * a) * 1.1, (tone[1] + (0.085 - tone[1]) * a) * 0.8, (tone[2] + (0.014 - tone[2]) * a) * 0.8];
-    return dim(c, (0.8 + 0.08 * noise(x * 1.2, y, z * 0.7) - 0.12 * Math.max(0, noise(x * 9, y * 9, z * 9))) * (1 - 0.7 * k) * (1 - 0.55 * ss(-0.1, -0.6, x + bow)));
+    return dim(c, (0.8 + 0.08 * noise(x * 1.2, y, z * 0.7) - 0.12 * Math.max(0, noise(x * 9, y * 9, z * 9))) * (1 - 0.7 * k) * (1 - 0.68 * ss(-0.1, -0.6, x + bow)));
   });
 }
 
@@ -955,7 +957,7 @@ function scaleWalk(): Model {
   const n = 13;
   for (let i = 0; i < n; i++) {
     const x = 0.65 + (i / (n - 1)) * (LONG - 1.3);
-    s.put(plates[(i * 7) % 6], pose(x, 0, 0), 0.72 + 0.42 * rnd(i * 13.7 + 2.1));
+    s.put(plates[(i * 7) % 6], pose(x, 0, 0), 0.8 + 0.26 * rnd(i * 13.7 + 2.1));
     const out = Math.abs(i - (n - 1) / 2) / ((n - 1) / 2);
     const e = i < (n - 1) / 2 ? -1 : 1;
     for (const k of [-1, 1]) {
@@ -1053,7 +1055,7 @@ function combWall(): Model {
   const W = 5.35;
   const T = 1.0;
   const top = (x: number): number => WALL_HIGH + 0.25 + 0.4 * Math.sin(x * 1.0 + 1) + 0.18 * Math.sin(x * 2.3) - 0.028 * x * x;
-  const kind = (x: number, y: number): number => (Math.abs(x) > W - 0.75 || y > top(x) - 0.95 || y < 0.6 ? 3 : noise(x * 0.5, y * 0.5, 4) > 0.22 ? 2 : noise(x * 0.55 + 9, y * 0.55, 1) > -0.05 ? 1 : 0);
+  const kind = (x: number, y: number): number => (Math.abs(x) > W - 0.45 || y > top(x) - 0.55 || y < 0.4 || ((Math.abs(x) > W - 1.1 || y > top(x) - 1.1) && rnd(x * 3.3 + y * 1.7) < 0.45) ? 3 : noise(x * 0.5, y * 0.5, 4) > 0.22 ? 2 : noise(x * 0.55 + 9, y * 0.55, 1) > -0.05 ? 1 : 0);
   const f: Field = (x, y, z) => {
     const az = Math.abs(z);
     let d = smax(smax(Math.abs(x) - W + 0.1 * noise(2, y, z), y - top(x), 0.45), az - T, 0.2) + 0.05 * noise(x * 1.3, y * 1.3, z * 1.3) + 0.035 * noise(x * 3.7, y * 3.7, z * 3.7);
