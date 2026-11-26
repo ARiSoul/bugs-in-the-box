@@ -676,7 +676,16 @@ function silkSpan(): Model {
   const deck = (x: number, v: number): V => [x, 0.4 * Math.abs(v) ** 9 + 0.012, v * edge];
   const belly = (x: number, v: number): V => [x, 0.4 * Math.abs(v) ** 9 - 0.08 - (1 - v ** 4) * (0.22 + 0.14 * Math.sin((x / LONG) * Math.PI) + 0.04 * Math.sin(x * 2.1 + v * 3)), v * edge];
   s.sheet((u, v) => deck(u * LONG, 1 - 2 * v), 100, 26, (u, v) => dim(felt(u * 30, v * 9, 1), 0.72));
-  s.sheet((u, v) => belly(u * LONG, 2 * v - 1), 80, 18, (u, v) => dim(felt(u * 24, v * 9, 2), 0.62));
+  // (its belly is a net of threads: the light comes through it)
+  for (let k = 0; k <= 12; k++) {
+    const v = -1 + k / 6;
+    s.line(path(48, 0, LONG, (x) => belly(x, Math.max(-1, Math.min(1, v + 0.05 * Math.sin(x * 1.3 + k))))), 0.014 + 0.008 * rnd(k + 0.3), dim(SILK, 0.85 + 0.25 * rnd(k)), 4);
+  }
+  for (let k = 0; k <= 30; k++) {
+    const x0 = (k / 30) * LONG;
+    const lean = (rnd(k + 0.7) - 0.5) * 0.5;
+    s.line(path(14, -1, 1, (v) => belly(Math.max(0, Math.min(LONG, x0 + lean * v)), v)), 0.011 + 0.008 * rnd(k + 0.1), dim(SILK, 0.8 + 0.3 * rnd(k + 2)), 4);
+  }
   for (const u of [0, 1]) s.sheet((a, b) => { const p = deck(u * LONG, 2 * a - 1); const q = belly(u * LONG, 2 * a - 1); return [p[0], p[1] + (q[1] - p[1]) * (u ? 1 - b : b), p[2]]; }, 20, 2, (a, b) => felt(a * 9, b, 3));
   const on = (x: number, v: number): V => { const p = deck(x, v); return [p[0], p[1] + 0.022, p[2]]; };
   for (let k = 0; k <= 6; k++) s.line(path(34, 0, LONG, (x) => on(x, Math.max(-1, Math.min(1, -1 + k / 3 + 0.06 * Math.sin(x * 0.9 + k * 2))))), 0.028, dim(SILK, 1.2));
@@ -702,10 +711,11 @@ function silkSpan(): Model {
     const rail = (x: number): V => { const p = deck(x, e); return [x, p[1] + 0.5 - 0.12 * Math.sin((x / LONG) * Math.PI) + 0.05 * Math.sin(x * 1.7 + e), p[2] * 1.04]; };
     for (let j = 0; j < 2; j++) s.line(path(90, 0.15, LONG - 0.15, (x) => { const p = rail(x); return [x, p[1] + 0.045 * Math.sin(x * 6 + j * 3.14), p[2] + 0.045 * Math.cos(x * 6 + j * 3.14)] as const; }), 0.05, dim(SILK, 1.05 + 0.1 * j), 5);
     for (let k = 0; k < 19; k++) {
-      const x = 0.4 + (k / 18) * (LONG - 0.8) + 0.12 * (rnd(k * 3 + e) - 0.5);
+      if (rnd(k * 5 + e + 0.5) < 0.3) continue;
+      const x = 0.4 + (k / 18) * (LONG - 0.8) + 0.45 * (rnd(k * 3 + e) - 0.5);
       const p = deck(x, e * 0.97);
       const q = rail(x + 0.25 * (rnd(k + e * 5) - 0.5));
-      s.line([[p[0], p[1] + 0.03, p[2]], [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2, (p[2] + q[2]) / 2 + e * 0.03], q], 0.016, dim(SILK, 1.1), 4);
+      s.line([[p[0], p[1] + 0.03, p[2]], [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2, (p[2] + q[2]) / 2 + e * 0.03], q], 0.008 + 0.012 * rnd(k + e * 2.5) * (0.4 + 0.6 * Math.abs((x / LONG) * 2 - 1)), dim(SILK, 1.1), 4);
     }
     // it is made fast at both ends
     for (let k = 0; k <= 8; k++) {
@@ -879,8 +889,8 @@ function shieldWall(): Model {
 /** A plate of a back, across z, its far edge over the next one. */
 function tergite(tone: V): Soup {
   const s = new Soup();
-  s.rough = 0.24;
-  s.glow = -0.12;
+  s.rough = 0.13;
+  s.glow = -0.2;
   const W = DECK + 0.05;
   const f: Field = (x, y, z) => {
     const u = z / W;
@@ -892,9 +902,11 @@ function tergite(tone: V): Soup {
   };
   return s.field(f, [-1.2, -1.2, -2.6], [1.1, 0.3, 2.6], 0.095, (x, y, z) => {
     const bow = 0.18 * (z / W) ** 2;
-    const k = Math.max(ss(0.5, 0.7, x + bow), ss(2.05, 2.25, Math.abs(z)));
-    // (fine pits all over it)
-    return dim(rim(tone, k * 0.6), 0.6 + 0.06 * noise(x * 1.2, y, z * 0.7) - 0.1 * Math.max(0, noise(x * 9, y * 9, z * 9)) - 0.18 * Math.exp(-((z / 1.1) ** 2)));
+    const k = Math.max(ss(0.5, 0.72, x + bow), ss(1.95, 2.25, Math.abs(z)));
+    // (red amber in its middle, near black at its edges, in the shadow of the one over it at its front; fine pits all over it)
+    const a = 0.55 * Math.exp(-((z / 1.5) ** 2));
+    const c: V = [(tone[0] + (0.5 - tone[0]) * a) * 1.1, (tone[1] + (0.085 - tone[1]) * a) * 0.8, (tone[2] + (0.014 - tone[2]) * a) * 0.8];
+    return dim(c, (0.8 + 0.08 * noise(x * 1.2, y, z * 0.7) - 0.12 * Math.max(0, noise(x * 9, y * 9, z * 9))) * (1 - 0.7 * k) * (1 - 0.55 * ss(-0.1, -0.6, x + bow)));
   });
 }
 

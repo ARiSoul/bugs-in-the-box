@@ -793,11 +793,11 @@ export class BuildViews {
     if (b.species === 'spider' && rim.length >= 8) {
       const n = rim.length / 4;
       const dn = f.up;
-      for (let k = 0; k < 44; k++) {
+      for (let k = 0; k < 13; k++) {
         const i = Math.floor(Math.random() * n) * 4;
         const a = [rim[i], rim[i + 1], rim[i + 2]];
         let e: number[];
-        if (k < 10) {
+        if (k < 3) {
           // (across, to the far side)
           let best = 0;
           let j = i;
@@ -820,8 +820,8 @@ export class BuildViews {
         const slot = isWall ? Math.min(COLUMNS - 1, Math.max(0, Math.round((lx - f.first) / f.gap))) : Math.min(SPANS - 1, Math.max(0, Math.floor(lx / SPAN)));
         const len = Math.hypot(e[0] - a[0], e[1] - a[1], e[2] - a[2]);
         if (len < 0.3) continue;
-        const sag = len * (0.08 + 0.12 * Math.random());
-        const w = 0.012 + 0.014 * Math.random();
+        const sag = len * (0.15 + 0.2 * Math.random());
+        const w = 0.006 + 0.008 * Math.random();
         const tone = 0.8 + 0.25 * Math.random();
         const S = 8;
         const pt = (t: number): number[] => {
