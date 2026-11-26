@@ -730,11 +730,11 @@ function silkSpan(): Model {
     const rail = (x: number): V => { const p = deck(x, e); return [x, p[1] + 0.5 - 0.12 * Math.sin((x / LONG) * Math.PI) + 0.05 * Math.sin(x * 1.7 + e), p[2] * 1.04]; };
     for (let j = 0; j < 2; j++) s.line(path(90, 0.15, LONG - 0.15, (x) => { const p = rail(x); return [x, p[1] + 0.045 * Math.sin(x * 6 + j * 3.14), p[2] + 0.045 * Math.cos(x * 6 + j * 3.14)] as const; }), 0.05, dim(SILK, 1.05 + 0.1 * j), 5);
     for (let k = 0; k < 19; k++) {
-      if (rnd(k * 5 + e + 0.5) < 0.3) continue;
+      if (rnd(k * 5 + e + 0.5) < 0.5) continue;
       const x = 0.4 + (k / 18) * (LONG - 0.8) + 0.45 * (rnd(k * 3 + e) - 0.5);
       const p = deck(x, e * 0.97);
       const q = rail(x + 0.25 * (rnd(k + e * 5) - 0.5));
-      s.line([[p[0], p[1] + 0.03, p[2]], [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2, (p[2] + q[2]) / 2 + e * 0.03], q], 0.008 + 0.012 * rnd(k + e * 2.5) * (0.4 + 0.6 * Math.abs((x / LONG) * 2 - 1)), dim(SILK, 1.1), 4);
+      s.line([[p[0], p[1] + 0.03, p[2]], [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2, (p[2] + q[2]) / 2 + e * 0.03], q], 0.006 + 0.008 * rnd(k + e * 2.5) * (0.4 + 0.6 * Math.abs((x / LONG) * 2 - 1)), dim(SILK, 1.1), 4);
     }
     // it is made fast at both ends
     for (let k = 0; k <= 8; k++) {
