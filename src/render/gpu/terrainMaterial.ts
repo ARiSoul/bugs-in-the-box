@@ -52,8 +52,14 @@ const FAN_SPIN = 2.4;
  * show the shared hue, and fan blades carry a bright stripe that turns, so the static blades read as
  * spinning.
  */
-export function createTerrainMaterial(glow: Glow, craters: Craters): { material: THREE.MeshStandardNodeMaterial; sharp: { value: number } } {
+export function createTerrainMaterial(
+  glow: Glow,
+  craters: Craters,
+): { material: THREE.MeshStandardNodeMaterial; sharp: { value: number }; insideCore: { value: THREE.Color }; insideLine: { value: THREE.Color } } {
   const sharp = uniform(1);
+  /** What the ground is made of inside (the scenario sets it): the broken stuff, and its thin layers. */
+  const insideCore = uniform(new THREE.Color(0.17, 0.15, 0.125));
+  const insideLine = uniform(new THREE.Color(0.3, 0.28, 0.25));
   const m = new THREE.MeshStandardNodeMaterial({ vertexColors: true });
   const pbr = attribute('pbr', 'vec3');
   // specular anti-aliasing: where the normal changes fast across a pixel, the surface gets rougher
@@ -82,14 +88,18 @@ export function createTerrainMaterial(glow: Glow, craters: Craters): { material:
     const band = p.y.mul(2.2).add(mx_noise_float(p.mul(0.45)).mul(1.4)).fract();
     const line = smoothstep(0.55, 0.62, band).mul(smoothstep(0.9, 0.83, band)).mul(smoothstep(0, 0.3, mx_noise_float(p.mul(0.9).add(5.3))));
     const steep = smoothstep(0.75, 0.45, abs(normalWorld.y));
-    const layers = float(1).add(steep.mul(line.mul(0.34).sub(0.08)));
+    const layer = steep.mul(line);
+    // (grainy: chips and specks of it)
+    const grit = float(0.9).add(mx_noise_float(p.mul(1.6)).mul(0.22)).add(mx_noise_float(p.mul(5.1)).mul(0.1));
+    const inside = mix(insideCore.mul(grit), insideLine, layer.mul(0.6));
     If(seen.not(), () => {
-      const grit = mx_noise_float(p.mul(2.1)).mul(0.45).add(mx_noise_float(p.mul(7.3)).mul(0.25));
-      base.assign(vec3(0.13, 0.12, 0.09).mul(float(1).add(grit)).mul(layers));
+      base.assign(inside);
     });
     const broken = clamp(float(1).sub(abs(pbr.z.sub(GLOW_BROKEN)).div(0.025)), 0, 1);
     If(broken.greaterThan(0.01), () => {
-      base.assign(mix(base, base.mul(layers), broken));
+      // (the mesher's colour carries its burn and a little of its outside; the inside's own colour over it)
+      const mesherLum = base.r.add(base.g).add(base.b).div(0.39);
+      base.assign(mix(base, inside.mul(mesherLum.clamp(0.45, 1.3)), broken));
     });
     // (the special shadings are codes in the glow channel; the mesher blends them across borders)
     const fuzz = clamp(float(1).sub(abs(pbr.z.sub(GLOW_FUZZ)).div(0.15)), 0, 1);
@@ -167,5 +177,5 @@ export function createTerrainMaterial(glow: Glow, craters: Craters): { material:
     return out;
   })();
 
-  return { material: m, sharp };
+  return { material: m, sharp, insideCore, insideLine };
 }

@@ -434,7 +434,7 @@ export class BuildViews {
       // (the big ones are shards of its broken inside)
       const own = !big && k % 3 === 0;
       const c = own ? outside : rgb;
-      const k2 = own ? 0.45 + 0.3 * Math.random() : 0.13 + 0.17 * Math.random();
+      const k2 = own ? 0.45 + 0.3 * Math.random() : 0.28 + 0.3 * Math.random();
       this.debris.setColorAt(i, this.c3.setRGB(c[0] * k2, c[1] * k2, c[2] * k2));
     }
     if (this.debris.instanceColor) this.debris.instanceColor.needsUpdate = true;

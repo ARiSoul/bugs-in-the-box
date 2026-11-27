@@ -371,6 +371,8 @@ export async function createGpuStage(canvas: HTMLCanvasElement, terrain: Terrain
       sun.intensity = sc.sunIntensity ?? 3.9;
       scene.environmentIntensity = sc.environment ?? 0.4;
       raysAmount.value = sc.rays ?? RAYS;
+      look.insideCore.value.setRGB(...(sc.inside?.core ?? [0.17, 0.15, 0.125]));
+      look.insideLine.value.setRGB(...(sc.inside?.line ?? [0.3, 0.28, 0.25]));
       sun.position.copy(sun.target.position).add(sunOffset);
       sunDir.copy(sunOffset).normalize();
       atmosphere.clear.value = sc.sky.fogClear ?? 40;

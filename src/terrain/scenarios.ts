@@ -42,6 +42,11 @@ export interface Scenario {
    * needs a larger map, so the bugs keep their size against the things around them.
    */
   mapSize?: [number, number, number];
+  /**
+   * What its ground is made of inside, where a blast breaks it open (linear RGB): the broken stuff, and the thin layers
+   * through it (visual only; default a grey-brown with paler lines).
+   */
+  inside?: { core: readonly [number, number, number]; line: readonly [number, number, number] };
   /** Where a bug may stand or walk, for a map of this size (default: all of it). */
   confine?: (W: number, H: number, D: number) => (x: number, y: number, z: number) => boolean;
   turntable?: (W: number, H: number, D: number) => { x: number; z: number; radius: number; j0: number; j1: number; surface: number };
@@ -53,6 +58,8 @@ export const SCENARIOS: readonly Scenario[] = [
     name: 'Tower Case',
     generate: pcCase,
     sharpEdges: true,
+    // (a circuit board: pale fibreglass, thin copper layers)
+    inside: { core: [0.15, 0.15, 0.085], line: [0.5, 0.2, 0.07] },
     sky: { css: 'radial-gradient(ellipse at 50% 45%, #1a1d24 0%, #050608 70%)', fog: 0x0b1016 },
     strictBounds: true,
   },
@@ -61,6 +68,8 @@ export const SCENARIOS: readonly Scenario[] = [
     name: 'Studio Monitor',
     generate: speaker,
     sharpEdges: true,
+    // (a cabinet of fibreboard)
+    inside: { core: [0.17, 0.11, 0.065], line: [0.09, 0.055, 0.03] },
     // an open desk: the fog only darkens the far end of the room, and a dim warm room shows behind (the
     // black cabinet must not melt into the background)
     sky: { css: 'radial-gradient(ellipse at 50% 40%, #221d19 0%, #070605 72%)', fog: 0x0d0b09, fogClear: 80, fogSpan: 220, cornerDark: 0.2, backdrop: 0x3a2e25 },
@@ -79,6 +88,8 @@ export const SCENARIOS: readonly Scenario[] = [
     name: 'Mini Fridge',
     generate: fridge,
     sharpEdges: true,
+    // (tiles: a pale fired body, a grey bed of mortar in it)
+    inside: { core: [0.3, 0.27, 0.22], line: [0.11, 0.105, 0.1] },
     // a kitchen at night: the fridge's light and a soft key light from the front, a dim warm room behind
     sky: { css: 'radial-gradient(ellipse at 50% 40%, #24211e 0%, #080706 72%)', fog: 0x0e0c0b, fogClear: 90, fogSpan: 230, cornerDark: 0.2, backdrop: 0x2e2a26 },
     strictBounds: true,
@@ -95,6 +106,8 @@ export const SCENARIOS: readonly Scenario[] = [
     name: 'Microwave',
     generate: microwave,
     sharpEdges: true,
+    // (sheet steel and plastic: grey)
+    inside: { core: [0.13, 0.13, 0.125], line: [0.3, 0.3, 0.3] },
     // a bright kitchen: a pale marble worktop, a warm dim room behind
     sky: { css: 'radial-gradient(ellipse at 50% 40%, #2a2622 0%, #0a0908 72%)', fog: 0x100e0c, fogClear: 90, fogSpan: 230, cornerDark: 0.2, backdrop: 0x34302b },
     strictBounds: true,
@@ -114,6 +127,8 @@ export const SCENARIOS: readonly Scenario[] = [
     name: 'Desk',
     generate: desk,
     sharpEdges: true,
+    // (a laminated chipboard top: tan chips, darker glue lines)
+    inside: { core: [0.2, 0.14, 0.08], line: [0.07, 0.05, 0.03] },
     // an evening room: warm walls far off, the screens' glow on the black desk
     sky: { css: 'radial-gradient(ellipse at 50% 40%, #2a2724 0%, #0b0a09 72%)', fog: 0x110f0e, fogClear: 220, fogSpan: 480, cornerDark: 0.2, backdrop: 0x3a352f },
     strictBounds: true,
@@ -132,6 +147,8 @@ export const SCENARIOS: readonly Scenario[] = [
     name: 'Car Dashboard',
     generate: car,
     sharpEdges: true,
+    // (a dashboard: grey-yellow foam under the skin)
+    inside: { core: [0.17, 0.155, 0.11], line: [0.06, 0.06, 0.06] },
     // a car parked in a bright garage, its ignition on
     sky: { css: 'radial-gradient(ellipse at 50% 40%, #3a3835 0%, #0c0b0a 72%)', fog: 0x14120f, fogClear: 300, fogSpan: 600, cornerDark: 0.1, backdrop: 0x3a3733 },
     strictBounds: true,
