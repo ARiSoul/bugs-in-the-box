@@ -81,6 +81,17 @@ export class BurrowViews {
       const t = this.surface(match, b.x + this.n.x * 6, b.y + this.n.y * 6, b.z + this.n.z * 6, -this.n.x, -this.n.y, -this.n.z, 12);
       if (t >= 0) this.puff(b.x + this.n.x * (6 - t), b.y + this.n.y * (6 - t), b.z + this.n.z * (6 - t), near ? 3 : 1);
     }
+    // (a bug walking through a tunnel: its far wall drawn, so the bug is seen in it through the ground)
+    const walk = u ? null : match.inTunnel;
+    if (walk) {
+      if (!this.tunnel || this.walking !== walk.path) {
+        this.tube(walk.path, walk.radius);
+        this.walking = walk.path;
+      }
+      this.gone = 0;
+      return;
+    }
+    this.walking = null;
     if (!this.tunnel) return;
     const g = this.tunnel.geometry;
     const index = g.getIndex() as THREE.BufferAttribute;
@@ -341,6 +352,9 @@ export class BurrowViews {
   }
 
   /** The tunnel along `path` (its far wall only, drawn as the ant goes). */
+  /** The way of the tunnel a bug walks through now (its far wall is drawn); null: none. */
+  private walking: readonly number[] | null = null;
+
   private tube(path: readonly number[], radius: number): void {
     this.dropTunnel();
     // (only what is under the ground: from halfway down its first stretch to halfway up its last)

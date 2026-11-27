@@ -171,3 +171,8 @@ export const MATERIAL_RGB: readonly (readonly [number, number, number])[] = [
   [0.05, 0.05, 0.053], // DASH_TRIM
   [0.02, 0.02, 0.02], // BUILT (never drawn)
 ];
+
+/**
+ * What an ant cannot dig through (metal, stone, hard ceramic): its Burrow stops short of it. Blasts still break them.
+ */
+export const HARD: readonly number[] = [ALUMINIUM, STEEL, FERRITE, ENAMEL, CHASSIS_RED, MARBLE];

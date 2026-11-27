@@ -62,7 +62,7 @@ export class AimView {
   /** `bugPosition`: interpolated render position of the active bug. */
   update(match: Match, bugPosition: THREE.Vector3, labelHeight: number, now: number, cameraDistance: number): void {
     const unit = match.activeUnit;
-    const aiming = match.phase === 'aim' && unit.bug.alive && match.underground === null;
+    const aiming = match.phase === 'aim' && unit.bug.alive && match.underground === null && match.inTunnel === null;
     // (a special attack has a view and a sight of its own)
     if (aiming && match.currentWeapon.sceneTicks > 0) {
       this.pointer.visible = this.marker.visible = false;
@@ -91,6 +91,11 @@ export class AimView {
   private showBurrow(match: Match, now: number): void {
     const u = match.activeUnit;
     const p = match.burrowPath(u, match.charging ? match.power : 0, this.path);
+    // (the ground before it is too thin, or hard: no way)
+    if (p.length < 12) {
+      this.dots.visible = this.ring.visible = this.start.visible = false;
+      return;
+    }
     let total = 0;
     for (let k = 0; k + 3 < p.length; k += 3) total += Math.hypot(p[k + 3] - p[k], p[k + 4] - p[k + 1], p[k + 5] - p[k + 2]);
     // (the dots run along it, slowly)

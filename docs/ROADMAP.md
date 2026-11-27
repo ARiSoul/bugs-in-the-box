@@ -82,7 +82,8 @@ To be decided: who evolves (recommended: the species, per player) · whether lev
 - [ ] Perks for the mini-map: a ghost that does not show on the others' (`Minimap.shows`)
 - [ ] Reading time over the network: the pause is an event of the match's, with its limits
 - [x] **Explosions like the builds' holes**: every crater uneven, its own shape for the place (deterministic, the same in the simulation and in what is drawn over the terrain), its walls the material's broken inside (matte), and lumps of the ground thrown out round it
-- [ ] **Burrow, next**: mind the thickness under the ant (never dig out into the air under a thin floor, nor deeper than the ground goes); places where nothing can be dug; the tunnel a real part of the map, like any crater: any bug that fits may go in and walk through it (forwards only, or stop halfway), seen from above, not followed from behind
+- [x] **Burrow and the ground**: the tunnel keeps solid ground under it (it runs shallower under thin ground, ends short where the ground gives out, and cannot start on a thin top); hard materials (metal, marble, ferrite; `HARD` in `terrain/materials.ts`) cannot be dug, and blasts still break them; the tunnel stays a part of the map: any bug that fits walks in at either mouth and through it (forwards only, or it stops halfway), seen from above, and out at the far end
+- [ ] Burrow, later: the computer using tunnels; the microwave has nothing an ant can dig (all metal and marble)
 
 ## Phase 5 · Multiplayer
 - [ ] Deterministic simulation validated across clients (same seed + same events = same map)

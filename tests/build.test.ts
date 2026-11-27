@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { Match, NO_INPUT, SKILL_FULL, type MatchEvent, type MatchInput } from '../src/game/match';
 import { ANT, BEE, COCKROACH, SPIDER, type BugSpecies } from '../src/game/species';
 import { ANT_COLUMN, TITAN_LIFT, BURROW, BURST, ANTHILL, LIVING_BRIDGE, RAMPART, SILK_CURTAIN, SOLDER_BLOB, WAX_NEST, WEAPONS, WORKS, type Weapon } from '../src/game/weapons';
-import { BUILT } from '../src/terrain/materials';
+import { BUILT, STEEL } from '../src/terrain/materials';
 import type { Terrain } from '../src/terrain/Terrain';
 import { world } from './helpers/worlds';
 import { BUILD_MODELS, buildModel } from '../src/render/gpu/buildModels';
@@ -329,6 +329,81 @@ describe('burrow', () => {
     expect(m.works[0]).toBe(WORKS);
     // (a spider has none)
     expect(m.usesLeft(1, at(BURROW))).toBe(0);
+  });
+});
+
+describe('burrow and the ground', () => {
+  /** Charge the Burrow to half and let it go; the events of it. */
+  const dig = (m: Match): MatchEvent[] => {
+    run(m, 1, { weapon: at(BURROW) });
+    const events: MatchEvent[] = [];
+    for (let k = 0; k < 200 && m.power < 0.5; k++) events.push(...run(m, 1, { fire: true }));
+    events.push(...run(m, 1));
+    return events;
+  };
+
+  it('never digs out into the air under a thin floor: on a thin slab it cannot, and it ends short where the ground thins', () => {
+    // (a slab from y 7 to 10: too thin for a tunnel under it)
+    const thin = world(4, 2, 2, (_i, j) => Math.max(j - 10, 7 - j));
+    const m = setup(thin);
+    expect(m.burrowPath(m.units[0], 0.5, []).length).toBe(0);
+    expect(dig(m).some((e) => e.type === 'noRoom')).toBe(true);
+    expect(m.usesLeft(0, at(BURROW))).toBe(3);
+    // (thick ground up to x 30, a thin slab past it: it comes up before the slab)
+    const t = world(4, 2, 2, (i, j) => Math.max(j - 10, (i < 30 ? 0 : 7) - j));
+    const n = setup(t);
+    const path = n.burrowPath(n.units[0], 1, []);
+    expect(path.length).toBe(12);
+    expect(path[9]).toBeLessThan(31);
+    expect(path[9]).toBeGreaterThan(24);
+  });
+
+  it('stops short of what is hard (metal, stone): blasts still break it', () => {
+    const t = world(4, 2, 2, (_i, j) => j - 10);
+    // (a steel plate standing down into the ground at x 30..31)
+    for (let k = 0; k < t.sz; k++) for (let j = 0; j < 10; j++) for (let i = 30; i <= 31; i++) t.material[t.idx(i, j, k)] = STEEL;
+    const m = setup(t);
+    const path = m.burrowPath(m.units[0], 1, []);
+    expect(path.length).toBe(12);
+    expect(path[9]).toBeLessThan(30);
+    expect(t.hard(30, 8, 32)).toBe(true);
+    expect(t.hard(26, 8, 32)).toBe(false);
+  });
+
+  it('a tunnel stays: a bug walks into it and through it (forwards only, or it stops), and out at its far end', () => {
+    const t = world(4, 2, 2, (_i, j) => j - 10);
+    const m = setup(t, ANT, SPIDER);
+    const b = m.units[0].bug;
+    expect(dig(m).some((e) => e.type === 'burrow')).toBe(true);
+    expect(run(m, 240).some((e) => e.type === 'emerge')).toBe(true);
+    expect(m.tunnels.length).toBe(1);
+    const out = b.x;
+    // (back into the hole it came up by, facing into it)
+    let inside = false;
+    for (let k = 0; k < 120 && !inside; k++) {
+      run(m, 1, { move: 1, faceX: -1 });
+      inside = m.inTunnel !== null;
+    }
+    expect(inside).toBe(true);
+    // (under the ground)
+    run(m, 40, { move: 1 });
+    expect(b.y).toBeLessThan(10);
+    // (it stops when it is not told to go on)
+    const x = b.x;
+    run(m, 30);
+    expect(b.x).toBe(x);
+    expect(m.inTunnel).not.toBe(null);
+    // (going back is not walking on: it stays)
+    run(m, 20, { move: -1 });
+    expect(b.x).toBe(x);
+    // (on, and out where the ant first went in)
+    const events = run(m, 400, { move: 1 });
+    expect(events.some((e) => e.type === 'emerge')).toBe(true);
+    expect(m.inTunnel).toBe(null);
+    expect(b.x).toBeLessThan(out - 8);
+    run(m, 60);
+    expect(b.alive).toBe(true);
+    expect(b.y).toBeGreaterThan(10);
   });
 });
 

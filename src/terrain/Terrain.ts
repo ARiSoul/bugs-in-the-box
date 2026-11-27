@@ -1,5 +1,5 @@
 import { CHUNK, DENSITY_CLAMP } from './constants';
-import { BUILT } from './materials';
+import { BUILT, HARD } from './materials';
 import { HIDDEN_CLEAR } from './sdf';
 import { CRATER_MAX, CRATER_WEIGHTS, craterReach, craterShape } from './crater';
 
@@ -105,6 +105,17 @@ export class Terrain {
   commitGeneration(): void {
     this.scorch.fill(0);
     this.markAllDirty();
+  }
+
+  /** Whether what is at (x, y, z) cannot be dug (a hard material, or the world's outer shell, which is never opened). */
+  hard(x: number, y: number, z: number): boolean {
+    const i = Math.round(x);
+    const j = Math.round(y);
+    const k = Math.round(z);
+    const { sx, sy, sz } = this;
+    if (Math.min(i, j, k, sx - 1 - i, sy - 1 - j, sz - 1 - k) < 1) return true;
+    const id = this.idx(i, j, k);
+    return this.dens[id] < 0 && HARD.includes(this.material[id]);
   }
 
   /** Trilinear sample of the density field. Outside the world it reads as air. */

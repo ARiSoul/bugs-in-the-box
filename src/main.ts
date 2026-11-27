@@ -1400,6 +1400,15 @@ function frame(now: number): void {
       const dy = (p[k + 4] - p[k + 1]) / (Math.hypot(p[k + 3] - p[k], p[k + 4] - p[k + 1], p[k + 5] - p[k + 2]) || 1);
       v.view.root.rotateX(-Math.asin(Math.max(-1, Math.min(1, dy))) * 0.85);
     }
+    // (a bug walking through a tunnel: head down or up as the way goes)
+    const tun = match.inTunnel;
+    if (tun && tun.unit === i) {
+      const p = tun.path;
+      const a = Math.hypot(p[3] - p[0], p[4] - p[1], p[5] - p[2]);
+      const k = tun.s < a ? 0 : tun.s > tun.end - Math.hypot(p[9] - p[6], p[10] - p[7], p[11] - p[8]) ? 6 : 3;
+      const dy = ((p[k + 4] - p[k + 1]) / (Math.hypot(p[k + 3] - p[k], p[k + 4] - p[k + 1], p[k + 5] - p[k + 2]) || 1)) * tun.dir;
+      v.view.root.rotateX(-Math.asin(Math.max(-1, Math.min(1, dy))) * 0.85);
+    }
     // (it blinks; dead, its lids are shut; about to shoot, its jaws open)
     v.blink -= scaled;
     if (v.blink < -0.16) v.blink = 1.5 + Math.random() * 4;
@@ -1489,6 +1498,8 @@ function frame(now: number): void {
     }
     if (tracking) follow.update(target, dt);
     if (burrowing) follow.overlook(holding ? 0.95 : 0.85, holding ? 29 : 21, dt, match.activeUnit.bug.hx, match.activeUnit.bug.hz);
+    // (a bug walking through a tunnel: seen from above, not followed from behind)
+    else if (tracking && match.inTunnel) follow.overlook(0.92, 19, dt, match.activeUnit.bug.hx, match.activeUnit.bug.hz);
   }
 
   // wind arrow in screen space: project the wind onto the camera's ground-plane axes
