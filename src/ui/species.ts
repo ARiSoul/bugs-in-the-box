@@ -31,7 +31,10 @@ export class SpeciesPage {
       this.draw();
     });
     window.addEventListener('keydown', (e) => {
-      if (!this.root.hidden && e.code === 'Escape') this.close();
+      if (!this.root.hidden && e.code === 'Escape') {
+        e.preventDefault();
+        this.close();
+      }
     });
   }
 

@@ -108,6 +108,8 @@ export class SoundEngine {
   private readonly loops: Looped[] = [];
   private voices = 0;
   private master!: GainNode;
+  /** Held still (a paused match): no sound nor music until it is let go. */
+  private held = false;
   private world!: GainNode;
   private muffle!: BiquadFilterNode;
   private scene!: GainNode;
@@ -134,13 +136,20 @@ export class SoundEngine {
     }, 0);
     const unlock = (): void => {
       if (!this.context) this.open();
-      void this.context?.resume();
+      if (!this.held) void this.context?.resume();
     };
     for (const type of ['pointerdown', 'keydown', 'touchend']) window.addEventListener(type, unlock, { capture: true });
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) void this.context?.suspend();
-      else void this.context?.resume();
+      else if (!this.held) void this.context?.resume();
     });
+  }
+
+  /** Hold every sound and the music still (a paused match), or let them go on. */
+  hold(on: boolean): void {
+    this.held = on;
+    if (on) void this.context?.suspend();
+    else if (!document.hidden) void this.context?.resume();
   }
 
   private open(): void {

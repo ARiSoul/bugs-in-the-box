@@ -54,6 +54,7 @@ import { HAND, Hud, type HudState } from './ui/hud';
 import { EndScreen, SetupScreen, type SetupChoice } from './ui/setup';
 import { setupKeysMenu } from './ui/keys';
 import { SoundMenu } from './ui/sound';
+import { PauseMenu } from './ui/pause';
 
 /** The two teams, each of one species (chosen in the menu, kept in the address as `?teams=ant,spider`). */
 const PLURAL: Record<string, string> = { ant: 'Ants', spider: 'Spiders', cockroach: 'Cockroaches', bee: 'Bees' };
@@ -935,7 +936,56 @@ function updateMenus(dt: number): void {
 window.addEventListener('pointermove', (e) => {
   heroes.pointer.set((e.clientX / window.innerWidth) * 2 - 1, 1 - (e.clientY / window.innerHeight) * 2);
 });
-(document.getElementById('toSetup') as HTMLButtonElement).addEventListener('click', () => openSetup());
+(document.getElementById('toSetup') as HTMLButtonElement).addEventListener('click', () => {
+  pauseMenu.close();
+  openSetup();
+});
+
+// ---- the pause box: Esc or its button; Continue, Restart (the same match anew), Leave match (to the setup) ----
+/** When the mouse was last given back by a flight (the same Esc must not pause too). */
+let mouseFreedAt = -1e9;
+document.addEventListener('pointerlockchange', () => {
+  if (!document.pointerLockElement) mouseFreedAt = performance.now();
+});
+/** Controls were on when it opened (they come back on with it closing). */
+let controlsWere = false;
+const pauseMenu = new PauseMenu(
+  // (only in a match being played: not while the box warms up, in the menus, its intro's rip, the end, nor a camera of its own)
+  () => !document.getElementById('loading') && !menus.setup && !menus.over && !menus.ripping && !debugCamera && !document.body.classList.contains('cinematic'),
+  {
+    open: () => {
+      controlsWere = controls.enabled;
+      controls.enabled = false;
+      if (document.pointerLockElement) document.exitPointerLock();
+      sound.hold(true);
+    },
+    close: () => {
+      if (controlsWere) controls.enabled = true;
+      controlsWere = false;
+      sound.hold(false);
+    },
+    // (the same map, teams, rules and seed, from the start; nobody gains from the match left)
+    restart: () => {
+      accumulator = 0;
+      newMatch(seed);
+      flash();
+    },
+    // (back to the setup: nobody gains from the match left)
+    leave: () => openSetup(),
+  },
+);
+document.getElementById('hud')?.append(pauseMenu.button);
+window.addEventListener('keydown', (e) => {
+  if (e.code !== 'Escape' || e.repeat || e.defaultPrevented) return;
+  // (the Esc that gives the mouse back from a flight is that, not a pause)
+  if (document.pointerLockElement || performance.now() - mouseFreedAt < 400) return;
+  if (!pauseMenu.open) {
+    // (what is open over the match closes first)
+    if (inventory.isOpen) return inventory.toggle(false);
+    if (minimap.big) return minimap.toggle(false);
+  }
+  if (pauseMenu.toggle()) e.preventDefault();
+});
 
 // Dev only, and only asked for (`?boom=1`): shift+click blows up the terrain under the pointer (handy to test falls and
 // damage). (Shift is also the run key: never on in a match by itself.)
@@ -1271,7 +1321,7 @@ let advancing = false;
 let wasSpecial = false;
 function loop(now: number): void {
   requestAnimationFrame(loop);
-  if (paused) {
+  if (paused || pauseMenu.open) {
     if (!advancing) lastFrame = now;
     return;
   }

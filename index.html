@@ -174,6 +174,19 @@
       #panel:not([open]) { background: rgba(15, 12, 11, 0.82); border: 0; border-radius: 0; transform: skewX(-8deg); font-family: 'Bahnschrift', 'Segoe UI', sans-serif; } #fps { display: none; } body:has(#panel[open]) #fps { display: block; }
       @media (hover: hover) and (pointer: fine) { #pad { display: none; } }
       #setup[hidden], #ending[hidden] { display: none; }
+      /* the pause box, and its button in the corner of a match */
+      #hud .pause-open { position: absolute; right: 1.2vw; top: 4.2vh; width: 5.2vh; height: 5.2vh; padding: 1.1vh; border: 0; border-radius: 3px; background: rgba(9, 7, 7, 0.72); color: var(--amber); transform: skewX(-6deg); pointer-events: auto; cursor: pointer; transition: transform 0.18s cubic-bezier(0.2, 2, 0.4, 1), background 0.15s; }
+      #hud .pause-open:hover { background: var(--amber); color: #1b1206; transform: skewX(-6deg) scale(1.08); }
+      #hud .pause-open svg { display: block; width: 100%; fill: none; stroke: currentColor; stroke-width: 5; stroke-linecap: round; }
+      #pause[hidden] { display: none; }
+      #pause { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; background: rgba(6, 4, 4, 0.55); --amber: #ffb547; --ink: #f6efdf; --red: #ff5a45; font-family: 'Bahnschrift', 'Segoe UI Variable Display', 'Segoe UI', system-ui, sans-serif; color: var(--ink); font-size: clamp(12px, 1.8vh, 20px); }
+      #pause .pause-box { display: flex; flex-direction: column; gap: 1.1vh; min-width: 30vh; padding: 2.4vh 3vh 3vh; background: rgba(12, 9, 8, 0.92); border-left: 0.5vh solid var(--amber); transform: skewX(-4deg); animation: swap 0.25s both; }
+      #pause h2 { margin: 0 0 0.6vh; font-size: 2.4em; letter-spacing: 0.04em; color: var(--amber); }
+      #pause button { padding: 0.7em 1em; border: 0; border-radius: 3px; background: #241d18; color: inherit; font: inherit; font-weight: 700; text-align: left; cursor: pointer; transition: background 0.15s, transform 0.15s; }
+      #pause button:hover, #pause button:focus-visible { background: #3a2f26; outline: none; transform: translateX(0.4vh); }
+      #pause .pause-continue { background: var(--amber); color: #1b1206; }
+      #pause .pause-continue:hover, #pause .pause-continue:focus-visible { background: #ffd08a; }
+      #pause button.armed, #pause button.armed:hover, #pause button.armed:focus-visible { background: var(--red); color: #1b0806; }
       #setup, #ending { position: fixed; inset: 0; z-index: 8; --red: #ff5a45; --blue: #5fb4ff; --amber: #ffb547; --ink: #f6efdf; --dim: #c2bbac; --px: 0; --py: 0; font-family: 'Bahnschrift', 'Segoe UI Variable Display', 'Segoe UI', system-ui, sans-serif; color: var(--ink); font-size: clamp(11px, 1.62vh, 18px); overflow: hidden; }
       #setup { pointer-events: none; }
       #setup button, #setup input, #setup .team-card, #setup .zone, #setup .marchers { pointer-events: auto; }

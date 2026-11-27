@@ -74,7 +74,10 @@ export class SoundMenu {
       if (!box.hidden && !root.contains(e.target as Node)) set(false);
     });
     window.addEventListener('keydown', (e) => {
-      if (e.code === 'Escape' && !box.hidden) set(false);
+      if (e.code === 'Escape' && !box.hidden) {
+        e.preventDefault();
+        set(false);
+      }
     });
     this.show();
     return root;
