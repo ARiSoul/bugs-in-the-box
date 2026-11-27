@@ -330,8 +330,11 @@ const BURROW_HOLD = 10;
 const BURROW_FLOOR = 0.4;
 const BURROW_STEP = 0.7;
 const BURROW_RISE = 0.15;
-/** How fast a bug walks through a tunnel (units a second), and how much room it needs in it (its radius and this). */
+/** How fast a bug walks through a tunnel (units a second; backing, this much of it), and how much room it needs in it (its radius and this). */
 const TUNNEL_WALK = 4.5;
+const TUNNEL_BACK = 0.6;
+/** Out of a tunnel, a bug goes in again only once it is this much further than the tunnel's radius from both its mouths. */
+const TUNNEL_AWAY = 2.5;
 const TUNNEL_ROOM = 0.2;
 const TUNNEL_HOP = 3;
 /** The Burrow's tunnel radius (the way bugs fit in one). */
@@ -499,6 +502,8 @@ export class Match {
   readonly tunnels: { readonly path: readonly number[]; readonly radius: number; readonly end: number }[] = [];
   /** Bugs in a tunnel now: which tunnel, how far along it, which way it goes (+1: from its first point). */
   private readonly walks = new Map<number, { tunnel: number; s: number; dir: 1 | -1 }>();
+  /** Bugs just out of a tunnel: which (they go in again only once they have gone away from its mouths). */
+  private readonly outOf = new Map<number, number>();
 
   /** The active bug in a tunnel now: its way, how far along it is, its radius (render only reads it); null: none. */
   get inTunnel(): { readonly unit: number; readonly path: readonly number[]; readonly s: number; readonly end: number; readonly radius: number; readonly dir: number } | null {
@@ -2120,10 +2125,26 @@ export class Match {
     const b = u.bug;
     let w = this.walks.get(u.id);
     if (!w) {
+      // (just out of one: away from its mouths first)
+      const out = this.outOf.get(u.id);
+      if (out !== undefined) {
+        const p = this.tunnels[out].path;
+        const f = this.tunnels[out].radius + TUNNEL_AWAY;
+        const far = f * f;
+        const ax = b.x - p[0];
+        const ay = b.y - p[1];
+        const az = b.z - p[2];
+        const bx = b.x - p[9];
+        const by = b.y - p[10];
+        const bz = b.z - p[11];
+        const d0 = ax * ax + ay * ay + az * az;
+        const d1 = bx * bx + by * by + bz * bz;
+        if (d0 > far && d1 > far) this.outOf.delete(u.id);
+      }
       if (going !== 1 || !b.grounded || !b.alive || u.web >= 0 || u.cover || b.species.radius + TUNNEL_ROOM > BURROW_TUNNEL) return false;
       for (let i = 0; i < this.tunnels.length && !w; i++) {
         const t = this.tunnels[i];
-        if (b.species.radius + TUNNEL_ROOM > t.radius) continue;
+        if (b.species.radius + TUNNEL_ROOM > t.radius || this.outOf.get(u.id) === i) continue;
         const p = t.path;
         for (let end = 0; end <= 9; end += 9) {
           const dx = b.x - p[end];
@@ -2136,7 +2157,7 @@ export class Match {
           const iz = p[n + 2] - p[end + 2];
           const il = Math.sqrt(ix * ix + iz * iz) || 1;
           if ((b.hx * ix + b.hz * iz) / il < 0.4) continue;
-          w = { tunnel: i, s: end === 0 ? 0 : t.end, dir: end === 0 ? 1 : -1 };
+          w = { tunnel: i, s: end === 0 ? 0.01 : t.end - 0.01, dir: end === 0 ? 1 : -1 };
           this.walks.set(u.id, w);
           break;
         }
@@ -2151,8 +2172,9 @@ export class Match {
       this.walks.delete(u.id);
       return false;
     }
-    if (going === 1) {
-      const next = w.s + w.dir * TUNNEL_WALK * DT;
+    // (on, or back a little slower, facing the same way)
+    if (going !== 0) {
+      const next = w.s + w.dir * going * TUNNEL_WALK * (going === 1 ? 1 : TUNNEL_BACK) * DT;
       const at = this.along(t.path, next < 0 ? 0 : next > t.end ? t.end : next);
       // (something built in its way, or the ground pushed in: it stops)
       if (this.field.sample(at[0], at[1], at[2]) > -0.4) w.s = next < 0 ? 0 : next > t.end ? t.end : next;
@@ -2171,12 +2193,17 @@ export class Match {
     }
     b.vx = b.vy = b.vz = 0;
     b.grounded = true;
-    if ((w.dir === 1 && w.s < t.end) || (w.dir === -1 && w.s > 0)) return true;
-    // (out at the far end: a little hop up out of the hole, onto its rim)
+    if (w.s > 0 && w.s < t.end) return true;
+    // (out at an end: a little hop up out of the hole, onto its rim, the way out of it)
     this.walks.delete(u.id);
-    b.vx = b.hx * TUNNEL_HOP * 0.6;
+    this.outOf.set(u.id, w.tunnel);
+    const way = w.s >= t.end ? 1 : -1;
+    const ox = at[3] * way;
+    const oz = at[5] * way;
+    const ol = Math.sqrt(ox * ox + oz * oz) || 1;
+    b.vx = (ox / ol) * TUNNEL_HOP * 0.6;
     b.vy = TUNNEL_HOP;
-    b.vz = b.hz * TUNNEL_HOP * 0.6;
+    b.vz = (oz / ol) * TUNNEL_HOP * 0.6;
     b.grounded = false;
     this.soft.add(u.id);
     this.events.push({ type: 'emerge', unit: u.id, x: b.x, y: b.y, z: b.z });
@@ -2290,6 +2317,7 @@ export class Match {
     b.vy = b.ny * BURROW_HOP;
     b.vz = b.nz * BURROW_HOP;
     this.events.push({ type: 'emerge', unit: r.unit.id, x: b.x, y: b.y, z: b.z });
+    this.outOf.set(r.unit.id, this.tunnels.length - 1);
     this.burrowing = null;
     // (out: back to what it had in hand)
     if (this.phase === 'aim') this.weapon = this.keptBy(r.unit);

@@ -370,7 +370,7 @@ describe('burrow and the ground', () => {
     expect(t.hard(26, 8, 32)).toBe(false);
   });
 
-  it('a tunnel stays: a bug walks into it and through it (forwards only, or it stops), and out at its far end', () => {
+  it('a tunnel stays: a bug walks into it and through it (on, back, or it stops), and out at its far end, and not straight back in', () => {
     const t = world(4, 2, 2, (_i, j) => j - 10);
     const m = setup(t, ANT, SPIDER);
     const b = m.units[0].bug;
@@ -378,6 +378,9 @@ describe('burrow and the ground', () => {
     expect(run(m, 240).some((e) => e.type === 'emerge')).toBe(true);
     expect(m.tunnels.length).toBe(1);
     const out = b.x;
+    // (away from it first: right out of it, it does not go in again)
+    run(m, 50, { move: 1, faceX: 1 });
+    expect(m.inTunnel).toBe(null);
     // (back into the hole it came up by, facing into it)
     let inside = false;
     for (let k = 0; k < 120 && !inside; k++) {
@@ -393,14 +396,21 @@ describe('burrow and the ground', () => {
     run(m, 30);
     expect(b.x).toBe(x);
     expect(m.inTunnel).not.toBe(null);
-    // (going back is not walking on: it stays)
+    // (it backs up, slower, facing the same way)
+    const hx = b.hx;
     run(m, 20, { move: -1 });
-    expect(b.x).toBe(x);
+    expect(b.x).toBeGreaterThan(x);
+    expect(b.hx).toBe(hx);
     // (on, and out where the ant first went in)
     const events = run(m, 400, { move: 1 });
     expect(events.some((e) => e.type === 'emerge')).toBe(true);
     expect(m.inTunnel).toBe(null);
     expect(b.x).toBeLessThan(out - 8);
+    // (still going on, facing back into it: it does not go in again at once)
+    for (let k = 0; k < 90; k++) {
+      run(m, 1, { move: 1, faceX: 1 });
+      expect(m.inTunnel).toBe(null);
+    }
     run(m, 60);
     expect(b.alive).toBe(true);
     expect(b.y).toBeGreaterThan(10);
