@@ -343,7 +343,7 @@ export class Hud {
               : match.phase === 'aim' && match.currentWeapon.kind === 'burrow'
               ? match.burrowPath(u, 0, this.way).length < 12
                 ? `<b>${match.currentWeapon.name}</b> cannot dig here: the ground is too thin, or hard`
-                : `<b>${match.currentWeapon.name}</b> hold fire: how far · it goes the way it faces`
+                : `<b>${match.currentWeapon.name}</b> hold fire to set the length · digs the way it faces`
               : match.phase === 'aim'
             ? `<b>${match.currentWeapon.name}</b> aim ${((Math.atan2(u.aimV, u.aimH) * 180) / Math.PI).toFixed(1)}°${u.bug.species.flight ? ` · ${u.bug.flying ? 'run: up, jump: let go' : u.bug.grounded ? 'jump twice: fly' : 'jump: fly'} · breath ${Math.round((u.bug.breath / (u.bug.species.flight * TICK_RATE)) * 100)}%` : ''}`
             : '';

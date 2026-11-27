@@ -1547,7 +1547,9 @@ function frame(now: number): void {
     const up = Math.max(0, (t.y - c.y) / d + Math.max(0, aimAt[1]) * 0.5);
     const playing = follow.stays && !debugCamera && !inMenu && !intro && !inScene() && !menus.over;
     const aheadHidden = playing && match.phase === 'aim' && terrain.raycast(c.x, c.y, c.z, lookAhead.x - c.x, lookAhead.y - c.y, lookAhead.z - c.z, c.distanceTo(lookAhead) - 1) >= 0 && terrain.sample(c.x, c.y, c.z) < 3;
-    seeThrough.update(t, lookAhead, up, playing && (follow.hides(terrain) || aheadHidden), dt, match.underground !== null || match.inTunnel !== null);
+    // (a bug under the ground is always seen through it: what is drawn over a broken roof hides it too)
+    const underGround = match.underground !== null || match.inTunnel !== null;
+    seeThrough.update(t, lookAhead, up, playing && (follow.hides(terrain) || aheadHidden || underGround), dt, underGround);
   }
   wasSpecial = inScene() !== null;
   bowState.active = bow.camera.active;

@@ -143,6 +143,9 @@ export class Craters {
       Loop(this.count, ({ i }) => {
         const c = this.list.element(i) as unknown as THREE.Node<'vec4'>;
         const k = this.gap(i as unknown as THREE.Node<'int'>).div(c.w.max(0.01));
+        // (only a blast leaves ash: a tunnel's spheres are plain, and its shape weights all 0)
+        const e = this.shapeC.element(i) as unknown as THREE.Node<'vec4'>;
+        const blast = smoothstep(0, 0.001, abs(e.x).add(abs(e.y)).add(abs(e.z)).add(abs(e.w)));
         const v = this.position.sub(c.xyz);
         // (streaks out from its middle)
         // (a few sharp rays out from its middle, of uneven length; thick and whole at the rim)
@@ -150,7 +153,7 @@ export class Craters {
         const ray = smoothstep(0.05, 0.35, mx_noise_float(dir.mul(7).add(c.xyz.mul(0.37))));
         const reach = float(0.55).add(ray.mul(0.75));
         const fall = smoothstep(reach, 0.05, k);
-        most.assign(max(most, fall.mul(fall).mul(float(0.4).add(ray.mul(0.3))).add(smoothstep(0.3, 0.02, k).mul(0.35)).min(0.9)));
+        most.assign(max(most, fall.mul(fall).mul(float(0.4).add(ray.mul(0.3))).add(smoothstep(0.3, 0.02, k).mul(0.35)).min(0.9).mul(blast)));
       });
       return most;
     })() as unknown as THREE.Node<'float'>;

@@ -54,10 +54,13 @@ export class BurrowViews {
       const p = e.path;
       const b = match.units[e.unit].bug;
       const r = b.species.radius;
-      // (where it goes in: the ground under it; it faces from the first point to the second)
-      this.mound(match, p[0] - b.nx * r, p[1] - b.ny * r, p[2] - b.nz * r, b.nx, b.ny, b.nz, p[0] - p[3], p[2] - p[5], 90, 1.0, 0.35);
+      // (where it goes in: the ground under it, on what is drawn there; it faces from the first point to the second)
+      const up = r - this.drawnOver(match, p[0], p[1], p[2], b.nx, b.ny, b.nz);
+      this.mound(match, p[0] - b.nx * up, p[1] - b.ny * up, p[2] - b.nz * up, b.nx, b.ny, b.nz, p[0] - p[3], p[2] - p[5], 90, 1.0, 0.35);
       this.tube(p, e.radius);
-      this.mouth(p[0] - b.nx * r, p[1] - b.ny * r, p[2] - b.nz * r, b.nx, b.ny, b.nz, p[3] - p[0], p[4] - p[1], p[5] - p[2], 1.25);
+      // (a burst of earth out of the hole as it goes in)
+      this.puff?.(p[0] - b.nx * up * 0.6, p[1] - b.ny * up * 0.6, p[2] - b.nz * up * 0.6, 5);
+      this.mouth(p[0] - b.nx * up, p[1] - b.ny * up, p[2] - b.nz * up, b.nx, b.ny, b.nz, p[3] - p[0], p[4] - p[1], p[5] - p[2], 1.25);
       this.rad = r;
       this.trace(match, p, b.nx, b.ny, b.nz, e.radius);
       this.n.set(b.nx, b.ny, b.nz);
@@ -65,7 +68,7 @@ export class BurrowViews {
     } else if (e.type === 'emerge') {
       const b = match.units[e.unit].bug;
       const r = b.species.radius;
-      this.mound(match, e.x - b.nx * r, e.y - b.ny * r, e.z - b.nz * r, b.nx, b.ny, b.nz, b.hx, b.hz, 95, 1.3, 0.88);
+      this.mound(match, e.x - b.nx * r, e.y - b.ny * r, e.z - b.nz * r, b.nx, b.ny, b.nz, b.hx, b.hz, 90, 1.0, 0.6);
       this.mouth(e.x - b.nx * r, e.y - b.ny * r, e.z - b.nz * r, b.nx, b.ny, b.nz, -b.hx, 0, -b.hz, 1.45);
     }
   }
@@ -134,6 +137,12 @@ export class BurrowViews {
     return this.rest ? this.rest(ox, oy, oz, dx, dy, dz, maxT) : match.field.raycast(ox, oy, oz, dx, dy, dz, maxT);
   }
 
+  /** Earth dug out from under a skin of colour `skin`: mostly the map's broken inside, a little of its outside. */
+  private dug(skin: readonly [number, number, number]): readonly [number, number, number] {
+    const core = this.inside?.();
+    return core ? [skin[0] * 0.3 + core[0] * 0.7, skin[1] * 0.3 + core[1] * 0.7, skin[2] * 0.3 + core[2] * 0.7] : skin;
+  }
+
   /** What the map is made of inside (set by the owner; linear): the earth dug out is mostly that. */
   inside: (() => readonly [number, number, number] | undefined) | null = null;
   /** The colour of the ground at a place (set by the owner); without it, a dull grey-brown. */
@@ -164,7 +173,7 @@ export class BurrowViews {
     const y1 = p[7];
     const z1 = p[8];
     const l = Math.hypot(x1 - x0, y1 - y0, z1 - z0) || 1;
-    const count = Math.ceil(l / 0.9);
+    const count = Math.ceil(l / 0.55);
     // (across the way)
     const sx = -(z1 - z0) / l;
     const sz = (x1 - x0) / l;
@@ -173,11 +182,10 @@ export class BurrowViews {
     const r = this.rad;
     const t0 = 8 + (x0 - (p[0] - nx * r)) * nx + (y0 - (p[1] - ny * r)) * ny + (z0 - (p[2] - nz * r)) * nz;
     const t1 = 8 + (x1 - (p[9] - nx * r)) * nx + (y1 - (p[10] - ny * r)) * ny + (z1 - (p[11] - nz * r)) * nz;
-    // (what is drawn may stand over the field: measured at the exit, not dug yet, and the mound set on it)
-    const d3 = this.surface(match, p[9] + nx * 3, p[10] + ny * 3, p[11] + nz * 3, -nx, -ny, -nz, 8);
-    const lift = d3 >= 0 ? Math.max(0, Math.min(1.5, 3 - d3 + r)) : 0;
-    this.mount(x0, y0, z0, x1, y1, z1, t0 - lift, t1 - lift, nx, ny, nz, radius);
-    const ground = this.groundColor?.(p[0] - nx * r, p[1] - ny * r, p[2] - nz * r) ?? GREY;
+    // (what is drawn may stand over the field: measured round both ends, off the holes, and the mound set on it)
+    const lift = (this.drawnOver(match, p[0], p[1], p[2], nx, ny, nz) + this.drawnOver(match, p[9], p[10], p[11], nx, ny, nz)) / 2;
+    this.mount(match, x0, y0, z0, x1, y1, z1, t0 - lift, t1 - lift, nx, ny, nz, radius);
+    const ground = this.dug(this.groundColor?.(p[0] - nx * r, p[1] - ny * r, p[2] - nz * r) ?? GREY);
     for (let k = 0; k <= count; k++) {
       const f = k / count;
       // (crumbs along the lips of its crack)
@@ -185,9 +193,10 @@ export class BurrowViews {
       const ox = x0 + (x1 - x0) * f + sx * w;
       const oy = y0 + (y1 - y0) * f;
       const oz = z0 + (z1 - z0) * f + sz * w;
-      const t = t0 + (t1 - t0) * f;
+      // (on what is drawn there, where it can be measured: a drawn floor may stand over the field)
+      const t = this.under(match, ox, oy, oz, nx, ny, nz, t0 + (t1 - t0) * f);
       // (a heaved ridge: high along its middle, low to its sides)
-      const size = 0.06 + 0.07 * Math.random();
+      const size = 0.09 + 0.11 * Math.random();
       // (on the mound's flank, not in the air nor under it)
       const heave = HEAVE_HIGH * 0.8 * (1 - (w / radius) ** 2);
       this.q.setFromEuler(this.e.set(Math.random() * 6, Math.random() * 6, Math.random() * 6));
@@ -204,7 +213,51 @@ export class BurrowViews {
   }
 
   /** The heaved mound over the tunnel from (x0..) to (x1..): its ground `t0`..`t1` under 8 along the normal; grown as the ant goes. */
-  private mount(x0: number, y0: number, z0: number, x1: number, y1: number, z1: number, t0: number, t1: number, nx: number, ny: number, nz: number, radius: number): void {
+  /**
+   * How far under (x, y, z) + 8 along the normal the top of what is drawn there is (the ground over the tunnel, measured
+   * from above); `or` where nothing is met near it (its roof broke: the hole).
+   */
+  private under(match: Match, x: number, y: number, z: number, nx: number, ny: number, nz: number, or: number): number {
+    const d = this.surface(match, x + nx * 8, y + ny * 8, z + nz * 8, -nx, -ny, -nz, 12);
+    // (deeper than that: down into the tunnel through its broken roof)
+    return d >= 0 && d < or + 0.6 ? d : or;
+  }
+
+  /**
+   * How far what is drawn round (x, y, z) stands over the field's own ground (0..2): a drawn floor (a carpet, a desk's
+   * top) lies over the hidden body that holds the bugs up. Measured a little way round it, off the hole.
+   */
+  private drawnOver(match: Match, x: number, y: number, z: number, nx: number, ny: number, nz: number): number {
+    const ax = Math.abs(nx) < 0.9 ? 1 : 0;
+    const az = 1 - ax;
+    // (two ways across the normal)
+    let ux = ny * az - nz * 0;
+    let uy = nz * ax - nx * az;
+    let uz = nx * 0 - ny * ax;
+    const ul = Math.hypot(ux, uy, uz) || 1;
+    ux /= ul;
+    uy /= ul;
+    uz /= ul;
+    const vx = ny * uz - nz * uy;
+    const vy = nz * ux - nx * uz;
+    const vz = nx * uy - ny * ux;
+    const over: number[] = [];
+    for (let k = 0; k < 4; k++) {
+      const c = k === 0 ? 1 : k === 2 ? -1 : 0;
+      const s = k === 1 ? 1 : k === 3 ? -1 : 0;
+      const ox = x + (ux * c + vx * s) * 2.6 + nx * 4;
+      const oy = y + (uy * c + vy * s) * 2.6 + ny * 4;
+      const oz = z + (uz * c + vz * s) * 2.6 + nz * 4;
+      const f = match.field.raycast(ox, oy, oz, -nx, -ny, -nz, 10);
+      const d = this.surface(match, ox, oy, oz, -nx, -ny, -nz, 10);
+      if (f >= 0 && d >= 0) over.push(f - d);
+    }
+    if (over.length === 0) return 0;
+    over.sort((a, b) => a - b);
+    return Math.max(0, Math.min(2, over[over.length >> 1]));
+  }
+
+  private mount(match: Match, x0: number, y0: number, z0: number, x1: number, y1: number, z1: number, t0: number, t1: number, nx: number, ny: number, nz: number, radius: number): void {
     const l = Math.hypot(x1 - x0, y1 - y0, z1 - z0) || 1;
     const rows = Math.max(2, Math.ceil(l / 0.22));
     const sx = -(z1 - z0) / l;
@@ -212,10 +265,10 @@ export class BurrowViews {
     const W = radius * 0.8;
     const pos = new Float32Array((rows + 1) * HEAVE_ACROSS * 3);
     const col = new Float32Array((rows + 1) * HEAVE_ACROSS * 3);
-    const ground = this.groundColor?.(x0 + nx * (8 - t0), y0 + ny * (8 - t0), z0 + nz * (8 - t0)) ?? GREY;
+    const ground = this.dug(this.groundColor?.(x0 + nx * (8 - t0), y0 + ny * (8 - t0), z0 + nz * (8 - t0)) ?? GREY);
     for (let i = 0; i <= rows; i++) {
       const f = i / rows;
-      const g = 8 - (t0 + (t1 - t0) * f);
+      const g = 8 - this.under(match, x0 + (x1 - x0) * f, y0 + (y1 - y0) * f, z0 + (z1 - z0) * f, nx, ny, nz, t0 + (t1 - t0) * f);
       const cx = x0 + (x1 - x0) * f + nx * g;
       const cy = y0 + (y1 - y0) * f + ny * g;
       const cz = z0 + (z1 - z0) * f + nz * g;
@@ -323,9 +376,7 @@ export class BurrowViews {
     const t2 = new THREE.Vector3().crossVectors(n, t1);
     const f = t1.clone();
     // (dug out from under its skin: mostly the map's broken inside, a little of its outside)
-    const skin = this.groundColor?.(x, y, z) ?? GREY;
-    const core = this.inside?.() ?? null;
-    const ground: readonly [number, number, number] = core ? [skin[0] * 0.3 + core[0] * 0.7, skin[1] * 0.3 + core[1] * 0.7, skin[2] * 0.3 + core[2] * 0.7] : skin;
+    const ground = this.dug(this.groundColor?.(x, y, z) ?? GREY);
     for (let k = 0; k < count; k++) {
       const a = Math.random() * Math.PI * 2;
       // (more on the side it faced)
@@ -338,7 +389,8 @@ export class BurrowViews {
       // (on the ground round the hole, taken as level with it: the field's rays are not to be trusted the moment it is carved)
       const t = 2;
       const near = 1 - (rr - 1.55) / 1.1;
-      const size = (0.2 + 0.26 * Math.random()) * big * (0.9 + 0.35 * near);
+      // (lumps no bigger than a bug's foot: the mound reads as earth, not as stones)
+      const size = (0.14 + 0.18 * Math.random()) * big * (0.9 + 0.35 * near);
       // (heaped: higher near the hole)
       const heap = 0.45 * big * near * Math.random();
       const i = this.next++ % LUMPS;
