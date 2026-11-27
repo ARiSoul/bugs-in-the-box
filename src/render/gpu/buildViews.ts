@@ -1,5 +1,5 @@
 import * as THREE from 'three/webgpu';
-import { abs, attribute, clamp, float, floor, mix, normalView, positionGeometry, positionViewDirection, pow, smoothstep, step, uniform, uniformArray, vec3 } from 'three/tsl';
+import { abs, attribute, clamp, float, floor, instancedBufferAttribute, mix, normalView, positionGeometry, positionViewDirection, pow, select, smoothstep, step, uniform, uniformArray, vec3 } from 'three/tsl';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { APART, COLUMNS, DECK_UNDER, PIECE, shifted, SPAN, SPANS, WALL_DEEP } from '../../game/build';
 import type { TerrainField } from '../../game/field';
@@ -186,7 +186,23 @@ export class BuildViews {
   private readonly flakes: THREE.InstancedMesh;
   /** What lies on the ground after a blast. */
   private readonly debris: THREE.InstancedMesh;
-  private readonly pieces: { at: THREE.Vector3; v: THREE.Vector3; t: number; size: number; still: boolean; strand: boolean; plate: boolean }[] = [];
+  private readonly pieces: {
+    at: THREE.Vector3;
+    v: THREE.Vector3;
+    t: number;
+    size: number;
+    still: boolean;
+    strand: boolean;
+    plate: boolean;
+    /** A thick chunk of the ground (its top the outside's finish); `over`: it came to rest upside down. */
+    chunk: boolean;
+    over: boolean;
+    /** A torn flap bent up out of the rim: it lies as `rot` turns it, from the start. */
+    flap: boolean;
+    rot: THREE.Quaternion;
+  }[] = [];
+  /** Each piece's top, as a multiple of its colour (the outside's finish on a chunk of the ground; 1: all one colour). */
+  private readonly tint = new THREE.InstancedBufferAttribute(new Float32Array(DEBRIS * 3).fill(1), 3);
   private nextPiece = 0;
   private field: TerrainField | null = null;
   private readonly bits: { at: THREE.Vector3; v: THREE.Vector3; t: number; life: number; size: number }[] = [];
@@ -281,13 +297,19 @@ export class BuildViews {
       this.bits.push({ at: new THREE.Vector3(), v: new THREE.Vector3(), t: 9, life: 1, size: 0 });
     }
     this.root.add(this.flakes);
-    this.debris = new THREE.InstancedMesh(new THREE.DodecahedronGeometry(1, 0), new THREE.MeshStandardNodeMaterial({ roughness: 0.95, metalness: 0 }), DEBRIS);
+    const chunk = new THREE.DodecahedronGeometry(1, 0);
+    chunk.setAttribute('tint', this.tint);
+    const debrisLook = new THREE.MeshStandardNodeMaterial({ roughness: 0.95, metalness: 0 });
+    // (its two faces on top: the tint; the rest its own colour)
+    debrisLook.colorNode = select(attribute('normal', 'vec3').y.greaterThan(0.55), instancedBufferAttribute(this.tint, 'vec3') as unknown as V3, vec3(1, 1, 1)) as unknown as V3;
+    this.debris = new THREE.InstancedMesh(chunk, debrisLook, DEBRIS);
     this.debris.frustumCulled = false;
-    this.debris.castShadow = this.debris.receiveShadow = true;
+    // (too small to take shadows cleanly: the shadow map stripes them)
+    this.debris.castShadow = true;
     for (let i = 0; i < DEBRIS; i++) {
       this.debris.setColorAt(i, new THREE.Color(0xffffff));
       this.debris.setMatrixAt(i, new THREE.Matrix4().makeScale(0, 0, 0));
-      this.pieces.push({ at: new THREE.Vector3(), v: new THREE.Vector3(), t: DEBRIS_LIFE, size: 0, still: false, strand: false, plate: false });
+      this.pieces.push({ at: new THREE.Vector3(), v: new THREE.Vector3(), t: DEBRIS_LIFE, size: 0, still: false, strand: false, plate: false, chunk: false, over: false, flap: false, rot: new THREE.Quaternion() });
     }
     this.debris.visible = false;
     this.root.add(this.debris);
@@ -430,24 +452,67 @@ export class BuildViews {
     const n = Math.round(12 + r * 4);
     for (let k = 0; k < n; k++) {
       const i = this.nextPiece % DEBRIS;
-      // (two or three big chunks, the rest small)
+      // (two or three big chunks, the rest small; the bits of its layers small and thin)
       const big = k < 3 + (r > 5 ? 1 : 0);
-      this.drop(x, y, z, r * 0.8, 'dirt', big || k % 2 === 0, (big ? 2.4 + 0.8 * Math.random() : 0.6 + 1.4 * Math.random() ** 2) * Math.min(1.6, r / 4));
+      const lined = !big && k % 5 === 1;
+      this.drop(x, y, z, r * 0.8, 'dirt', true, (big ? 2.2 + 0.8 * Math.random() : lined ? 0.4 + 0.4 * Math.random() : 0.6 + 1.4 * Math.random() ** 2) * Math.min(1.6, r / 4));
       const p = this.pieces[i];
       // (most fall near the rim; some fly far)
       p.v.multiplyScalar((k % 4 === 0 ? 1 + r * 0.12 : 0.45 + r * 0.05) * (big ? 0.5 : 1));
-      // (in the light they look paler than the walls they broke from: darker, and far apart)
-      // (a third of them the outside of what it was, its finish; the rest its broken inside, which the key light makes look
-      // paler than the walls it broke from: darker)
-      // (the big ones are shards of its broken inside)
-      // (lying flat, they face the key light the walls are turned from: darker still; one in five a bit of its layers)
-      const own = !big && k % 3 === 0;
-      const lined = !big && !own && k % 5 === 1;
-      const c = own ? outside : lined ? layer : rgb;
-      const k2 = own ? 0.22 + 0.15 * Math.random() : lined ? 0.35 + 0.2 * Math.random() : 0.16 + 0.18 * Math.random();
+      // (thick chunks of the ground: their sides its broken inside, their top the outside's finish, some fallen upside down;
+      // lying flat, they face the key light the walls are turned from: darker; one in five a bit of its layers)
+      const c = lined ? layer : rgb;
+      const k2 = lined ? 0.35 + 0.2 * Math.random() : 0.16 + 0.18 * Math.random();
       this.debris.setColorAt(i, this.c3.setRGB(c[0] * k2, c[1] * k2, c[2] * k2));
+      p.chunk = !lined;
+      p.over = k % 4 === 3;
+      if (p.chunk) this.top(i, c, k2, outside, 0.4 + 0.2 * Math.random());
     }
+    // (the rim torn up: flaps of its outside bent up and out round it, half in the ground)
+    const field = this.field;
+    // (a few, large, of uneven size and spacing)
+    const flaps = field ? Math.round(3 + r * 0.5) : 0;
+    const turn = Math.random() * Math.PI * 2;
+    for (let f = 0; f < flaps && field; f++) {
+      const a = turn + ((f + 0.9 * (Math.random() - 0.5)) / flaps) * Math.PI * 2;
+      const rad = r * (0.95 + 0.1 * Math.random());
+      const fx = x + Math.cos(a) * rad;
+      const fz = z + Math.sin(a) * rad;
+      const hit = field.raycast(fx, y + r, fz, 0, -1, 0, r * 2);
+      // (none down in the hole, or through it)
+      if (hit < 0 || y + r - hit < y - 1.5) continue;
+      const i = this.nextPiece++ % DEBRIS;
+      const p = this.pieces[i];
+      const tilt = 0.45 + 0.45 * Math.random();
+      p.size = (0.35 + 0.3 * Math.random()) * Math.min(1.6, r / 4);
+      // (its outer end in the ground at the rim: no gap under it)
+      p.at.set(fx, y + r - hit + Math.sin(tilt) * p.size * 0.25, fz);
+      p.v.set(0, 0, 0);
+      p.t = -20;
+      p.still = true;
+      p.strand = false;
+      p.plate = true;
+      p.chunk = true;
+      p.over = false;
+      p.flap = true;
+      // (its long side out from the middle, the inner end lifted)
+      p.rot.setFromEuler(this.e.set(0, -a, -tilt, 'YXZ'));
+      this.e.set(0, 0, 0, 'XYZ');
+      // (its underside, the broken inside, faces away from the light: lighter, so it is not a black shape)
+      const k2 = 0.35 + 0.1 * Math.random();
+      this.debris.setColorAt(i, this.c3.setRGB(rgb[0] * k2, rgb[1] * k2, rgb[2] * k2));
+      this.top(i, rgb, k2, outside, 0.55 + 0.15 * Math.random());
+      this.debris.setMatrixAt(i, this.m.compose(p.at, p.rot, this.s.set(p.size * 1.7, p.size * 0.13, p.size * 0.95)));
+      this.debris.instanceMatrix.needsUpdate = true;
+    }
+    this.tint.needsUpdate = true;
     if (this.debris.instanceColor) this.debris.instanceColor.needsUpdate = true;
+  }
+
+  /** Piece `i`'s top: `outside` times `kt`, over its colour `c` times `k2`. */
+  private top(i: number, c: readonly [number, number, number], k2: number, outside: readonly [number, number, number], kt: number): void {
+    const a = this.tint.array as Float32Array;
+    for (let j = 0; j < 3; j++) a[i * 3 + j] = (outside[j] * kt) / Math.max(1e-3, c[j] * k2);
   }
   private readonly c3 = new THREE.Color();
   private readonly sunk = new THREE.Vector3();
@@ -494,6 +559,11 @@ export class BuildViews {
     p.size *= scale;
     if (p.strand) p.v.multiplyScalar(0.45);
     p.still = false;
+    p.chunk = false;
+    p.over = false;
+    p.flap = false;
+    (this.tint.array as Float32Array).fill(1, i * 3, i * 3 + 3);
+    this.tint.needsUpdate = true;
     const c = BITS[species];
     this.debris.setColorAt(i, new THREE.Color(c[(i * 7) % c.length]).multiplyScalar(0.75 + 0.3 * Math.random()));
     if (this.debris.instanceColor) this.debris.instanceColor.needsUpdate = true;
@@ -532,12 +602,18 @@ export class BuildViews {
       if (p.t > DEBRIS_LIFE - 2) moved = true;
       if (!moved) return;
       // (at rest a piece lies flat, a little tilted, part sunk into what it fell on)
+      if (p.flap) {
+        this.debris.setMatrixAt(i, this.m.compose(p.at, p.rot, this.s.set(k * 1.7, k * 0.13, k * 0.95)));
+        return;
+      }
       const rest = p.still && !p.strand;
-      this.q.setFromEuler(rest ? this.e.set(0.25 * Math.sin(i * 1.7), i * 2.3, 0.25 * Math.cos(i * 0.9)) : this.e.set(i * 1.7, i * 2.3, i * 0.9));
+      this.q.setFromEuler(rest ? this.e.set(0.25 * Math.sin(i * 1.7) + (p.over ? Math.PI : 0), i * 2.3, 0.25 * Math.cos(i * 0.9)) : this.e.set(i * 1.7, i * 2.3, i * 0.9));
       if (p.strand) this.q.setFromEuler(this.e.set(i * 0.31, i * 2.3, 1.45 + i * 0.07));
       this.sunk.copy(p.at);
       if (rest) this.sunk.y -= k * (p.plate ? 0.08 : 0.3);
-      this.debris.setMatrixAt(i, this.m.compose(this.sunk, this.q, p.strand ? this.s.set(k * 2.4, k * 0.09, k * 0.09) : p.plate ? this.s.set(k * 1.3, k * 0.11, k) : this.s.set(k, k * 0.6, k * 0.85)));
+      // (a chunk of the ground is thick: its broken sides show)
+      const thick = p.chunk ? 0.3 : 0.11;
+      this.debris.setMatrixAt(i, this.m.compose(this.sunk, this.q, p.strand ? this.s.set(k * 2.4, k * 0.09, k * 0.09) : p.plate ? this.s.set(k * 1.3, k * thick, k) : this.s.set(k, k * 0.6, k * 0.85)));
     });
     this.debris.visible = n > 0;
     if (moved) this.debris.instanceMatrix.needsUpdate = true;

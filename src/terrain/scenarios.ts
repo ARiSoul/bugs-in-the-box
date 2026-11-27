@@ -45,8 +45,9 @@ export interface Scenario {
   /**
    * What its ground is made of inside, where a blast breaks it open (linear RGB): the broken stuff, and the thin layers
    * through it (visual only; default a grey-brown with paler lines).
+   * `skin`: the colour of its outside on a piece broken off it, where the ground's own material says less.
    */
-  inside?: { core: readonly [number, number, number]; line: readonly [number, number, number] };
+  inside?: { core: readonly [number, number, number]; line: readonly [number, number, number]; skin?: readonly [number, number, number] };
   /** Where a bug may stand or walk, for a map of this size (default: all of it). */
   confine?: (W: number, H: number, D: number) => (x: number, y: number, z: number) => boolean;
   turntable?: (W: number, H: number, D: number) => { x: number; z: number; radius: number; j0: number; j1: number; surface: number };
@@ -59,7 +60,7 @@ export const SCENARIOS: readonly Scenario[] = [
     generate: pcCase,
     sharpEdges: true,
     // (a circuit board: pale fibreglass, thin copper layers)
-    inside: { core: [0.27, 0.28, 0.16], line: [0.75, 0.32, 0.1] },
+    inside: { core: [0.27, 0.28, 0.16], line: [0.75, 0.32, 0.1], skin: [0.035, 0.075, 0.045] },
     sky: { css: 'radial-gradient(ellipse at 50% 45%, #1a1d24 0%, #050608 70%)', fog: 0x0b1016 },
     strictBounds: true,
   },
@@ -128,7 +129,7 @@ export const SCENARIOS: readonly Scenario[] = [
     generate: desk,
     sharpEdges: true,
     // (a laminated chipboard top: tan chips, darker glue lines)
-    inside: { core: [0.34, 0.23, 0.12], line: [0.07, 0.05, 0.03] },
+    inside: { core: [0.34, 0.23, 0.12], line: [0.07, 0.05, 0.03], skin: [0.1, 0.1, 0.105] },
     // an evening room: warm walls far off, the screens' glow on the black desk
     sky: { css: 'radial-gradient(ellipse at 50% 40%, #2a2724 0%, #0b0a09 72%)', fog: 0x110f0e, fogClear: 220, fogSpan: 480, cornerDark: 0.2, backdrop: 0x3a352f },
     strictBounds: true,
