@@ -286,7 +286,7 @@ export class Hud {
           chip.root.classList.toggle('boosted', q.boost);
         }, `${q.fuse}|${q.boost}`);
         this.set(`unit${q.id}`, () => {
-          chip.bar.style.width = `${Math.max(0, (q.bug.health / q.bug.species.health) * 100).toFixed(0)}%`;
+          chip.bar.style.width = `${Math.max(0, (q.bug.health / q.bug.maxHealth) * 100).toFixed(0)}%`;
           chip.root.classList.toggle('dead', !q.bug.alive);
           chip.root.classList.toggle('active', q === u && q.bug.alive);
         }, `${q.bug.health}|${q.bug.alive}|${q === u}`);

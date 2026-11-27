@@ -165,6 +165,11 @@ export class Bug {
   /** Its attributes (speed, jump, health...): its species' numbers, and what effects, items and levels put on them. */
   readonly stats: Attributes;
 
+  /** Its full health (the same for every species: see `BugSpecies.toughness`). */
+  get maxHealth(): number {
+    return this.stats.get('health');
+  }
+
   constructor(readonly species: BugSpecies) {
     this.stats = new Attributes(speciesBase(species));
     this.health = this.stats.get('health');

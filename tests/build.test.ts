@@ -7,6 +7,7 @@ import type { Terrain } from '../src/terrain/Terrain';
 import { world } from './helpers/worlds';
 import { BUILD_MODELS, buildModel, hasModel } from '../src/render/gpu/buildModels';
 import { analyze, meshAll } from './helpers/meshIntegrity';
+import { even } from './helpers/even';
 
 const at = (w: Weapon): number => WEAPONS.indexOf(w);
 const plain = (): Terrain => world(4, 2, 2, (_i, j) => j - 10);
@@ -14,6 +15,7 @@ const gap = (): Terrain => world(4, 2, 2, (i, j) => Math.max(j - 20, 4 - Math.ab
 
 function setup(t: Terrain, a: BugSpecies = ANT, b: BugSpecies = ANT): Match {
   const m = new Match(t, [{ name: 'A', species: a, color: 0, size: 1 }, { name: 'B', species: b, color: 0, size: 1 }], 1, { placeBugs: false, wind: 0 });
+  even(m);
   m.units[0].bug.drop(t, 20, 32);
   m.units[1].bug.drop(t, 44, 32);
   run(m, 60, { faceX: 1 });
@@ -453,6 +455,7 @@ describe('titan lift', () => {
   it('only a team that took it has it; it tears a block out before the ant, throws it from over its head, and crushes where it lands', () => {
     const t = plain();
     const m = new Match(t, [{ name: 'A', species: ANT, special: 'titan-lift', color: 0, size: 1 }, { name: 'B', species: ANT, color: 0, size: 1 }], 1, { placeBugs: false, wind: 0 });
+    even(m);
     m.units[0].bug.drop(t, 20, 32);
     m.units[1].bug.drop(t, 40, 32);
     run(m, 60, { faceX: 1 });

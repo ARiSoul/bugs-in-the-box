@@ -1,4 +1,4 @@
-import type { BugSpecies } from '../species';
+import { HEALTH, type BugSpecies } from '../species';
 import type { AttributeBase } from './attributes';
 
 /**
@@ -7,7 +7,7 @@ import type { AttributeBase } from './attributes';
 
 /** A bug's attributes as its species gives them (what effects, items and levels change). */
 export function speciesBase(s: BugSpecies): AttributeBase {
-  return { health: s.health, speed: s.walkSpeed, jump: s.jumpSpeed, jumpForward: s.jumpForward, damage: 1, defence: 1, luck: 0 };
+  return { health: HEALTH, speed: s.walkSpeed, jump: s.jumpSpeed, jumpForward: s.jumpForward, damage: 1, defence: s.toughness / 100, luck: 0 };
 }
 
 /** The events of a match that rules hang on (`Triggers<MatchTriggers>`), with what each carries. Unit numbers are

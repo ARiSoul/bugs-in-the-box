@@ -2,13 +2,15 @@ import { describe, expect, it } from 'vitest';
 import { TICK_RATE } from '../src/game/bug';
 import { ITEM_KINDS, type Item, type ItemKind } from '../src/game/items';
 import { Match, NO_INPUT } from '../src/game/match';
-import { ANT, COCKROACH, SPIDER } from '../src/game/species';
+import { ANT, COCKROACH, HEALTH, SPIDER } from '../src/game/species';
 import { CAPACITOR, WEAPONS } from '../src/game/weapons';
 import { flat } from './helpers/worlds';
+import { even } from './helpers/even';
 
 const make = (extra = {}): Match => {
   const t = flat(10);
   const m = new Match(t, [{ name: 'Red', species: ANT, color: 0, size: 1 }, { name: 'Blue', species: SPIDER, color: 0, size: 1 }], 1, { placeBugs: false, bag: 0, ...extra });
+  even(m);
   m.units[0].bug.drop(t, 20, 32);
   m.units[1].bug.drop(t, 44, 32);
   for (let n = 0; n < TICK_RATE * 2; n++) m.step(NO_INPUT);
@@ -37,6 +39,7 @@ describe('boxes', () => {
   it('turn up in a match, the same for the same seed, on the ground, and come to rest', () => {
     const run = (): { log: string; rested: number } => {
       const m = new Match(flat(10), [{ name: 'a', species: ANT, color: 0, size: 2 }, { name: 'b', species: COCKROACH, color: 0, size: 2 }], 7, { turnSeconds: 5 });
+      even(m);
       const log: string[] = [];
       for (let n = 0; n < TICK_RATE * 90 && m.phase !== 'over'; n++) {
         m.step(NO_INPUT);
@@ -54,6 +57,7 @@ describe('boxes', () => {
     expect(make().items.list.length).toBe(0);
     const winds = (items: boolean): number[] => {
       const m = new Match(flat(10), [{ name: 'a', species: ANT, color: 0, size: 1 }, { name: 'b', species: ANT, color: 0, size: 1 }], 3, { turnSeconds: 5, items });
+      even(m);
       const out: number[] = [];
       for (let n = 0; n < TICK_RATE * 40; n++) {
         m.step(NO_INPUT);
@@ -67,7 +71,8 @@ describe('boxes', () => {
   it('battery loads the special, patch heals', () => {
     expect(opened('battery').skill[0]).toBeGreaterThanOrEqual(400);
     const m = opened('patch', (q) => (q.units[0].bug.health = 50));
-    expect(m.units[0].bug.health).toBe(90);
+    // (35% of its full health, which is 100 for every bug)
+    expect(m.units[0].bug.health).toBe(85);
   });
 
   it('a fuse halves the next blow, once; an overclocked shot hurts half as much again', () => {
@@ -131,7 +136,7 @@ describe('boxes', () => {
     const g = opened('magnet');
     expect(g.units[1].bug.vx).toBeLessThan(-3);
     const d = opened('dud');
-    expect(d.units[0].bug.health).toBeLessThan(ANT.health);
+    expect(d.units[0].bug.health).toBeLessThan(HEALTH);
   });
 
   it('what is kept is used later, one a turn, and only as many kinds as there are spaces', () => {
@@ -146,7 +151,7 @@ describe('boxes', () => {
     open('patch');
     expect(b.health).toBeGreaterThan(70);
     expect(m.bag[0]).toEqual({});
-    b.health = b.species.health;
+    b.health = b.maxHealth;
     open('patch');
     open('patch');
     open('fuse');
@@ -179,6 +184,7 @@ describe('boxes', () => {
     const seen = new Set<string>();
     for (let seed = 0; seed < 12 && seen.size < ITEM_KINDS.length; seed++) {
       const m = new Match(flat(10), [{ name: 'a', species: ANT, color: 0, size: 1 }, { name: 'b', species: ANT, color: 0, size: 1 }], seed, { placeBugs: false });
+      even(m);
       for (let t = 2; t < 60; t++) {
         const it = m.items.turn(t);
         if (it) {
@@ -195,6 +201,7 @@ describe('more than two teams', () => {
   it('take turns in order, and the last one left wins', () => {
     const t = flat(10);
     const m = new Match(t, [0, 1, 2, 3].map((i) => ({ name: `p${i}`, species: [ANT, SPIDER, COCKROACH, ANT][i], color: 0, size: 1 })), 5, { turnSeconds: 1, items: false });
+    even(m);
     const order: number[] = [m.activeUnit.team];
     for (let n = 0; n < TICK_RATE * 12; n++) {
       m.step(NO_INPUT);

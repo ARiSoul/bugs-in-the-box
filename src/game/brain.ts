@@ -226,7 +226,7 @@ export class Brain {
   private useKept(match: Match, u: Unit): void {
     if (match.usedItem) return;
     const bag = match.bag[u.team];
-    const hurt = u.bug.health < u.bug.species.health * 0.65;
+    const hurt = u.bug.health < u.bug.maxHealth * 0.65;
     const k: ItemKind | '' = hurt && bag.patch ? 'patch' : bag.overclock && !u.boost ? 'overclock' : bag.fuse && !u.fuse ? 'fuse' : '';
     if (k !== '') this.out.item = ITEM_KINDS.indexOf(k);
   }
@@ -761,7 +761,7 @@ export class Brain {
   /** Its way of hiding, if it has one and would rather do that now. */
   private shelter(match: Match, u: Unit, best: number): Plan | null {
     const index = WEAPONS.findIndex((w) => w.kind === 'shelter' && w.species === u.bug.species.id);
-    if (!this.hides || index < 0 || u.web >= 0 || best >= (u.bug.health < u.bug.species.health * 0.4 ? 16 : 6)) return null;
+    if (!this.hides || index < 0 || u.web >= 0 || best >= (u.bug.health < u.bug.maxHealth * 0.4 ? 16 : 6)) return null;
     const e = this.enemies(match, u)[0];
     if (!e) return null;
     const dx = e.bug.x - u.bug.x;

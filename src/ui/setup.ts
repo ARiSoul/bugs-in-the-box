@@ -280,7 +280,7 @@ export class SetupScreen {
       const own = specialsOf(s.id);
       const special = own.find((w) => w.id === c.specials[i]) ?? own[0];
       const [line, gift, what] = ABOUT[s.id] ?? ['', '', ''];
-      const bars: [string, number, number][] = [['Health', s.health / 125, s.health], ['Speed', s.walkSpeed / 7, s.walkSpeed], ['Jump', s.jumpSpeed / 10.5, s.jumpSpeed]];
+      const bars: [string, number, number][] = [['Toughness', s.toughness / 125, s.toughness], ['Speed', s.walkSpeed / 7, s.walkSpeed], ['Jump', s.jumpSpeed / 10.5, s.jumpSpeed]];
       card.innerHTML =
         `<div class="chips" role="group" aria-label="${SIDES[i]}: species">${SPECIES.map((q, k) => `<button data-k="${k}" class="${q === s ? 'on' : ''}" title="${PLURAL[q.id]}" aria-label="${PLURAL[q.id]}" aria-pressed="${q === s}"><svg viewBox="0 0 100 60" aria-hidden="true">${BUGS[q.id]}</svg></button>`).join('')}</div>` +
         `<div class="name">${letters(SHORT[s.id], { fill: i ? '#8ccaff' : '#ff8676', drop: 7, outline: 11 })}</div><p>${line}</p>` +

@@ -3,6 +3,7 @@ import type { Match, MatchEvent } from '../game/match';
 import type { MusicEngine, MusicMood } from './MusicEngine';
 import type { LoopSound, SoundEngine } from './SoundEngine';
 import { WEAPONS } from '../game/weapons';
+import { HEALTH } from '../game/species';
 import { SOUNDS, type SoundId } from './sounds';
 
 /** How far a bug walks between two steps that are heard, and at which fall speed a landing is. */
@@ -464,7 +465,7 @@ export class GameSounds {
     const m = this.mood;
     const over = match.phase === 'over';
     let least = 1;
-    match.teams.forEach((t, i) => (least = Math.min(least, match.teamHealth(i) / (t.size * t.species.health))));
+    match.teams.forEach((t, i) => (least = Math.min(least, match.teamHealth(i) / (t.size * HEALTH))));
     const late = match.phase === 'aim' && !match.stance && match.turnTicks < 8 * TICK_RATE;
     m.base = blackout ? 0 : over ? 0.5 : 1;
     m.groove = blackout || over ? 0 : match.phase === 'settle' || match.phase === 'spin' ? 0.75 : 1;

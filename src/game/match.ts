@@ -1001,9 +1001,18 @@ export class Match {
     return this.currentWeapon.coverRadius + this.passive(this.units[this.active].team, 'wider-swarm');
   }
 
+  /**
+   * What `amount` (in the points of a bug of toughness 100) is in this bug's health: its defence divides it, so a cockroach
+   * loses more of its 100 to the same blow than an ant does. A blow, or a heal, of anything is at least 1.
+   */
+  private toHealth(u: Unit, amount: number): number {
+    const d = u.bug.stats.get('defence');
+    return amount <= 0 || d === 1 ? amount : Math.max(1, Math.round(amount / d));
+  }
+
   private heal(u: Unit, n: number): void {
     const b = u.bug;
-    const gain = Math.min(n, b.species.health - b.health);
+    const gain = Math.min(this.toHealth(u, n), b.maxHealth - b.health);
     if (!b.alive || b.health <= 0 || gain <= 0) return;
     b.health += gain;
     this.events.push({ type: 'heal', unit: u.id, amount: gain });
@@ -1400,7 +1409,7 @@ export class Match {
 
   /** What a blow of this much would do to a unit, as it is now. */
   dealt(u: Unit, amount: number): number {
-    return u.cover ? amount - Math.min(u.coverLeft, Math.floor(amount * (u.cover.cover ?? 0))) : amount;
+    return this.toHealth(u, u.cover ? amount - Math.min(u.coverLeft, Math.floor(amount * (u.cover.cover ?? 0))) : amount);
   }
 
   /** The curtain of another team that a shot is at, or null. */
@@ -2540,7 +2549,7 @@ export class Match {
     const b = u.bug;
     switch (kind) {
       case 'patch':
-        return b.health < b.species.health;
+        return b.health < b.maxHealth;
       case 'crystal':
         return u === this.units[this.active] && this.phase === 'aim';
       case 'fuse':
@@ -2575,7 +2584,7 @@ export class Match {
         this.load(u.team, BATTERY);
         break;
       case 'patch':
-        gain = Math.max(0, Math.min(Math.round(b.species.health * PATCH), Math.round(b.species.health * (1 + PATCH_OVER)) - b.health));
+        gain = Math.max(0, Math.min(Math.round(b.maxHealth * PATCH), Math.round(b.maxHealth * (1 + PATCH_OVER)) - b.health));
         b.health += gain;
         break;
       case 'fuse':
@@ -2687,6 +2696,8 @@ export class Match {
       if (u.coverLeft <= 0) this.bare(u, true);
       if (amount <= 0) return;
     }
+    // (what it takes off this bug's health)
+    amount = this.toHealth(u, amount);
     if (u.fuse && amount > 1) {
       // (a shock blows the fuse, which takes all of it; anything else, half)
       const blown = reaction('blow', hitBy, u.effects.tags()) !== null;
@@ -2710,8 +2721,10 @@ export class Match {
     const by = this.units[this.active].team;
     this.triggers.emit('damage', { unit: u.id, amount, team: by });
     if (by !== u.team) this.tally[by].damage += amount;
-    this.load(u.team, amount * SKILL_TAKEN);
-    if (by !== u.team && this.currentWeapon.sceneTicks === 0) this.load(by, amount * SKILL_DONE);
+    // (specials load by the blow itself, before its toughness: hitting a tough bug loads as much as a frail one)
+    const blow = amount * b.stats.get('defence');
+    this.load(u.team, blow * SKILL_TAKEN);
+    if (by !== u.team && this.currentWeapon.sceneTicks === 0) this.load(by, blow * SKILL_DONE);
     this.hurtOwnTurn(u);
   }
 
@@ -2770,7 +2783,7 @@ export class Match {
     }
     for (let t = 0; t < SPAWN_SETTLE_TICKS; t++) for (const b of this.bugs) b.step(this.field, IDLE);
     for (const b of this.bugs) {
-      b.health = b.species.health;
+      b.health = b.maxHealth;
       b.lastImpact = 0;
     }
   }

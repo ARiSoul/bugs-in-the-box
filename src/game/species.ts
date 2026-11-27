@@ -4,6 +4,9 @@
  *
  * Units: world units (1 = one terrain cell), seconds.
  */
+/** Every bug's full health, whatever its species: what tells them apart is in how hard each is to hurt (`toughness`). */
+export const HEALTH = 100;
+
 export interface BugSpecies {
   readonly id: string;
   /** Collision sphere radius. The body is drawn around this sphere. */
@@ -17,8 +20,11 @@ export interface BugSpecies {
   /** Forward take-off speed of a jump. */
   readonly jumpForward: number;
 
-  /** Health it starts with. */
-  readonly health: number;
+  /**
+   * How hard it is to hurt, in percent: every bug has the same health (`HEALTH`), and a blow takes `100 / toughness` of
+   * what it would take of a bug of 100 (a cockroach, 62, takes more of it; an ant, 115, less). Its `defence`, at the start.
+   */
+  readonly toughness: number;
   /** Spins silk: in the air it can hang on a thread (see Bug.thread), and no web holds it. */
   readonly silk?: boolean;
   /** Flies (see Bug.flying): the seconds of breath it has for that in a turn. */
@@ -49,7 +55,7 @@ export const ANT: BugSpecies = {
   turnRate: 3,
   jumpSpeed: 9,
   jumpForward: 4,
-  health: 115,
+  toughness: 115,
   legs: 6,
   legLength: 1.25,
   bodyLength: 2.6,
@@ -67,7 +73,7 @@ export const SPIDER: BugSpecies = {
   turnRate: 3.4,
   jumpSpeed: 10,
   jumpForward: 5,
-  health: 110,
+  toughness: 110,
   silk: true,
   legs: 8,
   legLength: 1.7,
@@ -86,7 +92,7 @@ export const COCKROACH: BugSpecies = {
   turnRate: 2.6,
   jumpSpeed: 7.5,
   jumpForward: 4.5,
-  health: 62,
+  toughness: 62,
   shell: true,
   legs: 6,
   legLength: 1.12,
@@ -105,7 +111,7 @@ export const BEE: BugSpecies = {
   turnRate: 3,
   jumpSpeed: 9,
   jumpForward: 4,
-  health: 110,
+  toughness: 110,
   flight: 3,
   legs: 6,
   legLength: 1.12,

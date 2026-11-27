@@ -59,7 +59,7 @@ const ABOUT: Readonly<Record<string, readonly [string, ...Tag[]]>> = {
   burrow: ['It digs along its aim and runs out through it. Three a match, once a turn; the turn goes on.', 'earth'],
   burst: ['It throws itself along its aim, far and fast, and lands softly. Twice a match; also while it gets away.', 'alive'],
   'thermal-paste': ['Smeared where you stand: others stick in it. It conducts shocks to all in it.', 'metal', 'sticky'],
-  patch: ['Heals 40% of its health.', 'heal'],
+  patch: ['Heals 35% of its health.', 'heal'],
   fuse: ['The next blow hurts half; a shock not at all.', 'electric'],
   overclock: ['The next shot hits half as hard again.', 'electric', 'fire'],
   spring: ['Jumps high for its next turns.', 'metal'],

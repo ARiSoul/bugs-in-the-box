@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { TICK_RATE } from '../src/game/bug';
 import { AIM_TICKS, DEATH_HOLD_TICKS, LOOK_DAMAGE_TICKS, Match, NO_INPUT, type MatchEvent, type MatchInput } from '../src/game/match';
-import { ANT, SPIDER } from '../src/game/species';
+import { ANT, BEE, COCKROACH, HEALTH, SPIDER, SPECIES } from '../src/game/species';
 import { CAPACITOR, SHORT_CIRCUIT, SOLDER_BLOB, WEAPONS } from '../src/game/weapons';
 import { floatingIslands } from './helpers/floatingIslands';
 import { createRng } from '../src/terrain/noise';
 import { Terrain } from '../src/terrain/Terrain';
 import { flat, world } from './helpers/worlds';
+import { even } from './helpers/even';
 
 const teams = (size: number) => [
   { name: 'Red', species: ANT, color: 0xff0000, size },
@@ -16,6 +17,7 @@ const teams = (size: number) => [
 /** Match on `t` with bugs dropped at the given (x, z), in unit order (red, blue, red, blue...). */
 function setup(t: Terrain, at: [number, number][]): Match {
   const m = new Match(t, teams(Math.ceil(at.length / 2)), 1, { placeBugs: false });
+  even(m);
   at.forEach(([x, z], i) => expect(m.units[i].bug.drop(t, x, z)).toBe(true));
   // an odd count leaves one unplaced bug: take it out of the game
   for (const u of m.units.slice(at.length)) {
@@ -115,6 +117,35 @@ describe('bugs against each other', () => {
   });
 });
 
+describe('health and toughness', () => {
+  it('every bug starts with the same health, whatever its species; toughness is in how much a blow takes', () => {
+    for (const s of SPECIES) {
+      const m = new Match(flat(10), [{ name: 'a', species: s, color: 0, size: 2 }, { name: 'b', species: ANT, color: 0, size: 1 }], 1, { placeBugs: false });
+      for (const u of m.units) expect([u.bug.health, u.bug.maxHealth]).toEqual([HEALTH, HEALTH]);
+      expect(m.teamHealth(0)).toBe(2 * HEALTH);
+    }
+    // (the same blow, the same spot: what each loses is the blow over its toughness)
+    const took = (s: typeof ANT): number => {
+      const t = flat(10);
+      const m = new Match(t, [{ name: 'a', species: s, color: 0, size: 1 }, { name: 'b', species: ANT, color: 0, size: 1 }], 1, { placeBugs: false, wind: 0 });
+      m.units[0].bug.drop(t, 20, 32);
+      m.units[1].bug.drop(t, 60, 32);
+      for (let n = 0; n < TICK_RATE; n++) m.step(NO_INPUT);
+      const b = m.units[0].bug;
+      m.explode(b.x + 1, b.y, b.z, CAPACITOR);
+      return HEALTH - b.health;
+    };
+    const bee = took(BEE);
+    const ant = took(ANT);
+    expect(bee).toBeGreaterThan(ant);
+    for (const [s, lost] of [[BEE, bee], [ANT, ant], [COCKROACH, took(COCKROACH)], [SPIDER, took(SPIDER)]] as const) {
+      // (within a point of the same share of a bug of toughness 100's)
+      const share = took({ ...s, toughness: 100 });
+      expect(Math.abs(lost - (share * 100) / s.toughness), s.id).toBeLessThanOrEqual(1);
+    }
+  });
+});
+
 describe('aiming and shooting from any surface', () => {
   it('from a wall the shot follows the front of the bug, off the wall, and does not hit the shooter', () => {
     const t = world(2, 2, 2, (i, j) => Math.min(j - 6, Math.max(40 - i, j - 50)));
@@ -160,6 +191,7 @@ describe('aiming and shooting from any surface', () => {
   it('a shot straight up stops at the top of a bounded map, falls back and can hit the shooter', () => {
     const t = flat(10);
     const m = new Match(t, teams(1), 1, { placeBugs: false, strictBounds: true });
+    even(m);
     m.units.forEach((u, i) => expect(u.bug.drop(t, 20 + i * 24, 32)).toBe(true));
     for (let n = 0; n < TICK_RATE * 2; n++) m.step(NO_INPUT);
     press(m, { aim: 1 }, TICK_RATE * 3);
@@ -494,6 +526,7 @@ describe('determinism', () => {
     const t = new Terrain(3, 2, 3);
     floatingIslands(t, 99);
     const m = new Match(t, teams(3), 5);
+    even(m);
     const rnd = createRng(11);
     const input: MatchInput = { ...NO_INPUT };
     const trace: number[] = [];
@@ -551,10 +584,13 @@ describe('what a shot did', () => {
 describe('the rules of a match', () => {
   it('a turn lasts as long as it is set to, and there is wind only where there is any', () => {
     const still = new Match(flat(10), teams(1), 1, { turnSeconds: 15, wind: 0 });
+    even(still);
     expect(still.turnTicks).toBe(15 * TICK_RATE);
     expect(Math.abs(still.windX) + Math.abs(still.windZ)).toBe(0);
     const usual = new Match(flat(10), teams(1), 1);
+    even(usual);
     const half = new Match(flat(10), teams(1), 1, { wind: 0.5 });
+    even(half);
     expect(usual.turnTicks).toBe(AIM_TICKS);
     expect(half.windX).toBeCloseTo(usual.windX / 2, 9);
   });

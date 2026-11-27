@@ -9,6 +9,7 @@ import { ANTHILL, COMB_WALL, HUSK, RAMPART, SHORT_CIRCUIT, SILK_CURTAIN, SOLDERI
 import { Profile } from '../src/ui/profile';
 import type { Terrain } from '../src/terrain/Terrain';
 import { world } from './helpers/worlds';
+import { even } from './helpers/even';
 
 interface Inside {
   damage(u: unknown, n: number): void;
@@ -31,6 +32,7 @@ function run(m: Match, ticks: number, input: Partial<MatchInput> = {}): MatchEve
 function setup(s: BugSpecies, passives: string[], size = 1, enemy: BugSpecies = ANT): Match {
   const t = plain();
   const m = new Match(t, [{ name: 'A', species: s, color: 0, size, growth: { level: 8, passives, items: {} } }, { name: 'B', species: enemy, color: 0, size: 1 }], 1, { placeBugs: false, wind: 0 });
+  even(m);
   m.units.forEach((u) => u.bug.drop(t, u.team ? 44 : 20, u.team ? 32 : 32 + u.id * 2));
   run(m, 60, { faceX: 1 });
   return m;
@@ -224,6 +226,7 @@ describe('passives', () => {
   it('what is kept from the last match comes along', () => {
     const t = plain();
     const m = new Match(t, [{ name: 'A', species: ANT, color: 0, size: 1, growth: { level: 1, passives: [], items: { patch: 1 } } }, { name: 'B', species: ANT, color: 0, size: 1 }], 1, { placeBugs: false });
+    even(m);
     expect(m.bag[0]).toEqual({ patch: 1 });
     m.units[0].bug.drop(t, 20, 32);
     m.units[1].bug.drop(t, 44, 32);
@@ -237,6 +240,7 @@ describe('passives', () => {
     const play = (): string => {
       const t = plain();
       const m = new Match(t, [{ name: 'A', species: BEE, color: 0, size: 2, growth: computerGrowth('bee', 8) }, { name: 'B', species: COCKROACH, color: 0, size: 2, growth: computerGrowth('cockroach', 8) }], 5, { turnSeconds: 12 });
+      even(m);
       const b = [new Brain(SKILLS[1], 1), new Brain(SKILLS[1], 2)];
       let n = 0;
       while (m.phase !== 'over' && n++ < 60 * 60) m.step(b[m.activeUnit.team].next(m));

@@ -6,6 +6,7 @@ import { ANT, BEE } from '../src/game/species';
 import { QUEENS_FLIGHT, RING_DAMAGE, WEAPONS } from '../src/game/weapons';
 import type { Terrain } from '../src/terrain/Terrain';
 import { world } from './helpers/worlds';
+import { even } from './helpers/even';
 
 const INDEX = WEAPONS.indexOf(QUEENS_FLIGHT);
 const plain = (): Terrain => world(4, 2, 2, (_i, j) => j - 10);
@@ -13,6 +14,7 @@ const wall = (): Terrain => world(4, 2, 2, (i, j) => Math.min(j - 10, Math.max(M
 
 function setup(t: Terrain, ant: [number, number] = [90, 32]): Match {
   const m = new Match(t, [{ name: 'B', species: BEE, color: 0, size: 1 }, { name: 'A', species: ANT, color: 0, size: 1 }], 1, { placeBugs: false });
+  even(m);
   m.units[0].bug.drop(t, 20, 32);
   m.units[1].bug.drop(t, ...ant);
   run(m, 60);

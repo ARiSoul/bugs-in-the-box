@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Attributes, Effects, Reactions, Registry, Triggers, speciesBase, type EffectDef, type MatchTriggers } from '../src/game/engine';
 import { Match, NO_INPUT } from '../src/game/match';
-import { ANT, SPIDER } from '../src/game/species';
+import { ANT, HEALTH, SPIDER } from '../src/game/species';
 import { world } from './helpers/worlds';
 
 const base = speciesBase(ANT);
@@ -11,7 +11,8 @@ describe('attributes', () => {
     const a = new Attributes(base);
     expect(a.get('speed')).toBe(ANT.walkSpeed);
     expect(a.get('jump')).toBe(ANT.jumpSpeed);
-    expect(a.get('health')).toBe(ANT.health);
+    expect(a.get('health')).toBe(HEALTH);
+    expect(a.get('defence')).toBe(ANT.toughness / 100);
     expect(a.get('damage')).toBe(1);
   });
 
@@ -48,7 +49,7 @@ describe('attributes', () => {
     const b = new Attributes(speciesBase(SPIDER));
     b.copy(a);
     expect(b.get('luck')).toBe(2);
-    expect(b.get('defence')).toBe(0.5);
+    expect(b.get('defence')).toBe((ANT.toughness / 100) * 0.5);
     expect(b.get('speed')).toBe(ANT.walkSpeed);
   });
 });

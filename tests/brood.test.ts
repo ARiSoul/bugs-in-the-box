@@ -3,6 +3,7 @@ import { BROOD_LIGHT, LINGER_TICKS, Match, NO_INPUT, type MatchEvent, type Match
 import { ANT, COCKROACH } from '../src/game/species';
 import { BLACKOUT_SWARM, SOLDER_BLOB, WEAPONS } from '../src/game/weapons';
 import { flat } from './helpers/worlds';
+import { even } from './helpers/even';
 
 const BROOD = WEAPONS.indexOf(BLACKOUT_SWARM);
 
@@ -24,6 +25,7 @@ function setup(roaches: [number, number][], ants: [number, number][]): Match {
   run(m, 60);
   // (the rules, whatever health a species starts with)
   for (const u of m.units) u.bug.health = 100;
+  even(m);
   m.skill.fill(SKILL_FULL);
   return m;
 }

@@ -7,6 +7,7 @@ import { CAPACITOR, COMB_WALL, LIVING_BRIDGE, RAMPART, SHIELD_WALL, SHORT_CIRCUI
 import type { Terrain } from '../src/terrain/Terrain';
 import { analyze, meshAll } from './helpers/meshIntegrity';
 import { world } from './helpers/worlds';
+import { even } from './helpers/even';
 
 interface Inside {
   struck(u: unknown, amount: number, by: readonly string[]): void;
@@ -27,6 +28,7 @@ function run(m: Match, ticks: number, input: Partial<MatchInput> = {}): MatchEve
 }
 function setup(s: BugSpecies, w: Weapon, t = plain()): Match {
   const m = new Match(t, [{ name: 'A', species: s, color: 0, size: 1 }, { name: 'B', species: ANT, color: 0, size: 1 }], 1, { placeBugs: false, wind: 0 });
+  even(m);
   m.units[0].bug.drop(t, 20, 32);
   m.units[1].bug.drop(t, 50, 32);
   run(m, 60, { faceX: 1 });
@@ -153,6 +155,7 @@ describe('tags that meet', () => {
   it('paste conducts to everyone in it; a fuse takes all of a shock', () => {
     const t = plain();
     const m = new Match(t, [{ name: 'A', species: ANT, color: 0, size: 3 }, { name: 'B', species: ANT, color: 0, size: 1 }], 1, { placeBugs: false, wind: 0 });
+    even(m);
     m.units.forEach((u, i) => u.bug.drop(t, u.team ? 50 : 20 + i * 1.4, 32));
     run(m, 60);
     const paste = WEAPONS.find((w) => w.kind === 'trap') as Weapon;
@@ -170,6 +173,7 @@ describe('tags that meet', () => {
   it('a living bridge closes a gap a turn, while over half of it stands', () => {
     const t = world(4, 3, 2, (i, j) => Math.max(j - 20, 4 - Math.abs(i - 28)));
     const m = new Match(t, [{ name: 'A', species: ANT, color: 0, size: 1 }, { name: 'B', species: ANT, color: 0, size: 1 }], 1, { placeBugs: false, wind: 0 });
+    even(m);
     m.units[0].bug.drop(t, 18, 32);
     m.units[1].bug.drop(t, 50, 32);
     run(m, 60, { faceX: 1 });
@@ -202,6 +206,7 @@ describe('tags that meet on bugs', () => {
   function hit(s: BugSpecies, w: Weapon | null, blast: Weapon): { took: number; words: string[]; m: Match } {
     const t = plain();
     const m = w ? setup(s, w, t) : new Match(t, [{ name: 'A', species: s, color: 0, size: 1 }, { name: 'B', species: ANT, color: 0, size: 1 }], 1, { placeBugs: false, wind: 0 });
+    even(m);
     if (!w) {
       m.units[0].bug.drop(t, 20, 32);
       m.units[1].bug.drop(t, 50, 32);

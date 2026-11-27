@@ -159,7 +159,7 @@ export class Minimap {
         g.fillRect(x - size * 0.045, y - size * 0.026, size * 0.09, size * 0.036);
         g.fillStyle = TEAMS[q.team] ?? '#fff';
         g.fillText(q.name, x, y - size * 0.002);
-        g.fillRect(x - size * 0.04, y + size * 0.004, size * 0.08 * Math.max(0, q.bug.health / q.bug.species.health), size * 0.004);
+        g.fillRect(x - size * 0.04, y + size * 0.004, size * 0.08 * Math.max(0, q.bug.health / q.bug.maxHealth), size * 0.004);
       });
       return;
     }
