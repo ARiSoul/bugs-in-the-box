@@ -1363,8 +1363,12 @@ const MAKERS: Record<string, () => Model> = {
   'wax-nest': waxNest,
 };
 
+/** Whether a weapon has a model here (what builds or hides; not a tunnel, say). */
+export const hasModel = (weapon: string): boolean => Object.prototype.hasOwnProperty.call(MAKERS, weapon);
+
 /** The model of a weapon that builds or hides. */
 export function buildModel(weapon: string): Model {
+  if (!hasModel(weapon)) throw new Error(`no build model for ${weapon}`);
   const m = MAKERS[weapon]();
   // (a bridge grows from its near end, the rest from the ground up)
   const span = SPANNING.includes(weapon);

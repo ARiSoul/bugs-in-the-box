@@ -5,7 +5,7 @@ import { ANT_COLUMN, TITAN_LIFT, BURROW, BURST, ANTHILL, LIVING_BRIDGE, RAMPART,
 import { BUILT, STEEL } from '../src/terrain/materials';
 import type { Terrain } from '../src/terrain/Terrain';
 import { world } from './helpers/worlds';
-import { BUILD_MODELS, buildModel } from '../src/render/gpu/buildModels';
+import { BUILD_MODELS, buildModel, hasModel } from '../src/render/gpu/buildModels';
 import { analyze, meshAll } from './helpers/meshIntegrity';
 
 const at = (w: Weapon): number => WEAPONS.indexOf(w);
@@ -220,6 +220,13 @@ describe('models', () => {
       for (let k = 0; k < n; k++) expect(Math.hypot(m.normal[k * 3], m.normal[k * 3 + 1], m.normal[k * 3 + 2]) > 0.5 || id).toBe(true);
     }
   }, 30000);
+
+  it('a weapon with stock but no model (the burrow) is not asked for, and asking says why', () => {
+    expect(hasModel('burrow')).toBe(false);
+    expect(hasModel('toString')).toBe(false);
+    expect(hasModel('rampart')).toBe(true);
+    expect(() => buildModel('burrow')).toThrow('no build model for burrow');
+  });
 });
 
 describe('putting things down with the pointer', () => {

@@ -32,6 +32,8 @@ export const KILL_Y = -4;
 const SNAP = 0.3;
 /** A surface this close counts as touching, without being pushed. */
 const CONTACT_EPS = 0.03;
+/** Where a contact says the surface is, a field over this is clear air: if it rises again past it, the field is stale there, no surface. */
+const NO_SURFACE = 0.5;
 /** Largest move per substep, as a fraction of the radius (prevents tunnelling through thin walls). */
 const MAX_SUBSTEP = 0.35;
 const MAX_SUBSTEPS = 8;
@@ -617,6 +619,9 @@ export class Bug {
     for (let it = 0; it < RESOLVE_ITERS; it++) {
       const d = surfaceDistance(field, this.x, this.y, this.z, n);
       if (d >= r + CONTACT_EPS) break;
+      // (only where there is a surface: under a hole blown through, the old field can stay near the radius with no
+      // surface in it, and a bug would stand on nothing; not every map's field is a distance, so it looks a unit past)
+      if (d > 0 && this.nothingAt(field, d)) break;
       const like = n[0] * prefer[0] + n[1] * prefer[1] + n[2] * prefer[2];
       if (like > best) {
         best = like;
@@ -648,6 +653,14 @@ export class Bug {
       }
     }
     return best > -2;
+  }
+
+  /** Whether, along `-n` from the bug, what is `d` away is no surface: clear air there, and no nearer to solid a unit further. */
+  private nothingAt(field: TerrainField, d: number): boolean {
+    const at = field.sample(this.x - n[0] * d, this.y - n[1] * d, this.z - n[2] * d);
+    if (at <= NO_SURFACE) return false;
+    const e = d + 1;
+    return field.sample(this.x - n[0] * e, this.y - n[1] * e, this.z - n[2] * e) >= at;
   }
 
   /** Rotate the facing about +Y by `a` radians (counter-clockwise seen from above). */

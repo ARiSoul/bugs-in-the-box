@@ -8,7 +8,7 @@ import { SMOTHERED } from '../../game/reactions';
 import { WEAPONS } from '../../game/weapons';
 import type { BuildReply } from '../../workers/build.worker';
 import type { BugView } from '../BugView';
-import { hexAt, outOf } from './buildModels';
+import { hasModel, hexAt, outOf } from './buildModels';
 import type { Placing } from '../../input/placing';
 
 type F = THREE.Node<'float'>;
@@ -331,7 +331,7 @@ export class BuildViews {
   /** Make the models these species need (a worker does). */
   private ask(species: readonly string[]): void {
     for (const w of WEAPONS) {
-      if (w.start === undefined || !w.species || !species.includes(w.species) || this.asked.has(w.id)) continue;
+      if (w.start === undefined || !w.species || !species.includes(w.species) || !hasModel(w.id) || this.asked.has(w.id)) continue;
       this.asked.add(w.id);
       if (!this.worker) {
         this.worker = new Worker(new URL('../../workers/build.worker.ts', import.meta.url), { type: 'module' });

@@ -2,7 +2,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { Bug, IDLE, RUN_FACTOR, TICK_RATE, type BugInput } from '../src/game/bug';
-import { ANT } from '../src/game/species';
+import { ANT, COCKROACH } from '../src/game/species';
 import { floatingIslands } from './helpers/floatingIslands';
 import { createRng } from '../src/terrain/noise';
 import { Terrain } from '../src/terrain/Terrain';
@@ -252,6 +252,25 @@ describe('bug in the air', () => {
     expect(bug.grounded).toBe(true);
     expect(bug.y).toBeLessThan(20 - 3);
     expect(bug.lastImpact).toBeGreaterThan(5);
+  });
+
+  it('falls through a hole blown in a thin slab, and does not stand on the old field under it', () => {
+    // (a slab from 7 to 10 with air under it, as the desk's top; the blast goes through it, and leaves the field
+    // under the hole as it was, about one unit from a surface that is gone)
+    const t = world(2, 1, 2, (_i, j) => Math.max(j - 10, 7 - j));
+    for (const bug of [new Bug(ANT), new Bug(COCKROACH)]) {
+      expect(bug.drop(t, 32, 32)).toBe(true);
+      run(bug, t, TICK_RATE);
+      expect(bug.grounded).toBe(true);
+    }
+    t.carve(32, 9.9, 32, 3.6);
+    const bug = new Bug(COCKROACH);
+    bug.x = bug.px = 32;
+    bug.y = bug.py = 8;
+    bug.z = bug.pz = 32;
+    run(bug, t, TICK_RATE * 2);
+    expect(bug.grounded).toBe(false);
+    expect(bug.y).toBeLessThan(0);
   });
 
   it('turns back at the edge of the world instead of walking off it, and dies when thrown off', () => {
