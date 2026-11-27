@@ -403,7 +403,8 @@ describe('burrow and the ground', () => {
     expect(b.hx).toBe(hx);
     // (on, and out where the ant first went in)
     const events = run(m, 400, { move: 1 });
-    expect(events.some((e) => e.type === 'emerge')).toBe(true);
+    // (out by a mouth already dug: no earth thrown, no new hole)
+    expect(events.some((e) => e.type === 'emerge')).toBe(false);
     expect(m.inTunnel).toBe(null);
     expect(b.x).toBeLessThan(out - 8);
     // (still going on, facing back into it: it does not go in again at once)

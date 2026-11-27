@@ -13,6 +13,8 @@ const LINGER = 0;
  */
 export class BurrowViews {
   private readonly lumps: THREE.InstancedMesh;
+  private readonly crumbs: THREE.InstancedMesh;
+  private nextCrumb = 0;
   private next = 0;
   private tunnel: THREE.Mesh | null = null;
   /** The tunnel's inside, seen through the ground: shaded by itself (no light reaches it), its floor lit, its roof dark. */
@@ -34,6 +36,15 @@ export class BurrowViews {
       this.lumps.setColorAt(i, this.c.setRGB(GREY[0], GREY[1], GREY[2]));
     }
     scene.add(this.lumps);
+    // (the crumbs along a tunnel's heave: apart from the mounds, hidden with the heave they lie on)
+    this.crumbs = new THREE.InstancedMesh(new THREE.DodecahedronGeometry(1, 0), this.lumps.material as THREE.Material, LUMPS);
+    this.crumbs.castShadow = this.crumbs.receiveShadow = true;
+    this.crumbs.frustumCulled = false;
+    for (let i = 0; i < LUMPS; i++) {
+      this.crumbs.setMatrixAt(i, this.m.makeScale(0, 0, 0));
+      this.crumbs.setColorAt(i, this.c.setRGB(GREY[0], GREY[1], GREY[2]));
+    }
+    scene.add(this.crumbs);
     this.earth.visible = false;
     this.earth.frustumCulled = false;
     scene.add(this.earth);
@@ -48,8 +59,13 @@ export class BurrowViews {
     this.heaves.length = 0;
     this.seams.length = 0;
     this.heave = null;
-    for (let i = 0; i < LUMPS; i++) this.lumps.setMatrixAt(i, this.m.makeScale(0, 0, 0));
+    for (let i = 0; i < LUMPS; i++) {
+      this.lumps.setMatrixAt(i, this.m.makeScale(0, 0, 0));
+      this.crumbs.setMatrixAt(i, this.m.makeScale(0, 0, 0));
+    }
     this.lumps.instanceMatrix.needsUpdate = true;
+    this.crumbs.instanceMatrix.needsUpdate = true;
+    this.nextCrumb = 0;
     this.next = 0;
     this.dropTunnel();
   }
@@ -93,11 +109,18 @@ export class BurrowViews {
     }
     // (under a bug under the ground, the earth: what is seen through the ground round its tunnel, not the dark below)
     const deep = u ?? match.inTunnel;
-    this.earth.visible = deep !== null;
+    // (the earth only while the bug is down along its tunnel, laid under the tunnel's floor there: never up by a mouth,
+    // where it would stand over the ground)
+    const b0 = deep ? match.units[deep.unit].bug : null;
+    const floor = deep ? deep.path[4] - BURROW_FLOOR_UNDER : 0;
+    const down = b0 !== null && b0.y < deep!.path[4] + 0.6;
+    this.earth.visible = down;
+    // (what lies over the tunnel is hidden while a bug is seen in it, so it never covers it)
     for (const s of this.seams) s.visible = deep === null;
-    if (deep) {
-      const b = match.units[deep.unit].bug;
-      this.earth.position.set(b.x, b.y - 1.9, b.z);
+    this.crumbs.visible = deep === null;
+    if (deep && b0) {
+      const b = b0;
+      this.earth.position.set(b.x, floor, b.z);
       if (this.earthOf !== deep.path) {
         this.earthOf = deep.path;
         const e = this.dug(this.groundColor?.(deep.path[0], deep.path[1] - 1.5, deep.path[2]) ?? GREY);
@@ -129,13 +152,14 @@ export class BurrowViews {
       let laid = false;
       while (this.ridge.length > 0 && this.ridge[0].at <= u.s - first) {
         const r = this.ridge.shift() as { m: THREE.Matrix4; c: number; at: number };
-        const i = this.next++ % LUMPS;
-        this.lumps.setMatrixAt(i, r.m);
-        this.lumps.setColorAt(i, this.c.set(r.c));
+        const i = this.nextCrumb++ % LUMPS;
+        this.crumbs.setMatrixAt(i, r.m);
+        this.crumbs.setColorAt(i, this.c.set(r.c));
         laid = true;
       }
       if (laid) {
-        this.lumps.instanceMatrix.needsUpdate = true;
+        this.crumbs.instanceMatrix.needsUpdate = true;
+        if (this.crumbs.instanceColor) this.crumbs.instanceColor.needsUpdate = true;
         if (this.lumps.instanceColor) this.lumps.instanceColor.needsUpdate = true;
       }
       if (this.heave) {
@@ -516,6 +540,8 @@ const TUBE_SEGMENTS = 60;
 /** The heaved mound over a tunnel: points across it, and how high it rises. */
 const HEAVE_ACROSS = 13;
 const HEAVE_HIGH = 0.18;
+/** The earth seen under a tunnel lies this far under the middle of its run. */
+const BURROW_FLOOR_UNDER = 1.9;
 const GREY: readonly [number, number, number] = [0.3, 0.27, 0.24];
 const TUBE_SIDES = 10;
 
@@ -545,6 +571,17 @@ function earthDisc(): THREE.BufferGeometry {
     col[i * 3] = col[i * 3 + 1] = col[i * 3 + 2] = k;
   }
   g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  // (only a round disc of it, about as wide as what is seen through the ground: never past the edge of a thin top)
+  const index = g.getIndex() as THREE.BufferAttribute;
+  const keep: number[] = [];
+  const R = 4.7;
+  for (let k = 0; k < index.count; k += 3) {
+    const a = index.getX(k);
+    const b = index.getX(k + 1);
+    const c = index.getX(k + 2);
+    if (Math.max(Math.hypot(p.getX(a), p.getZ(a)), Math.hypot(p.getX(b), p.getZ(b)), Math.hypot(p.getX(c), p.getZ(c))) <= R) keep.push(a, b, c);
+  }
+  g.setIndex(keep);
   return g;
 }
 

@@ -2212,7 +2212,7 @@ export class Match {
     b.vz = (oz / ol) * TUNNEL_HOP * 0.6;
     b.grounded = false;
     this.soft.add(u.id);
-    this.events.push({ type: 'emerge', unit: u.id, x: b.x, y: b.y, z: b.z });
+    // (out by a mouth already dug: nothing breaks, no earth is thrown)
     return false;
   }
 
