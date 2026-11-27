@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { DataCache, MemoryStore } from '../src/data';
 import { Brain, SKILLS } from '../src/game/brain';
 import { ITEM_KINDS } from '../src/game/items';
 import { Match, NO_INPUT, type MatchEvent, type MatchInput } from '../src/game/match';
@@ -75,7 +76,7 @@ describe('levels', () => {
 
 describe('a profile', () => {
   it('learns with points, uses a few, gains, and keeps three items', () => {
-    const p = new Profile();
+    const p = new Profile(new DataCache(new MemoryStore(), 'me'));
     expect(p.touch('spider', 'barbs')).toBe(false);
     p.gain('spider', xpFor(1), null);
     expect(p.level('spider').level).toBe(2);
@@ -88,6 +89,20 @@ describe('a profile', () => {
     const { before, after } = p.gain('spider', xpFor(2), { patch: 2, fuse: 2, spring: 1 });
     expect([before.level, after.level]).toEqual([2, 3]);
     expect(p.growth('spider').items).toEqual({ patch: 2, fuse: 1 });
+  });
+
+  it('is kept in the client data, and read back as it was (put right by its level)', async () => {
+    const store = new MemoryStore();
+    const cache = new DataCache(store, 'me');
+    const p = new Profile(cache);
+    p.gain('ant', xpFor(1) + xpFor(2), { fuse: 1 });
+    p.touch('ant', 'hot-tip');
+    await cache.flushed();
+    const again = new DataCache(store, 'me');
+    await again.load();
+    const q = new Profile(again);
+    expect(q.level('ant').level).toBe(3);
+    expect(q.growth('ant')).toMatchObject({ level: 3, passives: ['hot-tip'], items: { fuse: 1 } });
   });
 });
 

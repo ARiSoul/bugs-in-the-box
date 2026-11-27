@@ -28,7 +28,8 @@ const MUSIC = 1.4;
 const MAX_VOICES = 40;
 /** The same sound again within this (seconds) is one sound. */
 const AGAIN = 0.028;
-const KEY = 'bugs-in-the-box.sound';
+/** The setting its values are kept under. */
+const KEY = 'sound';
 
 interface Settings {
   volume: number;
@@ -120,12 +121,10 @@ export class SoundEngine {
   /** For checks of the level (made on demand). */
   private meter: AnalyserNode | null = null;
 
-  constructor() {
-    try {
-      Object.assign(this.settings, JSON.parse(localStorage.getItem(KEY) ?? '{}'));
-    } catch {
-      // (a private window may refuse it)
-    }
+  /** `kept`: where its settings are kept (the client's data); none: they last for this visit. */
+  constructor(private readonly kept: { get<T>(name: string): T | undefined; set(name: string, value: unknown): void } | null = null) {
+    const saved = kept?.get<Partial<Settings>>(KEY);
+    if (saved && typeof saved === 'object') Object.assign(this.settings, saved);
     if (typeof AudioContext === 'undefined') return;
     const worker = new Worker(new URL('./sound.worker.ts', import.meta.url), { type: 'module' });
     worker.onmessage = (e: MessageEvent<SoundReply>) => this.takes.set(e.data.id, { raw: e.data.takes, buffers: [] });
@@ -181,11 +180,7 @@ export class SoundEngine {
 
   /** The settings changed. */
   apply(): void {
-    try {
-      localStorage.setItem(KEY, JSON.stringify(this.settings));
-    } catch {
-      // (not kept, then)
-    }
+    this.kept?.set(KEY, { ...this.settings });
     if (!this.context) return;
     const { volume, muted, room, music } = this.settings;
     const now = this.context.currentTime;

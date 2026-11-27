@@ -57,6 +57,7 @@ Goal now: a PC demo first, as a proof of concept. The phone items below are post
 ## Settings and admins (proposed)
 
 - [ ] One registry of settings (id, value, unit, range, what it does), by module, instead of constants spread over the code: limits, times, speeds, damage, texts
+- [x] The client's data, offline first: IndexedDB (Dexie) under a cache, an outbox and a sync engine for any server (`src/data/`); the old `localStorage` values brought in
 - [ ] A match takes a frozen, numbered set of settings (as it takes a seed): every client must simulate with the same
 - [ ] An admin page that edits a set live (first local, in dev; then behind a server with accounts and roles, with history and undo). Numbers of the simulation change from the next match on; looks, sounds and texts at once
 
@@ -71,7 +72,7 @@ Everything that affects something else goes through the same five pieces, as dat
 - **Progression**: what stays between matches (experience, levels, skills chosen, items kept); it enters a match at its start, like the seed
 - **Tags** (fire, electric, silk, wax, resin, metal, wet) link them: a rule looks at the tag, not at the weapon's name
 
-Order: 1 the base, the game unchanged (whole matches compared tick by tick) · 2 items, shelters, webs and shell moved over, one at a time · 3 every attack in the one format · 4 tags and the first five combinations · 5 the local settings page · 6 progression.
+Order: 1 the base, the game unchanged (whole matches compared tick by tick; **done**: `src/game/engine/`, golden replays) · 2 items, shelters, webs and shell moved over, one at a time · 3 every attack in the one format · 4 tags and the first five combinations · 5 the local settings page · 6 progression.
 
 To be decided: who evolves (recommended: the species, per player) · whether levels give power (recommended: options, not strength) · whether interactions reach one's own team (recommended: yes).
 

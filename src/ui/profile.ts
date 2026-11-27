@@ -1,6 +1,7 @@
 import { KEPT } from '../game/actions';
 import type { ItemKind } from '../game/items';
 import { CARRY, levelOf, passivesOf, type Growth, type Level } from '../game/progress';
+import type { DataCache } from '../data';
 
 /** A player's growth with one species. */
 export interface Grown {
@@ -12,24 +13,16 @@ export interface Grown {
   items: Partial<Record<ItemKind, number>>;
 }
 
-const STORE = 'bugs-in-the-box.profile';
-
-/** What the player has grown so far, kept in this browser (later: on a server, where it cannot be made up). */
+/**
+ * What the player has grown so far, one `growth` record per species in the client's data (kept on this device, synced
+ * later; a server will check it, so it cannot be made up).
+ */
 export class Profile {
-  private data: Record<string, Grown> = {};
-
-  constructor() {
-    try {
-      const d: unknown = JSON.parse(localStorage.getItem(STORE) ?? '{}');
-      if (d && typeof d === 'object') this.data = d as Record<string, Grown>;
-    } catch {
-      // (no storage, or a broken entry: a new player)
-    }
-  }
+  constructor(private readonly data: DataCache) {}
 
   /** Whatever was stored, put right: nothing that its level does not allow. */
   of(species: string): Grown {
-    const d = (this.data[species] ?? {}) as Partial<Grown>;
+    const d = (this.data.get('growth', species) ?? {}) as Partial<Grown>;
     const xp = typeof d.xp === 'number' && Number.isFinite(d.xp) ? Math.max(0, Math.round(d.xp)) : 0;
     const l = levelOf(xp);
     const ids = passivesOf(species).map((p) => p.id);
@@ -43,9 +36,7 @@ export class Profile {
       if (n > 0) items[k] = n;
       left -= n;
     }
-    const g = { xp, known, active, items };
-    this.data[species] = g;
-    return g;
+    return { xp, known, active, items };
   }
 
   level(species: string): Level {
@@ -70,7 +61,7 @@ export class Profile {
     } else if (g.active.includes(id)) g.active = g.active.filter((q) => q !== id);
     else if (g.active.length < l.actives) g.active.push(id);
     else return false;
-    this.save();
+    this.save(species, g);
     return true;
   }
 
@@ -80,16 +71,13 @@ export class Profile {
     const g = this.of(species);
     g.xp += xp;
     if (items) g.items = { ...items };
-    this.of(species);
-    this.save();
+    this.save(species, g);
+    // (and put right again: what the new level allows)
+    this.save(species, this.of(species));
     return { before, after: this.level(species) };
   }
 
-  private save(): void {
-    try {
-      localStorage.setItem(STORE, JSON.stringify(this.data));
-    } catch {
-      // (storage unavailable: it lasts for this visit)
-    }
+  private save(species: string, g: Grown): void {
+    this.data.put('growth', species, g);
   }
 }

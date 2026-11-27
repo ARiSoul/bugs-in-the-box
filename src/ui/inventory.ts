@@ -14,7 +14,6 @@ const TABS: readonly (readonly [Category, string, string, string])[] = [
 ];
 const COLORS: Record<string, string> = Object.fromEntries(TABS.map(([c, , k]) => [c, k]));
 const BAG = `<svg viewBox="0 0 48 48"><path fill="currentColor" d="${TABS[3][3]}"/><path fill="var(--b)" d="M15 21h18v4H15z"/></svg>`;
-const STORE = 'bugs-in-the-box.quick';
 /** A press that moves this far is a drag. */
 const DRAG = 7;
 
@@ -39,13 +38,16 @@ export interface InventoryUse {
  * The quick slots beside the hand (their keys stay with their places), and the inventory behind them: a tab per kind of
  * action. Drag between them. What is in the slots is kept per creature on this device.
  */
+import type { DataCache } from '../data';
+
 export class Inventory {
   readonly dock = div('dock');
   private readonly quick = div('quick');
   private readonly bag = document.createElement('button');
   private readonly panel = div('inv');
   private readonly ghost = div('drag');
-  private saved: Record<string, string[]> = {};
+  /** The quick slots set for each species: `loadout` records in the client's data. */
+  private readonly loadouts: DataCache;
   private slots: string[] = [];
   /** How many there are now. */
   private count = QUICK_SLOTS;
@@ -62,17 +64,18 @@ export class Inventory {
   private unit: Unit | null = null;
   private press: { id: string; from: number; x: number; y: number; on: boolean } | null = null;
 
+  /** The slots kept for a species (none: empty). */
+  private savedOf(species: string): string[] {
+    return this.loadouts.get('loadout', species)?.slots ?? [];
+  }
+
   constructor(
     private readonly use: InventoryUse,
     /** The number of the first slot's key, from 0. */
     private readonly firstKey: number,
+    data: DataCache,
   ) {
-    try {
-      const s: unknown = JSON.parse(localStorage.getItem(STORE) ?? '{}');
-      if (s && typeof s === 'object') this.saved = s as Record<string, string[]>;
-    } catch {
-      // (no storage, or a broken entry: the defaults)
-    }
+    this.loadouts = data;
     this.bag.className = 'bag';
     this.bag.setAttribute('aria-label', 'Inventory');
     this.dock.append(this.quick, this.bag, this.panel);
@@ -180,12 +183,7 @@ export class Inventory {
       this.slots[i] = p.id;
     } else if (p.from >= 0) this.slots[p.from] = '';
     // (slots a higher level opened keep what they had, in a match without levels)
-    this.saved[this.species] = [...this.slots, ...(this.saved[this.species] ?? []).slice(this.slots.length)];
-    try {
-      localStorage.setItem(STORE, JSON.stringify(this.saved));
-    } catch {
-      // (storage unavailable: they last for this visit)
-    }
+    this.loadouts.put('loadout', this.species, { slots: [...this.slots, ...this.savedOf(this.species).slice(this.slots.length)] });
   }
 
   // ---------------------------------------------------------------- what it shows
@@ -218,7 +216,7 @@ export class Inventory {
       this.species = id;
       this.took = took;
       this.count = count;
-      const was = this.saved[id];
+      const was = this.loadouts.get('loadout', id)?.slots;
       const special = WEAPONS[match.special(u.team)]?.id;
       const first = firstSlots(id, special);
       // (a special attack in the slots is the one its team took)

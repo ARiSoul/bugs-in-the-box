@@ -21,9 +21,10 @@ npm run test        # Vitest: mesh integrity, determinism, carve, raycast
 npm run typecheck   # tsc --noEmit
 npm run build       # typecheck + production build into dist/
 npm run bench       # CPU benchmark of the terrain pipeline (no rendering)
+npm run golden      # rewrite the golden replays (only when the game is meant to change)
 ```
 
-Before any commit: `npm run typecheck && npm run test`. For changes in `src/terrain/` or the mesher: also run `npm run bench` and compare against the reference numbers below.
+Before any commit: `npm run typecheck && npm run test` (the golden replays included: a change that must leave the game as it was must keep them; one that changes the game rewrites them with `npm run golden` in the same commit). Every change brings its tests: unit tests for pure parts, integration tests through a `Match`, regression through the golden replays. For changes in `src/terrain/` or the mesher: also run `npm run bench` and compare against the reference numbers below.
 
 ## Structure
 
@@ -55,6 +56,7 @@ src/
     build.ts            what bugs build (thick flat pieces): where they go (wall, bridge)
     weapons.ts          weapons as data (Solder Blob, Capacitor, Short Circuit, Soldering Iron; building and hiding; the species' own: Web Shot, Web Bow, Ant Column, Blackout Swarm, Queen's Flight)
     math.ts             rotate2: deterministic rotation without sin/cos
+    engine/             the linked engine (RPG style): attributes (base + modifiers, fixed order), effects (stacks, time), triggers (when X do Y, fixed order), registry; pure
   render/             three.js: stage (Stage interface, key light), ChunkRenderer (1 mesh per chunk), MeshWorkers (worker pool), BugView, DrawnGround (where a foot rests: the drawn parts, not their hidden bodies), FollowCamera, labels, projectiles, aim, effects
     gpu/                the renderer, WebGPU (TSL): terrain material + glow, atmosphere (fog, glass, backdrop), god rays + bloom post, dust compute, heat shimmer, LEDs; buildModels (what bugs build and hide in, as pure arrays), buildViews; heroes, heroDress, heroStage (the menus' fighters)
   debug/              shared hooks for every map: ?pose, ?flythrough, ?fly, ?perf, ?res, ?hud; camera views per scenario; perf log; captures
@@ -62,9 +64,10 @@ src/
   audio/              sound, all computed (no files): dsp.ts and sounds.ts (recipes; pure, tested), sound.worker.ts (computes them), SoundEngine (Web Audio), GameSounds (match events and state -> sounds); reads the match, never changes it; music.ts (a theme per map as data, and its instruments; pure, tested), music.worker.ts, MusicEngine (stems that follow the match)
   input/              Controls (keyboard + on-screen pad -> MatchInput), picking against the density field, placing.ts (what is built follows the pointer)
   ui/                 DOM HUD; inventory.ts (quick slots, inventory), profile.ts and species.ts (levels)
+  data/               the client's data, offline first: DataCache (memory, read at once) over a DataStore (IndexedDB via Dexie, or memory), an outbox and SyncEngine (any server, one merge rule `newer`); never imported by game/ or terrain/
   bench/              benchmark shared between the in-browser button and scripts/bench.ts
   main.ts             glue: wires terrain, render, input and UI
-tests/                Vitest + helpers (meshIntegrity, worlds)
+tests/                Vitest + helpers (meshIntegrity, worlds, replay); golden/replays.json (whole matches, tick for tick); architecture.test.ts (layer borders)
 scripts/bench.ts      Node benchmark; scripts/balance.ts: the computer plays itself, species and weapons compared (`npm run balance`)
 docs/                 ARCHITECTURE.md, ROADMAP.md, IDEAS.md
 ```

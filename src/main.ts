@@ -13,7 +13,8 @@ import { DT, GRAVITY, KILL_Y, TICK_RATE } from './game/bug';
 import { LIFT_HIGH, Match, NO_INPUT, type MatchEvent, type TeamSpec } from './game/match';
 import { ANT, SPECIES, SPIDER, type BugSpecies } from './game/species';
 import { SOLDER_BLOB, WEAPONS } from './game/weapons';
-import { Controls } from './input/controls';
+import { Controls, keepKeysIn } from './input/controls';
+import { openData } from './data';
 import { pickTerrain } from './input/picking';
 import { AimView } from './render/aim';
 import { BugView } from './render/BugView';
@@ -68,7 +69,10 @@ const brain = (): Brain | null => brains[match.activeUnit.team];
 const rules = { size: 3, seconds: 30, wind: 1 };
 /** No levels in this match (`?equal=1`). */
 let equal = false;
-const profile = new Profile();
+/** The player's data: on this device first (IndexedDB), ready to sync with a server later (see `src/data`). */
+const data = await openData();
+keepKeysIn(data.settings);
+const profile = new Profile(data.cache);
 /** A side's level: the player's own with its species; the computer's is as high as its rival's. */
 function levelFor(side: number, species: readonly BugSpecies[], who: readonly string[]): number {
   if (who[side] === 'human') return profile.level(species[side].id).level;
@@ -159,7 +163,8 @@ const inScene = (): BowScene | ColumnScene | BroodScene | FlockScene | null => (
 /** What the player builds follows the pointer, until a click puts it down. */
 /** What hides the bug is seen through; or (as it was) the camera moves out of the way. The player's choice. */
 const seeThrough = new SeeThrough();
-const CAMERA = 'bugs-in-the-box.camera';
+/** The setting the camera's way is kept under. */
+const CAMERA = 'camera';
 /** How far along the aim the view is kept free. */
 const AHEAD = 14;
 const aimAt = new Float64Array(3);
@@ -176,7 +181,7 @@ const follow = new FollowCamera(stage.camera, stage.controls);
 // the right button turns the view (and the bug with it), the wheel zooms; the left button stays free
 stage.controls.mouseButtons = { LEFT: null, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.ROTATE };
 const hud = new Hud();
-const sound = new SoundEngine();
+const sound = new SoundEngine(data.settings);
 const music = new MusicEngine(sound);
 const gameSounds = new GameSounds(sound, music);
 
@@ -559,17 +564,13 @@ const cameraButton = document.getElementById('camMode') as HTMLButtonElement;
 function setCamera(stays: boolean): void {
   follow.stays = stays;
   cameraButton.textContent = `camera: ${stays ? 'sees through walls' : 'moves out of the way'}`;
-  try {
-    localStorage.setItem(CAMERA, stays ? 'stays' : 'moves');
-  } catch {
-    // (it lasts for this visit)
-  }
+  data.settings.set(CAMERA, stays ? 'stays' : 'moves');
 }
 cameraButton.addEventListener('click', () => {
   setCamera(!follow.stays);
   cameraButton.blur();
 });
-setCamera(localStorage.getItem(CAMERA) !== 'moves');
+setCamera(data.settings.get<string>(CAMERA) !== 'moves');
 const inventory = new Inventory(
   {
     weapon: (i) => controls.selectWeapon(i),
@@ -577,6 +578,7 @@ const inventory = new Inventory(
     drop: () => controls.selectWeapon(match.kept[match.activeUnit.team]),
   },
   HAND,
+  data.cache,
 );
 hud.addInventory(inventory);
 const minimap = new Minimap();

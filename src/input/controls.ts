@@ -35,7 +35,13 @@ export const DEFAULT_KEYS: Readonly<Record<Action, readonly string[]>> = {
 /** Keys the game keeps for itself: weapons and a new match. */
 const RESERVED = new Set(['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7', 'Digit8', 'Digit9', 'Digit0', 'KeyN', 'KeyM', 'KeyK', 'Escape']);
 const WEAPON_KEYS = ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7', 'Digit8', 'Digit9', 'Digit0'];
-const STORAGE = 'bugs-in-the-box.keys';
+/** The setting the keys are kept under, and where (the client's data; set before `Controls` is made). */
+const STORAGE = 'keys';
+let kept: { get<T>(name: string): T | undefined; set(name: string, value: unknown): void } | null = null;
+/** Keep the keys in the client's data (call before making `Controls`). */
+export function keepKeysIn(settings: { get<T>(name: string): T | undefined; set(name: string, value: unknown): void }): void {
+  kept = settings;
+}
 
 /**
  * Turns held keys and on-screen buttons into one MatchInput per simulation tick.
@@ -272,24 +278,16 @@ function copyKeys(k: Readonly<Record<Action, readonly string[]>>): Record<Action
 /** The saved keys, over the defaults (an unknown or broken entry falls back to them). */
 function loadKeys(): Record<Action, string[]> {
   const keys = copyKeys(DEFAULT_KEYS);
-  try {
-    const saved = JSON.parse(localStorage.getItem(STORAGE) ?? '{}') as Partial<Record<Action, unknown>>;
-    for (const a of Object.keys(keys) as Action[]) {
-      const v = saved[a];
-      if (Array.isArray(v) && v.length > 0 && v.every((x) => typeof x === 'string')) keys[a] = v as string[];
-    }
-  } catch {
-    // (no storage, or a broken entry: the defaults)
+  const saved = kept?.get<Partial<Record<Action, unknown>>>(STORAGE) ?? {};
+  for (const a of Object.keys(keys) as Action[]) {
+    const v = saved[a];
+    if (Array.isArray(v) && v.length > 0 && v.every((x) => typeof x === 'string')) keys[a] = v as string[];
   }
   return keys;
 }
 
 function saveKeys(keys: Record<Action, string[]>): void {
-  try {
-    localStorage.setItem(STORAGE, JSON.stringify(keys));
-  } catch {
-    // (storage unavailable: the keys last for this visit)
-  }
+  kept?.set(STORAGE, copyKeys(keys));
 }
 
 /** A key's name for the menu ("KeyQ" -> "Q", "ArrowUp" -> "↑", "ShiftLeft" -> "shift"). */
