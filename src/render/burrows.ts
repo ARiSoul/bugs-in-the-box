@@ -99,7 +99,7 @@ export class BurrowViews {
         const e = this.dug(this.groundColor?.(deep.path[0], deep.path[1] - 1.5, deep.path[2]) ?? GREY);
         // (darker and warmer than the tunnel's walls: the earth round it, not more of it)
         // (earth: some of the map's own broken stuff in a brown)
-        (this.earth.material as THREE.MeshBasicMaterial).color.setRGB(e[0] * 0.3 + 0.075, e[1] * 0.24 + 0.05, e[2] * 0.18 + 0.028);
+        (this.earth.material as THREE.MeshBasicMaterial).color.setRGB(e[0] * 0.22 + 0.095, e[1] * 0.17 + 0.062, e[2] * 0.12 + 0.03);
       }
     }
     // (a bug walking through a tunnel: its far wall drawn, so the bug is seen in it through the ground)
@@ -470,9 +470,9 @@ export class BurrowViews {
       const rib = Math.floor(i / (TUBE_SIDES + 1)) % 4 === 0 ? 0.72 : 1;
       const k = (0.18 + 0.62 * down * down) * rib * (0.9 + 0.2 * Math.abs(Math.sin(i * 12.9898)));
       // (darker than the earth round it: a hollow, not a log)
-      col[i * 3] = Math.min(1, earth[0] * 0.62 * k + 0.008);
-      col[i * 3 + 1] = Math.min(1, earth[1] * 0.58 * k + 0.006);
-      col[i * 3 + 2] = Math.min(1, earth[2] * 0.52 * k + 0.005);
+      col[i * 3] = Math.min(1, earth[0] * 0.42 * k + 0.006);
+      col[i * 3 + 1] = Math.min(1, earth[1] * 0.44 * k + 0.006);
+      col[i * 3 + 2] = Math.min(1, earth[2] * 0.5 * k + 0.008);
     }
     g.setAttribute('color', new THREE.BufferAttribute(col, 3));
     g.setDrawRange(0, 0);
@@ -511,7 +511,9 @@ function earthDisc(): THREE.BufferGeometry {
     const x = p.getX(i);
     const z = p.getZ(i);
     const r = Math.hypot(x, z);
-    const edge = 1 - 0.55 * Math.min(1, Math.max(0, (r - 2.4) / 1.6));
+    // (darker out to the edge of what is seen of it: the ground's cut edge, not a pasted circle)
+    const e0 = Math.min(1, Math.max(0, (r - 2.6) / 1.5));
+    const edge = 1 - 0.78 * e0 * e0 * (3 - 2 * e0);
     // (grain: a cheap hash of the place, and clods a little lighter)
     const h = Math.abs(Math.sin(x * 12.9898 + z * 78.233) * 43758.5453) % 1;
     const cx = Math.floor(x * 0.9);
