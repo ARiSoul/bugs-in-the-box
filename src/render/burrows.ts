@@ -442,7 +442,8 @@ export class BurrowViews {
       // (the ground's own stuff, dug out: its colour, paler and drier, some of it darker and damp from deeper down)
       const k = 0.75 + 0.5 * Math.random();
       const damp = Math.random() < 0.3 ? 0.6 : 1;
-      this.lumps.setColorAt(i, this.c.setRGB((ground[0] * 1.3 + 0.035) * k * damp, (ground[1] * 1.28 + 0.03) * k * damp, (ground[2] * 1.22 + 0.022) * k * damp));
+      // (a little dimmer than fresh: it lies on the ground in its light)
+      this.lumps.setColorAt(i, this.c.setRGB((ground[0] * 1.05 + 0.025) * k * damp, (ground[1] * 1.03 + 0.02) * k * damp, (ground[2] * 1.0 + 0.015) * k * damp));
     }
     this.lumps.instanceMatrix.needsUpdate = true;
     if (this.lumps.instanceColor) this.lumps.instanceColor.needsUpdate = true;

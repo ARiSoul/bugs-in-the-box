@@ -319,6 +319,8 @@ export const BURROW_LONG = 20;
 const BURROW_DEEP = 1.9;
 const BURROW_SLOPE = 2.6;
 const BURROW_HOP = 5;
+/** Out of its hole, how fast it goes on the way it went (it lands past the hole). */
+const BURROW_ON = 3.2;
 /** How far under the top it waits, and for how many ticks. */
 const BURROW_UNDER = 1.4;
 const BURROW_HOLD = 10;
@@ -2317,9 +2319,10 @@ export class Match {
     for (let s = 1; s <= 10; s++) this.field.carve(p6[6] + ((p6[9] - p6[6]) * s) / 10, p6[7] + ((p6[10] - p6[7]) * s) / 10, p6[8] + ((p6[11] - p6[8]) * s) / 10, r.radius, false, false);
     this.field.carve(p6[9] * 0.5 + p6[6] * 0.5, p6[10] * 0.5 + p6[7] * 0.5, p6[11] * 0.5 + p6[8] * 0.5, r.radius, false, false);
     // (out: a little hop up out of the hole, and it lands softly)
-    b.vx = b.nx * BURROW_HOP;
+    // (up, and on the way it went: it lands past its hole, not back in it)
+    b.vx = b.nx * BURROW_HOP + b.hx * BURROW_ON;
     b.vy = b.ny * BURROW_HOP;
-    b.vz = b.nz * BURROW_HOP;
+    b.vz = b.nz * BURROW_HOP + b.hz * BURROW_ON;
     this.events.push({ type: 'emerge', unit: r.unit.id, x: b.x, y: b.y, z: b.z });
     this.outOf.set(r.unit.id, this.tunnels.length - 1);
     this.burrowing = null;
