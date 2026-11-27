@@ -148,6 +148,8 @@ burrows.rest = (ox, oy, oz, dx, dy, dz, maxT) => ground.rest(ox, oy, oz, dx, dy,
 let shake = 0;
 /** After an ant is out of its burrow: how long the view still holds both holes (s), and its way. */
 let burrowAfter = 0;
+/** The view looked down from above (a burrow, or a bug in a tunnel) last frame. */
+let overlooked = false;
 let burrowPath: number[] = [];
 const liftUp = new THREE.Vector3();
 const aim = new AimView(stage.scene);
@@ -1523,6 +1525,13 @@ function frame(now: number): void {
     // (a bug walking through a tunnel: seen from above, not followed from behind)
     // (turned to the tunnel's way, not the bug's: the bug faces where the view looks, and the two would chase each other)
     else if (tracking && match.inTunnel) follow.overlook(1.25, 21, dt, match.inTunnel.ax * match.inTunnel.dir, match.inTunnel.az * match.inTunnel.dir);
+    // (out of the ground again, or out of the tunnel: back behind the bug, looking where it walks)
+    const above = burrowing || (tracking && match.inTunnel !== null);
+    if (overlooked && !above && tracking && match.activeUnit.bug.alive && !follow.gliding) {
+      const b = match.activeUnit.bug;
+      follow.chase(terrain, bugViews[match.active].view.root.position, b.fx, b.fz, 1.1);
+    }
+    overlooked = above;
   }
 
   // wind arrow in screen space: project the wind onto the camera's ground-plane axes

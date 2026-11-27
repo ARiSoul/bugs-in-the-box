@@ -427,6 +427,28 @@ describe('burrow and the ground', () => {
   });
 });
 
+describe('over a tunnel', () => {
+  it('a bug walking on the roof over a tunnel is not drawn to its middle: it walks across it', () => {
+    // (ground 6 thick, as on a keyboard: the roof over the tunnel is thin)
+    const t = world(4, 2, 2, (_i, j) => Math.max(j - 10, 4 - j));
+    const m = setup(t);
+    run(m, 1, { weapon: at(BURROW) });
+    for (let k = 0; k < 200 && m.power < 0.5; k++) run(m, 1, { fire: true });
+    expect(run(m, 400).some((e) => e.type === 'emerge')).toBe(true);
+    const p = m.tunnels[0].path;
+    const b = m.units[0].bug;
+    b.x = b.px = (p[3] + p[6]) / 2;
+    b.z = b.pz = 26;
+    b.y = b.py = 11.5;
+    b.vx = b.vy = b.vz = 0;
+    run(m, 30);
+    expect(b.y).toBeGreaterThan(10);
+    run(m, 120, { move: 1, faceX: 0, faceZ: 1 });
+    expect(b.z).toBeGreaterThan(p[5] + 3);
+    expect(m.inTunnel).toBe(null);
+  });
+});
+
 describe('titan lift', () => {
   it('only a team that took it has it; it tears a block out before the ant, throws it from over its head, and crushes where it lands', () => {
     const t = plain();

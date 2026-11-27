@@ -2202,6 +2202,8 @@ export class Match {
         // (in its bore, or over it in the cut of a mouth)
         const up = b.y - cy;
         if (up < -t.radius || up > t.radius * 2.4) continue;
+        // (standing on something higher than half way up the bore: on the roof over it, not in it nor in its cut)
+        if (b.ny > 0.5 && b.y - b.species.radius > cy + t.radius * 0.5) continue;
         // (across the way, level)
         const hl = Math.sqrt(dx * dx + dz * dz) || 1;
         const sx = -dz / hl;
