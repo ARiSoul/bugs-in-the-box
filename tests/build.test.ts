@@ -401,6 +401,12 @@ describe('burrow and the ground', () => {
     // (it backs up)
     run(m, 20, { move: -1 });
     expect(b.x).toBeGreaterThan(x + 0.3);
+    // (turning in it does not turn it into its walls: it faces along it, and goes on)
+    const before = b.x;
+    run(m, 40, { move: 1, turn: 1 });
+    expect(m.inTunnel).not.toBe(null);
+    expect(b.x).toBeLessThan(before - 1);
+    expect(Math.abs(b.hz)).toBeLessThan(0.2);
     // (on, along it and up out of the mouth the ant first went in by)
     let out = false;
     for (let k = 0; k < 900 && !out; k++) {

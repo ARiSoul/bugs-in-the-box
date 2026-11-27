@@ -1513,7 +1513,8 @@ function frame(now: number): void {
     // (under the ground: from high above, so little stands between the view and the bug)
     if (burrowing) follow.overlook(holding ? 1.25 : 0.85, holding ? 29 : 21, dt, match.activeUnit.bug.hx, match.activeUnit.bug.hz);
     // (a bug walking through a tunnel: seen from above, not followed from behind)
-    else if (tracking && match.inTunnel) follow.overlook(1.25, 21, dt, match.activeUnit.bug.hx, match.activeUnit.bug.hz);
+    // (turned to the tunnel's way, not the bug's: the bug faces where the view looks, and the two would chase each other)
+    else if (tracking && match.inTunnel) follow.overlook(1.25, 21, dt, match.inTunnel.ax * match.inTunnel.dir, match.inTunnel.az * match.inTunnel.dir);
   }
 
   // wind arrow in screen space: project the wind onto the camera's ground-plane axes

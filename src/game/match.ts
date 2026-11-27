@@ -514,7 +514,7 @@ export class Match {
    * radius, and which way along it the bug faces (+1: from its first point). Bugs walk tunnels by their own physics; this
    * only says where one is (render only reads it); null: none.
    */
-  get inTunnel(): { readonly unit: number; readonly path: readonly number[]; readonly s: number; readonly end: number; readonly radius: number; readonly dir: number } | null {
+  get inTunnel(): { readonly unit: number; readonly path: readonly number[]; readonly s: number; readonly end: number; readonly radius: number; readonly dir: number; readonly ax: number; readonly az: number } | null {
     const b = this.units[this.active]?.bug;
     if (!b || !b.alive || this.burrowing) return null;
     for (const t of this.tunnels) {
@@ -531,9 +531,11 @@ export class Match {
         const oy = b.y - (p[k + 1] + dy * f);
         const oz = b.z - (p[k + 2] + dz * f);
         // (in its bore, with ground over it: not just by a mouth in the open)
-        if (ox * ox + oy * oy + oz * oz < t.radius * t.radius && this.field.raycast(b.x, b.y, b.z, 0, 1, 0, 3.5) >= 0) {
+        if (ox * ox + oy * oy + oz * oz < t.radius * t.radius && this.field.raycast(b.x, b.y, b.z, 0, 1, 0, 8) >= 0) {
           const dir = (b.hx * dx + b.hz * dz) >= 0 ? 1 : -1;
-          return { unit: this.active, path: p, s: s0 + f * l, end: t.end, radius: t.radius, dir };
+          // (its way along the ground there, level)
+          const hl = Math.sqrt(dx * dx + dz * dz) || 1;
+          return { unit: this.active, path: p, s: s0 + f * l, end: t.end, radius: t.radius, dir, ax: dx / hl, az: dz / hl };
         }
         s0 += l;
       }
@@ -674,8 +676,16 @@ export class Match {
     this.events.length = 0;
     this.tick++;
     const unit = this.units[this.active];
-    // (in a tunnel: nothing is fired from under the ground)
-    if (input.fire && this.inTunnel) input = { ...input, fire: false };
+    // (in a tunnel: it faces along it, the way nearest to where it is told to face, so it walks its length and never
+    // into its walls; nothing is fired from under the ground)
+    const tun = this.inTunnel;
+    if (tun) {
+      const b = this.units[this.active].bug;
+      const fx = input.faceX !== 0 || input.faceZ !== 0 ? input.faceX : b.hx;
+      const fz = input.faceX !== 0 || input.faceZ !== 0 ? input.faceZ : b.hz;
+      const sgn = fx * tun.ax + fz * tun.az >= 0 ? 1 : -1;
+      input = { ...input, faceX: tun.ax * sgn, faceZ: tun.az * sgn, turn: 0, fire: false };
+    }
     const fireDown = input.fire && !this.fireWasDown;
     this.fireWasDown = input.fire;
     this.turnHeld = input.turn !== 0 && input.turn === this.turnDir ? this.turnHeld + 1 : 0;
