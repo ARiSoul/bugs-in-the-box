@@ -19,6 +19,7 @@ import {
   min,
   mix,
   normalView,
+  normalWorld,
   normalize,
   positionView,
   positionWorld,
@@ -32,7 +33,7 @@ import {
   mx_noise_float,
   positionViewDirection,
 } from 'three/tsl';
-import { BUILT_METAL, GLOW_FAN, GLOW_FUZZ, GLOW_GRAIN, GLOW_PEEL, GLOW_RGB, HIDDEN_ROUGHNESS } from '../../terrain/materials';
+import { BUILT_METAL, GLOW_BROKEN, GLOW_FAN, GLOW_FUZZ, GLOW_GRAIN, GLOW_PEEL, GLOW_RGB, HIDDEN_ROUGHNESS } from '../../terrain/materials';
 import type { Craters } from './craters';
 import { Glow, MAX_FANS, hueColor } from './glow';
 
@@ -75,9 +76,20 @@ export function createTerrainMaterial(glow: Glow, craters: Craters): { material:
   m.colorNode = Fn(() => {
     const base = vertexColor().rgb.toVar();
     // (a hidden body's crater: the broken inside of what was drawn, dull and grainy, darker deep in its cracks)
+    // (its layers, as a board, a tile or a moulding is made: thin pale lines along the level, wavy, of uneven spacing,
+    // broken up, only on steep walls: the floor of a crater is plain broken stuff)
+    const p = positionWorld;
+    const band = p.y.mul(2.2).add(mx_noise_float(p.mul(0.45)).mul(1.4)).fract();
+    const line = smoothstep(0.55, 0.62, band).mul(smoothstep(0.9, 0.83, band)).mul(smoothstep(0, 0.3, mx_noise_float(p.mul(0.9).add(5.3))));
+    const steep = smoothstep(0.75, 0.45, abs(normalWorld.y));
+    const layers = float(1).add(steep.mul(line.mul(0.34).sub(0.08)));
     If(seen.not(), () => {
-      const grit = mx_noise_float(positionWorld.mul(2.1)).mul(0.45).add(mx_noise_float(positionWorld.mul(7.3)).mul(0.25));
-      base.assign(vec3(0.05, 0.046, 0.042).mul(float(1).add(grit)));
+      const grit = mx_noise_float(p.mul(2.1)).mul(0.45).add(mx_noise_float(p.mul(7.3)).mul(0.25));
+      base.assign(vec3(0.13, 0.12, 0.09).mul(float(1).add(grit)).mul(layers));
+    });
+    const broken = clamp(float(1).sub(abs(pbr.z.sub(GLOW_BROKEN)).div(0.025)), 0, 1);
+    If(broken.greaterThan(0.01), () => {
+      base.assign(mix(base, base.mul(layers), broken));
     });
     // (the special shadings are codes in the glow channel; the mesher blends them across borders)
     const fuzz = clamp(float(1).sub(abs(pbr.z.sub(GLOW_FUZZ)).div(0.15)), 0, 1);

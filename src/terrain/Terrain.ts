@@ -5,9 +5,15 @@ import { CRATER_MAX, CRATER_WEIGHTS, craterReach, craterShape } from './crater';
 
 /** The weights of the crater being carved (reused: no allocation per carve). */
 const shape = new Float64Array(CRATER_WEIGHTS);
-/** The parts of a `scorch` sample: its burn (0..127), and the mark of a surface a carve opened. */
-export const SCORCH_BURN = 127;
+/**
+ * The parts of a `scorch` sample: its burn (0..63), the mark of a surface a carve opened, and the mark of one it opened
+ * just under the outer surface (its skin: the material's own finish, a thin layer over its broken inside).
+ */
+export const SCORCH_BURN = 63;
+export const SCORCH_SKIN = 64;
 export const SCORCH_CUT = 128;
+/** How deep under the outer surface the skin goes (cells). */
+const SKIN_DEPTH = 1.1;
 
 /**
  * Destructible terrain stored as a grid of signed-distance-like density samples.
@@ -214,9 +220,14 @@ export class Terrain {
           let changed = dens[id] !== was;
           const old = scorch[id];
           let next = old;
-          if (sc > (old & SCORCH_BURN)) next = (old & SCORCH_CUT) | sc;
-          // (opened by it, or near what it opened: its surface now is the inside of what it is made of)
-          if (changed && dens[id] < 2) next |= SCORCH_CUT;
+          if (sc > (old & SCORCH_BURN)) next = (old & (SCORCH_CUT | SCORCH_SKIN)) | sc;
+          // (opened by it, or near what it opened: its surface now is the inside of what it is made of; where that was just
+          // under the outer surface, and not opened before, its skin)
+          if (changed && dens[id] < 2) {
+            // (not every map's densities are distances: the level of the blast bounds it too)
+            if ((old & SCORCH_CUT) === 0 && was > -SKIN_DEPTH && j > py - SKIN_DEPTH) next |= SCORCH_SKIN;
+            next |= SCORCH_CUT;
+          }
           if (next !== old) {
             scorch[id] = next;
             changed = true;

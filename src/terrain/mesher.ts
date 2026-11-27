@@ -1,10 +1,10 @@
 import { CHUNK } from './constants';
-import { BUILT, COLLIDER, MATERIAL_PBR } from './materials';
-import { SCORCH_BURN, SCORCH_CUT } from './Terrain';
+import { BUILT, COLLIDER, GLOW_BROKEN, MATERIAL_PBR } from './materials';
+import { SCORCH_BURN, SCORCH_CUT, SCORCH_SKIN } from './Terrain';
 import { hash3 } from './noise';
 
 /** The broken inside of what the map is made of, where a blast opened it (before its own colour is mixed in). */
-const CORE = [0.13, 0.115, 0.097] as const;
+const CORE = [0.17, 0.15, 0.125] as const;
 import { shadeNoise, shadeVertex, shadeWithNoise } from './shading';
 import type { Terrain } from './Terrain';
 
@@ -231,6 +231,7 @@ export class ChunkMesher {
       const si = Math.round(x) + sx * (Math.round(y) + sy * Math.round(z));
       const burn = (scorch[si] & SCORCH_BURN) / SCORCH_BURN;
       const opened = (scorch[si] & SCORCH_CUT) !== 0;
+      const skin = (scorch[si] & SCORCH_SKIN) !== 0;
       // Materials: where the cell's corners disagree, blend their colours and finishes (trilinear,
       // solid corners count more) so material borders follow the surface smoothly instead of in steps.
       const ix = Math.min(Math.floor(x), t.W - 1);
@@ -304,22 +305,31 @@ export class ChunkMesher {
       ocol[o3 + 1] *= ao;
       ocol[o3 + 2] *= ao;
       // (opened by a blast: the material's broken inside, dull and grey-brown, not its outer finish)
-      if (opened) {
-        // (grainy: broad patches and fine specks)
+      // (its skin, just under the outer surface: its own colour, chipped, over a lighter broken inside in layers)
+      if (opened && skin) {
+        const d = 0.8 + 0.15 * hash3(Math.round(x * 3), Math.round(y * 3), Math.round(z * 3), 93);
+        ocol[o3] *= d;
+        ocol[o3 + 1] *= d;
+        ocol[o3 + 2] *= d;
+        if (pr < 1.5) pr = 0.85;
+        pmet *= 0.3;
+        pglow = 0;
+      } else if (opened) {
+        // (grainy: broad patches and fine specks; the render draws its layers, finer than the vertices)
         const g = (0.82 + 0.3 * shadeNoise(x * 2.3, y * 2.3, z * 2.3)) * (0.82 + 0.36 * hash3(Math.round(x * 2), Math.round(y * 2), Math.round(z * 2), 77));
-        ocol[o3] = (ocol[o3] * 0.3 + CORE[0] * 0.7) * g;
-        ocol[o3 + 1] = (ocol[o3 + 1] * 0.3 + CORE[1] * 0.7) * g;
-        ocol[o3 + 2] = (ocol[o3 + 2] * 0.3 + CORE[2] * 0.7) * g;
+        ocol[o3] = (ocol[o3] * 0.25 + CORE[0] * 0.75) * g;
+        ocol[o3 + 1] = (ocol[o3 + 1] * 0.25 + CORE[1] * 0.75) * g;
+        ocol[o3 + 2] = (ocol[o3 + 2] * 0.25 + CORE[2] * 0.75) * g;
         if (pr < 1.5) pr = 0.95;
         pmet = 0;
-        pglow = 0;
+        pglow = GLOW_BROKEN;
       }
       // (scorched: dull, no polish nor any special shading left on it)
       if (burn > 0) {
         const b = burn > 0.7 ? 1 : burn / 0.7;
         if (pr < 1.5) pr = pr + (0.95 - pr) * b;
         pmet *= 1 - b;
-        if (b > 0.5) pglow = 0;
+        if (b > 0.5 && pglow !== GLOW_BROKEN) pglow = 0;
       }
       opbr[vi * 3] = pr;
       opbr[vi * 3 + 1] = pmet;

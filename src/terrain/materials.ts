@@ -64,6 +64,7 @@ export const GLOW_RGB = 1; // hue-cycling RGB light
 export const GLOW_FAN = -1; // fan blades: a renderer may draw a spinning stripe on them
 export const GLOW_FUZZ = -0.4; // fibrous wadding: a renderer may give it a soft velvet sheen
 export const GLOW_GRAIN = -0.7; // wood: a renderer may draw a grain along x
+export const GLOW_BROKEN = -0.05; // the broken inside a blast opened: a renderer may draw it in layers (near 0: a blend to 0 crosses no other code)
 export const GLOW_PEEL = -0.12; // textured vinyl wrap: a renderer may give it an orange-peel mottle and an edge sheen
 
 /** Surface finish of each material: [roughness, metalness, glow], indexed by id. */
