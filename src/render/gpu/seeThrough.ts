@@ -1,5 +1,5 @@
 import * as THREE from 'three/webgpu';
-import { Fn, If, bool, cameraPosition, clamp, float, fract, frontFacing, length, max, min, mix, positionWorld, screenCoordinate, smoothstep, step, uniform } from 'three/tsl';
+import { Fn, If, bool, cameraPosition, cameraProjectionMatrix, cameraViewMatrix, clamp, float, fract, frontFacing, length, max, min, mix, positionWorld, screenCoordinate, screenSize, smoothstep, step, uniform, vec2, vec4 } from 'three/tsl';
 
 type F = THREE.Node<'float'>;
 type B = THREE.Node<'bool'>;
@@ -23,7 +23,7 @@ const UP_WIDER = 2.2;
 const AHEAD_ROUND = 4;
 /** A bug under the ground (in a tunnel, digging): only round it, this wide, and more of the ground left (ghosted). */
 const UNDER_ROUND = 4;
-const UNDER_LEFT = 0.22;
+const UNDER_LEFT = 0.13;
 /** Right over it, this far round, nothing is left at all (no lines across the bug). */
 const UNDER_CLEAR = 1.1;
 
@@ -102,12 +102,23 @@ export class SeeThrough {
       If(this.amount.greaterThan(0.01), () => {
         const low = step(min(this.at.y, cameraPosition.y).sub(UNDER), positionWorld.y);
         const ahead = this.open(this.ahead as unknown as THREE.Node<'vec3'>, AHEAD_ROUND).mul(float(1).sub(this.under));
-        const open = max(this.open(this.at as unknown as THREE.Node<'vec3'>, ROUND), ahead).mul(this.amount).mul(low);
+        // (a bug under the ground: one round disc on the screen round it, whatever stands over it, chips or slopes)
+        const at = this.at as unknown as THREE.Node<'vec3'>;
+        const clip = cameraProjectionMatrix.mul(cameraViewMatrix).mul(vec4(at, 1));
+        const ndc = clip.xy.div(clip.w);
+        const px = vec2(ndc.x.mul(0.5).add(0.5), float(0.5).sub(ndc.y.mul(0.5))).mul(screenSize);
+        const focal = (cameraProjectionMatrix as unknown as { element(i: number): THREE.Node<'vec4'> }).element(1).y;
+        const rpx = float(UNDER_ROUND).div(clip.w).mul(focal).mul(screenSize.y).mul(0.5) as unknown as F;
+        const dpx = length(screenCoordinate.xy.sub(px)) as unknown as F;
+        const way = at.sub(cameraPosition);
+        const before = length(way).sub(positionWorld.sub(cameraPosition).dot(way.div(length(way))));
+        const nearer = step(BEFORE * 0.5, before) as unknown as F;
+        const disc = smoothstep(rpx, rpx.mul(0.86), dpx).mul(nearer) as unknown as F;
+        const open = mix(max(this.open(at, ROUND), ahead).mul(low), disc, this.under).mul(this.amount);
         const line = fract(screenCoordinate.x.add(screenCoordinate.y).div(PITCH));
         keep.assign(keep.and(line.lessThan(mix(float(1.01), mix(float(LEFT), float(UNDER_LEFT), this.under), open))));
         // (right over a bug under the ground, nothing at all: no lines across it)
-        const d = positionWorld.xz.sub(this.at.xz);
-        If(this.under.greaterThan(0.5).and(this.amount.greaterThan(0.3)).and(d.dot(d).lessThan(UNDER_CLEAR * UNDER_CLEAR)).and(low.greaterThan(0.5)), () => {
+        If(this.under.greaterThan(0.5).and(this.amount.greaterThan(0.3)).and(dpx.lessThan(rpx.mul(UNDER_CLEAR / UNDER_ROUND))).and(nearer.greaterThan(0.5)), () => {
           keep.assign(false);
         });
       });

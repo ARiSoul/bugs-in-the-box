@@ -332,8 +332,12 @@ export class BurrowViews {
     const RINGS = 6;
     const AROUND = 20;
     const pos = new Float32Array((RINGS + 1) * AROUND * 3);
+    // (a hole: its lip the dug earth, lit, darker down it, black at its throat)
+    const col = new Float32Array((RINGS + 1) * AROUND * 3);
+    const earth = this.dug(this.groundColor?.(x - nx, y - ny, z - nz) ?? GREY);
     for (let i = 0; i <= RINGS; i++) {
       const t = i / RINGS;
+      const lit = (1 - t) ** 2.2;
       // (from the rim, just over the ground, down and along: narrower as it goes)
       const rr = r * (1 - 0.65 * t);
       const down = 0.05 - 1.6 * t;
@@ -347,6 +351,9 @@ export class BurrowViews {
         pos[o] = x + f.x * u + s.x * v + n.x * down;
         pos[o + 1] = y + f.y * u + s.y * v + n.y * down;
         pos[o + 2] = z + f.z * u + s.z * v + n.z * down;
+        col[o] = earth[0] * 1.2 * lit;
+        col[o + 1] = earth[1] * 1.2 * lit;
+        col[o + 2] = earth[2] * 1.2 * lit;
       }
     }
     const idx: number[] = [];
@@ -358,6 +365,7 @@ export class BurrowViews {
       }
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    g.setAttribute('color', new THREE.BufferAttribute(col, 3));
     g.setIndex(idx);
     g.computeVertexNormals();
     const m = new THREE.Mesh(g, this.mouthMaterial);
@@ -366,7 +374,7 @@ export class BurrowViews {
     this.scene.add(m);
     this.heaves.push(m);
   }
-  private readonly mouthMaterial = new THREE.MeshStandardMaterial({ color: 0x0e0b08, roughness: 1, metalness: 0, side: THREE.DoubleSide });
+  private readonly mouthMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0, side: THREE.DoubleSide });
 
   /** A ring of lumps round a hole at (x, y, z) on ground of normal n, thicker the way (fx, fz); `even`: how much all round. */
   private mound(match: Match, x: number, y: number, z: number, nx: number, ny: number, nz: number, fx: number, fz: number, count: number, big: number, even: number): void {
