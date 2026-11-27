@@ -1,5 +1,6 @@
 import { createRng } from '../terrain/noise';
 import { Bug, DT, IDLE, TICK_RATE, type BugInput } from './bug';
+import { Effects, Triggers, type MatchTriggers } from './engine';
 import { surfaceDistance, type TerrainField } from './field';
 import { rot, rotate2 } from './math';
 import { Projectile } from './projectile';
@@ -184,6 +185,8 @@ export interface Unit {
   /** It hides (until its next turn): in which shelter, and how much that still keeps off. */
   cover: Weapon | null;
   coverLeft: number;
+  /** What it is under now (effects, with their stacks and time); their modifiers sit on `bug.stats`. */
+  readonly effects: Effects;
 }
 
 export interface MatchInput {
@@ -555,6 +558,8 @@ export class Match {
   going: { x: number; y: number; z: number; w: Weapon; left: number } | null = null;
   /** Curtains of silk that still catch shots of other teams: how many. */
   readonly curtains: { readonly team: number; readonly pieces: number[]; left: number }[] = [];
+  /** The rules hung on what happens in the match ("when X, do Y"; see `engine/`), run in a fixed order. */
+  readonly triggers = new Triggers<MatchTriggers>();
   /** What happened during the last `step` (cleared at the start of every step). */
   readonly events: MatchEvent[] = [];
   phase: Phase = 'aim';
@@ -631,7 +636,12 @@ export class Match {
         if (i >= teams[t].size) continue;
         const bug = new Bug(teams[t].species);
         bug.confine = options.confine ?? null;
-        this.units.push({ id: id++, team: t, name: `${teams[t].species.id} ${i + 1}`, bug, aimH: COS45, aimV: COS45, dead: false, web: -1, shell: teams[t].species.shell === true, shellTurn: -1, fuse: false, boost: false, spring: 0, extra: 0, cover: null, coverLeft: 0 });
+        const unit = id++;
+        const effects = new Effects(bug.stats, {
+          started: (def, stacks) => this.triggers.emit('effectStart', { unit, effect: def.id, stacks }),
+          ended: (def) => this.triggers.emit('effectEnd', { unit, effect: def.id }),
+        });
+        this.units.push({ id: unit, team: t, name: `${teams[t].species.id} ${i + 1}`, bug, aimH: COS45, aimV: COS45, dead: false, web: -1, shell: teams[t].species.shell === true, shellTurn: -1, fuse: false, boost: false, spring: 0, extra: 0, cover: null, coverLeft: 0, effects });
         this.bugs.push(bug);
       }
     this.nextInTeam = teams.map(() => 0);
@@ -737,6 +747,8 @@ export class Match {
 
     for (const u of this.units) {
       const b = u.bug;
+      // (its effects count down, and what runs out comes off)
+      u.effects.tick();
       // (what rides the turntable is moved by it, not by its own physics)
       if (this.phase === 'spin' && this.isCarried(u)) continue;
       // (an ant in its tunnel is carried along it)
@@ -1781,6 +1793,7 @@ export class Match {
           if (box) this.events.push({ type: 'box', id: box.id });
         }
         this.events.push({ type: 'turn', unit: u.id });
+        this.triggers.emit('turnStart', { turn: this.turnNumber, team: u.team, unit: u.id });
         this.load(u.team, SKILL_TURN);
         return;
       }
@@ -2492,6 +2505,7 @@ export class Match {
     // (the event first: what it does may end the turn, or the bug)
     const e = { type: 'open' as const, unit: u.id, kind: it.kind, x: it.x, y: it.y, z: it.z, id: it.id, gain: 0, kept };
     this.events.push(e);
+    this.triggers.emit('boxOpen', { unit: u.id, kind: it.kind });
     if (kept) this.bag[u.team][it.kind] = (this.bag[u.team][it.kind] ?? 0) + 1;
     else e.gain = this.effect(u, it.kind, it.x, it.y, it.z);
   }
@@ -2634,6 +2648,7 @@ export class Match {
     this.lookTicks = LOOK_DAMAGE_TICKS;
     this.events.push({ type: 'damage', unit: u.id, amount });
     const by = this.units[this.active].team;
+    this.triggers.emit('damage', { unit: u.id, amount, team: by });
     if (by !== u.team) this.tally[by].damage += amount;
     this.load(u.team, amount * SKILL_TAKEN);
     if (by !== u.team && this.currentWeapon.sceneTicks === 0) this.load(by, amount * SKILL_DONE);
@@ -2650,6 +2665,7 @@ export class Match {
     u.dead = true;
     u.bug.health = 0;
     this.events.push({ type: 'death', unit: u.id });
+    this.triggers.emit('death', { unit: u.id });
     const by = this.units[this.active];
     if (by.team === u.team) return;
     this.tally[by.team].kills++;

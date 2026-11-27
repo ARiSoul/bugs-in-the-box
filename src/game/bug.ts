@@ -1,5 +1,7 @@
 import { surfaceDistance, type TerrainField } from './field';
 import { rot, rotate2 } from './math';
+import { Attributes } from './engine/attributes';
+import { speciesBase } from './engine/match';
 import type { BugSpecies } from './species';
 
 /**
@@ -158,8 +160,12 @@ export class Bug {
   /** Hanging under a ceiling (see `turnHeading`). */
   private hung = false;
 
+  /** Its attributes (speed, jump, health...): its species' numbers, and what effects, items and levels put on them. */
+  readonly stats: Attributes;
+
   constructor(readonly species: BugSpecies) {
-    this.health = species.health;
+    this.stats = new Attributes(speciesBase(species));
+    this.health = this.stats.get('health');
     this.breath = Math.round((species.flight ?? 0) * TICK_RATE);
   }
 
@@ -228,6 +234,7 @@ export class Bug {
     this.airTicks = o.airTicks;
     this.alive = o.alive;
     this.health = o.health;
+    this.stats.copy(o.stats);
   }
 
   /** Advance one tick (DT seconds). */
@@ -261,19 +268,19 @@ export class Bug {
     const n0z = this.nz;
     if (this.grounded && input.jump) {
       if (this.ny >= WALKABLE_NY) {
-        this.vx = this.fx * sp.jumpForward;
-        this.vy = sp.jumpSpeed * this.leap;
-        this.vz = this.fz * sp.jumpForward;
+        this.vx = this.fx * this.stats.get('jumpForward');
+        this.vy = this.stats.get('jump') * this.leap;
+        this.vz = this.fz * this.stats.get('jumpForward');
       } else {
         // off a wall: away from it and up (off a ceiling: just down)
-        const up = this.ny > -0.2 ? sp.jumpSpeed * 0.7 * this.leap : 0;
-        this.vx = this.nx * sp.jumpForward;
-        this.vy = this.ny * sp.jumpForward + up;
-        this.vz = this.nz * sp.jumpForward;
+        const up = this.ny > -0.2 ? this.stats.get('jump') * 0.7 * this.leap : 0;
+        this.vx = this.nx * this.stats.get('jumpForward');
+        this.vy = this.ny * this.stats.get('jumpForward') + up;
+        this.vz = this.nz * this.stats.get('jumpForward');
       }
       this.grounded = false;
     } else if (this.grounded) {
-      const walk = input.run ? sp.walkSpeed * RUN_FACTOR : sp.walkSpeed;
+      const walk = input.run ? this.stats.get('speed') * RUN_FACTOR : this.stats.get('speed');
       const v = (input.move > 0 ? walk : input.move < 0 ? -walk * WALK_BACK_FACTOR : 0) * (this.ny < WALKABLE_NY ? CLIMB_FACTOR : 1) * this.slow;
       this.vx = this.hx * v;
       this.vy = this.hy * v;
