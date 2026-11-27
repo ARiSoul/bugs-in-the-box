@@ -1,10 +1,10 @@
 import * as THREE from 'three';
-import { craterReach, craterShape } from '../terrain/crater';
+import { CRATER_WEIGHTS, craterReach, craterShape } from '../terrain/crater';
 import { BUILT, COLLIDER } from '../terrain/materials';
 import type { Terrain } from '../terrain/Terrain';
 
 /** A sphere's crater shape. */
-const NO_SHAPE: readonly number[] = [0, 0, 0, 0, 0, 0, 0, 0];
+const NO_SHAPE: readonly number[] = new Array<number>(CRATER_WEIGHTS).fill(0);
 
 /** Size of a lookup cell (world units). */
 const CELL = 4;
@@ -86,7 +86,7 @@ export class DrawnGround {
   /** `rough`: a blast's uneven crater (its weights kept with it). */
   addCrater(x: number, y: number, z: number, radius: number, rough = false): void {
     this.craters.push(x, y, z, radius);
-    const w = rough ? (craterShape(x, y, z, new Array<number>(8)) as number[]) : NO_SHAPE;
+    const w = rough ? (craterShape(x, y, z, new Array<number>(CRATER_WEIGHTS)) as number[]) : NO_SHAPE;
     this.shapes.push(w);
   }
 

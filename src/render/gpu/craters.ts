@@ -1,6 +1,6 @@
 import * as THREE from 'three/webgpu';
-import { Fn, If, Loop, bool, float, frontFacing, length, materialColor, materialRoughness, mx_noise_float, positionWorld, select, uniform, uniformArray, vec3 } from 'three/tsl';
-import { CRATER_ROUGH, craterShape } from '../../terrain/crater';
+import { Fn, If, Loop, abs, bool, float, frontFacing, length, materialColor, materialRoughness, mx_noise_float, positionWorld, select, uniform, uniformArray, vec3 } from 'three/tsl';
+import { CRATER_ROUGH, CRATER_WEIGHTS, craterShape } from '../../terrain/crater';
 
 /** Most craters a match keeps (explosions and the spheres along a tunnel). */
 const MAX_CRATERS = 256;
@@ -18,7 +18,8 @@ export class Craters {
   /** Each crater's shape weights, four and four (all 0: a sphere). */
   private readonly shapeA = uniformArray(Array.from({ length: MAX_CRATERS }, () => new THREE.Vector4(0, 0, 0, 0)), 'vec4');
   private readonly shapeB = uniformArray(Array.from({ length: MAX_CRATERS }, () => new THREE.Vector4(0, 0, 0, 0)), 'vec4');
-  private readonly w = new Float64Array(8);
+  private readonly shapeC = uniformArray(Array.from({ length: MAX_CRATERS }, () => new THREE.Vector4(0, 0, 0, 0)), 'vec4');
+  private readonly w = new Float64Array(CRATER_WEIGHTS);
   private readonly count = uniform(0, 'int');
   private n = 0;
 
@@ -33,6 +34,7 @@ export class Craters {
     else w.fill(0);
     (this.shapeA.array[this.n] as THREE.Vector4).set(w[0], w[1], w[2], w[3]);
     (this.shapeB.array[this.n] as THREE.Vector4).set(w[4], w[5], w[6], w[7]);
+    (this.shapeC.array[this.n] as THREE.Vector4).set(w[8], w[9], w[10], w[11]);
     (this.list.array[this.n++] as THREE.Vector4).set(x, y, z, radius);
     this.count.value = this.n;
   }
@@ -42,6 +44,7 @@ export class Craters {
     const c = this.list.element(i) as unknown as THREE.Node<'vec4'>;
     const a = this.shapeA.element(i) as unknown as THREE.Node<'vec4'>;
     const b = this.shapeB.element(i) as unknown as THREE.Node<'vec4'>;
+    const e = this.shapeC.element(i) as unknown as THREE.Node<'vec4'>;
     const v = this.position.sub(c.xyz);
     const d = length(v).toVar();
     const u = v.div(d.max(1e-6));
@@ -58,7 +61,14 @@ export class Craters {
       .add(b.x.mul(yy.sub(xx.add(zz).mul(0.5))))
       .add(b.y.mul(2.6).mul(x).mul(y).mul(z))
       .add(b.z.mul(x).mul(xx.sub(zz.mul(3))).mul(0.5))
-      .add(b.w.mul(z).mul(xx.mul(3).sub(zz)).mul(0.5));
+      .add(b.w.mul(z).mul(xx.mul(3).sub(zz)).mul(0.5))
+      .add(
+        e.x.mul(float(1).sub(abs(xx.mul(xx).sub(xx.mul(zz).mul(6)).add(zz.mul(zz))).mul(2)))
+          .add(e.y.mul(float(1).sub(abs(xx.mul(x).mul(z).sub(x.mul(zz).mul(z)).mul(4)).mul(2))))
+          .add(e.z.mul(float(1).sub(abs(x.mul(xx.mul(xx).sub(xx.mul(zz).mul(10)).add(zz.mul(zz).mul(5)))).mul(2))))
+          .add(e.w.mul(float(1).sub(abs(z.mul(xx.mul(xx).mul(5).sub(xx.mul(zz).mul(10)).add(zz.mul(zz)))).mul(2))))
+          .mul(0.6),
+      );
     return d.sub(c.w.mul(float(1).add(s.mul(CRATER_ROUGH)))) as unknown as THREE.Node<'float'>;
   }
 
@@ -78,6 +88,7 @@ export class Craters {
       (this.list.array[i] as THREE.Vector4).set(0, -1000, 0, 0);
       (this.shapeA.array[i] as THREE.Vector4).set(0, 0, 0, 0);
       (this.shapeB.array[i] as THREE.Vector4).set(0, 0, 0, 0);
+      (this.shapeC.array[i] as THREE.Vector4).set(0, 0, 0, 0);
     }
     this.n = 0;
     this.count.value = 0;

@@ -1,10 +1,10 @@
 import { CHUNK, DENSITY_CLAMP } from './constants';
 import { BUILT } from './materials';
 import { HIDDEN_CLEAR } from './sdf';
-import { CRATER_MAX, craterReach, craterShape } from './crater';
+import { CRATER_MAX, CRATER_WEIGHTS, craterReach, craterShape } from './crater';
 
 /** The weights of the crater being carved (reused: no allocation per carve). */
-const shape = new Float64Array(8);
+const shape = new Float64Array(CRATER_WEIGHTS);
 /** The parts of a `scorch` sample: its burn (0..127), and the mark of a surface a carve opened. */
 export const SCORCH_BURN = 127;
 export const SCORCH_CUT = 128;

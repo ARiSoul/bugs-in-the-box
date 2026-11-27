@@ -1,6 +1,7 @@
 import { CHUNK } from './constants';
 import { BUILT, COLLIDER, MATERIAL_PBR } from './materials';
 import { SCORCH_BURN, SCORCH_CUT } from './Terrain';
+import { hash3 } from './noise';
 
 /** The broken inside of what the map is made of, where a blast opened it (before its own colour is mixed in). */
 const CORE = [0.19, 0.17, 0.145] as const;
@@ -304,7 +305,8 @@ export class ChunkMesher {
       ocol[o3 + 2] *= ao;
       // (opened by a blast: the material's broken inside, dull and grey-brown, not its outer finish)
       if (opened) {
-        const g = 0.85 + 0.3 * shadeNoise(x * 2.3, y * 2.3, z * 2.3);
+        // (grainy: broad patches and fine specks)
+        const g = (0.82 + 0.3 * shadeNoise(x * 2.3, y * 2.3, z * 2.3)) * (0.82 + 0.36 * hash3(Math.round(x * 2), Math.round(y * 2), Math.round(z * 2), 77));
         ocol[o3] = (ocol[o3] * 0.3 + CORE[0] * 0.7) * g;
         ocol[o3 + 1] = (ocol[o3 + 1] * 0.3 + CORE[1] * 0.7) * g;
         ocol[o3 + 2] = (ocol[o3 + 2] * 0.3 + CORE[2] * 0.7) * g;

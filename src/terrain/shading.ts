@@ -24,12 +24,17 @@ export function shadeNoise(x: number, y: number, z: number): number {
   return vnoise3(x * 0.35, y * 0.35, z * 0.35, 3);
 }
 
+/** The grey of ash (linear). */
+const ASH = 0.11;
+
 /** `shadeVertex` with the noise value already computed (see `shadeNoise`). */
 export function shadeWithNoise(out: Float32Array, o: number, n: number, ny: number, scorch01: number, material: number): void {
-  const burn = Math.min(1, scorch01 * 1.4);
-  // (scorched: darker, but its own colour still under the soot, not a black hole)
-  const keep = 1 - burn * 0.6;
-  const soot = burn * 0.035;
+  // (its edge broken up, not a smooth ring)
+  const burn = Math.min(1, scorch01 * 1.4 * (0.55 + 0.9 * n));
+  // (scorched: a grey ash laid over its own colour, that shows on dark things too; darker soot only near the middle)
+  const ash = Math.min(0.7, burn * 0.9);
+  const keep = (1 - ash) * (1 - Math.max(0, burn - 0.75) * 1.6);
+  const soot = ash * ASH * (0.75 + 0.5 * n) * (1 - Math.max(0, burn - 0.75) * 1.6);
   if (material === GROUND || material >= MATERIAL_RGB.length) {
     const grass = Math.min(1, Math.max(0, (ny - 0.55) * 3.2));
     out[o] = ((0.2 + 0.06 * n) * (1 - grass) + (0.07 + 0.03 * n) * grass) * keep + soot;
