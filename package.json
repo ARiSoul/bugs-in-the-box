@@ -16,6 +16,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "bench": "tsx scripts/bench.ts",
+    "golden": "tsx scripts/golden.ts",
     "balance": "tsx scripts/balance.ts"
   },
   "dependencies": {
