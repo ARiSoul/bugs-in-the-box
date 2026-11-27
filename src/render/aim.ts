@@ -57,7 +57,7 @@ export class AimView {
     scene.add(this.start);
     // (where it cannot dig: a red cross in its ring)
     const bar = new THREE.BoxGeometry(2.2, 0.06, 0.26);
-    const red = new THREE.MeshBasicMaterial({ color: 0xff5a4a, transparent: true, opacity: 0.85, depthTest: false });
+    const red = new THREE.MeshBasicMaterial({ color: 0xfff0e8, transparent: true, opacity: 0.95, depthTest: false });
     this.cross = new THREE.Group();
     for (const a of [Math.PI / 4, -Math.PI / 4]) {
       const m = new THREE.Mesh(bar, red);

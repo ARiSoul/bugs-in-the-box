@@ -23,7 +23,7 @@ const UP_WIDER = 2.2;
 const AHEAD_ROUND = 4;
 /** A bug under the ground (in a tunnel, digging): only round it, this wide, and more of the ground left (ghosted). */
 const UNDER_ROUND = 4;
-const UNDER_LEFT = 0.13;
+const UNDER_LEFT = 0.09;
 /** Right over it, this far round, nothing is left at all (no lines across the bug). */
 const UNDER_CLEAR = 1.1;
 
