@@ -432,7 +432,9 @@ export class BurrowViews {
     const col = new Float32Array(nor.count * 3);
     for (let i = 0; i < nor.count; i++) {
       const down = Math.max(0, -nor.getY(i));
-      const k = (0.25 + 0.95 * down * down) * (0.9 + 0.2 * Math.abs(Math.sin(i * 12.9898)));
+      // (rings along it, as it was dug bite by bite)
+      const rib = Math.floor(i / (TUBE_SIDES + 1)) % 4 === 0 ? 0.72 : 1;
+      const k = (0.18 + 0.62 * down * down) * rib * (0.9 + 0.2 * Math.abs(Math.sin(i * 12.9898)));
       col[i * 3] = Math.min(1, earth[0] * 1.1 * k + 0.012);
       col[i * 3 + 1] = Math.min(1, earth[1] * 1.05 * k + 0.01);
       col[i * 3 + 2] = Math.min(1, earth[2] * 0.95 * k + 0.008);

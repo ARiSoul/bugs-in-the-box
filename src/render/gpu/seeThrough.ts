@@ -24,6 +24,8 @@ const AHEAD_ROUND = 4;
 /** A bug under the ground (in a tunnel, digging): only round it, this wide, and more of the ground left (ghosted). */
 const UNDER_ROUND = 4;
 const UNDER_LEFT = 0.22;
+/** Right over it, this far round, nothing is left at all (no lines across the bug). */
+const UNDER_CLEAR = 1.5;
 
 /**
  * What stands between the camera and a bug is drawn as thin lines, so the bug is seen through it and one still knows that
@@ -103,6 +105,11 @@ export class SeeThrough {
         const open = max(this.open(this.at as unknown as THREE.Node<'vec3'>, ROUND), ahead).mul(this.amount).mul(low);
         const line = fract(screenCoordinate.x.add(screenCoordinate.y).div(PITCH));
         keep.assign(keep.and(line.lessThan(mix(float(1.01), mix(float(LEFT), float(UNDER_LEFT), this.under), open))));
+        // (right over a bug under the ground, nothing at all: no lines across it)
+        const d = positionWorld.xz.sub(this.at.xz);
+        If(this.under.greaterThan(0.5).and(this.amount.greaterThan(0.3)).and(d.dot(d).lessThan(UNDER_CLEAR * UNDER_CLEAR)).and(low.greaterThan(0.5)), () => {
+          keep.assign(false);
+        });
       });
       return keep;
     })() as unknown as B;
