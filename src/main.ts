@@ -392,7 +392,8 @@ function handleEvents(events: readonly MatchEvent[]): void {
         texts.spawn('fuse blown', 0x8ccaff, at.set(match.units[e.unit].bug.x, match.units[e.unit].bug.y + 3.2, match.units[e.unit].bug.z));
         break;
       case 'noRoom':
-        texts.spawn(match.built ? 'once a turn' : 'no room', 0xff8a6a, at.set(match.units[e.unit].bug.x, match.units[e.unit].bug.y + 3, match.units[e.unit].bug.z));
+        // (a burrow where the ground is too thin, or hard: it says so)
+        texts.spawn(match.currentWeapon.kind === 'burrow' && match.burrowPath(match.units[e.unit], 0, burrowWay).length < 12 ? 'cannot dig here' : match.built ? 'once a turn' : 'no room', 0xff8a6a, at.set(match.units[e.unit].bug.x, match.units[e.unit].bug.y + 3, match.units[e.unit].bug.z));
         break;
       case 'bared':
         if (e.broken && match.units[e.unit].bug.alive) texts.spawn('shelter broken', 0xffd9a0, at.set(match.units[e.unit].bug.x, match.units[e.unit].bug.y + 3.2, match.units[e.unit].bug.z));
@@ -1493,8 +1494,11 @@ function frame(now: number): void {
       const p = under ? under.path : holding ? burrowPath : match.burrowPath(match.activeUnit, match.charging ? match.power : 0, burrowWay);
       // (between where it went in and where it comes out)
       // (a little towards the way out and up the screen: the cards cover its foot)
-      if (holding) target.set(p[0] * 0.42 + p[9] * 0.58, p[1] * 0.42 + p[10] * 0.58 - 1.2, p[2] * 0.42 + p[11] * 0.58);
-      else target.lerp(at.set(p[9], p[10], p[11]), 0.45);
+      // (no way where the ground is too thin, or hard: the view stays on the ant)
+      if (p.length >= 12) {
+        if (holding) target.set(p[0] * 0.42 + p[9] * 0.58, p[1] * 0.42 + p[10] * 0.58 - 1.2, p[2] * 0.42 + p[11] * 0.58);
+        else target.lerp(at.set(p[9], p[10], p[11]), 0.45);
+      }
     }
     if (tracking) follow.update(target, dt);
     if (burrowing) follow.overlook(holding ? 0.95 : 0.85, holding ? 29 : 21, dt, match.activeUnit.bug.hx, match.activeUnit.bug.hz);
