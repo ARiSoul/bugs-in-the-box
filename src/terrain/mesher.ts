@@ -4,7 +4,7 @@ import { SCORCH_BURN, SCORCH_CUT } from './Terrain';
 import { hash3 } from './noise';
 
 /** The broken inside of what the map is made of, where a blast opened it (before its own colour is mixed in). */
-const CORE = [0.19, 0.17, 0.145] as const;
+const CORE = [0.13, 0.115, 0.097] as const;
 import { shadeNoise, shadeVertex, shadeWithNoise } from './shading';
 import type { Terrain } from './Terrain';
 

@@ -77,7 +77,7 @@ export function createTerrainMaterial(glow: Glow, craters: Craters): { material:
     // (a hidden body's crater: the broken inside of what was drawn, dull and grainy, darker deep in its cracks)
     If(seen.not(), () => {
       const grit = mx_noise_float(positionWorld.mul(2.1)).mul(0.45).add(mx_noise_float(positionWorld.mul(7.3)).mul(0.25));
-      base.assign(vec3(0.085, 0.079, 0.072).mul(float(1).add(grit)));
+      base.assign(vec3(0.05, 0.046, 0.042).mul(float(1).add(grit)));
     });
     // (the special shadings are codes in the glow channel; the mesher blends them across borders)
     const fuzz = clamp(float(1).sub(abs(pbr.z.sub(GLOW_FUZZ)).div(0.15)), 0, 1);

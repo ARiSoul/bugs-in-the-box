@@ -1,9 +1,24 @@
 import * as THREE from 'three/webgpu';
-import { Fn, If, Loop, abs, bool, clamp, float, frontFacing, length, materialColor, materialRoughness, max, mix, mx_noise_float, positionWorld, select, smoothstep, uniform, uniformArray, vec3 } from 'three/tsl';
+import { Fn, If, Loop, abs, bool, clamp, float, frontFacing, length, materialColor, materialRoughness, max, mix, mx_noise_float, normalWorld, positionWorld, select, smoothstep, uniform, uniformArray, vec3 } from 'three/tsl';
+
+/** Make `key` of `material` always hold `make` of what is set to it (now and later). */
+function wrap(material: THREE.Material, key: 'colorNode' | 'roughnessNode', make: (inner: THREE.Node | null) => THREE.Node): void {
+  const m = material as unknown as Record<string, THREE.Node | null>;
+  let wrapped = make(m[key] ?? null);
+  Object.defineProperty(material, key, {
+    configurable: true,
+    enumerable: true,
+    get: () => wrapped,
+    set: (v: THREE.Node | null) => {
+      wrapped = make(v);
+    },
+  });
+}
+
+import { CRATER_MAX, CRATER_MIN, CRATER_ROUGH, CRATER_WEIGHTS, craterShape } from '../../terrain/crater';
 
 /** The grey of ash on what is drawn (linear). */
-const ASH_GREY = vec3(0.1, 0.095, 0.088);
-import { CRATER_MAX, CRATER_MIN, CRATER_ROUGH, CRATER_WEIGHTS, craterShape } from '../../terrain/crater';
+const ASH_GREY = vec3(0.075, 0.071, 0.066);
 
 /** Most craters a match keeps (explosions and the spheres along a tunnel). */
 const MAX_CRATERS = 256;
@@ -101,7 +116,7 @@ export class Craters {
   /** The test every cut material shares (one node: materials that differ only in their numbers share a shader). */
   private mask: THREE.Node<'bool'> | null = null;
 
-  /** How much ash lies here (0..1): thick at a crater's rim, thinning out to about 1.8 of its radius, in streaks. */
+  /** How much ash lies here (0..1): thick at a crater's rim, thinning out to about a radius past it, in streaks. */
   private ashNode: THREE.Node<'float'> | null = null;
   private ash(): THREE.Node<'float'> {
     this.ashNode ??= Fn(() => {
@@ -112,7 +127,7 @@ export class Craters {
         const v = this.position.sub(c.xyz);
         // (streaks out from its middle)
         const streak = mx_noise_float(vec3(v.x.div(length(v).max(0.01)).mul(9), 0, v.z.div(length(v).max(0.01)).mul(9))).mul(0.5).add(0.6);
-        most.assign(max(most, smoothstep(0.8, 0, k).mul(streak).mul(0.75)));
+        most.assign(max(most, smoothstep(1.0, 0.05, k).mul(streak).mul(0.8)));
       });
       return most;
     })() as unknown as THREE.Node<'float'>;
@@ -139,7 +154,13 @@ export class Craters {
     this.mask ??= Fn(() => {
       const keep = bool(true).toVar();
       Loop(count, ({ i }) => {
-        If(this.gap(i as unknown as THREE.Node<'int'>).lessThan(0), () => {
+        const gap = this.gap(i as unknown as THREE.Node<'int'>);
+        If(gap.lessThan(0), () => {
+          keep.assign(false);
+        });
+        // (near a crater, the underside of a part seen from inside it through the hole is not drawn: what is under it shows)
+        const r = (this.list.element(i) as unknown as THREE.Node<'vec4'>).w;
+        If(frontFacing.not().and(normalWorld.y.lessThan(-0.5)).and(gap.lessThan(r.mul(0.8))), () => {
           keep.assign(false);
         });
       });
@@ -153,11 +174,12 @@ export class Craters {
     }
     if (material.side === THREE.DoubleSide && !material.transparent) {
       // (and that inside is what it is broken open to: dull and grainy, not its outside's gloss)
-      const grit = vec3(0.1, 0.093, 0.085).mul(float(1).add(mx_noise_float(positionWorld.mul(2.4)).mul(0.4)).add(mx_noise_float(positionWorld.mul(8.1)).mul(0.2)));
-      const m = material as unknown as { colorNode: THREE.Node | null; roughnessNode?: THREE.Node | null; metalnessNode?: THREE.Node | null };
-      const outside = (m.colorNode ?? materialColor) as unknown as THREE.Node<'vec3'>;
-      m.colorNode = select(frontFacing, mix(outside, ASH_GREY.mul(float(0.8).add(mx_noise_float(positionWorld.mul(1.7)).mul(0.4))), this.ash()), grit) as unknown as THREE.Node;
-      if ('roughnessNode' in m) m.roughnessNode = select(frontFacing, m.roughnessNode ?? materialRoughness, float(0.95)) as unknown as THREE.Node;
+      const grit = vec3(0.045, 0.042, 0.038).mul(float(1).add(mx_noise_float(positionWorld.mul(2.4)).mul(0.4)).add(mx_noise_float(positionWorld.mul(8.1)).mul(0.2)));
+      const ash = ASH_GREY.mul(float(0.8).add(mx_noise_float(positionWorld.mul(1.7)).mul(0.4)));
+      // (its colour and roughness are wrapped whenever they are set, also after this call: ash on its outside near a crater,
+      // the broken inside dull)
+      wrap(material, 'colorNode', (outside) => select(frontFacing, mix((outside ?? materialColor) as unknown as THREE.Node<'vec3'>, ash, this.ash()), grit) as unknown as THREE.Node);
+      wrap(material, 'roughnessNode', (outside) => select(frontFacing, (outside ?? materialRoughness) as unknown as THREE.Node<'float'>, float(0.95)) as unknown as THREE.Node);
     }
     return material;
   }

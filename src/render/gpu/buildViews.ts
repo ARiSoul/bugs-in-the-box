@@ -281,7 +281,7 @@ export class BuildViews {
       this.bits.push({ at: new THREE.Vector3(), v: new THREE.Vector3(), t: 9, life: 1, size: 0 });
     }
     this.root.add(this.flakes);
-    this.debris = new THREE.InstancedMesh(new THREE.DodecahedronGeometry(1, 0), new THREE.MeshStandardNodeMaterial({ roughness: 0.85 }), DEBRIS);
+    this.debris = new THREE.InstancedMesh(new THREE.DodecahedronGeometry(1, 0), new THREE.MeshStandardNodeMaterial({ roughness: 0.95, metalness: 0 }), DEBRIS);
     this.debris.frustumCulled = false;
     this.debris.castShadow = this.debris.receiveShadow = true;
     for (let i = 0; i < DEBRIS; i++) {
@@ -422,20 +422,24 @@ export class BuildViews {
     const n = Math.round(14 + r * 6);
     for (let k = 0; k < n; k++) {
       const i = this.nextPiece % DEBRIS;
-      this.drop(x, y, z, r * 0.8, 'dirt', k % 2 === 0, (0.3 + 1.3 * Math.random() ** 2.5) * Math.min(1.6, r / 4));
+      // (two or three big chunks, the rest small)
+      const big = k < 2 + (r > 5 ? 1 : 0);
+      this.drop(x, y, z, r * 0.8, 'dirt', !big && k % 2 === 0, (big ? 2.4 + 0.8 * Math.random() : 0.3 + 1.3 * Math.random() ** 2.5) * Math.min(1.6, r / 4));
       const p = this.pieces[i];
-      p.v.multiplyScalar(1 + r * 0.12);
+      // (most fall near the rim; some fly far)
+      p.v.multiplyScalar((k % 4 === 0 ? 1 + r * 0.12 : 0.45 + r * 0.05) * (big ? 0.5 : 1));
       // (in the light they look paler than the walls they broke from: darker, and far apart)
       // (a third of them the outside of what it was, its finish; the rest its broken inside, which the key light makes look
       // paler than the walls it broke from: darker)
       const own = k % 3 === 0;
       const c = own ? outside : rgb;
-      const k2 = own ? 0.7 + 0.5 * Math.random() : 0.2 + 0.3 * Math.random();
+      const k2 = own ? 0.45 + 0.3 * Math.random() : 0.13 + 0.17 * Math.random();
       this.debris.setColorAt(i, this.c3.setRGB(c[0] * k2, c[1] * k2, c[2] * k2));
     }
     if (this.debris.instanceColor) this.debris.instanceColor.needsUpdate = true;
   }
   private readonly c3 = new THREE.Color();
+  private readonly sunk = new THREE.Vector3();
 
   /** A puff of dust off the ground (an ant going under it). */
   dust(x: number, y: number, z: number, n: number): void {
@@ -516,9 +520,13 @@ export class BuildViews {
       const k = p.size * Math.min(1, (DEBRIS_LIFE - p.t) * 0.5);
       if (p.t > DEBRIS_LIFE - 2) moved = true;
       if (!moved) return;
-      this.q.setFromEuler(this.e.set(i * 1.7, i * 2.3, i * 0.9));
+      // (at rest a piece lies flat, a little tilted, part sunk into what it fell on)
+      const rest = p.still && !p.strand;
+      this.q.setFromEuler(rest ? this.e.set(0.25 * Math.sin(i * 1.7), i * 2.3, 0.25 * Math.cos(i * 0.9)) : this.e.set(i * 1.7, i * 2.3, i * 0.9));
       if (p.strand) this.q.setFromEuler(this.e.set(i * 0.31, i * 2.3, 1.45 + i * 0.07));
-      this.debris.setMatrixAt(i, this.m.compose(p.at, this.q, p.strand ? this.s.set(k * 2.4, k * 0.09, k * 0.09) : p.plate ? this.s.set(k * 1.3, k * 0.16, k) : this.s.set(k, k * 0.6, k * 0.85)));
+      this.sunk.copy(p.at);
+      if (rest) this.sunk.y -= k * (p.plate ? 0.08 : 0.3);
+      this.debris.setMatrixAt(i, this.m.compose(this.sunk, this.q, p.strand ? this.s.set(k * 2.4, k * 0.09, k * 0.09) : p.plate ? this.s.set(k * 1.3, k * 0.16, k) : this.s.set(k, k * 0.6, k * 0.85)));
     });
     this.debris.visible = n > 0;
     if (moved) this.debris.instanceMatrix.needsUpdate = true;
