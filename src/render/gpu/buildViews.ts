@@ -432,7 +432,7 @@ export class BuildViews {
       const i = this.nextPiece % DEBRIS;
       // (two or three big chunks, the rest small)
       const big = k < 3 + (r > 5 ? 1 : 0);
-      this.drop(x, y, z, r * 0.8, 'dirt', big || k % 2 === 0, (big ? 2.4 + 0.8 * Math.random() : 0.6 + 1.4 * Math.random() ** 2) * Math.min(1.6, r / 4));
+      this.drop(x, y, z, r * 0.8, 'dirt', big || k % 2 === 0, (big ? 1.6 + 0.6 * Math.random() : 0.6 + 1.4 * Math.random() ** 2) * Math.min(1.6, r / 4));
       const p = this.pieces[i];
       // (most fall near the rim; some fly far)
       p.v.multiplyScalar((k % 4 === 0 ? 1 + r * 0.12 : 0.45 + r * 0.05) * (big ? 0.5 : 1));
@@ -537,7 +537,7 @@ export class BuildViews {
       if (p.strand) this.q.setFromEuler(this.e.set(i * 0.31, i * 2.3, 1.45 + i * 0.07));
       this.sunk.copy(p.at);
       if (rest) this.sunk.y -= k * (p.plate ? 0.08 : 0.3);
-      this.debris.setMatrixAt(i, this.m.compose(this.sunk, this.q, p.strand ? this.s.set(k * 2.4, k * 0.09, k * 0.09) : p.plate ? this.s.set(k * 1.3, k * 0.16, k) : this.s.set(k, k * 0.6, k * 0.85)));
+      this.debris.setMatrixAt(i, this.m.compose(this.sunk, this.q, p.strand ? this.s.set(k * 2.4, k * 0.09, k * 0.09) : p.plate ? this.s.set(k * 1.3, k * 0.11, k) : this.s.set(k, k * 0.6, k * 0.85)));
     });
     this.debris.visible = n > 0;
     if (moved) this.debris.instanceMatrix.needsUpdate = true;
