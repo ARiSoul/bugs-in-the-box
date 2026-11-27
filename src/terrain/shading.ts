@@ -27,18 +27,20 @@ export function shadeNoise(x: number, y: number, z: number): number {
 /** `shadeVertex` with the noise value already computed (see `shadeNoise`). */
 export function shadeWithNoise(out: Float32Array, o: number, n: number, ny: number, scorch01: number, material: number): void {
   const burn = Math.min(1, scorch01 * 1.4);
-  const keep = 1 - burn * 0.87;
+  // (scorched: darker, but its own colour still under the soot, not a black hole)
+  const keep = 1 - burn * 0.6;
+  const soot = burn * 0.035;
   if (material === GROUND || material >= MATERIAL_RGB.length) {
     const grass = Math.min(1, Math.max(0, (ny - 0.55) * 3.2));
-    out[o] = ((0.2 + 0.06 * n) * (1 - grass) + (0.07 + 0.03 * n) * grass) * keep;
-    out[o + 1] = ((0.15 + 0.05 * n) * (1 - grass) + (0.24 + 0.06 * n) * grass) * keep;
-    out[o + 2] = ((0.12 + 0.04 * n) * (1 - grass) + (0.05 + 0.02 * n) * grass) * keep;
+    out[o] = ((0.2 + 0.06 * n) * (1 - grass) + (0.07 + 0.03 * n) * grass) * keep + soot;
+    out[o + 1] = ((0.15 + 0.05 * n) * (1 - grass) + (0.24 + 0.06 * n) * grass) * keep + soot * 0.9;
+    out[o + 2] = ((0.12 + 0.04 * n) * (1 - grass) + (0.05 + 0.02 * n) * grass) * keep + soot * 0.8;
     return;
   }
   const c = MATERIAL_RGB[material];
   const amp = MATERIAL_NOISE[material] ?? 0.24;
   const v = (1 - amp / 2 + amp * n) * keep;
-  out[o] = c[0] * v;
-  out[o + 1] = c[1] * v;
-  out[o + 2] = c[2] * v;
+  out[o] = c[0] * v + soot;
+  out[o + 1] = c[1] * v + soot * 0.9;
+  out[o + 2] = c[2] * v + soot * 0.8;
 }

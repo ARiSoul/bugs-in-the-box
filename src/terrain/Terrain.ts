@@ -1,6 +1,13 @@
 import { CHUNK, DENSITY_CLAMP } from './constants';
 import { BUILT } from './materials';
 import { HIDDEN_CLEAR } from './sdf';
+import { CRATER_MAX, craterReach, craterShape } from './crater';
+
+/** The weights of the crater being carved (reused: no allocation per carve). */
+const shape = new Float64Array(8);
+/** The parts of a `scorch` sample: its burn (0..127), and the mark of a surface a carve opened. */
+export const SCORCH_BURN = 127;
+export const SCORCH_CUT = 128;
 
 /**
  * Destructible terrain stored as a grid of signed-distance-like density samples.
@@ -27,7 +34,10 @@ export class Terrain {
   sy!: number;
   sz!: number;
   dens!: Float32Array;
-  /** Visual-only burn mark, 0..255 per sample. */
+  /**
+   * Visual-only, per sample: a burn mark (its low seven bits, 0..127), and whether a carve opened it (bit 128: its surface
+   * is the material's broken inside, not its outer finish).
+   */
   scorch!: Uint8Array;
   /** Visual-only material id per sample (see `materials.ts`): what the surface near it is made of. */
   material!: Uint8Array;
@@ -164,11 +174,13 @@ export class Terrain {
 
   /**
    * Subtract a sphere: d = max(d, r - dist). Marks every affected chunk dirty, including neighbours
-   * (their meshes share the seam vertices). The outer shell of the world is never opened.
+   * (their meshes share the seam vertices). The outer shell of the world is never opened. `rough`: a blast's crater,
+   * uneven, its shape its own for the place (see `crater.ts`), not a sphere.
    */
-  carve(px: number, py: number, pz: number, r: number): void {
+  carve(px: number, py: number, pz: number, r: number, rough = false): void {
     const { sx, sy, sz, dens, scorch } = this;
-    const pad = r + 2;
+    if (rough) craterShape(px, py, pz, shape);
+    const pad = r * (rough ? CRATER_MAX : 1) + 2;
     const i0 = Math.max(0, Math.floor(px - pad));
     const i1 = Math.min(sx - 1, Math.ceil(px + pad));
     const j0 = Math.max(0, Math.floor(py - pad));
@@ -176,6 +188,13 @@ export class Terrain {
     const k0 = Math.max(0, Math.floor(pz - pad));
     const k1 = Math.min(sz - 1, Math.ceil(pz + pad));
     const scorchR = r * 1.6;
+    // (the cells it really changed: only their chunks are meshed again)
+    let ci0 = sx;
+    let ci1 = -1;
+    let cj0 = sy;
+    let cj1 = -1;
+    let ck0 = sz;
+    let ck1 = -1;
     for (let k = k0; k <= k1; k++) {
       for (let j = j0; j <= j1; j++) {
         for (let i = i0; i <= i1; i++) {
@@ -186,19 +205,39 @@ export class Terrain {
           const ddz = k - pz;
           const dist = Math.sqrt(ddx * ddx + ddy * ddy + ddz * ddz);
           const id = i + sx * (j + sy * k);
-          const nd = Math.max(dens[id], r - dist);
+          const reach = rough && dist > 1e-6 ? r * craterReach(ddx / dist, ddy / dist, ddz / dist, shape) : r;
+          const was = dens[id];
+          const nd = Math.max(was, reach - dist);
           dens[id] = nd > DENSITY_CLAMP ? DENSITY_CLAMP : nd;
-          const sc = Math.max(0, 1 - dist / scorchR) * 255;
-          if (sc > scorch[id]) scorch[id] = sc;
+          const sc = Math.round(Math.max(0, 1 - dist / scorchR) * SCORCH_BURN);
+          let changed = dens[id] !== was;
+          const old = scorch[id];
+          let next = old;
+          if (sc > (old & SCORCH_BURN)) next = (old & SCORCH_CUT) | sc;
+          // (opened by it, or near what it opened: its surface now is the inside of what it is made of)
+          if (changed && dens[id] < 2) next |= SCORCH_CUT;
+          if (next !== old) {
+            scorch[id] = next;
+            changed = true;
+          }
+          if (changed) {
+            if (i < ci0) ci0 = i;
+            if (i > ci1) ci1 = i;
+            if (j < cj0) cj0 = j;
+            if (j > cj1) cj1 = j;
+            if (k < ck0) ck0 = k;
+            if (k > ck1) ck1 = k;
+          }
         }
       }
     }
-    const c0x = Math.max(0, Math.floor((i0 - 1) / CHUNK));
-    const c1x = Math.min(this.cx - 1, Math.floor((i1 + 1) / CHUNK));
-    const c0y = Math.max(0, Math.floor((j0 - 1) / CHUNK));
-    const c1y = Math.min(this.cy - 1, Math.floor((j1 + 1) / CHUNK));
-    const c0z = Math.max(0, Math.floor((k0 - 1) / CHUNK));
-    const c1z = Math.min(this.cz - 1, Math.floor((k1 + 1) / CHUNK));
+    if (ci1 < 0) return;
+    const c0x = Math.max(0, Math.floor((ci0 - 1) / CHUNK));
+    const c1x = Math.min(this.cx - 1, Math.floor((ci1 + 1) / CHUNK));
+    const c0y = Math.max(0, Math.floor((cj0 - 1) / CHUNK));
+    const c1y = Math.min(this.cy - 1, Math.floor((cj1 + 1) / CHUNK));
+    const c0z = Math.max(0, Math.floor((ck0 - 1) / CHUNK));
+    const c1z = Math.min(this.cz - 1, Math.floor((ck1 + 1) / CHUNK));
     for (let z = c0z; z <= c1z; z++)
       for (let y = c0y; y <= c1y; y++) for (let x = c0x; x <= c1x; x++) this.dirty.add(this.chunkId(x, y, z));
   }

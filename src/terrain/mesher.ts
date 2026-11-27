@@ -1,5 +1,9 @@
 import { CHUNK } from './constants';
 import { BUILT, COLLIDER, MATERIAL_PBR } from './materials';
+import { SCORCH_BURN, SCORCH_CUT } from './Terrain';
+
+/** The broken inside of what the map is made of, where a blast opened it (before its own colour is mixed in). */
+const CORE = [0.19, 0.17, 0.145] as const;
 import { shadeNoise, shadeVertex, shadeWithNoise } from './shading';
 import type { Terrain } from './Terrain';
 
@@ -224,7 +228,8 @@ export class ChunkMesher {
       onrm[o3 + 1] = vnrm[l3 + 1];
       onrm[o3 + 2] = vnrm[l3 + 2];
       const si = Math.round(x) + sx * (Math.round(y) + sy * Math.round(z));
-      const burn = scorch[si] / 255;
+      const burn = (scorch[si] & SCORCH_BURN) / SCORCH_BURN;
+      const opened = (scorch[si] & SCORCH_CUT) !== 0;
       // Materials: where the cell's corners disagree, blend their colours and finishes (trilinear,
       // solid corners count more) so material borders follow the surface smoothly instead of in steps.
       const ix = Math.min(Math.floor(x), t.W - 1);
@@ -297,6 +302,23 @@ export class ChunkMesher {
       ocol[o3] *= ao;
       ocol[o3 + 1] *= ao;
       ocol[o3 + 2] *= ao;
+      // (opened by a blast: the material's broken inside, dull and grey-brown, not its outer finish)
+      if (opened) {
+        const g = 0.85 + 0.3 * shadeNoise(x * 2.3, y * 2.3, z * 2.3);
+        ocol[o3] = (ocol[o3] * 0.3 + CORE[0] * 0.7) * g;
+        ocol[o3 + 1] = (ocol[o3 + 1] * 0.3 + CORE[1] * 0.7) * g;
+        ocol[o3 + 2] = (ocol[o3 + 2] * 0.3 + CORE[2] * 0.7) * g;
+        if (pr < 1.5) pr = 0.95;
+        pmet = 0;
+        pglow = 0;
+      }
+      // (scorched: dull, no polish nor any special shading left on it)
+      if (burn > 0) {
+        const b = burn > 0.7 ? 1 : burn / 0.7;
+        if (pr < 1.5) pr = pr + (0.95 - pr) * b;
+        pmet *= 1 - b;
+        if (b > 0.5) pglow = 0;
+      }
       opbr[vi * 3] = pr;
       opbr[vi * 3 + 1] = pmet;
       opbr[vi * 3 + 2] = pglow;

@@ -347,8 +347,8 @@ export async function createGpuStage(canvas: HTMLCanvasElement, terrain: Terrain
     resize,
     // (the turntable keeps its own craters, in its own frame: they turn with it)
     craters: {
-      add(x: number, y: number, z: number, radius: number) {
-        craters.add(x, y, z, radius);
+      add(x: number, y: number, z: number, radius: number, rough = false) {
+        craters.add(x, y, z, radius, rough);
         microwaveParts.addCrater(x, y, z, radius);
       },
       addTunnel(x1: number, y1: number, z1: number, x2: number, y2: number, z2: number, radius: number) {

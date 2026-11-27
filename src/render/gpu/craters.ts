@@ -1,5 +1,6 @@
 import * as THREE from 'three/webgpu';
-import { Fn, If, Loop, bool, length, positionWorld, uniform, uniformArray } from 'three/tsl';
+import { Fn, If, Loop, bool, float, frontFacing, length, materialColor, materialRoughness, mx_noise_float, positionWorld, select, uniform, uniformArray, vec3 } from 'three/tsl';
+import { CRATER_ROUGH, craterShape } from '../../terrain/crater';
 
 /** Most craters a match keeps (explosions and the spheres along a tunnel). */
 const MAX_CRATERS = 256;
@@ -14,17 +15,51 @@ const WALL_OUT = 0.12;
  */
 export class Craters {
   private readonly list = uniformArray(Array.from({ length: MAX_CRATERS }, () => new THREE.Vector4(0, -1000, 0, 0)), 'vec4');
+  /** Each crater's shape weights, four and four (all 0: a sphere). */
+  private readonly shapeA = uniformArray(Array.from({ length: MAX_CRATERS }, () => new THREE.Vector4(0, 0, 0, 0)), 'vec4');
+  private readonly shapeB = uniformArray(Array.from({ length: MAX_CRATERS }, () => new THREE.Vector4(0, 0, 0, 0)), 'vec4');
+  private readonly w = new Float64Array(8);
   private readonly count = uniform(0, 'int');
   private n = 0;
 
   /** `position`: where a fragment is tested (the world; a turning part passes its own frame). */
   constructor(private readonly position: THREE.Node<'vec3'> = positionWorld as unknown as THREE.Node<'vec3'>) {}
 
-  /** A crater of `radius` at (x, y, z), as `Terrain.carve` makes it. */
-  add(x: number, y: number, z: number, radius: number): void {
+  /** A crater of `radius` at (x, y, z), as `Terrain.carve` makes it (`rough`: a blast's uneven one). */
+  add(x: number, y: number, z: number, radius: number, rough = false): void {
     if (this.n >= MAX_CRATERS) return;
+    const w = this.w;
+    if (rough) craterShape(x, y, z, w);
+    else w.fill(0);
+    (this.shapeA.array[this.n] as THREE.Vector4).set(w[0], w[1], w[2], w[3]);
+    (this.shapeB.array[this.n] as THREE.Vector4).set(w[4], w[5], w[6], w[7]);
     (this.list.array[this.n++] as THREE.Vector4).set(x, y, z, radius);
     this.count.value = this.n;
+  }
+
+  /** How far crater `i`'s wall is from `p` (negative: inside it), as `craterReach` shapes it. */
+  private gap(i: THREE.Node<'int'>): THREE.Node<'float'> {
+    const c = this.list.element(i) as unknown as THREE.Node<'vec4'>;
+    const a = this.shapeA.element(i) as unknown as THREE.Node<'vec4'>;
+    const b = this.shapeB.element(i) as unknown as THREE.Node<'vec4'>;
+    const v = this.position.sub(c.xyz);
+    const d = length(v).toVar();
+    const u = v.div(d.max(1e-6));
+    const x = u.x;
+    const y = u.y;
+    const z = u.z;
+    const xx = x.mul(x);
+    const yy = y.mul(y);
+    const zz = z.mul(z);
+    const s = a.x.mul(x).mul(y)
+      .add(a.y.mul(y).mul(z))
+      .add(a.z.mul(z).mul(x))
+      .add(a.w.mul(xx.sub(zz)))
+      .add(b.x.mul(yy.sub(xx.add(zz).mul(0.5))))
+      .add(b.y.mul(2.6).mul(x).mul(y).mul(z))
+      .add(b.z.mul(x).mul(xx.sub(zz.mul(3))).mul(0.5))
+      .add(b.w.mul(z).mul(xx.mul(3).sub(zz)).mul(0.5));
+    return d.sub(c.w.mul(float(1).add(s.mul(CRATER_ROUGH)))) as unknown as THREE.Node<'float'>;
   }
 
   /** A tunnel from (x1, y1, z1) to (x2, y2, z2): spheres along it, as the dig carves them. */
@@ -39,7 +74,11 @@ export class Craters {
 
   /** A new map: no craters. */
   clear(): void {
-    for (let i = 0; i < this.n; i++) (this.list.array[i] as THREE.Vector4).set(0, -1000, 0, 0);
+    for (let i = 0; i < this.n; i++) {
+      (this.list.array[i] as THREE.Vector4).set(0, -1000, 0, 0);
+      (this.shapeA.array[i] as THREE.Vector4).set(0, 0, 0, 0);
+      (this.shapeB.array[i] as THREE.Vector4).set(0, 0, 0, 0);
+    }
     this.n = 0;
     this.count.value = 0;
   }
@@ -49,12 +88,10 @@ export class Craters {
 
   /** True on the wall of a crater (a fragment about as far from its middle as its radius). */
   onWall(): THREE.Node<'bool'> {
-    const list = this.list;
     return Fn(() => {
       const on = bool(false).toVar();
       Loop(this.count, ({ i }) => {
-        const c = list.element(i) as unknown as THREE.Node<'vec4'>;
-        const d = length(this.position.sub(c.xyz)).sub(c.w).toVar();
+        const d = this.gap(i as unknown as THREE.Node<'int'>).toVar();
         If(d.greaterThan(-WALL_IN).and(d.lessThan(WALL_OUT)), () => {
           on.assign(true);
         });
@@ -65,13 +102,11 @@ export class Craters {
 
   /** Make `material` drop its fragments inside the craters (in colour and in the shadow pass). */
   cut<M extends THREE.NodeMaterial>(material: M): M {
-    const list = this.list;
     const count = this.count;
     this.mask ??= Fn(() => {
       const keep = bool(true).toVar();
       Loop(count, ({ i }) => {
-        const c = list.element(i) as unknown as THREE.Node<'vec4'>;
-        If(length(this.position.sub(c.xyz)).lessThan(c.w), () => {
+        If(this.gap(i as unknown as THREE.Node<'int'>).lessThan(0), () => {
           keep.assign(false);
         });
       });
@@ -82,6 +117,13 @@ export class Craters {
     if (material.side === THREE.FrontSide && !material.transparent) {
       material.side = THREE.DoubleSide;
       material.shadowSide ??= THREE.BackSide;
+    }
+    if (material.side === THREE.DoubleSide && !material.transparent) {
+      // (and that inside is what it is broken open to: dull and grainy, not its outside's gloss)
+      const grit = vec3(0.1, 0.093, 0.085).mul(float(1).add(mx_noise_float(positionWorld.mul(2.4)).mul(0.4)).add(mx_noise_float(positionWorld.mul(8.1)).mul(0.2)));
+      const m = material as unknown as { colorNode: THREE.Node | null; roughnessNode?: THREE.Node | null; metalnessNode?: THREE.Node | null };
+      m.colorNode = select(frontFacing, m.colorNode ?? materialColor, grit) as unknown as THREE.Node;
+      if ('roughnessNode' in m) m.roughnessNode = select(frontFacing, m.roughnessNode ?? materialRoughness, float(0.95)) as unknown as THREE.Node;
     }
     return material;
   }

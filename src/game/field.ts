@@ -8,8 +8,8 @@ export interface TerrainField {
   readonly D: number;
   sample(x: number, y: number, z: number): number;
   raycast(ox: number, oy: number, oz: number, dx: number, dy: number, dz: number, maxT?: number): number;
-  /** Remove a sphere of terrain (explosions, digging). */
-  carve(x: number, y: number, z: number, r: number): void;
+  /** Remove a sphere of terrain (explosions, digging); `rough`: a blast's uneven crater (see `terrain/crater.ts`). */
+  carve(x: number, y: number, z: number, r: number, rough?: boolean): void;
   /** Add what a bug builds (pieces, see `build.ts`). Optional: where it is missing, nothing can be built. */
   deposit?(pieces: readonly number[]): void;
   /** Take pieces away again, or what of them is inside a sphere (x, y, z, radius). Optional, as `deposit` is. */

@@ -417,6 +417,21 @@ export class BuildViews {
     this.bit(at, 'air', 0.6, 0.5, 0.09);
   }
 
+  /** What a blast throws out of the ground: lumps of it, of its colour, that fall round the crater and lie there a while. */
+  rubble(x: number, y: number, z: number, r: number, rgb: readonly [number, number, number]): void {
+    const n = Math.round(10 + r * 4);
+    for (let k = 0; k < n; k++) {
+      const i = this.nextPiece % DEBRIS;
+      this.drop(x, y, z, r * 0.8, 'dirt', k % 3 === 0, (0.8 + 1.4 * Math.random() ** 2) * Math.min(1.6, r / 4));
+      const p = this.pieces[i];
+      p.v.multiplyScalar(1 + r * 0.12);
+      const k2 = 0.55 + 0.6 * Math.random();
+      this.debris.setColorAt(i, this.c3.setRGB(rgb[0] * k2 + 0.02, rgb[1] * k2 + 0.018, rgb[2] * k2 + 0.015));
+    }
+    if (this.debris.instanceColor) this.debris.instanceColor.needsUpdate = true;
+  }
+  private readonly c3 = new THREE.Color();
+
   /** A puff of dust off the ground (an ant going under it). */
   dust(x: number, y: number, z: number, n: number): void {
     for (let k = 0; k < n * 6; k++) this.bit(this.s.set(x, y + 0.1, z), 'dust', 1.6 + n * 0.8, 0.7, 0.15 + 0.04 * n);

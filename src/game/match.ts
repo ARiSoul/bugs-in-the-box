@@ -2189,7 +2189,7 @@ export class Match {
     const tags = tagsOf(w.id);
     // (arcs find it by themselves)
     if (tags.includes('electric') && w.arcs === 0) this.conductAt(x, y, z, w.blastRadius, w.arcDamage, new Set());
-    this.field.carve(x, y, z, w.blastRadius);
+    this.field.carve(x, y, z, w.blastRadius, true);
     this.lookTicks = Math.max(this.lookTicks, LOOK_BLAST_TICKS);
     this.events.push({ type: 'explosion', x, y, z, radius: w.blastRadius });
     // (a web whose surface is blown away goes with it)

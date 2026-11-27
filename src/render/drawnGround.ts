@@ -1,6 +1,10 @@
 import * as THREE from 'three';
+import { craterReach, craterShape } from '../terrain/crater';
 import { BUILT, COLLIDER } from '../terrain/materials';
 import type { Terrain } from '../terrain/Terrain';
+
+/** A sphere's crater shape. */
+const NO_SHAPE: readonly number[] = [0, 0, 0, 0, 0, 0, 0, 0];
 
 /** Size of a lookup cell (world units). */
 const CELL = 4;
@@ -42,12 +46,15 @@ export class DrawnGround {
   private job: Generator<void> | null = null;
   /** What gameplay carved (x, y, z, radius): the drawn parts are cut there. */
   private craters: number[] = [];
+  /** Each crater's shape weights (all 0: a sphere). */
+  private shapes: (readonly number[])[] = [];
 
   constructor(private readonly terrain: Terrain) {}
 
   /** A new map: index what `scene` draws, except `skip` (the bugs). The work is done by `step`. */
   reset(scene: THREE.Scene, skip: readonly THREE.Object3D[]): void {
     this.craters = [];
+    this.shapes = [];
     this.reindex(scene, skip);
   }
 
@@ -76,8 +83,11 @@ export class DrawnGround {
     return this.job === null;
   }
 
-  addCrater(x: number, y: number, z: number, radius: number): void {
+  /** `rough`: a blast's uneven crater (its weights kept with it). */
+  addCrater(x: number, y: number, z: number, radius: number, rough = false): void {
     this.craters.push(x, y, z, radius);
+    const w = rough ? (craterShape(x, y, z, new Array<number>(8)) as number[]) : NO_SHAPE;
+    this.shapes.push(w);
   }
 
   addTunnel(x1: number, y1: number, z1: number, x2: number, y2: number, z2: number, radius: number): void {
@@ -222,7 +232,10 @@ export class DrawnGround {
       const dx = x - c[i];
       const dy = y - c[i + 1];
       const dz = z - c[i + 2];
-      if (dx * dx + dy * dy + dz * dz < c[i + 3] * c[i + 3]) return true;
+      const d2 = dx * dx + dy * dy + dz * dz;
+      const d = Math.sqrt(d2);
+      const r = c[i + 3] * (d > 1e-6 ? craterReach(dx / d, dy / d, dz / d, this.shapes[i / 4]) : 1);
+      if (d2 < r * r) return true;
     }
     return false;
   }

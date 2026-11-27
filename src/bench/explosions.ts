@@ -37,7 +37,7 @@ export function runExplosionBenchmark(
     const t = terrain.raycast(x, top, z, 0, -1, 0);
     if (t < 0) continue;
     const start = performance.now();
-    terrain.carve(x, top - t, z, radius);
+    terrain.carve(x, top - t, z, radius, true);
     chunkSum += remesh();
     times.push(performance.now() - start);
   }

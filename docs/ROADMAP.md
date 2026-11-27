@@ -81,6 +81,8 @@ To be decided: who evolves (recommended: the species, per player) · whether lev
 - [x] **Mini-map**: the ground from above, turned with the view, the bugs by team, the boxes
 - [ ] Perks for the mini-map: a ghost that does not show on the others' (`Minimap.shows`)
 - [ ] Reading time over the network: the pause is an event of the match's, with its limits
+- [x] **Explosions like the builds' holes**: every crater uneven, its own shape for the place (deterministic, the same in the simulation and in what is drawn over the terrain), its walls the material's broken inside (matte), and lumps of the ground thrown out round it
+- [ ] **Burrow, next**: mind the thickness under the ant (never dig out into the air under a thin floor, nor deeper than the ground goes); places where nothing can be dug; the tunnel a real part of the map, like any crater: any bug that fits may go in and walk through it (forwards only, or stop halfway), seen from above, not followed from behind
 
 ## Phase 5 · Multiplayer
 - [ ] Deterministic simulation validated across clients (same seed + same events = same map)

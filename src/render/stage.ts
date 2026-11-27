@@ -43,7 +43,8 @@ export interface Stage {
   setScenario(sc: Scenario, layout: SceneLayout): void;
   /** Where gameplay carved the terrain: the render-only parts are cut the same way. */
   craters: {
-    add(x: number, y: number, z: number, radius: number): void;
+    /** `rough`: a blast's uneven crater (see `terrain/crater.ts`). */
+    add(x: number, y: number, z: number, radius: number, rough?: boolean): void;
     addTunnel(x1: number, y1: number, z1: number, x2: number, y2: number, z2: number, radius: number): void;
   };
   /** The menu's own layer over the picture (see `MenuLayer`). */
