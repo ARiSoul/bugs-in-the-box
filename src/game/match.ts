@@ -1,6 +1,7 @@
 import { createRng } from '../terrain/noise';
 import { Bug, DT, IDLE, TICK_RATE, type BugInput } from './bug';
-import { Effects, Triggers, type MatchTriggers } from './engine';
+import { abilityAt, AGAIN_POOL, CHARGE_POOL, costFor, SKILL_FULL, usesPool, WORKS_POOL } from './abilities';
+import { Effects, pay, Resources, Triggers, type AbilityDef, type MatchTriggers } from './engine';
 import { Unit } from './unit';
 import { surfaceDistance, type TerrainField } from './field';
 import { rot, rotate2 } from './math';
@@ -286,7 +287,7 @@ const BROOD_THROW = 5;
  * The skill loader: a team's special attack must be loaded (to SKILL_FULL) before it can be used, and using it empties
  * it. It loads at every turn of the team, with the damage it does (not by the special itself) and takes.
  */
-export const SKILL_FULL = 1000;
+export { SKILL_FULL } from './abilities';
 const SKILL_TURN = 200;
 /** Ticks a burst hardly falls. */
 const BURST_TICKS = 50;
@@ -457,13 +458,23 @@ export class Match {
   /** The swarm a player flies, if any, and the rings laid out for it. */
   flock: Flock | null = null;
   rings: Ring[] = [];
-  /** How far each team's special attack is loaded (0..SKILL_FULL). */
+  /**
+   * What each side has to spend (`abilities.ts`: a weapon's uses, builds left, a special attack's charge, a second
+   * build); the abilities say what they cost in it. `skill`, `stock` and `works` below are views of it (read and written
+   * as arrays, as before).
+   */
+  private readonly pools: Resources[];
+  /** A side's pools. */
+  resources(team: number): Resources {
+    return this.pools[team];
+  }
+  /** How far each team's special attack is loaded (0..SKILL_FULL): a view of its `charge` pool. */
   readonly skill: number[];
   /** The boxes on the map. */
   readonly items: Items;
-  /** Uses left of what each team found (by weapon index). */
+  /** Uses left of what each team found, or starts with (by weapon index): views of its `uses:<id>` pools. */
   readonly stock: number[][];
-  /** How often each team may still build or hide, whatever kind. */
+  /** How often each team may still build or hide, whatever kind: a view of its `works` pool. */
   readonly works: number[];
   /** The items each team keeps, and whether one was used this turn. */
   readonly bag: Partial<Record<ItemKind, number>>[];
@@ -474,14 +485,12 @@ export class Match {
   readonly structures: Structure[] = [];
   /** What of each team's holds enemies that touch it, and how much they slow down. */
   private readonly sticky: { readonly team: number; readonly pieces: number[]; readonly slow: number }[] = [];
-  /** Builds in one turn that a team may still do once more; whose shell grew back; whether the active bee stung. */
-  private readonly again: number[];
+  /** Whose shell grew back; whether the active bee stung. */
   private readonly regrown = new Set<number>();
   private stung = false;
   private builtOnce = false;
-  /** The turn a burst was used in; who lands softly. */
-  private burstTurn = -1;
-  private burrowTurn = -1;
+  /** The turn an ability with a limit a turn was last used in (by its id); who lands softly. */
+  private readonly usedOn = new Map<string, number>();
   /** An ant running through the tunnel it dug: from where, which way, how far it has gone, how far it goes. */
   private burrowing: { unit: Unit; path: number[]; s: number; end: number; hold: number; radius: number } | null = null;
 
@@ -626,12 +635,19 @@ export class Match {
     this.quarterTurns = options.turned ?? 0;
     this.luck = createRng(seed * 1597334677 + 411);
     this.items = new Items(field, this.luck, options.spawnLevels === true, options.confine ?? null);
-    this.stock = teams.map((t) => WEAPONS.map((w) => (w.species === undefined || w.species === t.species.id ? (w.start ?? 0) : 0)));
-    this.works = teams.map(() => WORKS);
+    this.pools = teams.map((t) => {
+      const r = new Resources();
+      WEAPONS.forEach((w) => r.set(usesPool(w.id), w.species === undefined || w.species === t.species.id ? (w.start ?? 0) : 0));
+      r.set(WORKS_POOL, WORKS);
+      r.set(AGAIN_POOL, t.growth?.passives.includes('many-hands') ? 1 : 0);
+      r.set(CHARGE_POOL, 0);
+      return r;
+    });
+    this.stock = this.pools.map((r) => poolView(WEAPONS.length, (i) => usesPool(WEAPONS[i].id), () => r));
+    this.works = poolView(teams.length, () => WORKS_POOL, (i) => this.pools[i]);
     this.bag = teams.map((t) => ({ ...t.growth?.items }));
     this.tally = teams.map(() => ({ damage: 0, kills: 0, blocked: 0, boxes: 0 }));
-    this.again = teams.map((t) => (t.growth?.passives.includes('many-hands') ? 1 : 0));
-    this.skill = teams.map(() => 0);
+    this.skill = poolView(teams.length, () => CHARGE_POOL, (i) => this.pools[i]);
     if (options.placeBugs !== false) this.placeBugs();
     this.beginTurn(0);
   }
@@ -940,14 +956,27 @@ export class Match {
 
   /** How often a team may still use what it has only some of. */
   usesLeft(team: number, index: number): number {
-    const n = this.stock[team][index];
+    const r = this.pools[team];
     const w = WEAPONS[index];
-    return w.start === undefined || w.alone ? n : Math.min(n, this.works[team]);
+    const n = r.amount(usesPool(w.id));
+    return w.start === undefined || w.alone ? n : Math.min(n, r.amount(WORKS_POOL));
   }
 
   /** Whether the unit can use weapon `index` now. */
   canUse(u: Unit, index: number): boolean {
-    return this.has(u, index) && (WEAPONS[index].sceneTicks === 0 || this.skill[u.team] >= SKILL_FULL);
+    return this.has(u, index) && (WEAPONS[index].sceneTicks === 0 || this.pools[u.team].amount(CHARGE_POOL) >= SKILL_FULL);
+  }
+
+  /** Whether `a` was used this turn as often as it may be. */
+  private spentThisTurn(a: AbilityDef): boolean {
+    return a.perTurn !== undefined && this.usedOn.get(a.id) === this.turnNumber;
+  }
+
+  /** `a` is used by `u`: what it costs comes off its side's pools, and its limit a turn counts it. */
+  private use(u: Unit, a: AbilityDef): void {
+    const team = u.team;
+    pay(costFor(a, u.bug.species.id), this.pools[team]);
+    if (a.perTurn !== undefined) this.usedOn.set(a.id, this.turnNumber);
   }
 
   /** A team's passive: its number (1 where it has none), or 0: it is not in use. */
@@ -991,10 +1020,11 @@ export class Match {
   /** Load a team's special attack. */
   private load(team: number, by: number): void {
     by *= this.passive(team, 'patience') || 1;
-    const was = this.skill[team];
+    const r = this.pools[team];
+    const was = r.amount(CHARGE_POOL);
     if (was >= SKILL_FULL) return;
-    this.skill[team] = was + by < SKILL_FULL ? was + by : SKILL_FULL;
-    if (this.skill[team] >= SKILL_FULL) this.events.push({ type: 'skill', team });
+    r.set(CHARGE_POOL, was + by < SKILL_FULL ? was + by : SKILL_FULL);
+    if (r.amount(CHARGE_POOL) >= SKILL_FULL) this.events.push({ type: 'skill', team });
   }
 
   /** Which bugs the webs hold now; the active one pulls at its web while it tries to walk or jump. */
@@ -1319,11 +1349,11 @@ export class Match {
   private lay(u: Unit, w: Weapon, pieces: readonly number[]): void {
     this.field.deposit?.(pieces);
     // (many hands: once a match, two in one turn)
-    if (this.again[u.team] > 0 && this.builtOnce) this.again[u.team]--;
-    this.built = this.again[u.team] <= 0 || this.builtOnce;
+    const r = this.pools[u.team];
+    if (r.amount(AGAIN_POOL) > 0 && this.builtOnce) r.give(AGAIN_POOL, -1);
+    this.built = r.amount(AGAIN_POOL) <= 0 || this.builtOnce;
     this.builtOnce = true;
-    this.stock[u.team][WEAPONS.indexOf(w)]--;
-    this.works[u.team]--;
+    this.use(u, abilityAt(WEAPONS.indexOf(w)));
     if (w === SILK_CURTAIN) this.curtains.push({ team: u.team, pieces: [...pieces], left: CATCHES + this.passive(u.team, 'double-weave') });
     const slow = w.species === 'spider' && w.kind === 'bridge' ? this.passive(u.team, 'trapline') : w.species === 'bee' ? this.passive(u.team, 'honey-trap') : 0;
     if (slow > 0) this.sticky.push({ team: u.team, pieces: [...pieces], slow });
@@ -1347,8 +1377,7 @@ export class Match {
     u.cover = w;
     u.coverLeft = (w.coverHealth ?? 0) + (w.species === 'cockroach' ? this.passive(u.team, 'thick-skin') : 0);
     this.events.push({ type: 'hide', unit: u.id, weapon: w.id });
-    this.stock[u.team][WEAPONS.indexOf(w)]--;
-    this.works[u.team]--;
+    this.use(u, abilityAt(WEAPONS.indexOf(w)));
     this.load(u.team, SKILL_HIDE);
     this.events.push({ type: 'fire', unit: u.id, weapon: w.id });
     this.phase = 'flight';
@@ -1410,11 +1439,11 @@ export class Match {
   private fire(unit: Unit, w: Weapon): void {
     this.charging = false;
     this.events.push({ type: 'fire', unit: unit.id, weapon: w.id });
-    if (w.sceneTicks > 0) this.skill[unit.team] = 0;
+    const index = WEAPONS.indexOf(w);
+    // (what it costs: a found weapon's use, a special attack's charge)
+    this.use(unit, abilityAt(index));
     this.hard = unit.boost ? OVERCLOCK : 1;
     unit.boost = false;
-    const index = WEAPONS.indexOf(w);
-    if (!hasWeapon(unit.bug.species.id, w)) this.stock[unit.team][index]--;
     if (w.kind === 'lift') this.tearOut(unit, w);
     if (w.kind === 'tunnel') this.dig(unit, w);
     else if (w.kind === 'trap') this.openWeb(unit.bug.x, unit.bug.y, unit.bug.z, w, false, unit.team);
@@ -2027,19 +2056,18 @@ export class Match {
 
   /** Whether the unit may burst now. */
   canBurst(u: Unit): boolean {
-    return this.burstTurn !== this.turnNumber && this.usesLeft(u.team, BURST_AT) > 0 && u.web < 0 && !u.cover && u.bug.alive;
+    return !this.spentThisTurn(abilityAt(BURST_AT)) && this.usesLeft(u.team, BURST_AT) > 0 && u.web < 0 && !u.cover && u.bug.alive;
   }
 
   /** It throws itself along its aim: fast, far, and it lands softly. Once a turn; the turn goes on. */
   private burst(u: Unit): void {
     const i = WEAPONS.findIndex((w) => w.kind === 'burst');
     const b = u.bug;
-    if (this.burstTurn === this.turnNumber || this.usesLeft(u.team, i) <= 0 || u.web >= 0 || u.cover || !b.alive) {
+    if (this.spentThisTurn(abilityAt(i)) || this.usesLeft(u.team, i) <= 0 || u.web >= 0 || u.cover || !b.alive) {
       this.events.push({ type: 'noRoom', unit: u.id });
       return;
     }
-    this.burstTurn = this.turnNumber;
-    this.stock[u.team][i]--;
+    this.use(u, abilityAt(i));
     const [dx, dy, dz] = this.aimDirection(u, aimed);
     launch(b, dx, dy, dz);
     this.soft.add(u.id);
@@ -2220,7 +2248,7 @@ export class Match {
   private burrow(u: Unit, w: Weapon, power: number): void {
     const i = WEAPONS.indexOf(w);
     const b = u.bug;
-    if (this.burrowTurn === this.turnNumber || this.usesLeft(u.team, i) <= 0 || u.web >= 0 || u.cover || !b.alive || !b.grounded) {
+    if (this.spentThisTurn(abilityAt(i)) || this.usesLeft(u.team, i) <= 0 || u.web >= 0 || u.cover || !b.alive || !b.grounded) {
       this.events.push({ type: 'noRoom', unit: u.id });
       return;
     }
@@ -2230,8 +2258,7 @@ export class Match {
       this.events.push({ type: 'noRoom', unit: u.id });
       return;
     }
-    this.burrowTurn = this.turnNumber;
-    this.stock[u.team][i]--;
+    this.use(u, abilityAt(i));
     // (the tunnel, all of it at once: as wide as the ant, and a little more)
     let total = 0;
     for (let k = 0; k + 3 < path.length; k += 3) {
@@ -2551,7 +2578,7 @@ export class Match {
         b.leap = SPRING;
         break;
       case 'paste':
-        this.stock[u.team][PASTE]++;
+        this.pools[u.team].give(usesPool(WEAPONS[PASTE].id), 1);
         break;
       case 'crystal':
         if (u === this.units[this.active] && this.phase === 'aim') this.turnTicks += CRYSTAL * TICK_RATE;
@@ -2563,7 +2590,7 @@ export class Match {
       case 'scrap': {
         // (a weapon of somebody else's, or paste; twice)
         const k = this.luck() < 0.6 && !hasWeapon(b.species.id, WEAPONS[WEB]) ? WEB : PASTE;
-        this.stock[u.team][k] += 2;
+        this.pools[u.team].give(usesPool(WEAPONS[k].id), 2);
         gain = k;
         break;
       }
@@ -2692,4 +2719,26 @@ export class Match {
       b.lastImpact = 0;
     }
   }
+}
+
+/**
+ * An array that reads and writes resource pools: index `i` is `pool(i)` in `pools(i)` (a view, kept so the rules and the
+ * UI that read `skill`, `stock` and `works` as arrays go on doing so; the pools are what is real).
+ */
+function poolView(length: number, pool: (i: number) => string, pools: (i: number) => Resources): number[] {
+  const index = (k: string | symbol): number => (typeof k === 'string' && /^\d+$/.test(k) ? Number(k) : -1);
+  return new Proxy(new Array<number>(length).fill(0), {
+    get(target, k, receiver) {
+      const i = index(k);
+      return i >= 0 && i < length ? pools(i).amount(pool(i)) : Reflect.get(target, k, receiver);
+    },
+    set(target, k, v, receiver) {
+      const i = index(k);
+      if (i >= 0 && i < length) {
+        pools(i).set(pool(i), v as number);
+        return true;
+      }
+      return Reflect.set(target, k, v, receiver);
+    },
+  });
 }

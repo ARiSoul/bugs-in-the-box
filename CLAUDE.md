@@ -58,6 +58,7 @@ src/
     math.ts             rotate2: deterministic rotation without sin/cos
     unit.ts             Unit: a bug in a match; its states (fuse, springs, web, shell, shelter...) are effects, read through its fields
     conditions.ts       those states as effect definitions with tags (data)
+    abilities.ts        every weapon as an ability (cost in a side's pools, limit a turn, target, effects); the pools' names
     engine/             the linked engine (RPG style): attributes (base + modifiers, fixed order), effects (stacks, time), triggers (when X do Y, fixed order), registry; pure
   render/             three.js: stage (Stage interface, key light), ChunkRenderer (1 mesh per chunk), MeshWorkers (worker pool), BugView, DrawnGround (where a foot rests: the drawn parts, not their hidden bodies), FollowCamera, labels, projectiles, aim, effects
     gpu/                the renderer, WebGPU (TSL): terrain material + glow, atmosphere (fog, glass, backdrop), god rays + bloom post, dust compute, heat shimmer, LEDs; buildModels (what bugs build and hide in, as pure arrays), buildViews; heroes, heroDress, heroStage (the menus' fighters)
