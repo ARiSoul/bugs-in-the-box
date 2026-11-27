@@ -51,13 +51,14 @@ export class AimView {
     this.ring.renderOrder = 10;
     this.ring.visible = false;
     scene.add(this.ring);
-    this.start = new THREE.Mesh(new THREE.TorusGeometry(1.7, 0.07, 6, 32).rotateX(Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xffd27a, transparent: true, opacity: 0.6, depthTest: false }));
+    // (on the ground at its feet: its body over it)
+    this.start = new THREE.Mesh(new THREE.TorusGeometry(1.7, 0.07, 6, 32).rotateX(Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xffd27a, transparent: true, opacity: 0.6 }));
     this.start.renderOrder = 10;
     this.start.visible = false;
     scene.add(this.start);
     // (where it cannot dig: a red cross in its ring)
     const bar = new THREE.BoxGeometry(2.2, 0.06, 0.26);
-    const red = new THREE.MeshBasicMaterial({ color: 0xfff0e8, transparent: true, opacity: 0.95, depthTest: false });
+    const red = new THREE.MeshBasicMaterial({ color: 0xfff0e8, transparent: true, opacity: 0.95 });
     this.cross = new THREE.Group();
     for (const a of [Math.PI / 4, -Math.PI / 4]) {
       const m = new THREE.Mesh(bar, red);
@@ -89,7 +90,7 @@ export class AimView {
     if (!burrow) this.cross.visible = false;
     if (burrow) {
       this.pointer.visible = false;
-      this.showBurrow(match, now);
+      this.showBurrow(match, now, bugPosition);
     }
     // (near enough, it needs no mark)
     this.marker.visible = aiming && cameraDistance > 24;
@@ -103,13 +104,14 @@ export class AimView {
     this.marker.position.set(bugPosition.x, bugPosition.y + labelHeight + 1.4 + Math.sin(now / 180) * 0.25, bugPosition.z);
   }
 
-  private showBurrow(match: Match, now: number): void {
+  private showBurrow(match: Match, now: number, drawn: THREE.Vector3): void {
     const u = match.activeUnit;
     const p = match.burrowPath(u, match.charging ? match.power : 0, this.path);
     // (the ground before it is too thin, or hard: no way)
     const start = this.start.material as THREE.MeshBasicMaterial;
     const b0 = u.bug;
-    this.start.position.set(b0.x - b0.nx * b0.species.radius * 0.9, b0.y - b0.ny * b0.species.radius * 0.9, b0.z - b0.nz * b0.species.radius * 0.9);
+    // (at its feet as it is drawn: on a drawn floor, over the field's own ground)
+    this.start.position.set(drawn.x - b0.nx * (b0.species.radius * 0.9 - 0.06), drawn.y - b0.ny * (b0.species.radius * 0.9 - 0.06), drawn.z - b0.nz * (b0.species.radius * 0.9 - 0.06));
     this.start.quaternion.setFromUnitVectors(AimView.UP, this.v.set(b0.nx, b0.ny, b0.nz));
     this.cross.visible = p.length < 12;
     if (p.length < 12) {
@@ -157,7 +159,7 @@ export class AimView {
     const b = u.bug;
     this.ring.position.set(p[9] - b.nx * b.species.radius * 0.9, p[10] - b.ny * b.species.radius * 0.9, p[11] - b.nz * b.species.radius * 0.9);
     // (and a ring where it goes in, at its feet)
-    this.start.position.set(p[0] - b.nx * b.species.radius * 0.9, p[1] - b.ny * b.species.radius * 0.9, p[2] - b.nz * b.species.radius * 0.9);
+    this.start.position.set(drawn.x - b.nx * (b.species.radius * 0.9 - 0.06), drawn.y - b.ny * (b.species.radius * 0.9 - 0.06), drawn.z - b.nz * (b.species.radius * 0.9 - 0.06));
     this.start.quaternion.setFromUnitVectors(AimView.UP, this.v.set(b.nx, b.ny, b.nz));
     this.ring.quaternion.setFromUnitVectors(AimView.UP, this.v.set(b.nx, b.ny, b.nz));
     this.ring.scale.setScalar(1 + 0.08 * Math.sin(now / 160));

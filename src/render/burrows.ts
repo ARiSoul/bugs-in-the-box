@@ -98,7 +98,7 @@ export class BurrowViews {
         this.earthOf = deep.path;
         const e = this.dug(this.groundColor?.(deep.path[0], deep.path[1] - 1.5, deep.path[2]) ?? GREY);
         // (darker and warmer than the tunnel's walls: the earth round it, not more of it)
-        (this.earth.material as THREE.MeshBasicMaterial).color.setRGB(e[0] * 0.42 + 0.012, e[1] * 0.36 + 0.008, e[2] * 0.3 + 0.004);
+        (this.earth.material as THREE.MeshBasicMaterial).color.setRGB(e[0] * 0.55 + 0.015, e[1] * 0.47 + 0.01, e[2] * 0.38 + 0.006);
       }
     }
     // (a bug walking through a tunnel: its far wall drawn, so the bug is seen in it through the ground)
@@ -464,9 +464,10 @@ export class BurrowViews {
       // (rings along it, as it was dug bite by bite)
       const rib = Math.floor(i / (TUBE_SIDES + 1)) % 4 === 0 ? 0.72 : 1;
       const k = (0.18 + 0.62 * down * down) * rib * (0.9 + 0.2 * Math.abs(Math.sin(i * 12.9898)));
-      col[i * 3] = Math.min(1, earth[0] * 1.1 * k + 0.012);
-      col[i * 3 + 1] = Math.min(1, earth[1] * 1.05 * k + 0.01);
-      col[i * 3 + 2] = Math.min(1, earth[2] * 0.95 * k + 0.008);
+      // (darker than the earth round it: a hollow, not a log)
+      col[i * 3] = Math.min(1, earth[0] * 0.62 * k + 0.008);
+      col[i * 3 + 1] = Math.min(1, earth[1] * 0.58 * k + 0.006);
+      col[i * 3 + 2] = Math.min(1, earth[2] * 0.52 * k + 0.005);
     }
     g.setAttribute('color', new THREE.BufferAttribute(col, 3));
     g.setDrawRange(0, 0);
