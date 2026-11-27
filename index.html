@@ -174,6 +174,19 @@
       #panel:not([open]) { background: rgba(15, 12, 11, 0.82); border: 0; border-radius: 0; transform: skewX(-8deg); font-family: 'Bahnschrift', 'Segoe UI', sans-serif; } #fps { display: none; } body:has(#panel[open]) #fps { display: block; }
       @media (hover: hover) and (pointer: fine) { #pad { display: none; } }
       #setup[hidden], #ending[hidden] { display: none; }
+      /* the settings page (development) */
+      #tuning[hidden] { display: none; }
+      #tuning { position: fixed; inset: 4vh 4vw; z-index: 70; display: flex; flex-direction: column; background: rgba(14, 11, 9, 0.97); border-top: 4px solid #ffb547; box-shadow: 0 2vh 6vh rgba(0, 0, 0, 0.7); color: #f6efdf; font: 13px/1.4 'Bahnschrift', 'Segoe UI', system-ui, sans-serif; }
+      #tuning .tuning-head { padding: 12px 18px 4px; } #tuning h2 { margin: 0; color: #ffb547; font-size: 22px; letter-spacing: 0.04em; } #tuning .tuning-head p { margin: 2px 0 0; color: #c2bbac; } #tuning code { color: #ffb547; } #tuning em { color: #ff8a6e; font-style: normal; }
+      #tuning .tuning-bar { display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 18px; border-bottom: 1px solid #2b251f; }
+      #tuning .tuning-bar input[type='search'] { flex: 1; min-width: 180px; padding: 6px 10px; background: #1f1915; border: 1px solid #3a2f26; border-radius: 3px; color: inherit; font: inherit; }
+      #tuning button { padding: 6px 12px; background: #2a221c; border: 0; border-radius: 3px; color: inherit; font: inherit; cursor: pointer; } #tuning button:hover { background: #3a2f26; } #tuning button.on { background: #ffb547; color: #1b1206; } #tuning button:disabled { opacity: 0.3; cursor: default; }
+      #tuning .tuning-list { flex: 1; overflow: auto; padding: 6px 18px 18px; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 430px), 1fr)); align-content: start; column-gap: 28px; }
+      #tuning section { break-inside: avoid; margin-top: 12px; } #tuning h3 { margin: 0 0 4px; font-size: 14px; color: #ffb547; text-transform: uppercase; letter-spacing: 0.08em; }
+      #tuning .tuning-row { display: grid; grid-template-columns: 9.5em 1fr 5.5em 6.5em 2.2em; align-items: center; gap: 8px; padding: 3px 6px; border-left: 3px solid transparent; }
+      #tuning .tuning-row.changed { border-left-color: #ffb547; background: rgba(255, 181, 71, 0.08); } #tuning .tuning-row.changed span { color: #ffb547; font-weight: 700; }
+      #tuning .tuning-row input[type='number'] { width: 100%; padding: 3px 5px; background: #1f1915; border: 1px solid #3a2f26; border-radius: 3px; color: inherit; font: inherit; } #tuning .tuning-row input[type='range'] { width: 100%; accent-color: #ffb547; }
+      #tuning .tuning-row small { color: #8d8478; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } #tuning .tuning-back { padding: 2px 0; } #tuning .tuning-none { color: #8d8478; }
       /* the pause box, and its button in the corner of a match */
       #hud .pause-open { position: absolute; right: 1.2vw; top: 4.2vh; width: 5.2vh; height: 5.2vh; padding: 1.2vh; border: 0; border-radius: 3px; background: rgba(9, 7, 7, 0.72); color: var(--amber); transform: skewX(-6deg); pointer-events: auto; cursor: pointer; transition: transform 0.18s cubic-bezier(0.2, 2, 0.4, 1), background 0.15s; }
       #hud .pause-open:hover { background: var(--amber); color: #1b1206; transform: skewX(-6deg) scale(1.08); }
@@ -378,6 +391,7 @@
         <button id="fly" title="fly freely round the map, just to look at it">free camera</button>
         <button id="camMode" title="V: what hides the bug is seen through, or the camera moves out of its way"></button>
         <button id="cine" title="a film-like flight over the map, on its own">cinematic camera</button>
+        <button id="tuningOpen" title="the numbers the game is tuned by (from the next match)">settings</button>
       </div>
       <div class="row">
         <button id="mute"></button>

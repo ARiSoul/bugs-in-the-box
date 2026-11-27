@@ -328,3 +328,9 @@ export function specialsOf(species: string): Weapon[] {
 export function hasWeapon(species: string, w: Weapon): boolean {
   return !w.found && (w.species === undefined || w.species === species);
 }
+
+const BY_ID = new Map(WEAPONS.map((w, i) => [w.id, i]));
+/** A weapon's index in `WEAPONS`, by its id (a match's tuned copy finds its place too); -1: none. */
+export function weaponIndex(w: Pick<Weapon, 'id'>): number {
+  return BY_ID.get(w.id) ?? -1;
+}

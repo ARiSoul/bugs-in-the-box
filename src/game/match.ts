@@ -1,7 +1,8 @@
 import { createRng } from '../terrain/noise';
 import { Bug, DT, IDLE, TICK_RATE, type BugInput } from './bug';
 import { abilityAt, AGAIN_POOL, CHARGE_POOL, costFor, SKILL_FULL, usesPool, WORKS_POOL } from './abilities';
-import { Effects, pay, Resources, Triggers, type AbilityDef, type MatchTriggers } from './engine';
+import { Effects, pay, Resources, Triggers, type AbilityDef, type MatchTriggers, type SettingsSet } from './engine';
+import { RULE, speciesSetting, TUNING, tunedWeapons } from './tuning';
 import { Unit } from './unit';
 import { surfaceDistance, type TerrainField } from './field';
 import { rot, rotate2 } from './math';
@@ -14,7 +15,7 @@ import { KEPT, type Tag } from './actions';
 import { BURN_HURTS, HONEY_TURNS, HONEY_WIDE, reaction, SMOTHERED, tagsOf } from './reactions';
 import { levelAt, passive, type Growth, type Tally } from './progress';
 import { BOX, ITEM_KINDS, Items, type Item, type ItemKind } from './items';
-import { CATCHES, DUD, hasWeapon, SILK_CURTAIN, specialsOf, WORKS, RING_DAMAGE, WEAPONS, type Weapon } from './weapons';
+import { CATCHES, DUD, hasWeapon, SILK_CURTAIN, specialsOf, WORKS, RING_DAMAGE, WEAPONS, weaponIndex, type Weapon } from './weapons';
 
 /**
  * One match: teams of bugs taking turns on a destructible map. Pure and deterministic like Bug:
@@ -59,10 +60,6 @@ export const WIND_MAX = 5;
 /** Damage reaches this many blast radii from the centre, falling off linearly. */
 export const BLAST_REACH = 1.6;
 /** Knockback speed at the blast centre for a 45-damage weapon. */
-const KNOCKBACK = 14;
-/** Landing faster than this (world units / s) hurts; each unit above it costs FALL_DAMAGE health. */
-export const FALL_SAFE_SPEED = 15;
-const FALL_DAMAGE = 2.5;
 /** Bugs are placed at least this far apart at the start. */
 const SPAWN_SPACING = 14;
 const SPAWN_SETTLE_TICKS = 3 * TICK_RATE;
@@ -370,7 +367,6 @@ const STANCE_RATE = 0.4;
 const PITCH_MAX = 0.06;
 /** Boxes: how much a battery loads, a patch heals (of the full health, and how far over it), a crystal adds (seconds); an overclocked shot's damage; a spring's jump; a magnet's reach. */
 const BATTERY = 400;
-const PATCH = 0.35;
 const PATCH_OVER = 0.15;
 const CRYSTAL = 15;
 const OVERCLOCK = 1.5;
@@ -450,6 +446,8 @@ export interface MatchOptions {
   items?: boolean;
   /** Where a bug may spawn, stand and walk: it turns back at the limit (default: the whole map). Pure. */
   confine?: (x: number, y: number, z: number) => boolean;
+  /** The numbers it is tuned by, frozen (default: as shipped); every client plays with the same (see `tuning.ts`). */
+  tuning?: SettingsSet;
 }
 
 export class Match {
@@ -610,6 +608,10 @@ export class Match {
   /** Webs on the turntable this spin, with their offset and normal at the start. */
   private readonly carriedWebs: { w: Web; dx: number; dz: number; nx: number; nz: number }[] = [];
   private readonly bugs: Bug[] = [];
+  /** The numbers this match is tuned by (`MatchOptions.tuning`). */
+  readonly tuning: SettingsSet;
+  /** The weapons as its tuning has them, by the same index as `WEAPONS`. */
+  readonly arsenal: readonly Weapon[];
 
   constructor(
     readonly field: TerrainField,
@@ -618,6 +620,8 @@ export class Match {
     readonly options: MatchOptions = {},
   ) {
     this.rng = createRng(seed * 2654435761 + 97);
+    this.tuning = options.tuning ?? TUNING.defaults();
+    this.arsenal = tunedWeapons(this.tuning);
     let id = 0;
     const maxSize = teams.reduce((m, t) => Math.max(m, t.size), 0);
     // interleave teams so the spawn order (and so the spread over the map) is fair
@@ -626,6 +630,13 @@ export class Match {
         if (i >= teams[t].size) continue;
         const bug = new Bug(teams[t].species);
         bug.confine = options.confine ?? null;
+        // (its species' numbers, as the tuning has them)
+        if (!this.tuning.shipped) {
+          const s = teams[t].species;
+          bug.stats.setBase('defence', this.tuning.get(speciesSetting(s, 'toughness')) / 100);
+          bug.stats.setBase('speed', this.tuning.get(speciesSetting(s, 'walk')));
+          bug.stats.setBase('jump', this.tuning.get(speciesSetting(s, 'jump')));
+        }
         const unit = id++;
         const effects = new Effects(bug.stats, {
           started: (def, stacks) => this.triggers.emit('effectStart', { unit, effect: def.id, stacks }),
@@ -663,7 +674,7 @@ export class Match {
   }
 
   get currentWeapon(): Weapon {
-    return WEAPONS[this.weapon];
+    return this.arsenal[this.weapon];
   }
 
   /** Bugs still alive per team. */
@@ -758,7 +769,7 @@ export class Match {
       if (b.justLanded && this.soft.delete(u.id)) {
         // (it meant to)
         b.floating = 0;
-      } else if (b.justLanded && b.lastImpact > FALL_SAFE_SPEED && !this.passive(u.team, 'light-feet')) this.damage(u, Math.round((b.lastImpact - FALL_SAFE_SPEED) * FALL_DAMAGE));
+      } else if (b.justLanded && b.lastImpact > this.tuning.get(RULE.fallSafe) && !this.passive(u.team, 'light-feet')) this.damage(u, Math.round((b.lastImpact - this.tuning.get(RULE.fallSafe)) * this.tuning.get(RULE.fallDamage)));
       if (!b.alive && !u.dead) this.announceDeath(u);
       // (its hold is gone: so is its shelter)
       else if (u.cover && !b.grounded && b.airTicks > 6) this.bare(u, true);
@@ -957,7 +968,7 @@ export class Match {
     const t = this.teams[team];
     const own = specialsOf(t.species.id);
     const w = own.find((q) => q.id === t.special) ?? own[0];
-    return w ? WEAPONS.indexOf(w) : -1;
+    return w ? weaponIndex(w) : -1;
   }
 
   /** How often a team may still use what it has only some of. */
@@ -1293,7 +1304,7 @@ export class Match {
       const near2 = this.towards(b, x, y, z);
       if (near2) return true;
       b.step(this.field, goInput);
-      if (!b.alive || b.airTicks > 22 || (b.justLanded && b.lastImpact > FALL_SAFE_SPEED)) return false;
+      if (!b.alive || b.airTicks > 22 || (b.justLanded && b.lastImpact > this.tuning.get(RULE.fallSafe))) return false;
     }
     return false;
   }
@@ -1368,7 +1379,7 @@ export class Match {
     if (r.amount(AGAIN_POOL) > 0 && this.builtOnce) r.give(AGAIN_POOL, -1);
     this.built = r.amount(AGAIN_POOL) <= 0 || this.builtOnce;
     this.builtOnce = true;
-    this.use(u, abilityAt(WEAPONS.indexOf(w)));
+    this.use(u, abilityAt(weaponIndex(w)));
     if (w === SILK_CURTAIN) this.curtains.push({ team: u.team, pieces: [...pieces], left: CATCHES + this.passive(u.team, 'double-weave') });
     const slow = w.species === 'spider' && w.kind === 'bridge' ? this.passive(u.team, 'trapline') : w.species === 'bee' ? this.passive(u.team, 'honey-trap') : 0;
     if (slow > 0) this.sticky.push({ team: u.team, pieces: [...pieces], slow });
@@ -1392,7 +1403,7 @@ export class Match {
     u.cover = w;
     u.coverLeft = (w.coverHealth ?? 0) + (w.species === 'cockroach' ? this.passive(u.team, 'thick-skin') : 0);
     this.events.push({ type: 'hide', unit: u.id, weapon: w.id });
-    this.use(u, abilityAt(WEAPONS.indexOf(w)));
+    this.use(u, abilityAt(weaponIndex(w)));
     this.load(u.team, SKILL_HIDE);
     this.events.push({ type: 'fire', unit: u.id, weapon: w.id });
     this.phase = 'flight';
@@ -1454,7 +1465,7 @@ export class Match {
   private fire(unit: Unit, w: Weapon): void {
     this.charging = false;
     this.events.push({ type: 'fire', unit: unit.id, weapon: w.id });
-    const index = WEAPONS.indexOf(w);
+    const index = weaponIndex(w);
     // (what it costs: a found weapon's use, a special attack's charge)
     this.use(unit, abilityAt(index));
     this.hard = unit.boost ? OVERCLOCK : 1;
@@ -2263,7 +2274,7 @@ export class Match {
 
   /** An ant burrows (charged this much): down, along under the ground, up again. Once a turn; the turn goes on. */
   private burrow(u: Unit, w: Weapon, power: number): void {
-    const i = WEAPONS.indexOf(w);
+    const i = weaponIndex(w);
     const b = u.bug;
     if (this.spentThisTurn(abilityAt(i)) || this.usesLeft(u.team, i) <= 0 || u.web >= 0 || u.cover || !b.alive || !b.grounded) {
       this.events.push({ type: 'noRoom', unit: u.id });
@@ -2467,7 +2478,7 @@ export class Match {
       // (a swarm's hit does not throw as hard as it hurts)
       // (it sits tight in its shelter)
       if (u.cover) continue;
-      const speed = KNOCKBACK * f * (Math.min(60, w.damage) / 45);
+      const speed = this.tuning.get(RULE.knockback) * f * (Math.min(60, w.damage) / 45);
       b.push(kx * speed, ky * speed, kz * speed);
     }
     if (w.arcs > 0) this.arc(x, y, z, w);
@@ -2584,7 +2595,7 @@ export class Match {
         this.load(u.team, BATTERY);
         break;
       case 'patch':
-        gain = Math.max(0, Math.min(Math.round(b.maxHealth * PATCH), Math.round(b.maxHealth * (1 + PATCH_OVER)) - b.health));
+        gain = Math.max(0, Math.min(Math.round(b.maxHealth * this.tuning.get(RULE.patch)), Math.round(b.maxHealth * (1 + PATCH_OVER)) - b.health));
         b.health += gain;
         break;
       case 'fuse':

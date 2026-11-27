@@ -57,9 +57,9 @@ Goal now: a PC demo first, as a proof of concept. The phone items below are post
 
 ## Settings and admins (proposed)
 
-- [ ] One registry of settings (id, value, unit, range, what it does), by module, instead of constants spread over the code: limits, times, speeds, damage, texts
+- [ ] One registry of settings (id, value, unit, range, what it does), by module, instead of constants spread over the code: limits, times, speeds, damage, texts (**begun**: `engine/settings.ts`, `game/tuning.ts`: the weapons' damage, blast and arcs, the species' toughness, walk and jump, four rules)
 - [x] The client's data, offline first: IndexedDB (Dexie) under a cache, an outbox and a sync engine for any server (`src/data/`); the old `localStorage` values brought in
-- [ ] A match takes a frozen, numbered set of settings (as it takes a seed): every client must simulate with the same
+- [x] A match takes a frozen, numbered set of settings (as it takes a seed): every client must simulate with the same (`MatchOptions.tuning`, its hash)
 - [ ] An admin page that edits a set live (first local, in dev; then behind a server with accounts and roles, with history and undo). Numbers of the simulation change from the next match on; looks, sounds and texts at once
 
 ## One linked engine, RPG style (begun: one list of actions with tags, quick slots, an inventory, kept items, levels and passives, the first tags that meet)
@@ -73,7 +73,7 @@ Everything that affects something else goes through the same five pieces, as dat
 - **Progression**: what stays between matches (experience, levels, skills chosen, items kept); it enters a match at its start, like the seed
 - **Tags** (fire, electric, silk, wax, resin, metal, wet) link them: a rule looks at the tag, not at the weapon's name
 
-Order: 1 the base, the game unchanged (whole matches compared tick by tick; **done**: `src/game/engine/`, golden replays) · 2 items, shelters, webs and shell moved over, one at a time (**done**: `conditions.ts`, `unit.ts`) · 3 every attack in the one format (**done**: `AbilityDef`, `Resources`, `abilities.ts`) · 4 tags and the first five combinations (**done**: `Reactions` in the engine, reaching bugs' effects; the first five on bugs: fire burns a web free, fire burns silk and wax shelters, blasts shatter chitin shelters, a whole shell insulates, silk tires swarms) · 5 the local settings page · 6 progression.
+Order: 1 the base, the game unchanged (whole matches compared tick by tick; **done**: `src/game/engine/`, golden replays) · 2 items, shelters, webs and shell moved over, one at a time (**done**: `conditions.ts`, `unit.ts`) · 3 every attack in the one format (**done**: `AbilityDef`, `Resources`, `abilities.ts`) · 4 tags and the first five combinations (**done**: `Reactions` in the engine, reaching bugs' effects; the first five on bugs: fire burns a web free, fire burns silk and wax shelters, blasts shatter chitin shelters, a whole shell insulates, silk tires swarms) · 5 the local settings page (**done**: `ui/tuning.ts`, the debug panel's settings) · 6 progression.
 
 To be decided: who evolves (recommended: the species, per player) · whether levels give power (recommended: options, not strength) · whether interactions reach one's own team (recommended: yes).
 

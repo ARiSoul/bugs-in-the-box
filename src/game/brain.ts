@@ -591,7 +591,7 @@ export class Brain {
       for (const index of [0, 1])
         for (let k = 0; k < 7; k++)
           this.queue.push(() => {
-            const score = this.tryArc(match, u, s.bug, bugs, WEAPONS[index], index, e, k / 7, []);
+            const score = this.tryArc(match, u, s.bug, bugs, match.arsenal[index], index, e, k / 7, []);
             // (a shot that may change on the way counts less)
             if (score * 0.9 > s.best) s.best = score * 0.9;
           });
@@ -836,7 +836,7 @@ export class Brain {
   private aim(match: Match, u: Unit): void {
     const o = this.out;
     const p = this.plan as Plan;
-    const w = WEAPONS[p.weapon];
+    const w = match.arsenal[p.weapon];
     if (match.weapon !== p.weapon) {
       o.weapon = p.weapon;
       return;

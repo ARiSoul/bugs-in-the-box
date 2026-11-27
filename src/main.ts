@@ -55,6 +55,8 @@ import { EndScreen, SetupScreen, type SetupChoice } from './ui/setup';
 import { setupKeysMenu } from './ui/keys';
 import { SoundMenu } from './ui/sound';
 import { PauseMenu } from './ui/pause';
+import { keptOf, readKept, TuningPage } from './ui/tuning';
+import { TUNING } from './game/tuning';
 
 /** The two teams, each of one species (chosen in the menu, kept in the address as `?teams=ant,spider`). */
 const PLURAL: Record<string, string> = { ant: 'Ants', spider: 'Spiders', cockroach: 'Cockroaches', bee: 'Bees' };
@@ -168,6 +170,8 @@ const inScene = (): BowScene | ColumnScene | BroodScene | FlockScene | null => (
 const seeThrough = new SeeThrough();
 /** The setting the camera's way is kept under. */
 const CAMERA = 'camera';
+/** The numbers the next match is tuned by (the settings page changes them; kept on this device). */
+let tuning = readKept(TUNING, data.settings.get('tuning'));
 /** How far along the aim the view is kept free. */
 const AHEAD = 14;
 const aimAt = new Float64Array(3);
@@ -268,7 +272,7 @@ function newMatch(s: number): void {
 
 /** New teams on the map as it is; `turns`: how far its turntable has turned. */
 function newTeams(s: number, turns = 0): void {
-  match = new Match(terrain, teams(), s, { turned: turns, turnSeconds: rules.seconds, wind: rules.wind, strictBounds: scenario.strictBounds, spawnLevels: scenario.spawnLevels === true, turntable: scenario.turntable?.(terrain.W, terrain.H, terrain.D), confine: scenario.confine?.(terrain.W, terrain.H, terrain.D) });
+  match = new Match(terrain, teams(), s, { tuning, turned: turns, turnSeconds: rules.seconds, wind: rules.wind, strictBounds: scenario.strictBounds, spawnLevels: scenario.spawnLevels === true, turntable: scenario.turntable?.(terrain.W, terrain.H, terrain.D), confine: scenario.confine?.(terrain.W, terrain.H, terrain.D) });
 
   brains = players.map((id, i) => {
     const s = SKILLS.find((q) => q.id === id);
@@ -939,6 +943,21 @@ window.addEventListener('pointermove', (e) => {
 (document.getElementById('toSetup') as HTMLButtonElement).addEventListener('click', () => {
   pauseMenu.close();
   openSetup();
+});
+
+// ---- the settings page (development): the numbers the next match is tuned by ----
+const tuningPage = new TuningPage(
+  TUNING,
+  tuning,
+  (s) => {
+    tuning = s;
+    data.settings.set('tuning', keptOf(s));
+  },
+  () => match.tuning,
+);
+(document.getElementById('tuningOpen') as HTMLButtonElement).addEventListener('click', (e) => {
+  tuningPage.toggle();
+  (e.currentTarget as HTMLButtonElement).blur();
 });
 
 // ---- the pause box: Esc or its button; Continue, Restart (the same match anew), Leave match (to the setup) ----
