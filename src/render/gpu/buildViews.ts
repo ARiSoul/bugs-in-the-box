@@ -432,7 +432,7 @@ export class BuildViews {
       const i = this.nextPiece % DEBRIS;
       // (two or three big chunks, the rest small)
       const big = k < 3 + (r > 5 ? 1 : 0);
-      this.drop(x, y, z, r * 0.8, 'dirt', big || k % 2 === 0, (big ? 1.6 + 0.6 * Math.random() : 0.6 + 1.4 * Math.random() ** 2) * Math.min(1.6, r / 4));
+      this.drop(x, y, z, r * 0.8, 'dirt', big || k % 2 === 0, (big ? 2.4 + 0.8 * Math.random() : 0.6 + 1.4 * Math.random() ** 2) * Math.min(1.6, r / 4));
       const p = this.pieces[i];
       // (most fall near the rim; some fly far)
       p.v.multiplyScalar((k % 4 === 0 ? 1 + r * 0.12 : 0.45 + r * 0.05) * (big ? 0.5 : 1));
@@ -444,7 +444,7 @@ export class BuildViews {
       const own = !big && k % 3 === 0;
       const lined = !big && !own && k % 5 === 1;
       const c = own ? outside : lined ? layer : rgb;
-      const k2 = own ? 0.3 + 0.2 * Math.random() : lined ? 0.35 + 0.2 * Math.random() : 0.2 + 0.2 * Math.random();
+      const k2 = own ? 0.22 + 0.15 * Math.random() : lined ? 0.35 + 0.2 * Math.random() : 0.16 + 0.18 * Math.random();
       this.debris.setColorAt(i, this.c3.setRGB(c[0] * k2, c[1] * k2, c[2] * k2));
     }
     if (this.debris.instanceColor) this.debris.instanceColor.needsUpdate = true;

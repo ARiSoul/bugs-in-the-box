@@ -87,7 +87,11 @@ export function createTerrainMaterial(
     If(seen.not(), () => {
       base.assign(inside);
     });
-    const broken = clamp(float(1).sub(abs(pbr.z.sub(GLOW_BROKEN)).div(0.025)), 0, 1);
+    // (where the outside ends and the broken inside begins: a crisp chipped line, not a blend across the triangles)
+    const near = clamp(float(1).sub(abs(pbr.z.sub(GLOW_BROKEN)).div(0.025)), 0, 1);
+    const broken = smoothstep(0.4, 0.55, near.add(mx_noise_float(positionWorld.mul(2.1)).mul(0.22)).add(mx_noise_float(positionWorld.mul(5.3)).mul(0.1))).mul(
+      smoothstep(0.01, 0.05, near),
+    );
     If(broken.greaterThan(0.01), () => {
       // (the mesher's colour carries its burn and a little of its outside; the inside's own colour over it)
       const mesherLum = base.r.add(base.g).add(base.b).div(0.39);
