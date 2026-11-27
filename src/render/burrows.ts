@@ -97,7 +97,8 @@ export class BurrowViews {
       if (this.earthOf !== deep.path) {
         this.earthOf = deep.path;
         const e = this.dug(this.groundColor?.(deep.path[0], deep.path[1] - 1.5, deep.path[2]) ?? GREY);
-        (this.earth.material as THREE.MeshBasicMaterial).color.setRGB(e[0] * 0.45, e[1] * 0.45, e[2] * 0.45);
+        // (darker and warmer than the tunnel's walls: the earth round it, not more of it)
+        (this.earth.material as THREE.MeshBasicMaterial).color.setRGB(e[0] * 0.42 + 0.012, e[1] * 0.36 + 0.008, e[2] * 0.3 + 0.004);
       }
     }
     // (a bug walking through a tunnel: its far wall drawn, so the bug is seen in it through the ground)
@@ -366,9 +367,9 @@ export class BurrowViews {
         pos[o] = x + f.x * u + s.x * v + n.x * down;
         pos[o + 1] = y + f.y * u + s.y * v + n.y * down;
         pos[o + 2] = z + f.z * u + s.z * v + n.z * down;
-        col[o] = earth[0] * 1.2 * lit;
-        col[o + 1] = earth[1] * 1.2 * lit;
-        col[o + 2] = earth[2] * 1.2 * lit;
+        col[o] = earth[0] * 0.85 * lit;
+        col[o + 1] = earth[1] * 0.85 * lit;
+        col[o + 2] = earth[2] * 0.85 * lit;
       }
     }
     const idx: number[] = [];
@@ -437,7 +438,7 @@ export class BurrowViews {
 
   /** The tunnel along `path` (its far wall only, drawn as the ant goes). */
   /** The earth under a bug under the ground (a flat disc of it, below its tunnel), and the tunnel it was coloured for. */
-  private readonly earth = new THREE.Mesh(new THREE.CircleGeometry(7, 40).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x2a2018 }));
+  private readonly earth = new THREE.Mesh(earthDisc(), new THREE.MeshBasicMaterial({ color: 0x2a2018, vertexColors: true }));
   private earthOf: readonly number[] | null = null;
 
   /** The way of the tunnel a bug walks through now (its far wall is drawn); null: none. */
@@ -489,3 +490,27 @@ const HEAVE_ACROSS = 13;
 const HEAVE_HIGH = 0.75;
 const GREY: readonly [number, number, number] = [0.3, 0.27, 0.24];
 const TUBE_SIDES = 10;
+
+/**
+ * A flat disc of earth (lying level): grainy, with clods, darker out towards the edge of what is seen of it through the
+ * ground (about 4 round its middle), so it reads as a cut through the earth, not a flat colour. Its colours multiply the
+ * material's.
+ */
+function earthDisc(): THREE.BufferGeometry {
+  const g = new THREE.RingGeometry(0, 7, 64, 14).rotateX(-Math.PI / 2);
+  const p = g.getAttribute('position') as THREE.BufferAttribute;
+  const col = new Float32Array(p.count * 3);
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i);
+    const z = p.getZ(i);
+    const r = Math.hypot(x, z);
+    const edge = 1 - 0.55 * Math.min(1, Math.max(0, (r - 2.4) / 1.6));
+    // (grain: a cheap hash of the place, and clods a little lighter)
+    const h = Math.abs(Math.sin(x * 12.9898 + z * 78.233) * 43758.5453) % 1;
+    const clod = Math.abs(Math.sin(x * 1.7 + z * 2.3) * Math.sin(x * 0.9 - z * 1.3));
+    const k = edge * (0.8 + 0.35 * h) * (0.9 + 0.3 * clod);
+    col[i * 3] = col[i * 3 + 1] = col[i * 3 + 2] = k;
+  }
+  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  return g;
+}

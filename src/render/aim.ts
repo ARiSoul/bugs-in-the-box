@@ -145,10 +145,12 @@ export class AimView {
         y += b.ny * (6 - t + 0.08);
         z += b.nz * (6 - t + 0.08);
       }
-      const dash = i % 3 === 2 ? 0.45 : 1;
+      // (where it runs under the ground: smaller, in the earth's colour; bright where it goes in and comes up)
+      const under = k === 3;
+      const dash = (i % 3 === 2 ? 0.45 : 1) * (under ? 0.75 : 1);
       this.m.makeScale(dash, 0.45 * dash, dash).setPosition(x, y, z);
       this.dots.setMatrixAt(i, this.m);
-      this.dots.setColorAt(i, this.c.set(0xffd27a));
+      this.dots.setColorAt(i, this.c.set(under ? 0xc89a62 : 0xffd27a));
     }
     this.dots.instanceMatrix.needsUpdate = true;
     if (this.dots.instanceColor) this.dots.instanceColor.needsUpdate = true;
