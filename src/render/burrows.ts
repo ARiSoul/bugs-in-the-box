@@ -46,6 +46,7 @@ export class BurrowViews {
       m.geometry.dispose();
     }
     this.heaves.length = 0;
+    this.seams.length = 0;
     this.heave = null;
     for (let i = 0; i < LUMPS; i++) this.lumps.setMatrixAt(i, this.m.makeScale(0, 0, 0));
     this.lumps.instanceMatrix.needsUpdate = true;
@@ -93,6 +94,7 @@ export class BurrowViews {
     // (under a bug under the ground, the earth: what is seen through the ground round its tunnel, not the dark below)
     const deep = u ?? match.inTunnel;
     this.earth.visible = deep !== null;
+    for (const s of this.seams) s.visible = deep === null;
     if (deep) {
       const b = match.units[deep.unit].bug;
       this.earth.position.set(b.x, b.y - 1.9, b.z);
@@ -169,6 +171,8 @@ export class BurrowViews {
   /** The earth of the tunnel dug last (its mounds, its mouths, its inside are all of it); null: none yet. */
   private soil: readonly [number, number, number] | null = null;
 
+  /** The colour of the map's outside where its material says less (set by the owner; linear). */
+  skin: (() => readonly [number, number, number] | undefined) | null = null;
   /** What the map is made of inside (set by the owner; linear): the earth dug out is mostly that. */
   inside: (() => readonly [number, number, number] | undefined) | null = null;
   /** The colour of the ground at a place (set by the owner); without it, a dull grey-brown. */
@@ -177,6 +181,8 @@ export class BurrowViews {
   private heave: THREE.Mesh | null = null;
   private heaveRows = 0;
   private readonly heaves: THREE.Mesh[] = [];
+  /** The heaves alone (not the mouths): hidden while a bug is seen under the ground, so they never cover it. */
+  private readonly seams: THREE.Mesh[] = [];
   // (both sides: its rows are laid so its faces look down)
   private readonly heaveMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.97, side: THREE.DoubleSide });
 
@@ -296,7 +302,8 @@ export class BurrowViews {
     const W = radius * 0.8;
     const pos = new Float32Array((rows + 1) * HEAVE_ACROSS * 3);
     const col = new Float32Array((rows + 1) * HEAVE_ACROSS * 3);
-    const ground = this.soil ?? this.dug(this.groundColor?.(x0 + nx * (8 - t0), y0 + ny * (8 - t0), z0 + nz * (8 - t0)) ?? GREY);
+    // (the ground's own skin, pushed up: a bump of it, not a slab of something else)
+    const ground = this.skin?.() ?? this.groundColor?.(x0 + nx * (8 - t0), y0 + ny * (8 - t0), z0 + nz * (8 - t0)) ?? GREY;
     for (let i = 0; i <= rows; i++) {
       const f = i / rows;
       const line = t0 + (t1 - t0) * f;
@@ -307,7 +314,7 @@ export class BurrowViews {
       const cy = y0 + (y1 - y0) * f + ny * g;
       const cz = z0 + (z1 - z0) * f + nz * g;
       // (low at its ends, where it meets the holes)
-      const end = Math.min(1, f / 0.12, (1 - f) / 0.12);
+      const end = Math.min(1, f / 0.25, (1 - f) / 0.25);
       const taper = end * end * (3 - 2 * end);
       for (let j = 0; j < HEAVE_ACROSS; j++) {
         const s = -W + (2 * W * j) / (HEAVE_ACROSS - 1);
@@ -322,9 +329,9 @@ export class BurrowViews {
         pos[o + 2] = cz + sz * s + nz * h;
         const k = crack ? 0.35 : (0.8 + 0.25 * lump - 0.2 * (1 - a) + 0.85 * a ** 6) * (0.92 + 0.16 * Math.sin(f * 53 + j * 5.1));
         // (disturbed earth, low and a little darker than the crumbs on it: a seam over the tunnel, not a log)
-        col[o] = (ground[0] * 0.7 + 0.012) * k;
-        col[o + 1] = (ground[1] * 0.68 + 0.01) * k;
-        col[o + 2] = (ground[2] * 0.66 + 0.008) * k;
+        col[o] = ground[0] * 0.8 * k;
+        col[o + 1] = ground[1] * 0.8 * k;
+        col[o + 2] = ground[2] * 0.8 * k;
       }
     }
     const idx: number[] = [];
@@ -347,6 +354,7 @@ export class BurrowViews {
     this.heave = m;
     this.heaveRows = rows;
     this.heaves.push(m);
+    this.seams.push(m);
   }
 
   /**
@@ -506,7 +514,7 @@ export class BurrowViews {
 const TUBE_SEGMENTS = 60;
 /** The heaved mound over a tunnel: points across it, and how high it rises. */
 const HEAVE_ACROSS = 13;
-const HEAVE_HIGH = 0.38;
+const HEAVE_HIGH = 0.22;
 const GREY: readonly [number, number, number] = [0.3, 0.27, 0.24];
 const TUBE_SIDES = 10;
 

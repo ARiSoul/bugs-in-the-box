@@ -126,6 +126,7 @@ const burrowWay: number[] = [];
 let burrowUp: number[] = [];
 burrows.puff = (x, y, z, n) => buildViews.dust(x, y, z, n);
 burrows.inside = () => scenario.inside?.core;
+burrows.skin = () => scenario.inside?.skin;
 // (the colour of what is under a place: the first solid cell down from it)
 burrows.groundColor = (x, y, z) => {
   const i = Math.round(x);
