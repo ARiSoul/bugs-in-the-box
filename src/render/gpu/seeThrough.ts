@@ -113,7 +113,8 @@ export class SeeThrough {
         const way = at.sub(cameraPosition);
         const before = length(way).sub(positionWorld.sub(cameraPosition).dot(way.div(length(way))));
         const nearer = step(BEFORE * 0.5, before) as unknown as F;
-        const disc = smoothstep(rpx, rpx.mul(0.86), dpx).mul(nearer) as unknown as F;
+        // (a clean round edge: the lines end on a circle)
+        const disc = smoothstep(rpx, rpx.mul(0.985), dpx).mul(nearer) as unknown as F;
         const open = mix(max(this.open(at, ROUND), ahead).mul(low), disc, this.under).mul(this.amount);
         const line = fract(screenCoordinate.x.add(screenCoordinate.y).div(PITCH));
         keep.assign(keep.and(line.lessThan(mix(float(1.01), mix(float(LEFT), float(UNDER_LEFT), this.under), open))));

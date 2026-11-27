@@ -34,6 +34,9 @@ export class BurrowViews {
       this.lumps.setColorAt(i, this.c.setRGB(GREY[0], GREY[1], GREY[2]));
     }
     scene.add(this.lumps);
+    this.earth.visible = false;
+    this.earth.frustumCulled = false;
+    scene.add(this.earth);
   }
 
   /** A new match: no mounds, no tunnel. */
@@ -84,6 +87,18 @@ export class BurrowViews {
       const b = match.units[u.unit].bug;
       const t = this.surface(match, b.x + this.n.x * 6, b.y + this.n.y * 6, b.z + this.n.z * 6, -this.n.x, -this.n.y, -this.n.z, 12);
       if (t >= 0) this.puff(b.x + this.n.x * (6 - t), b.y + this.n.y * (6 - t), b.z + this.n.z * (6 - t), near ? 3 : 1);
+    }
+    // (under a bug under the ground, the earth: what is seen through the ground round its tunnel, not the dark below)
+    const deep = u ?? match.inTunnel;
+    this.earth.visible = deep !== null;
+    if (deep) {
+      const b = match.units[deep.unit].bug;
+      this.earth.position.set(b.x, b.y - 1.9, b.z);
+      if (this.earthOf !== deep.path) {
+        this.earthOf = deep.path;
+        const e = this.dug(this.groundColor?.(deep.path[0], deep.path[1] - 1.5, deep.path[2]) ?? GREY);
+        (this.earth.material as THREE.MeshBasicMaterial).color.setRGB(e[0] * 0.45, e[1] * 0.45, e[2] * 0.45);
+      }
     }
     // (a bug walking through a tunnel: its far wall drawn, so the bug is seen in it through the ground)
     const walk = u ? null : match.inTunnel;
@@ -374,7 +389,8 @@ export class BurrowViews {
     this.scene.add(m);
     this.heaves.push(m);
   }
-  private readonly mouthMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0, side: THREE.DoubleSide });
+  /** Matte, shaded by itself (from its lit lip to its black throat): no shine. */
+  private readonly mouthMaterial = new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide });
 
   /** A ring of lumps round a hole at (x, y, z) on ground of normal n, thicker the way (fx, fz); `even`: how much all round. */
   private mound(match: Match, x: number, y: number, z: number, nx: number, ny: number, nz: number, fx: number, fz: number, count: number, big: number, even: number): void {
@@ -420,6 +436,10 @@ export class BurrowViews {
   }
 
   /** The tunnel along `path` (its far wall only, drawn as the ant goes). */
+  /** The earth under a bug under the ground (a flat disc of it, below its tunnel), and the tunnel it was coloured for. */
+  private readonly earth = new THREE.Mesh(new THREE.CircleGeometry(7, 40).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x2a2018 }));
+  private earthOf: readonly number[] | null = null;
+
   /** The way of the tunnel a bug walks through now (its far wall is drawn); null: none. */
   private walking: readonly number[] | null = null;
 
