@@ -20,6 +20,8 @@ export class AimView {
   private readonly dots: THREE.InstancedMesh;
   private readonly ring: THREE.Mesh;
   private readonly start: THREE.Mesh;
+  /** A red cross in the start ring, where the Burrow cannot dig. */
+  private readonly cross: THREE.Group;
   private readonly path: number[] = [];
   private readonly m = new THREE.Matrix4();
   private readonly c = new THREE.Color();
@@ -53,10 +55,22 @@ export class AimView {
     this.start.renderOrder = 10;
     this.start.visible = false;
     scene.add(this.start);
+    // (where it cannot dig: a red cross in its ring)
+    const bar = new THREE.BoxGeometry(2.2, 0.06, 0.26);
+    const red = new THREE.MeshBasicMaterial({ color: 0xff5a4a, transparent: true, opacity: 0.85, depthTest: false });
+    this.cross = new THREE.Group();
+    for (const a of [Math.PI / 4, -Math.PI / 4]) {
+      const m = new THREE.Mesh(bar, red);
+      m.rotation.y = a;
+      m.renderOrder = 10;
+      this.cross.add(m);
+    }
+    this.cross.visible = false;
+    scene.add(this.cross);
   }
 
   hide(): void {
-    this.pointer.visible = this.marker.visible = this.dots.visible = this.ring.visible = this.start.visible = false;
+    this.pointer.visible = this.marker.visible = this.dots.visible = this.ring.visible = this.start.visible = this.cross.visible = false;
   }
 
   /** `bugPosition`: interpolated render position of the active bug. */
@@ -72,6 +86,7 @@ export class AimView {
     // (a burrow: where it goes, not which way it points; longer as it is charged)
     const burrow = aiming && match.currentWeapon.kind === 'burrow';
     this.dots.visible = this.ring.visible = this.start.visible = burrow;
+    if (!burrow) this.cross.visible = false;
     if (burrow) {
       this.pointer.visible = false;
       this.showBurrow(match, now);
@@ -96,9 +111,12 @@ export class AimView {
     const b0 = u.bug;
     this.start.position.set(b0.x - b0.nx * b0.species.radius * 0.9, b0.y - b0.ny * b0.species.radius * 0.9, b0.z - b0.nz * b0.species.radius * 0.9);
     this.start.quaternion.setFromUnitVectors(AimView.UP, this.v.set(b0.nx, b0.ny, b0.nz));
+    this.cross.visible = p.length < 12;
     if (p.length < 12) {
       this.dots.visible = this.ring.visible = false;
       start.color.set(0xff6a5a);
+      this.cross.position.copy(this.start.position);
+      this.cross.quaternion.copy(this.start.quaternion);
       return;
     }
     start.color.set(0xffd27a);

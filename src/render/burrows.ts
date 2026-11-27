@@ -15,7 +15,8 @@ export class BurrowViews {
   private readonly lumps: THREE.InstancedMesh;
   private next = 0;
   private tunnel: THREE.Mesh | null = null;
-  private readonly tunnelMaterial = new THREE.MeshStandardMaterial({ color: 0x2a2018, roughness: 1, side: THREE.BackSide });
+  /** The tunnel's inside, seen through the ground: shaded by itself (no light reaches it), its floor lit, its roof dark. */
+  private readonly tunnelMaterial = new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide });
   private gone = 0;
   private readonly m = new THREE.Matrix4();
   private readonly q = new THREE.Quaternion();
@@ -90,6 +91,8 @@ export class BurrowViews {
       if (!this.tunnel || this.walking !== walk.path) {
         this.tube(walk.path, walk.radius);
         this.walking = walk.path;
+        // (all of it: it was dug before)
+        this.tunnel?.geometry.setDrawRange(0, Infinity);
       }
       this.gone = 0;
       return;
@@ -422,6 +425,19 @@ export class BurrowViews {
     const curve = new THREE.CurvePath<THREE.Vector3>();
     for (let k = 0; k + 1 < pts.length; k++) curve.add(new THREE.LineCurve3(pts[k], pts[k + 1]));
     const g = new THREE.TubeGeometry(curve, TUBE_SEGMENTS, radius * 0.92, TUBE_SIDES, false);
+    // (the dug earth's colour: its floor pale, as if lit from the way in, its sides darker, its roof darkest; a little
+    // grain along it)
+    const earth = this.dug(this.groundColor?.(path[0], path[1] - 1.5, path[2]) ?? GREY);
+    const nor = g.getAttribute('normal') as THREE.BufferAttribute;
+    const col = new Float32Array(nor.count * 3);
+    for (let i = 0; i < nor.count; i++) {
+      const down = Math.max(0, -nor.getY(i));
+      const k = (0.25 + 0.95 * down * down) * (0.9 + 0.2 * Math.abs(Math.sin(i * 12.9898)));
+      col[i * 3] = Math.min(1, earth[0] * 1.6 * k + 0.012);
+      col[i * 3 + 1] = Math.min(1, earth[1] * 1.6 * k + 0.01);
+      col[i * 3 + 2] = Math.min(1, earth[2] * 1.6 * k + 0.008);
+    }
+    g.setAttribute('color', new THREE.BufferAttribute(col, 3));
     g.setDrawRange(0, 0);
     this.tunnel = new THREE.Mesh(g, this.tunnelMaterial);
     this.tunnel.frustumCulled = false;
