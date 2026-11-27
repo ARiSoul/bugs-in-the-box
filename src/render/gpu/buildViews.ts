@@ -419,10 +419,10 @@ export class BuildViews {
 
   /** What a blast throws out of the ground: lumps of it, of its colour, that fall round the crater and lie there a while. */
   rubble(x: number, y: number, z: number, r: number, rgb: readonly [number, number, number], outside: readonly [number, number, number] = rgb): void {
-    const n = Math.round(10 + r * 4);
+    const n = Math.round(14 + r * 6);
     for (let k = 0; k < n; k++) {
       const i = this.nextPiece % DEBRIS;
-      this.drop(x, y, z, r * 0.8, 'dirt', k % 2 === 0, (0.35 + 2.2 * Math.random() ** 2.2) * Math.min(1.6, r / 4));
+      this.drop(x, y, z, r * 0.8, 'dirt', k % 2 === 0, (0.3 + 1.3 * Math.random() ** 2.5) * Math.min(1.6, r / 4));
       const p = this.pieces[i];
       p.v.multiplyScalar(1 + r * 0.12);
       // (in the light they look paler than the walls they broke from: darker, and far apart)

@@ -12,7 +12,9 @@ export const CRATER_ROUGH = 0.16;
 /** How strong the lobes round its rim are, against the broad lumps. */
 const RIM = 0.6;
 /** The farthest a crater reaches, as a multiple of its radius (to bound the cells a carve visits). */
-export const CRATER_MAX = 1 + CRATER_ROUGH * 5;
+export const CRATER_MAX = 1.75;
+/** The nearest it reaches, as a multiple of its radius. */
+export const CRATER_MIN = 0.55;
 /** How many weights shape a crater. */
 export const CRATER_WEIGHTS = 12;
 
@@ -39,11 +41,14 @@ export function craterReach(ux: number, uy: number, uz: number, c: Float64Array 
     c[5] * 2.6 * ux * uy * uz +
     c[6] * ux * (xx - 3 * zz) * 0.5 +
     c[7] * uz * (3 * xx - zz) * 0.5 +
-    // (its rim: notches round the level, four and five a turn, folded sharp: a broken edge, not petals)
+    // (its rim: a few notches round the level, folded sharp, of uneven depth: a broken edge, not petals; deeper on one
+    // side, a sector nearly whole)
     RIM *
-      (c[8] * (1 - 2 * Math.abs(xx * xx - 6 * xx * zz + zz * zz)) +
-        c[9] * (1 - 2 * Math.abs(4 * (xx * ux * uz - ux * zz * uz))) +
-        c[10] * (1 - 2 * Math.abs(ux * (xx * xx - 10 * xx * zz + 5 * zz * zz))) +
-        c[11] * (1 - 2 * Math.abs(uz * (5 * xx * xx - 10 * xx * zz + zz * zz))));
-  return 1 + CRATER_ROUGH * s;
+      (1 + 0.85 * (c[3] * ux + c[7] * uz)) *
+      (c[8] * (1 - 2 * Math.abs(xx - zz)) +
+        c[9] * (1 - 2 * Math.abs(2 * ux * uz)) +
+        c[10] * 0.6 * (1 - 2 * Math.abs(ux * (xx - 3 * zz))) +
+        c[11] * 0.6 * (1 - 2 * Math.abs(uz * (3 * xx - zz))));
+  const k = 1 + CRATER_ROUGH * s;
+  return k < CRATER_MIN ? CRATER_MIN : k > CRATER_MAX ? CRATER_MAX : k;
 }

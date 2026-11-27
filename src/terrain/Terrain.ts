@@ -187,7 +187,8 @@ export class Terrain {
     const j1 = Math.min(sy - 1, Math.ceil(py + pad));
     const k0 = Math.max(0, Math.floor(pz - pad));
     const k1 = Math.min(sz - 1, Math.ceil(pz + pad));
-    const scorchR = r * 1.6;
+    // (ash and scorch well out past its rim)
+    const scorchR = r * 1.8;
     // (the cells it really changed: only their chunks are meshed again)
     let ci0 = sx;
     let ci1 = -1;
