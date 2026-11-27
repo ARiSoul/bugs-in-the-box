@@ -98,7 +98,8 @@ export class BurrowViews {
         this.earthOf = deep.path;
         const e = this.dug(this.groundColor?.(deep.path[0], deep.path[1] - 1.5, deep.path[2]) ?? GREY);
         // (darker and warmer than the tunnel's walls: the earth round it, not more of it)
-        (this.earth.material as THREE.MeshBasicMaterial).color.setRGB(e[0] * 0.55 + 0.015, e[1] * 0.47 + 0.01, e[2] * 0.38 + 0.006);
+        // (earth: some of the map's own broken stuff in a brown)
+        (this.earth.material as THREE.MeshBasicMaterial).color.setRGB(e[0] * 0.3 + 0.075, e[1] * 0.24 + 0.05, e[2] * 0.18 + 0.028);
       }
     }
     // (a bug walking through a tunnel: its far wall drawn, so the bug is seen in it through the ground)
@@ -213,7 +214,10 @@ export class BurrowViews {
       const oy = y0 + (y1 - y0) * f;
       const oz = z0 + (z1 - z0) * f + sz * w;
       // (on what is drawn there, where it can be measured: a drawn floor may stand over the field)
-      const t = this.under(match, ox, oy, oz, nx, ny, nz, t0 + (t1 - t0) * f);
+      const line = t0 + (t1 - t0) * f;
+      const t = this.under(match, ox, oy, oz, nx, ny, nz, line);
+      // (not on top of a part it went under: only on the ground over it)
+      if (t < line - 0.8) continue;
       // (a heaved ridge: high along its middle, low to its sides)
       const size = 0.09 + 0.11 * Math.random();
       // (on the mound's flank, not in the air nor under it)
@@ -353,10 +357,11 @@ export class BurrowViews {
     const earth = this.dug(this.groundColor?.(x - nx, y - ny, z - nz) ?? GREY);
     for (let i = 0; i <= RINGS; i++) {
       const t = i / RINGS;
-      const lit = (1 - t) ** 2.2;
+      const lit = 0.6 * (1 - t) ** 2.2;
       // (from the rim, just over the ground, down and along: narrower as it goes)
       const rr = r * (1 - 0.65 * t);
-      const down = 0.05 - 1.6 * t;
+      // (its lip a little under the ground round it: a hole, not a horn standing out of it)
+      const down = -0.12 - 1.6 * t;
       const along = 1.3 * t * t;
       for (let j = 0; j < AROUND; j++) {
         const a = (j / AROUND) * Math.PI * 2;
@@ -498,7 +503,8 @@ const TUBE_SIDES = 10;
  * material's.
  */
 function earthDisc(): THREE.BufferGeometry {
-  const g = new THREE.RingGeometry(0, 7, 64, 14).rotateX(-Math.PI / 2);
+  // (a fine square grid, not rings: its grain has no circles in it)
+  const g = new THREE.PlaneGeometry(14, 14, 70, 70).rotateX(-Math.PI / 2);
   const p = g.getAttribute('position') as THREE.BufferAttribute;
   const col = new Float32Array(p.count * 3);
   for (let i = 0; i < p.count; i++) {
@@ -508,8 +514,10 @@ function earthDisc(): THREE.BufferGeometry {
     const edge = 1 - 0.55 * Math.min(1, Math.max(0, (r - 2.4) / 1.6));
     // (grain: a cheap hash of the place, and clods a little lighter)
     const h = Math.abs(Math.sin(x * 12.9898 + z * 78.233) * 43758.5453) % 1;
-    const clod = Math.abs(Math.sin(x * 1.7 + z * 2.3) * Math.sin(x * 0.9 - z * 1.3));
-    const k = edge * (0.8 + 0.35 * h) * (0.9 + 0.3 * clod);
+    const cx = Math.floor(x * 0.9);
+    const cz = Math.floor(z * 0.9);
+    const clod = Math.abs(Math.sin(cx * 41.3 + cz * 17.9) * 9137.7) % 1;
+    const k = edge * (0.78 + 0.32 * h) * (0.88 + 0.24 * clod);
     col[i * 3] = col[i * 3 + 1] = col[i * 3 + 2] = k;
   }
   g.setAttribute('color', new THREE.BufferAttribute(col, 3));

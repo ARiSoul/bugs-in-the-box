@@ -58,12 +58,13 @@ export class AimView {
     scene.add(this.start);
     // (where it cannot dig: a red cross in its ring)
     const bar = new THREE.BoxGeometry(2.2, 0.06, 0.26);
-    const red = new THREE.MeshBasicMaterial({ color: 0xfff0e8, transparent: true, opacity: 0.95 });
+    const red = new THREE.MeshBasicMaterial({ color: 0xff6a5a, transparent: true, opacity: 0.95, depthTest: false });
     this.cross = new THREE.Group();
     for (const a of [Math.PI / 4, -Math.PI / 4]) {
       const m = new THREE.Mesh(bar, red);
       m.rotation.y = a;
       m.renderOrder = 10;
+      m.scale.setScalar(1.25);
       this.cross.add(m);
     }
     this.cross.visible = false;
@@ -117,7 +118,8 @@ export class AimView {
     if (p.length < 12) {
       this.dots.visible = this.ring.visible = false;
       start.color.set(0xff6a5a);
-      this.cross.position.copy(this.start.position);
+      // (before it, the way it would have dug: over all, not under its body)
+      this.cross.position.copy(this.start.position).add(this.v.set(b0.hx, 0, b0.hz).normalize().multiplyScalar(3.6));
       this.cross.quaternion.copy(this.start.quaternion);
       return;
     }
