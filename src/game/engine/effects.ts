@@ -97,6 +97,13 @@ export class Effects {
     return this.on.get(id)?.stacks ?? 0;
   }
 
+  /** The tags of every effect on, each once, in order (what reactions look at on a bug). */
+  tags(): string[] {
+    const out: string[] = [];
+    for (const s of this.on.values()) for (const t of s.def.tags) if (!out.includes(t)) out.push(t);
+    return out;
+  }
+
   /** Every effect on with this tag. */
   tagged(tag: string): EffectState[] {
     return [...this.on.values()].filter((s) => s.def.tags.includes(tag));

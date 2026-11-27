@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Attributes, Effects, Registry, Triggers, speciesBase, type EffectDef, type MatchTriggers } from '../src/game/engine';
+import { Attributes, Effects, Reactions, Registry, Triggers, speciesBase, type EffectDef, type MatchTriggers } from '../src/game/engine';
 import { Match, NO_INPUT } from '../src/game/match';
 import { ANT, SPIDER } from '../src/game/species';
 import { world } from './helpers/worlds';
@@ -114,6 +114,34 @@ describe('triggers', () => {
     expect(got).toEqual([1]);
     t.emit('damage', { unit: 0, amount: 2, team: 0 });
     expect(got).toEqual([1, 2, 20]);
+  });
+});
+
+describe('reactions', () => {
+  const rules = new Reactions([
+    { id: 'burn', by: 'fire', on: ['silk', 'wood'], value: 1, word: 'burning' },
+    { id: 'conduct', by: 'electric', on: ['metal'], value: 12, word: 'conducts' },
+    { id: 'regrow', by: null, on: ['alive'], value: 0.5, word: 'regrows' },
+  ]);
+
+  it('one is found where its tag meets any of the tags it acts on; one by nothing acts on its own', () => {
+    expect(rules.find('burn', ['fire', 'blast'], ['wood'])?.value).toBe(1);
+    expect(rules.find('burn', ['blast'], ['wood'])).toBeNull();
+    expect(rules.find('burn', ['fire'], ['metal'])).toBeNull();
+    expect(rules.find('regrow', [], ['alive'])?.word).toBe('regrows');
+    expect(rules.find('regrow', ['fire'], ['alive'])).not.toBeNull();
+  });
+
+  it('every reaction between two sets of tags, in the order they were given', () => {
+    expect(rules.between(['fire', 'electric'], ['silk', 'metal', 'alive']).map((r) => r.id)).toEqual(['burn', 'conduct', 'regrow']);
+    expect(rules.between([], ['silk'])).toEqual([]);
+  });
+
+  it('the effects of a bug give the tags they react by, each once, in order', () => {
+    const e = new Effects(new Attributes(base));
+    e.apply({ id: 'a', tags: ['electric', 'item'], maxStacks: 1, ticks: 0 });
+    e.apply({ id: 'b', tags: ['silk', 'electric'], maxStacks: 1, ticks: 0 });
+    expect(e.tags()).toEqual(['electric', 'item', 'silk']);
   });
 });
 

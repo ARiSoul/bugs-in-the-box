@@ -1,19 +1,17 @@
 import { ACTIONS, type Tag } from './actions';
+import { Reactions, type ReactionDef } from './engine';
 
 /**
  * What comes of two tags that meet, as data: what does it, what it does it to, how much. The match asks these in the order
  * they stand here, so every client does the same. A wall, a bridge, a web, a swarm is what its tags say, not its name.
  */
-export interface Reaction {
-  readonly id: 'burn' | 'melt' | 'brittle' | 'insulate' | 'conduct' | 'blow' | 'tire' | 'regrow';
+export type ReactionId = 'burn' | 'melt' | 'brittle' | 'insulate' | 'conduct' | 'blow' | 'tire' | 'regrow';
+export interface Reaction extends ReactionDef<ReactionId> {
   readonly by: Tag | null;
   readonly on: readonly Tag[];
-  /** Its main number: see each. */
-  readonly value: number;
-  readonly word: string;
 }
 
-export const REACTIONS: readonly Reaction[] = [
+const LIST: readonly Reaction[] = [
   // a piece burns until the next turn; from there its neighbours, so many times over
   { id: 'burn', by: 'fire', on: ['silk', 'wood'], value: 1, word: 'burning' },
   // the hole is so much wider
@@ -42,10 +40,13 @@ export const SMOTHERED = 2.3;
 const TAGS = new Map(ACTIONS.map((a) => [a.id, a.tags]));
 export const tagsOf = (id: string): readonly Tag[] => TAGS.get(id) ?? [];
 
-/** The reaction of something with these tags to what `id` does, if there is one. */
-export function reaction(id: Reaction['id'], by: readonly Tag[], on: readonly Tag[]): Reaction | null {
-  for (const r of REACTIONS) if (r.id === id && (r.by === null || by.includes(r.by)) && r.on.some((t) => on.includes(t))) return r;
-  return null;
+const RULES = new Reactions<ReactionId>(LIST);
+/** The reactions, in the order they are asked (an engine `Reactions`: the same rule for builds and for bugs' effects). */
+export const REACTIONS = RULES.all() as readonly Reaction[];
+
+/** The reaction of something with tags `on` (a build's, or a bug's effects') to what `id` does, if there is one. */
+export function reaction(id: ReactionId, by: readonly string[], on: readonly string[]): Reaction | null {
+  return RULES.find(id, by, on) as Reaction | null;
 }
 
 /** What a weapon would do to something built, in a word ('': nothing special). */

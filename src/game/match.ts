@@ -375,6 +375,9 @@ const OVERCLOCK = 1.5;
 const SPRING = 1.42;
 const MAGNET = 45;
 const PASTE = WEAPONS.findIndex((w) => w.kind === 'trap');
+/** What hits a bug, in tags: a shock, or nothing in particular. */
+const SHOCK: readonly Tag[] = ['electric'];
+const NONE: readonly Tag[] = [];
 const WEB = WEAPONS.findIndex((w) => w.kind === 'web');
 /** After hiding there is a moment to see it (ticks). */
 const HIDE_TICKS = 70;
@@ -2623,6 +2626,8 @@ export class Match {
 
   private damage(u: Unit, amount: number, electric = false): void {
     if (amount <= 0 || !u.bug.alive) return;
+    // (what hit it, in tags: what its effects react to)
+    const hitBy = electric ? SHOCK : NONE;
     const b = u.bug;
     if (u.cover) {
       const w = u.cover;
@@ -2634,9 +2639,10 @@ export class Match {
       if (amount <= 0) return;
     }
     if (u.fuse && amount > 1) {
+      // (a shock blows the fuse, which takes all of it; anything else, half)
+      const blown = reaction('blow', hitBy, u.effects.tags()) !== null;
       u.fuse = false;
-      // (a shock: it takes all of it)
-      amount = electric ? 0 : Math.ceil(amount / 2);
+      amount = blown ? 0 : Math.ceil(amount / 2);
       this.events.push({ type: 'fuse', unit: u.id });
       if (amount <= 0) return;
     }

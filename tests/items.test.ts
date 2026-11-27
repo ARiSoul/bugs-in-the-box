@@ -90,6 +90,19 @@ describe('boxes', () => {
     expect(was - b.health).toBe(Math.round(CAPACITOR.damage * 1.5));
   });
 
+  it('a shock blows a fuse (electric meets its electric tag): it takes all of the blow, once', () => {
+    const m = opened('fuse');
+    const shock = (q: Match, u: number, n: number): number => {
+      const was = q.units[u].bug.health;
+      (q as unknown as { damage(u: unknown, n: number, electric: boolean): void }).damage(q.units[u], n, true);
+      return was - q.units[u].bug.health;
+    };
+    expect(m.units[0].effects.tags()).toContain('electric');
+    expect(shock(m, 0, 30)).toBe(0);
+    expect(m.units[0].fuse).toBe(false);
+    expect(shock(m, 0, 30)).toBe(30);
+  });
+
   it('springs, crystal, paste, scrap, magnet and dud do what they say', () => {
     expect(opened('spring').units[0].bug.leap).toBeGreaterThan(1.3);
     const c = make();
