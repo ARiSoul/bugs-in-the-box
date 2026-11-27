@@ -177,7 +177,8 @@ export class BurrowViews {
   private heave: THREE.Mesh | null = null;
   private heaveRows = 0;
   private readonly heaves: THREE.Mesh[] = [];
-  private readonly heaveMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.97 });
+  // (both sides: its rows are laid so its faces look down)
+  private readonly heaveMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.97, side: THREE.DoubleSide });
 
   /** The ridge over a tunnel, waiting to be laid as the ant gets under each part of it: where, how big, its colour, how far along. */
   private readonly ridge: { m: THREE.Matrix4; c: number; at: number }[] = [];
@@ -295,10 +296,13 @@ export class BurrowViews {
     const W = radius * 0.8;
     const pos = new Float32Array((rows + 1) * HEAVE_ACROSS * 3);
     const col = new Float32Array((rows + 1) * HEAVE_ACROSS * 3);
-    const ground = this.dug(this.groundColor?.(x0 + nx * (8 - t0), y0 + ny * (8 - t0), z0 + nz * (8 - t0)) ?? GREY);
+    const ground = this.soil ?? this.dug(this.groundColor?.(x0 + nx * (8 - t0), y0 + ny * (8 - t0), z0 + nz * (8 - t0)) ?? GREY);
     for (let i = 0; i <= rows; i++) {
       const f = i / rows;
-      const g = 8 - this.under(match, x0 + (x1 - x0) * f, y0 + (y1 - y0) * f, z0 + (z1 - z0) * f, nx, ny, nz, t0 + (t1 - t0) * f);
+      const line = t0 + (t1 - t0) * f;
+      const top = this.under(match, x0 + (x1 - x0) * f, y0 + (y1 - y0) * f, z0 + (z1 - z0) * f, nx, ny, nz, line);
+      // (under a part it went under, it stays down in the ground: it does not climb over the part)
+      const g = 8 - (top < line - 0.8 ? line + 0.6 : top);
       const cx = x0 + (x1 - x0) * f + nx * g;
       const cy = y0 + (y1 - y0) * f + ny * g;
       const cz = z0 + (z1 - z0) * f + nz * g;
@@ -317,10 +321,10 @@ export class BurrowViews {
         pos[o + 1] = cy + ny * h;
         pos[o + 2] = cz + sz * s + nz * h;
         const k = crack ? 0.35 : (0.8 + 0.25 * lump - 0.2 * (1 - a) + 0.85 * a ** 6) * (0.92 + 0.16 * Math.sin(f * 53 + j * 5.1));
-        // (fresh earth: the ground's colour, paler and a little warmer, dry)
-        col[o] = (ground[0] * 1.3 + 0.035) * k;
-        col[o + 1] = (ground[1] * 1.28 + 0.03) * k;
-        col[o + 2] = (ground[2] * 1.22 + 0.022) * k;
+        // (disturbed earth, low and a little darker than the crumbs on it: a seam over the tunnel, not a log)
+        col[o] = (ground[0] * 0.7 + 0.012) * k;
+        col[o + 1] = (ground[1] * 0.68 + 0.01) * k;
+        col[o + 2] = (ground[2] * 0.66 + 0.008) * k;
       }
     }
     const idx: number[] = [];
@@ -502,7 +506,7 @@ export class BurrowViews {
 const TUBE_SEGMENTS = 60;
 /** The heaved mound over a tunnel: points across it, and how high it rises. */
 const HEAVE_ACROSS = 13;
-const HEAVE_HIGH = 0.75;
+const HEAVE_HIGH = 0.38;
 const GREY: readonly [number, number, number] = [0.3, 0.27, 0.24];
 const TUBE_SIDES = 10;
 
