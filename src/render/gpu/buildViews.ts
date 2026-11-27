@@ -419,19 +419,20 @@ export class BuildViews {
 
   /** What a blast throws out of the ground: lumps of it, of its colour, that fall round the crater and lie there a while. */
   rubble(x: number, y: number, z: number, r: number, rgb: readonly [number, number, number], outside: readonly [number, number, number] = rgb): void {
-    const n = Math.round(14 + r * 6);
+    const n = Math.round(20 + r * 7);
     for (let k = 0; k < n; k++) {
       const i = this.nextPiece % DEBRIS;
       // (two or three big chunks, the rest small)
       const big = k < 2 + (r > 5 ? 1 : 0);
-      this.drop(x, y, z, r * 0.8, 'dirt', !big && k % 2 === 0, (big ? 2.4 + 0.8 * Math.random() : 0.3 + 1.3 * Math.random() ** 2.5) * Math.min(1.6, r / 4));
+      this.drop(x, y, z, r * 0.8, 'dirt', big || k % 2 === 0, (big ? 2.4 + 0.8 * Math.random() : 0.3 + 1.3 * Math.random() ** 2.5) * Math.min(1.6, r / 4));
       const p = this.pieces[i];
       // (most fall near the rim; some fly far)
       p.v.multiplyScalar((k % 4 === 0 ? 1 + r * 0.12 : 0.45 + r * 0.05) * (big ? 0.5 : 1));
       // (in the light they look paler than the walls they broke from: darker, and far apart)
       // (a third of them the outside of what it was, its finish; the rest its broken inside, which the key light makes look
       // paler than the walls it broke from: darker)
-      const own = k % 3 === 0;
+      // (the big ones are shards of its broken inside)
+      const own = !big && k % 3 === 0;
       const c = own ? outside : rgb;
       const k2 = own ? 0.45 + 0.3 * Math.random() : 0.13 + 0.17 * Math.random();
       this.debris.setColorAt(i, this.c3.setRGB(c[0] * k2, c[1] * k2, c[2] * k2));

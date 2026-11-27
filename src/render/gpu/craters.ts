@@ -18,7 +18,7 @@ function wrap(material: THREE.Material, key: 'colorNode' | 'roughnessNode', make
 import { CRATER_MAX, CRATER_MIN, CRATER_ROUGH, CRATER_WEIGHTS, craterShape } from '../../terrain/crater';
 
 /** The grey of ash on what is drawn (linear). */
-const ASH_GREY = vec3(0.075, 0.071, 0.066);
+const ASH_GREY = vec3(0.058, 0.055, 0.051);
 
 /** Most craters a match keeps (explosions and the spheres along a tunnel). */
 const MAX_CRATERS = 256;
@@ -126,8 +126,12 @@ export class Craters {
         const k = this.gap(i as unknown as THREE.Node<'int'>).div(c.w.max(0.01));
         const v = this.position.sub(c.xyz);
         // (streaks out from its middle)
-        const streak = mx_noise_float(vec3(v.x.div(length(v).max(0.01)).mul(9), 0, v.z.div(length(v).max(0.01)).mul(9))).mul(0.5).add(0.6);
-        most.assign(max(most, smoothstep(1.0, 0.05, k).mul(streak).mul(0.8)));
+        // (a few sharp rays out from its middle, of uneven length; thick and whole at the rim)
+        const dir = vec3(v.x.div(length(v).max(0.01)), 0, v.z.div(length(v).max(0.01)));
+        const ray = smoothstep(0.05, 0.35, mx_noise_float(dir.mul(7).add(c.xyz.mul(0.37))));
+        const reach = float(0.55).add(ray.mul(0.75));
+        const fall = smoothstep(reach, 0.05, k);
+        most.assign(max(most, fall.mul(fall).mul(float(0.4).add(ray.mul(0.3))).add(smoothstep(0.3, 0.02, k).mul(0.35)).min(0.9)));
       });
       return most;
     })() as unknown as THREE.Node<'float'>;
