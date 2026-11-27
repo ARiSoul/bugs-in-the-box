@@ -418,7 +418,15 @@ export class BuildViews {
   }
 
   /** What a blast throws out of the ground: lumps of it, of its colour, that fall round the crater and lie there a while. */
-  rubble(x: number, y: number, z: number, r: number, rgb: readonly [number, number, number], outside: readonly [number, number, number] = rgb): void {
+  rubble(
+    x: number,
+    y: number,
+    z: number,
+    r: number,
+    rgb: readonly [number, number, number],
+    outside: readonly [number, number, number] = rgb,
+    layer: readonly [number, number, number] = rgb,
+  ): void {
     const n = Math.round(12 + r * 4);
     for (let k = 0; k < n; k++) {
       const i = this.nextPiece % DEBRIS;
@@ -432,9 +440,11 @@ export class BuildViews {
       // (a third of them the outside of what it was, its finish; the rest its broken inside, which the key light makes look
       // paler than the walls it broke from: darker)
       // (the big ones are shards of its broken inside)
+      // (lying flat, they face the key light the walls are turned from: darker still; one in five a bit of its layers)
       const own = !big && k % 3 === 0;
-      const c = own ? outside : rgb;
-      const k2 = own ? 0.45 + 0.3 * Math.random() : 0.28 + 0.3 * Math.random();
+      const lined = !big && !own && k % 5 === 1;
+      const c = own ? outside : lined ? layer : rgb;
+      const k2 = own ? 0.3 + 0.2 * Math.random() : lined ? 0.35 + 0.2 * Math.random() : 0.2 + 0.2 * Math.random();
       this.debris.setColorAt(i, this.c3.setRGB(c[0] * k2, c[1] * k2, c[2] * k2));
     }
     if (this.debris.instanceColor) this.debris.instanceColor.needsUpdate = true;

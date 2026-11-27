@@ -19,7 +19,6 @@ import {
   min,
   mix,
   normalView,
-  normalWorld,
   normalize,
   positionView,
   positionWorld,
@@ -34,7 +33,7 @@ import {
   positionViewDirection,
 } from 'three/tsl';
 import { BUILT_METAL, GLOW_BROKEN, GLOW_FAN, GLOW_FUZZ, GLOW_GRAIN, GLOW_PEEL, GLOW_RGB, HIDDEN_ROUGHNESS } from '../../terrain/materials';
-import type { Craters } from './craters';
+import { type Craters, brokenInside } from './craters';
 import { Glow, MAX_FANS, hueColor } from './glow';
 
 /** How bright the RGB diffusers glow (HDR, before bloom and tone mapping). */
@@ -58,8 +57,8 @@ export function createTerrainMaterial(
 ): { material: THREE.MeshStandardNodeMaterial; sharp: { value: number }; insideCore: { value: THREE.Color }; insideLine: { value: THREE.Color } } {
   const sharp = uniform(1);
   /** What the ground is made of inside (the scenario sets it): the broken stuff, and its thin layers. */
-  const insideCore = uniform(new THREE.Color(0.17, 0.15, 0.125));
-  const insideLine = uniform(new THREE.Color(0.3, 0.28, 0.25));
+  const insideCore = craters.insideCore;
+  const insideLine = craters.insideLine;
   const m = new THREE.MeshStandardNodeMaterial({ vertexColors: true });
   const pbr = attribute('pbr', 'vec3');
   // specular anti-aliasing: where the normal changes fast across a pixel, the surface gets rougher
@@ -84,14 +83,7 @@ export function createTerrainMaterial(
     // (a hidden body's crater: the broken inside of what was drawn, dull and grainy, darker deep in its cracks)
     // (its layers, as a board, a tile or a moulding is made: thin pale lines along the level, wavy, of uneven spacing,
     // broken up, only on steep walls: the floor of a crater is plain broken stuff)
-    const p = positionWorld;
-    const band = p.y.mul(2.2).add(mx_noise_float(p.mul(0.45)).mul(1.4)).fract();
-    const line = smoothstep(0.55, 0.62, band).mul(smoothstep(0.9, 0.83, band)).mul(smoothstep(0, 0.3, mx_noise_float(p.mul(0.9).add(5.3))));
-    const steep = smoothstep(0.75, 0.45, abs(normalWorld.y));
-    const layer = steep.mul(line);
-    // (grainy: chips and specks of it)
-    const grit = float(0.9).add(mx_noise_float(p.mul(1.6)).mul(0.22)).add(mx_noise_float(p.mul(5.1)).mul(0.1));
-    const inside = mix(insideCore.mul(grit), insideLine, layer.mul(0.6));
+    const inside = brokenInside(insideCore as unknown as THREE.Node<'vec3'>, insideLine as unknown as THREE.Node<'vec3'>);
     If(seen.not(), () => {
       base.assign(inside);
     });

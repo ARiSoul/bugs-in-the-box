@@ -128,7 +128,7 @@ export const SCENARIOS: readonly Scenario[] = [
     generate: desk,
     sharpEdges: true,
     // (a laminated chipboard top: tan chips, darker glue lines)
-    inside: { core: [0.2, 0.14, 0.08], line: [0.07, 0.05, 0.03] },
+    inside: { core: [0.34, 0.23, 0.12], line: [0.07, 0.05, 0.03] },
     // an evening room: warm walls far off, the screens' glow on the black desk
     sky: { css: 'radial-gradient(ellipse at 50% 40%, #2a2724 0%, #0b0a09 72%)', fog: 0x110f0e, fogClear: 220, fogSpan: 480, cornerDark: 0.2, backdrop: 0x3a352f },
     strictBounds: true,

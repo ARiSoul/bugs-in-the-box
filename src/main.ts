@@ -411,7 +411,8 @@ function handleEvents(events: readonly MatchEvent[]): void {
           // (its outside's colour a little, mostly the broken inside, as the crater's walls)
           const c = burrows.groundColor?.(e.x, e.y + e.radius, e.z) ?? [0.3, 0.27, 0.24];
           const k = scenario.inside?.core ?? [0.17, 0.15, 0.125];
-          buildViews.rubble(e.x, e.y, e.z, e.radius, [c[0] * 0.2 + k[0] * 0.8, c[1] * 0.2 + k[1] * 0.8, c[2] * 0.2 + k[2] * 0.8], c);
+          const l = scenario.inside?.line ?? k;
+          buildViews.rubble(e.x, e.y, e.z, e.radius, [c[0] * 0.2 + k[0] * 0.8, c[1] * 0.2 + k[1] * 0.8, c[2] * 0.2 + k[2] * 0.8], c, [k[0] * 0.3 + l[0] * 0.7, k[1] * 0.3 + l[1] * 0.7, k[2] * 0.3 + l[2] * 0.7]);
         }
         // (a blast's crater is uneven: the same shape the terrain was carved to)
         stage.craters.add(e.x, e.y, e.z, e.radius, true);

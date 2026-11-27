@@ -17,6 +17,22 @@ function wrap(material: THREE.Material, key: 'colorNode' | 'roughnessNode', make
 
 import { CRATER_MAX, CRATER_MIN, CRATER_ROUGH, CRATER_WEIGHTS, craterShape } from '../../terrain/crater';
 
+/**
+ * What a map is made of inside, broken open (the scenario sets `core` and `line`): grainy, with coarse chips of
+ * lighter and darker stuff, and thin layers along the level on steep walls (as a board, a tile or a moulding is made).
+ */
+export function brokenInside(core: THREE.Node<'vec3'>, line: THREE.Node<'vec3'>): THREE.Node<'vec3'> {
+  const p = positionWorld;
+  const band = p.y.mul(2.2).add(mx_noise_float(p.mul(0.45)).mul(1.4)).fract();
+  const thin = smoothstep(0.55, 0.62, band).mul(smoothstep(0.9, 0.83, band)).mul(smoothstep(0, 0.3, mx_noise_float(p.mul(0.9).add(5.3))));
+  const steep = smoothstep(0.75, 0.45, abs(normalWorld.y));
+  const grit = float(0.9).add(mx_noise_float(p.mul(1.6)).mul(0.22)).add(mx_noise_float(p.mul(5.1)).mul(0.1));
+  // (chips: coarse flecks, some lighter, some darker)
+  const chip = mx_noise_float(p.mul(3.3).add(11.7));
+  const fleck = smoothstep(0.35, 0.5, chip).mul(0.3).sub(smoothstep(-0.35, -0.5, chip).mul(0.3));
+  return mix(core.mul(grit.add(fleck)), line, steep.mul(thin).mul(0.6)) as unknown as THREE.Node<'vec3'>;
+}
+
 /** The grey of ash on what is drawn (linear). */
 const ASH_GREY = vec3(0.058, 0.055, 0.051);
 
@@ -39,6 +55,9 @@ export class Craters {
   private readonly shapeC = uniformArray(Array.from({ length: MAX_CRATERS }, () => new THREE.Vector4(0, 0, 0, 0)), 'vec4');
   private readonly w = new Float64Array(CRATER_WEIGHTS);
   private readonly count = uniform(0, 'int');
+  /** What the map is made of inside (the scenario sets it): the broken stuff, and its thin layers (linear). */
+  readonly insideCore = uniform(new THREE.Color(0.17, 0.15, 0.125));
+  readonly insideLine = uniform(new THREE.Color(0.3, 0.28, 0.25));
   private n = 0;
 
   /** `position`: where a fragment is tested (the world; a turning part passes its own frame). */
@@ -157,9 +176,11 @@ export class Craters {
     const count = this.count;
     this.mask ??= Fn(() => {
       const keep = bool(true).toVar();
+      // (a chipped edge, not a smooth cut: in and out of the terrain's wall by up to about a cell, in small bites)
+      const jag = mx_noise_float(this.position.mul(1.3)).mul(0.55).add(mx_noise_float(this.position.mul(3.7)).mul(0.3)).toVar();
       Loop(count, ({ i }) => {
         const gap = this.gap(i as unknown as THREE.Node<'int'>);
-        If(gap.lessThan(0), () => {
+        If(gap.add(jag).lessThan(0), () => {
           keep.assign(false);
         });
         // (near a crater, the underside of a part seen from inside it through the hole is not drawn: what is under it shows)
@@ -178,7 +199,8 @@ export class Craters {
     }
     if (material.side === THREE.DoubleSide && !material.transparent) {
       // (and that inside is what it is broken open to: dull and grainy, not its outside's gloss)
-      const grit = vec3(0.045, 0.042, 0.038).mul(float(1).add(mx_noise_float(positionWorld.mul(2.4)).mul(0.4)).add(mx_noise_float(positionWorld.mul(8.1)).mul(0.2)));
+      // (in the shell's shade: a little darker than the terrain's broken wall)
+      const grit = brokenInside(this.insideCore as unknown as THREE.Node<'vec3'>, this.insideLine as unknown as THREE.Node<'vec3'>).mul(0.85);
       const ash = ASH_GREY.mul(float(0.8).add(mx_noise_float(positionWorld.mul(1.7)).mul(0.4)));
       // (its colour and roughness are wrapped whenever they are set, also after this call: ash on its outside near a crater,
       // the broken inside dull)
