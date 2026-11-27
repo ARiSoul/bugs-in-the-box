@@ -194,7 +194,7 @@ export class Terrain {
    * (their meshes share the seam vertices). The outer shell of the world is never opened. `rough`: a blast's crater,
    * uneven, its shape its own for the place (see `crater.ts`), not a sphere.
    */
-  carve(px: number, py: number, pz: number, r: number, rough = false): void {
+  carve(px: number, py: number, pz: number, r: number, rough = false, burn = true): void {
     const { sx, sy, sz, dens, scorch } = this;
     if (rough) craterShape(px, py, pz, shape);
     const pad = r * (rough ? CRATER_MAX : 1) + 2;
@@ -227,7 +227,7 @@ export class Terrain {
           const was = dens[id];
           const nd = Math.max(was, reach - dist);
           dens[id] = nd > DENSITY_CLAMP ? DENSITY_CLAMP : nd;
-          const sc = Math.round(Math.max(0, 1 - dist / scorchR) * SCORCH_BURN);
+          const sc = burn ? Math.round(Math.max(0, 1 - dist / scorchR) * SCORCH_BURN) : 0;
           let changed = dens[id] !== was;
           const old = scorch[id];
           let next = old;

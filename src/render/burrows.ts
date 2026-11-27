@@ -433,9 +433,9 @@ export class BurrowViews {
     for (let i = 0; i < nor.count; i++) {
       const down = Math.max(0, -nor.getY(i));
       const k = (0.25 + 0.95 * down * down) * (0.9 + 0.2 * Math.abs(Math.sin(i * 12.9898)));
-      col[i * 3] = Math.min(1, earth[0] * 1.6 * k + 0.012);
-      col[i * 3 + 1] = Math.min(1, earth[1] * 1.6 * k + 0.01);
-      col[i * 3 + 2] = Math.min(1, earth[2] * 1.6 * k + 0.008);
+      col[i * 3] = Math.min(1, earth[0] * 1.1 * k + 0.012);
+      col[i * 3 + 1] = Math.min(1, earth[1] * 1.05 * k + 0.01);
+      col[i * 3 + 2] = Math.min(1, earth[2] * 0.95 * k + 0.008);
     }
     g.setAttribute('color', new THREE.BufferAttribute(col, 3));
     g.setDrawRange(0, 0);

@@ -8,8 +8,11 @@ export interface TerrainField {
   readonly D: number;
   sample(x: number, y: number, z: number): number;
   raycast(ox: number, oy: number, oz: number, dx: number, dy: number, dz: number, maxT?: number): number;
-  /** Remove a sphere of terrain (explosions, digging); `rough`: a blast's uneven crater (see `terrain/crater.ts`). */
-  carve(x: number, y: number, z: number, r: number, rough?: boolean): void;
+  /**
+   * Remove a sphere of terrain (explosions, digging); `rough`: a blast's uneven crater (see `terrain/crater.ts`);
+   * `burn` false: dug, not blown (no scorch round it).
+   */
+  carve(x: number, y: number, z: number, r: number, rough?: boolean, burn?: boolean): void;
   /** Whether what is at a place cannot be dug (an ant's Burrow stops short of it). Optional: where it is missing, all can be. */
   hard?(x: number, y: number, z: number): boolean;
   /** Add what a bug builds (pieces, see `build.ts`). Optional: where it is missing, nothing can be built. */

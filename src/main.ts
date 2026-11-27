@@ -1551,7 +1551,8 @@ function frame(now: number): void {
     const aheadHidden = playing && match.phase === 'aim' && terrain.raycast(c.x, c.y, c.z, lookAhead.x - c.x, lookAhead.y - c.y, lookAhead.z - c.z, c.distanceTo(lookAhead) - 1) >= 0 && terrain.sample(c.x, c.y, c.z) < 3;
     // (a bug under the ground is always seen through it: what is drawn over a broken roof hides it too)
     const underGround = match.underground !== null || match.inTunnel !== null;
-    seeThrough.update(t, lookAhead, up, playing && (follow.hides(terrain) || aheadHidden || underGround), dt, underGround);
+    // (and round the bug itself there, not round where the view looks)
+    seeThrough.update(underGround ? active.view.root.position : t, lookAhead, up, playing && (follow.hides(terrain) || aheadHidden || underGround), dt, underGround);
   }
   wasSpecial = inScene() !== null;
   bowState.active = bow.camera.active;

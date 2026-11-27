@@ -2264,11 +2264,11 @@ export class Match {
       const n = Math.max(1, Math.ceil(l / (w.tunnelRadius * 0.5)));
       // (the way up is dug only as far as under the top: it breaks through when it gets there)
       const last = k + 6 >= path.length ? Math.floor(n * 0.1) : n;
-      for (let s = k === 0 ? Math.floor(n * 0.3) : 0; s <= last; s++) this.field.carve(path[k] + (dx * s) / n, path[k + 1] + (dy * s) / n, path[k + 2] + (dz * s) / n, w.tunnelRadius);
+      for (let s = k === 0 ? Math.floor(n * 0.3) : 0; s <= last; s++) this.field.carve(path[k] + (dx * s) / n, path[k + 1] + (dy * s) / n, path[k + 2] + (dz * s) / n, w.tunnelRadius, false, false);
       for (let s = 0; s <= n; s += 2) this.react(path[k] + (dx * s) / n, path[k + 1] + (dy * s) / n, path[k + 2] + (dz * s) / n, w.tunnelRadius, tagsOf(w.id));
     }
     // (the hole it goes in by: a slope down into it, not a pit)
-    this.field.carve(path[0] * 0.55 + path[3] * 0.45, path[1] * 0.55 + path[4] * 0.45, path[2] * 0.55 + path[5] * 0.45, w.tunnelRadius * 0.8);
+    this.field.carve(path[0] * 0.55 + path[3] * 0.45, path[1] * 0.55 + path[4] * 0.45, path[2] * 0.55 + path[5] * 0.45, w.tunnelRadius * 0.8, false, false);
     this.burrowing = { unit: u, path, s: 0, end: total, hold: BURROW_HOLD, radius: w.tunnelRadius };
     // (and it stays: a way through for any bug that fits)
     this.tunnels.push({ path: path.slice(), radius: w.tunnelRadius, end: total });
@@ -2312,8 +2312,8 @@ export class Match {
     if (r.s < r.end && b.alive) return true;
     // (it breaks through: the rest of the way up, and a slope out of it)
     const p6 = r.path;
-    for (let s = 1; s <= 10; s++) this.field.carve(p6[6] + ((p6[9] - p6[6]) * s) / 10, p6[7] + ((p6[10] - p6[7]) * s) / 10, p6[8] + ((p6[11] - p6[8]) * s) / 10, r.radius);
-    this.field.carve(p6[9] * 0.5 + p6[6] * 0.5, p6[10] * 0.5 + p6[7] * 0.5, p6[11] * 0.5 + p6[8] * 0.5, r.radius);
+    for (let s = 1; s <= 10; s++) this.field.carve(p6[6] + ((p6[9] - p6[6]) * s) / 10, p6[7] + ((p6[10] - p6[7]) * s) / 10, p6[8] + ((p6[11] - p6[8]) * s) / 10, r.radius, false, false);
+    this.field.carve(p6[9] * 0.5 + p6[6] * 0.5, p6[10] * 0.5 + p6[7] * 0.5, p6[11] * 0.5 + p6[8] * 0.5, r.radius, false, false);
     // (out: a little hop up out of the hole, and it lands softly)
     b.vx = b.nx * BURROW_HOP;
     b.vy = b.ny * BURROW_HOP;
