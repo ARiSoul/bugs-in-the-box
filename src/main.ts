@@ -398,6 +398,10 @@ function handleEvents(events: readonly MatchEvent[]): void {
       case 'fuse':
         texts.spawn('fuse blown', 0x8ccaff, at.set(match.units[e.unit].bug.x, match.units[e.unit].bug.y + 3.2, match.units[e.unit].bug.z));
         break;
+      case 'reacted':
+        // (tags met on a bug: what came of it, in a word)
+        texts.spawn(e.word, 0xffc98a, at.set(match.units[e.unit].bug.x, match.units[e.unit].bug.y + 3.4, match.units[e.unit].bug.z));
+        break;
       case 'noRoom':
         // (a burrow where the ground is too thin, or hard: it says so)
         texts.spawn(match.currentWeapon.kind === 'burrow' && match.burrowPath(match.units[e.unit], 0, burrowWay).length < 12 ? 'cannot dig here' : match.built ? 'once a turn' : 'no room', 0xff8a6a, at.set(match.units[e.unit].bug.x, match.units[e.unit].bug.y + 3, match.units[e.unit].bug.z));

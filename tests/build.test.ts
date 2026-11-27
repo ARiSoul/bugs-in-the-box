@@ -131,7 +131,8 @@ describe('hiding', () => {
       const u = m.units[0];
       expect(use(m, w).some((e) => e.type === 'hide')).toBe(true);
       expect(u.cover).toBe(w);
-      m.explode(u.bug.x + 1, u.bug.y, u.bug.z, { ...SOLDER_BLOB, blastRadius: 3 });
+      // (a blast that does not burn: fire would burn a wax nest at once, see reactions.test)
+      m.explode(u.bug.x + 1, u.bug.y, u.bug.z, { ...SOLDER_BLOB, id: 'capacitor', blastRadius: 3 });
       expect(100 - u.bug.health).toBe(m.units[0].bug.health < 100 ? 42 - Math.floor(42 * (w.cover as number)) : -1);
       expect(Math.abs(u.bug.vy)).toBe(0);
     }

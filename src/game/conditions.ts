@@ -21,6 +21,6 @@ export const HELD = CONDITIONS.register({ id: 'held', tags: ['silk'], maxStacks:
 /** Its shell is whole: it takes the next blow that would kill it. */
 export const SHELL = CONDITIONS.register({ id: 'shell', tags: ['chitin'], maxStacks: 1, ticks: 0 });
 /** Its shell broke in a turn: nothing more hurts it in that turn; `value`: the turn's number. */
-export const CRACKED = CONDITIONS.register({ id: 'cracked', tags: ['chitin'], maxStacks: 1, ticks: 0 });
+export const CRACKED = CONDITIONS.register({ id: 'cracked', tags: ['broken'], maxStacks: 1, ticks: 0 });
 /** It hides in a shelter (until its next turn); `ref`: the shelter's weapon id; `value`: how much it still keeps off. */
 export const SHELTERED = CONDITIONS.register({ id: 'sheltered', tags: ['cover'], maxStacks: 1, ticks: 0 });

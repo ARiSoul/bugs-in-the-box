@@ -223,6 +223,8 @@ export type MatchEvent =
   | { type: 'webGone'; id: number; torn: boolean }
   | { type: 'damage'; unit: number; amount: number }
   | { type: 'death'; unit: number }
+  /** Tags met on a bug: what came of it, in a word (a web burnt off it, its shelter burnt, a swarm slowed...). */
+  | { type: 'reacted'; unit: number; word: string }
   | { type: 'ring'; index: number; x: number; y: number; z: number }
   | { type: 'sting'; x: number; y: number; z: number; unit: number; rings: number }
   | { type: 'box'; id: number }
@@ -378,6 +380,7 @@ const PASTE = WEAPONS.findIndex((w) => w.kind === 'trap');
 /** What hits a bug, in tags: a shock, or nothing in particular. */
 const SHOCK: readonly Tag[] = ['electric'];
 const NONE: readonly Tag[] = [];
+const SWARMING: readonly Tag[] = ['swarm'];
 const WEB = WEAPONS.findIndex((w) => w.kind === 'web');
 /** After hiding there is a moment to see it (ticks). */
 const HIDE_TICKS = 70;
@@ -1171,7 +1174,7 @@ export class Match {
     if (since > 0 && since % BROOD_BITE_TICKS === 0 && since <= BROOD_BITES * BROOD_BITE_TICKS) {
       const k = since / BROOD_BITE_TICKS;
       for (let i = 0; i < c.units.length; i++)
-        this.damage(this.units[c.units[i]], Math.floor((c.harm[i] * k) / BROOD_BITES) - Math.floor((c.harm[i] * (k - 1)) / BROOD_BITES));
+        this.struck(this.units[c.units[i]], Math.floor((c.harm[i] * k) / BROOD_BITES) - Math.floor((c.harm[i] * (k - 1)) / BROOD_BITES), SWARMING);
     }
     if (c.ticks < BROOD_LIGHT) return;
     for (const id of c.units) {
@@ -1560,7 +1563,7 @@ export class Match {
     if (c.victim >= 0) {
       const v = this.units[c.victim];
       c.swarm++;
-      if (v.bug.alive && c.swarm % Math.floor(SWARM_TICKS / SWARM_BITES) === 0 && c.swarm < SWARM_TICKS) this.damage(v, Math.round(SWARM_BITE * this.hard * this.tired));
+      if (v.bug.alive && c.swarm % Math.floor(SWARM_TICKS / SWARM_BITES) === 0 && c.swarm < SWARM_TICKS) this.struck(v, Math.round(SWARM_BITE * this.hard * this.tired), SWARMING);
       if (v.bug.alive && c.swarm < SWARM_TICKS) return;
       // (under it: the nearest ground, which on an edge is not straight below)
       const on = v.bug.alive ? this.toSurface(v.bug.x, v.bug.y, v.bug.z) : null;
@@ -2436,7 +2439,7 @@ export class Match {
       const dist = Math.sqrt(ex * ex + ey * ey + ez * ez);
       const f = blastShare(b, x, y, z, w);
       if (f <= 0) continue;
-      this.damage(u, Math.round(w.damage * this.hard * f), tags.includes('electric'));
+      this.struck(u, Math.round(w.damage * this.hard * f), tags);
       // thrown away from the blast, with an upward bias so it does not just slide
       let kx = 0;
       let ky = 1;
@@ -2485,7 +2488,10 @@ export class Match {
       const b = best.bug;
       this.events.push({ type: 'arc', x1: fx, y1: fy, z1: fz, x2: b.x, y2: b.y, z2: b.z });
       // (grounded in its husk: it runs off)
-      if (!(best.cover && best.cover.species === 'cockroach' && this.passive(best.team, 'grounded'))) this.damage(best, Math.round(w.arcDamage * this.hard), true);
+      // (a whole shell insulates: no arc gets through it)
+      const insulated = reaction('insulate', SHOCK, best.effects.tags()) !== null;
+      if (insulated) this.events.push({ type: 'reacted', unit: best.id, word: 'insulated' });
+      else if (!(best.cover && best.cover.species === 'cockroach' && this.passive(best.team, 'grounded'))) this.damage(best, Math.round(w.arcDamage * this.hard), true);
       this.conductAt(b.x, b.y, b.z, 0, w.arcDamage, hit);
       b.push(0, 5, 0);
       fx = b.x;
@@ -2622,6 +2628,47 @@ export class Match {
     const pull = 10 + d * 0.35;
     o.push(((b.x - o.x) / d) * pull, 7 + ((b.y - o.y) / d) * pull * 0.5, ((b.z - o.z) / d) * pull);
     this.events.push({ type: 'arc', x1: b.x, y1: b.y, z1: b.z, x2: o.x, y2: o.y, z2: o.z });
+  }
+
+  /**
+   * A bug is hit by something with tags `by`: first what comes of those tags meeting its own (its effects', and its
+   * shelter's), then the harm. Fire burns a silk or wax shelter at once, and the web that holds it (and hurts a little);
+   * a blast shatters more through a shelter of chitin; a swarm bites less through the silk that holds it.
+   */
+  private struck(u: Unit, amount: number, by: readonly Tag[]): void {
+    if (!u.bug.alive) return;
+    const said = (word: string): void => {
+      this.events.push({ type: 'reacted', unit: u.id, word });
+    };
+    if (u.cover) {
+      const shelter = tagsOf(u.cover.id);
+      const gone = reaction('burn', by, shelter) ?? reaction('melt', by, shelter);
+      if (gone) {
+        said(gone.word);
+        this.bare(u, true);
+      } else {
+        const shatter = reaction('brittle', by, shelter);
+        if (shatter && amount > 0) {
+          said(shatter.word);
+          amount = Math.round(amount * shatter.value);
+        }
+      }
+    }
+    const on = u.effects.tags();
+    if (u.web >= 0 && reaction('burn', by, on)) {
+      const w = this.webs.find((q) => q.id === u.web);
+      if (w) this.removeWeb(w, false);
+      u.web = -1;
+      u.bug.slow = 1;
+      said('burnt free');
+      amount += BURN_HURTS;
+    }
+    const tire = reaction('tire', by, on);
+    if (tire && amount > 0) {
+      said(tire.word);
+      amount = Math.round(amount * tire.value);
+    }
+    this.damage(u, amount, by.includes('electric'));
   }
 
   private damage(u: Unit, amount: number, electric = false): void {

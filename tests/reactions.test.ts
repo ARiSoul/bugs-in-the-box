@@ -2,12 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { Match, NO_INPUT, type MatchEvent, type MatchInput, type Structure } from '../src/game/match';
 import { BURN_HURTS, reaction, REACTIONS, tagsOf, wordFor } from '../src/game/reactions';
 import { ANT, BEE, COCKROACH, SPIDER, type BugSpecies } from '../src/game/species';
+import { HUSK, SILK_FUNNEL, WAX_NEST } from '../src/game/weapons';
 import { CAPACITOR, COMB_WALL, LIVING_BRIDGE, RAMPART, SHIELD_WALL, SHORT_CIRCUIT, SILK_CURTAIN, SOLDER_BLOB, WEAPONS, WEB_SHOT, type Weapon } from '../src/game/weapons';
 import type { Terrain } from '../src/terrain/Terrain';
 import { analyze, meshAll } from './helpers/meshIntegrity';
 import { world } from './helpers/worlds';
 
 interface Inside {
+  struck(u: unknown, amount: number, by: readonly string[]): void;
   openWeb(x: number, y: number, z: number, w: Weapon, grand: boolean, paste?: number): void;
   arc(x: number, y: number, z: number, w: Weapon): void;
   bite(x: number, y: number, z: number, r: number): number;
@@ -140,6 +142,10 @@ describe('tags that meet', () => {
     inside(n).arc(b.x + 9, b.y + 0.5, b.z, SHORT_CIRCUIT);
     expect(b.health).toBe(h);
     n.field.erase?.(n.structures[0].pieces);
+    // (its own shell, whole, insulates it too: once it is broken, the arc gets through)
+    inside(n).arc(b.x + 9, b.y + 0.5, b.z, SHORT_CIRCUIT);
+    expect(b.health).toBe(h);
+    n.units[0].shell = false;
     inside(n).arc(b.x + 9, b.y + 0.5, b.z, SHORT_CIRCUIT);
     expect(b.health).toBeLessThan(h);
   });
@@ -188,5 +194,102 @@ describe('tags that meet', () => {
     inside(m).openWeb(44, 10.5, 20, WEB_SHOT, false);
     expect(inside(m).bite(44, 10.5, 20, 0.5)).toBeCloseTo(2 / 3);
     expect(inside(m).bite(44, 10.5, 50, 0.5)).toBe(1);
+  });
+});
+
+describe('tags that meet on bugs', () => {
+  /** A side of `s` hidden in `w` (or out in the open with no shelter), and a blast right by it; what it took, and said. */
+  function hit(s: BugSpecies, w: Weapon | null, blast: Weapon): { took: number; words: string[]; m: Match } {
+    const t = plain();
+    const m = w ? setup(s, w, t) : new Match(t, [{ name: 'A', species: s, color: 0, size: 1 }, { name: 'B', species: ANT, color: 0, size: 1 }], 1, { placeBugs: false, wind: 0 });
+    if (!w) {
+      m.units[0].bug.drop(t, 20, 32);
+      m.units[1].bug.drop(t, 50, 32);
+      run(m, 60);
+    }
+    const u = m.units[0];
+    u.bug.health = 100;
+    m.explode(u.bug.x + 1, u.bug.y, u.bug.z, { ...blast, blastRadius: 3 });
+    const words = m.events.filter((e): e is Extract<MatchEvent, { type: 'reacted' }> => e.type === 'reacted').map((e) => e.word);
+    return { took: 100 - u.bug.health, words, m };
+  }
+
+  it('fire burns a bug free of the web that holds it, and hurts it a little', () => {
+    const blast = (w: Weapon): { took: number; free: boolean; words: string[] } => {
+      const m = setup(SPIDER, SOLDER_BLOB);
+      const u = m.units[1];
+      inside(m).openWeb(u.bug.x, u.bug.y, u.bug.z, WEB_SHOT, false);
+      run(m, 1);
+      expect(u.web).toBeGreaterThanOrEqual(0);
+      u.bug.health = 100;
+      inside(m).struck(u, 10, tagsOf(w.id));
+      const words = m.events.filter((e): e is Extract<MatchEvent, { type: 'reacted' }> => e.type === 'reacted').map((e) => e.word);
+      return { took: 100 - u.bug.health, free: u.web < 0, words };
+    };
+    const fire = blast(SOLDER_BLOB);
+    expect(fire.free).toBe(true);
+    expect(fire.words).toContain('burnt free');
+    expect(fire.took).toBe(10 + BURN_HURTS);
+    const shock = blast(CAPACITOR);
+    expect(shock.free).toBe(false);
+    expect(shock.took).toBe(10);
+  });
+
+  it('fire burns a shelter of silk or wax at once: the blow comes through whole', () => {
+    for (const [s, w] of [[SPIDER, SILK_FUNNEL], [BEE, WAX_NEST]] as const) {
+      const burnt = hit(s, w, SOLDER_BLOB);
+      expect(burnt.m.units[0].cover).toBeNull();
+      expect(burnt.words.length).toBe(1);
+      const kept = hit(s, w, { ...SOLDER_BLOB, id: 'capacitor' });
+      expect(kept.m.units[0].cover).toBe(w);
+      expect(burnt.took).toBeGreaterThan(kept.took);
+    }
+  });
+
+  it('a blast shatters more through a shelter of chitin', () => {
+    const husk = hit(COCKROACH, HUSK, CAPACITOR);
+    expect(husk.words).toContain('shattered');
+    const plainBlast = Math.round(CAPACITOR.damage * 1);
+    expect(husk.took).toBeGreaterThan(0);
+    expect(husk.took).toBeLessThan(plainBlast);
+    // (the same blast, its harm not raised: what the husk keeps off of it is less than of the raised one)
+    const n = setup(COCKROACH, HUSK);
+    const u = n.units[0];
+    u.bug.health = 100;
+    inside(n).struck(u, 50, ['electric']);
+    const without = 100 - u.bug.health;
+    const k = setup(COCKROACH, HUSK);
+    const v = k.units[0];
+    v.bug.health = 100;
+    inside(k).struck(v, 50, ['blast']);
+    expect(100 - v.bug.health).toBeGreaterThan(without);
+  });
+
+  it('a whole shell lets no arc through; a broken one does', () => {
+    const m = setup(COCKROACH, SOLDER_BLOB);
+    const b = m.units[0].bug;
+    const h = b.health;
+    inside(m).arc(b.x + 3, b.y + 0.5, b.z, SHORT_CIRCUIT);
+    expect(b.health).toBe(h);
+    expect(m.events.some((e) => e.type === 'reacted' && e.word === 'insulated')).toBe(true);
+    m.units[0].shell = false;
+    inside(m).arc(b.x + 3, b.y + 0.5, b.z, SHORT_CIRCUIT);
+    expect(b.health).toBeLessThan(h);
+  });
+
+  it('a swarm bites less through the silk that holds a bug', () => {
+    const bite = (held: boolean): number => {
+      const m = setup(SPIDER, SOLDER_BLOB);
+      const u = m.units[1];
+      if (held) {
+        inside(m).openWeb(u.bug.x, u.bug.y, u.bug.z, WEB_SHOT, false);
+        run(m, 1);
+      }
+      u.bug.health = 100;
+      inside(m).struck(u, 30, ['swarm']);
+      return 100 - u.bug.health;
+    };
+    expect(bite(false)).toBe(30);
+    expect(bite(true)).toBe(20);
   });
 });
