@@ -1348,7 +1348,7 @@ export class ColumnScene {
     const key = [bug.x, bug.y, bug.z, bug.fx, bug.fz].map((v) => v.toFixed(3)).join();
     if (key === this.previewKey && !march) return;
     this.previewKey = key;
-    const h = match.columnHead(march ? { ...match.activeUnit, bug: march.head } : match.activeUnit);
+    const h = match.columnHead(march ? { bug: march.head } : match.activeUnit);
     const p = this.trail.geometry.getAttribute('position') as THREE.BufferAttribute;
     const every = (march ? 75 : MARCH_TICKS) / PREVIEW;
     let tick = 0;

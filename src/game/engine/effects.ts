@@ -25,6 +25,18 @@ export interface EffectState {
   stacks: number;
   /** Ticks left (0: until taken off). */
   left: number;
+  /** What it carries, if anything: a number (turns left, what a shelter still keeps off, a web's id) and a reference (an
+   * id: the shelter's weapon). Plain values, so a match's state can be sent and compared. */
+  value: number;
+  ref: string;
+}
+
+/** How an effect is put on: how many stacks (1), for how long (its own time), and what it carries. */
+export interface ApplyOptions {
+  readonly stacks?: number;
+  readonly ticks?: number;
+  readonly value?: number;
+  readonly ref?: string;
 }
 
 /** What `Effects` tells as things change (for triggers). */
@@ -42,19 +54,29 @@ export class Effects {
     private readonly listener: EffectListener = {},
   ) {}
 
-  /** Put `def` on (more stacks of it if it is on already, its time from now). */
-  apply(def: EffectDef, stacks = 1, ticks = def.ticks): EffectState {
+  /** Put `def` on (more stacks of it if it is on already, its time from now; what it carries, if given, anew). */
+  apply(def: EffectDef, opts: ApplyOptions = {}): EffectState {
+    const stacks = opts.stacks ?? 1;
+    const ticks = opts.ticks ?? def.ticks;
     let s = this.on.get(def.id);
     if (s) {
+      this.unplace(s);
       s.stacks = Math.min(def.maxStacks, s.stacks + stacks);
       s.left = ticks;
+      if (opts.value !== undefined) s.value = opts.value;
+      if (opts.ref !== undefined) s.ref = opts.ref;
     } else {
-      s = { def, stacks: Math.min(def.maxStacks, stacks), left: ticks };
+      s = { def, stacks: Math.min(def.maxStacks, stacks), left: ticks, value: opts.value ?? 0, ref: opts.ref ?? '' };
       this.on.set(def.id, s);
       this.listener.started?.(def, s.stacks);
     }
     this.place(s);
     return s;
+  }
+
+  /** The effect `id` if it is on. */
+  find(id: string): EffectState | undefined {
+    return this.on.get(id);
   }
 
   /** Take `id` off; false if it was not on. */

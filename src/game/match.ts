@@ -1,6 +1,7 @@
 import { createRng } from '../terrain/noise';
 import { Bug, DT, IDLE, TICK_RATE, type BugInput } from './bug';
 import { Effects, Triggers, type MatchTriggers } from './engine';
+import { Unit } from './unit';
 import { surfaceDistance, type TerrainField } from './field';
 import { rot, rotate2 } from './math';
 import { Projectile } from './projectile';
@@ -161,33 +162,7 @@ export interface TeamSpec {
   readonly size: number;
 }
 
-export interface Unit {
-  readonly id: number;
-  readonly team: number;
-  readonly name: string;
-  readonly bug: Bug;
-  /** Aim pitch as a unit vector in the vertical plane of the facing: (horizontal, vertical). */
-  aimH: number;
-  aimV: number;
-  /** Set once the death has been announced. */
-  dead: boolean;
-  /** Held by a web (its id; -1: free). */
-  web: number;
-  /** Its shell is whole: it takes the next blow that would kill it... */
-  shell: boolean;
-  /** ...and nothing more hurts it in that turn (its number; -1: never yet). */
-  shellTurn: number;
-  /** From boxes: a fuse that halves the next blow; its next shot hurts more; turns left on springs; seconds its next turn has more. */
-  fuse: boolean;
-  boost: boolean;
-  spring: number;
-  extra: number;
-  /** It hides (until its next turn): in which shelter, and how much that still keeps off. */
-  cover: Weapon | null;
-  coverLeft: number;
-  /** What it is under now (effects, with their stacks and time); their modifiers sit on `bug.stats`. */
-  readonly effects: Effects;
-}
+export { Unit } from './unit';
 
 export interface MatchInput {
   move: -1 | 0 | 1;
@@ -641,7 +616,9 @@ export class Match {
           started: (def, stacks) => this.triggers.emit('effectStart', { unit, effect: def.id, stacks }),
           ended: (def) => this.triggers.emit('effectEnd', { unit, effect: def.id }),
         });
-        this.units.push({ id: unit, team: t, name: `${teams[t].species.id} ${i + 1}`, bug, aimH: COS45, aimV: COS45, dead: false, web: -1, shell: teams[t].species.shell === true, shellTurn: -1, fuse: false, boost: false, spring: 0, extra: 0, cover: null, coverLeft: 0, effects });
+        const u = new Unit(unit, t, `${teams[t].species.id} ${i + 1}`, bug, effects, COS45);
+        u.shell = teams[t].species.shell === true;
+        this.units.push(u);
         this.bugs.push(bug);
       }
     this.nextInTeam = teams.map(() => 0);
@@ -1525,7 +1502,8 @@ export class Match {
   }
 
   /** What leads a column of this unit's, where it would set out now. */
-  columnHead(u: Unit): Bug {
+  /** A marcher's body where `u` stands (only its bug is read). */
+  columnHead(u: Pick<Unit, 'bug'>): Bug {
     const b = u.bug;
     const h = new Bug(MARCHER);
     h.confine = b.confine;

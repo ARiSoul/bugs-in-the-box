@@ -158,7 +158,9 @@ Rules that change what bugs are and do go through a few pieces, as data, pure li
 - `Triggers<MatchTriggers>`: "when X, do Y". `Match.triggers` emits `turnStart`, `damage`, `death`, `boxOpen`, `effectStart`, `effectEnd`; handlers run by priority, then in the order added (a handler added during an event waits for the next).
 - `Registry<T>`: definitions by id, frozen, in the order registered.
 
-Step 1 (this base) leaves the game exactly as it was. The proof is the **golden replays** (`tests/replays.test.ts`): five whole matches the computer plays against itself (every species, levels 1 to 10, four minutes each), boiled down to a hash of every unit's state and the match's events every 60 ticks, and of the ground at the end. Every later step must keep them, tick for tick, unless the game is meant to change: then `npm run golden` writes them anew, in the same commit as the change.
+Step 2 moved a bug's states onto it: `conditions.ts` defines them as effects with tags (the box items `fuse`, `overclock`, `springs`, `extra-time`; `held` in a web, tag silk; `shell` and `cracked`, tag chitin; `sheltered`, tag cover). An effect may carry a number and a reference (`EffectState.value` / `ref`: a web's id, turns left, what a shelter still keeps off, the shelter's weapon id). `Unit` (`unit.ts`) is a class whose fields `fuse`, `boost`, `spring`, `extra`, `web`, `shell`, `shellTurn`, `cover`, `coverLeft` read and write those effects, so the rules read as before and every state is in one place, with triggers when it comes and goes. (A `Unit` must not be copied with a spread: its fields are accessors.)
+
+Steps 1 and 2 leave the game exactly as it was. The proof is the **golden replays** (`tests/replays.test.ts`): five whole matches the computer plays against itself (every species, levels 1 to 10, four minutes each), boiled down to a hash of every unit's state and the match's events every 60 ticks, and of the ground at the end. Every later step must keep them, tick for tick, unless the game is meant to change: then `npm run golden` writes them anew, in the same commit as the change.
 
 ## Client data (`src/data/`)
 

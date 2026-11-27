@@ -72,7 +72,7 @@ Everything that affects something else goes through the same five pieces, as dat
 - **Progression**: what stays between matches (experience, levels, skills chosen, items kept); it enters a match at its start, like the seed
 - **Tags** (fire, electric, silk, wax, resin, metal, wet) link them: a rule looks at the tag, not at the weapon's name
 
-Order: 1 the base, the game unchanged (whole matches compared tick by tick; **done**: `src/game/engine/`, golden replays) · 2 items, shelters, webs and shell moved over, one at a time · 3 every attack in the one format · 4 tags and the first five combinations · 5 the local settings page · 6 progression.
+Order: 1 the base, the game unchanged (whole matches compared tick by tick; **done**: `src/game/engine/`, golden replays) · 2 items, shelters, webs and shell moved over, one at a time (**done**: `conditions.ts`, `unit.ts`) · 3 every attack in the one format · 4 tags and the first five combinations · 5 the local settings page · 6 progression.
 
 To be decided: who evolves (recommended: the species, per player) · whether levels give power (recommended: options, not strength) · whether interactions reach one's own team (recommended: yes).
 

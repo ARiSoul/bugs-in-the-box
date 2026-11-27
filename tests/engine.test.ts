@@ -60,11 +60,11 @@ describe('effects', () => {
     const a = new Attributes(base);
     const ended: string[] = [];
     const e = new Effects(a, { ended: (d) => ended.push(d.id) });
-    e.apply(slow, 2);
+    e.apply(slow, { stacks: 2 });
     expect(e.stacks('wet')).toBe(2);
     expect(a.get('speed')).toBe(ANT.walkSpeed * 0.25);
     expect(a.get('jump')).toBe(ANT.jumpSpeed - 2);
-    e.apply(slow, 5);
+    e.apply(slow, { stacks: 5 });
     expect(e.stacks('wet')).toBe(3);
     expect(a.get('speed')).toBe(ANT.walkSpeed * 0.125);
     for (let i = 0; i < 4; i++) e.tick();
