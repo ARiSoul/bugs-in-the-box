@@ -1542,6 +1542,8 @@ function frame(now: number): void {
     match.aimDirection(u, aimAt);
     const t = stage.controls.target;
     lookAhead.set(t.x + aimAt[0] * AHEAD, t.y + aimAt[1] * AHEAD, t.z + aimAt[2] * AHEAD);
+    // (a Burrow is not aimed up: no way is kept free ahead of it)
+    if (u.bug.alive && match.currentWeapon.kind === 'burrow') lookAhead.copy(t);
     const c = stage.camera.position;
     const d = c.distanceTo(t) || 1;
     const up = Math.max(0, (t.y - c.y) / d + Math.max(0, aimAt[1]) * 0.5);
