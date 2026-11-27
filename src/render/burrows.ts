@@ -184,7 +184,7 @@ export class BurrowViews {
   /** The heaves alone (not the mouths): hidden while a bug is seen under the ground, so they never cover it. */
   private readonly seams: THREE.Mesh[] = [];
   // (both sides: its rows are laid so its faces look down)
-  private readonly heaveMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.97, side: THREE.DoubleSide });
+  private readonly heaveMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0, envMapIntensity: 0, side: THREE.DoubleSide });
 
   /** The ridge over a tunnel, waiting to be laid as the ant gets under each part of it: where, how big, its colour, how far along. */
   private readonly ridge: { m: THREE.Matrix4; c: number; at: number }[] = [];
@@ -299,7 +299,7 @@ export class BurrowViews {
     const rows = Math.max(2, Math.ceil(l / 0.22));
     const sx = -(z1 - z0) / l;
     const sz = (x1 - x0) / l;
-    const W = radius * 0.8;
+    const W = radius * 1.15;
     const pos = new Float32Array((rows + 1) * HEAVE_ACROSS * 3);
     const col = new Float32Array((rows + 1) * HEAVE_ACROSS * 3);
     // (the ground's own skin, pushed up: a bump of it, not a slab of something else)
@@ -327,7 +327,8 @@ export class BurrowViews {
         pos[o] = cx + sx * s + nx * h;
         pos[o + 1] = cy + ny * h;
         pos[o + 2] = cz + sz * s + nz * h;
-        const k = crack ? 0.35 : (0.8 + 0.25 * lump - 0.2 * (1 - a) + 0.85 * a ** 6) * (0.92 + 0.16 * Math.sin(f * 53 + j * 5.1));
+        // (no shine on its crest: a soft bulge, a little darker in its crack)
+        const k = crack ? 0.6 : (0.85 + 0.15 * lump - 0.1 * (1 - a) + 0.15 * a ** 6) * (0.94 + 0.12 * Math.sin(f * 53 + j * 5.1));
         // (disturbed earth, low and a little darker than the crumbs on it: a seam over the tunnel, not a log)
         col[o] = ground[0] * 0.8 * k;
         col[o + 1] = ground[1] * 0.8 * k;
@@ -514,7 +515,7 @@ export class BurrowViews {
 const TUBE_SEGMENTS = 60;
 /** The heaved mound over a tunnel: points across it, and how high it rises. */
 const HEAVE_ACROSS = 13;
-const HEAVE_HIGH = 0.22;
+const HEAVE_HIGH = 0.18;
 const GREY: readonly [number, number, number] = [0.3, 0.27, 0.24];
 const TUBE_SIDES = 10;
 
