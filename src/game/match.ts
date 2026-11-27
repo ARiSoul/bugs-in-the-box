@@ -324,12 +324,14 @@ const BURROW_UNDER = 1.4;
 const BURROW_HOLD = 10;
 /**
  * The ground a tunnel needs under it: solid this far under its wall, tested every this much along it. Where it is not, or
- * something hard is near, the tunnel ends short there. Under thin ground it runs shallower, by this much at a time, as far
- * up as just under the top (its roof may break: the ground over it heaves up anyway).
+ * something hard is near, the tunnel ends short there. Under thin ground it runs shallower, by this much at a time (but
+ * never so shallow that its roof is gone: it stays a tunnel, not a trench).
  */
 const BURROW_FLOOR = 0.4;
 const BURROW_STEP = 0.7;
 const BURROW_RISE = 0.15;
+/** The ground it leaves over itself at the least (it stays a tunnel, not a trench). */
+const BURROW_ROOF = 0.5;
 /** How fast a bug walks through a tunnel (units a second; backing, this much of it), and how much room it needs in it (its radius and this). */
 const TUNNEL_WALK = 4.5;
 const TUNNEL_BACK = 0.6;
@@ -2057,7 +2059,7 @@ export class Match {
     const want = BURROW_SHORT + (BURROW_LONG - BURROW_SHORT) * (power < 0 ? 0 : power > 1 ? 1 : power);
     let len = -1;
     let deep = r + BURROW_DEEP;
-    for (let d = r + BURROW_DEEP; d >= r + BURROW_TUNNEL - 1e-9 && len < want; d -= BURROW_RISE) {
+    for (let d = r + BURROW_DEEP; d >= r + BURROW_TUNNEL + BURROW_ROOF - 1e-9 && len < want; d -= BURROW_RISE) {
       const reach = this.burrowReach(b.x, b.y, b.z, fx, fy, fz, b.nx, b.ny, b.nz, d, want);
       if (reach > len + 0.5) {
         len = reach;

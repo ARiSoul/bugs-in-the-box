@@ -134,6 +134,8 @@ export class BurrowViews {
     return this.rest ? this.rest(ox, oy, oz, dx, dy, dz, maxT) : match.field.raycast(ox, oy, oz, dx, dy, dz, maxT);
   }
 
+  /** What the map is made of inside (set by the owner; linear): the earth dug out is mostly that. */
+  inside: (() => readonly [number, number, number] | undefined) | null = null;
   /** The colour of the ground at a place (set by the owner); without it, a dull grey-brown. */
   groundColor: ((x: number, y: number, z: number) => readonly [number, number, number]) | null = null;
   /** The heaved mounds over tunnels: the one growing now, and all of them (gone with the match). */
@@ -320,7 +322,10 @@ export class BurrowViews {
     const n = new THREE.Vector3(nx, ny, nz);
     const t2 = new THREE.Vector3().crossVectors(n, t1);
     const f = t1.clone();
-    const ground = this.groundColor?.(x, y, z) ?? GREY;
+    // (dug out from under its skin: mostly the map's broken inside, a little of its outside)
+    const skin = this.groundColor?.(x, y, z) ?? GREY;
+    const core = this.inside?.() ?? null;
+    const ground: readonly [number, number, number] = core ? [skin[0] * 0.3 + core[0] * 0.7, skin[1] * 0.3 + core[1] * 0.7, skin[2] * 0.3 + core[2] * 0.7] : skin;
     for (let k = 0; k < count; k++) {
       const a = Math.random() * Math.PI * 2;
       // (more on the side it faced)

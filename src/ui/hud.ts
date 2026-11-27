@@ -78,6 +78,8 @@ interface TeamView {
 
 /** DOM HUD of a match: the duel (both teams' health, the clock between them), the hand of weapons. Writes only what changed. */
 export class Hud {
+  /** Scratch for the Burrow's way (whether it can dig where it stands). */
+  private readonly way: number[] = [];
   readonly seed = el<HTMLInputElement>('seed');
   readonly regen = el<HTMLButtonElement>('regen');
   readonly random = el<HTMLButtonElement>('rand');
@@ -336,19 +338,23 @@ export class Hud {
           ? 'point at a spot, click (or the fire key) to call them · W/S move, right drag turns the view'
           : match.underground
             ? ''
-            : match.phase === 'aim' && match.currentWeapon.kind === 'burrow'
-              ? `<b>${match.currentWeapon.name}</b> hold fire: how far · it goes the way it faces`
+            : match.inTunnel
+              ? 'in a tunnel · W: forward · S: back'
+              : match.phase === 'aim' && match.currentWeapon.kind === 'burrow'
+              ? match.burrowPath(u, 0, this.way).length < 12
+                ? `<b>${match.currentWeapon.name}</b> cannot dig here: the ground is too thin, or hard`
+                : `<b>${match.currentWeapon.name}</b> hold fire: how far · it goes the way it faces`
               : match.phase === 'aim'
             ? `<b>${match.currentWeapon.name}</b> aim ${((Math.atan2(u.aimV, u.aimH) * 180) / Math.PI).toFixed(1)}°${u.bug.species.flight ? ` · ${u.bug.flying ? 'run: up, jump: let go' : u.bug.grounded ? 'jump twice: fly' : 'jump: fly'} · breath ${Math.round((u.bug.breath / (u.bug.species.flight * TICK_RATE)) * 100)}%` : ''}`
             : '';
-    if (aim && match.phase === 'aim' && match.currentWeapon.start === undefined && !match.stance) {
+    if (aim && match.phase === 'aim' && match.currentWeapon.start === undefined && !match.stance && !match.inTunnel) {
       const tags = tagsOf(match.currentWeapon.id).filter((q) => q === 'fire' || q === 'electric');
       if (tags.length) aim += ` · ${tags.join(' ')}`;
       const s = match.builtAhead(u, 45);
       const word = s ? wordFor(match.currentWeapon.id, s.weapon.id) : '';
       if (s && word) aim += ` · <b>${word}: ${s.weapon.name}</b>`;
     }
-    if (aim && match.currentWeapon.start !== undefined && !match.currentWeapon.alone) aim = match.going ? `<b>${match.currentWeapon.name}</b> on its way` : `<b>${match.currentWeapon.name}</b> ${match.currentWeapon.kind === 'bridge' ? 'click its near end, then its far one' : match.currentWeapon.kind === 'shelter' ? 'click where it goes to hide' : 'click where it stands · wheel turns it'} · right click drops it · fire key: right here`;
+    if (aim && match.currentWeapon.start !== undefined && !match.currentWeapon.alone && !match.inTunnel) aim = match.going ? `<b>${match.currentWeapon.name}</b> on its way` : `<b>${match.currentWeapon.name}</b> ${match.currentWeapon.kind === 'bridge' ? 'click its near end, then its far one' : match.currentWeapon.kind === 'shelter' ? 'click where it goes to hide' : 'click where it stands · wheel turns it'} · right click drops it · fire key: right here`;
     if (aim && match.built && (match.currentWeapon.kind === 'wall' || match.currentWeapon.kind === 'bridge')) aim += ' · once a turn';
     this.showFlock(match, computer);
     this.set('aim', () => (this.aim.innerHTML = aim), aim);

@@ -92,10 +92,16 @@ export class AimView {
     const u = match.activeUnit;
     const p = match.burrowPath(u, match.charging ? match.power : 0, this.path);
     // (the ground before it is too thin, or hard: no way)
+    const start = this.start.material as THREE.MeshBasicMaterial;
+    const b0 = u.bug;
+    this.start.position.set(b0.x - b0.nx * b0.species.radius * 0.9, b0.y - b0.ny * b0.species.radius * 0.9, b0.z - b0.nz * b0.species.radius * 0.9);
+    this.start.quaternion.setFromUnitVectors(AimView.UP, this.v.set(b0.nx, b0.ny, b0.nz));
     if (p.length < 12) {
-      this.dots.visible = this.ring.visible = this.start.visible = false;
+      this.dots.visible = this.ring.visible = false;
+      start.color.set(0xff6a5a);
       return;
     }
+    start.color.set(0xffd27a);
     let total = 0;
     for (let k = 0; k + 3 < p.length; k += 3) total += Math.hypot(p[k + 3] - p[k], p[k + 4] - p[k + 1], p[k + 5] - p[k + 2]);
     // (the dots run along it, slowly)

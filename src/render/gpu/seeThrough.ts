@@ -21,6 +21,9 @@ const UNDER = 0.9;
 /** Looking straight up, it is this much wider again; round where the aim goes. */
 const UP_WIDER = 2.2;
 const AHEAD_ROUND = 4;
+/** A bug under the ground (in a tunnel, digging): only round it, this wide, and more of the ground left (ghosted). */
+const UNDER_ROUND = 4;
+const UNDER_LEFT = 0.22;
 
 /**
  * What stands between the camera and a bug is drawn as thin lines, so the bug is seen through it and one still knows that
@@ -32,6 +35,8 @@ export class SeeThrough {
   /** Where the aim goes (a way kept free to it too), and how much wider all of it is (looking up from under something). */
   private readonly ahead = uniform(new THREE.Vector3());
   private readonly wider = uniform(1);
+  /** 1: the bug is under the ground (only round it, ghosted); 0: as usual. */
+  private readonly under = uniform(0);
   /** Something is seen through now. */
   get on(): boolean {
     return this.amount.value > 0.3;
@@ -42,8 +47,9 @@ export class SeeThrough {
   private readonly whole = bool(true) as unknown as B;
 
   /** Follow: where the bug is, where its aim goes, how far up the view looks (0..1), whether something is in the way. */
-  update(point: THREE.Vector3, ahead: THREE.Vector3, up: number, hidden: boolean, dt: number): void {
+  update(point: THREE.Vector3, ahead: THREE.Vector3, up: number, hidden: boolean, dt: number, under = false): void {
     this.at.value.copy(point);
+    this.under.value += ((under ? 1 : 0) - this.under.value) * (1 - Math.exp(-dt / FADE));
     this.ahead.value.copy(ahead);
     this.wider.value += (1 + UP_WIDER * Math.max(0, up) - this.wider.value) * (1 - Math.exp(-dt / FADE));
     const k = 1 - Math.exp(-dt / FADE);
@@ -81,7 +87,7 @@ export class SeeThrough {
     const along = rel.dot(dir);
     const before = far.sub(along) as unknown as F;
     const off = length(rel.sub(dir.mul(along)));
-    const wide = clamp(before.mul(WIDER).add(round), 0, WIDEST).mul(this.wider);
+    const wide = mix(clamp(before.mul(WIDER).add(round), 0, WIDEST).mul(this.wider), float(UNDER_ROUND), this.under);
     // (a back that faces the camera: it is inside of something, or under the ground)
     const back = frontFacing.select(float(0), float(1)) as unknown as F;
     const o = clamp(smoothstep(wide, wide.mul(0.62), off).add(back.mul(smoothstep(wide.mul(2.4), wide.mul(1.4), off))), 0, 1);
@@ -93,9 +99,10 @@ export class SeeThrough {
       const keep = (was ?? bool(true)).toVar();
       If(this.amount.greaterThan(0.01), () => {
         const low = step(min(this.at.y, cameraPosition.y).sub(UNDER), positionWorld.y);
-        const open = max(this.open(this.at as unknown as THREE.Node<'vec3'>, ROUND), this.open(this.ahead as unknown as THREE.Node<'vec3'>, AHEAD_ROUND)).mul(this.amount).mul(low);
+        const ahead = this.open(this.ahead as unknown as THREE.Node<'vec3'>, AHEAD_ROUND).mul(float(1).sub(this.under));
+        const open = max(this.open(this.at as unknown as THREE.Node<'vec3'>, ROUND), ahead).mul(this.amount).mul(low);
         const line = fract(screenCoordinate.x.add(screenCoordinate.y).div(PITCH));
-        keep.assign(keep.and(line.lessThan(mix(float(1.01), float(LEFT), open))));
+        keep.assign(keep.and(line.lessThan(mix(float(1.01), mix(float(LEFT), float(UNDER_LEFT), this.under), open))));
       });
       return keep;
     })() as unknown as B;

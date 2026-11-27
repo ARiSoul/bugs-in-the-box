@@ -125,6 +125,7 @@ const burrowWay: number[] = [];
 /** The way up out of a burrow, drawn when the ant breaks through (x, y, z twice, and the radius). */
 let burrowUp: number[] = [];
 burrows.puff = (x, y, z, n) => buildViews.dust(x, y, z, n);
+burrows.inside = () => scenario.inside?.core;
 // (the colour of what is under a place: the first solid cell down from it)
 burrows.groundColor = (x, y, z) => {
   const i = Math.round(x);
@@ -1501,9 +1502,10 @@ function frame(now: number): void {
       }
     }
     if (tracking) follow.update(target, dt);
-    if (burrowing) follow.overlook(holding ? 0.95 : 0.85, holding ? 29 : 21, dt, match.activeUnit.bug.hx, match.activeUnit.bug.hz);
+    // (under the ground: from high above, so little stands between the view and the bug)
+    if (burrowing) follow.overlook(holding ? 1.25 : 0.85, holding ? 29 : 21, dt, match.activeUnit.bug.hx, match.activeUnit.bug.hz);
     // (a bug walking through a tunnel: seen from above, not followed from behind)
-    else if (tracking && match.inTunnel) follow.overlook(0.92, 19, dt, match.activeUnit.bug.hx, match.activeUnit.bug.hz);
+    else if (tracking && match.inTunnel) follow.overlook(1.25, 21, dt, match.activeUnit.bug.hx, match.activeUnit.bug.hz);
   }
 
   // wind arrow in screen space: project the wind onto the camera's ground-plane axes
@@ -1545,7 +1547,7 @@ function frame(now: number): void {
     const up = Math.max(0, (t.y - c.y) / d + Math.max(0, aimAt[1]) * 0.5);
     const playing = follow.stays && !debugCamera && !inMenu && !intro && !inScene() && !menus.over;
     const aheadHidden = playing && match.phase === 'aim' && terrain.raycast(c.x, c.y, c.z, lookAhead.x - c.x, lookAhead.y - c.y, lookAhead.z - c.z, c.distanceTo(lookAhead) - 1) >= 0 && terrain.sample(c.x, c.y, c.z) < 3;
-    seeThrough.update(t, lookAhead, up, playing && (follow.hides(terrain) || aheadHidden), dt);
+    seeThrough.update(t, lookAhead, up, playing && (follow.hides(terrain) || aheadHidden), dt, match.underground !== null || match.inTunnel !== null);
   }
   wasSpecial = inScene() !== null;
   bowState.active = bow.camera.active;
