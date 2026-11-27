@@ -59,7 +59,7 @@ export const SCENARIOS: readonly Scenario[] = [
     generate: pcCase,
     sharpEdges: true,
     // (a circuit board: pale fibreglass, thin copper layers)
-    inside: { core: [0.15, 0.15, 0.085], line: [0.5, 0.2, 0.07] },
+    inside: { core: [0.17, 0.17, 0.095], line: [0.75, 0.32, 0.1] },
     sky: { css: 'radial-gradient(ellipse at 50% 45%, #1a1d24 0%, #050608 70%)', fog: 0x0b1016 },
     strictBounds: true,
   },

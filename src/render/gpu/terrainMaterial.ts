@@ -99,7 +99,7 @@ export function createTerrainMaterial(
     If(broken.greaterThan(0.01), () => {
       // (the mesher's colour carries its burn and a little of its outside; the inside's own colour over it)
       const mesherLum = base.r.add(base.g).add(base.b).div(0.39);
-      base.assign(mix(base, inside.mul(mesherLum.clamp(0.45, 1.3)), broken));
+      base.assign(mix(base, inside.mul(mesherLum.clamp(0.8, 1.2)), broken));
     });
     // (the special shadings are codes in the glow channel; the mesher blends them across borders)
     const fuzz = clamp(float(1).sub(abs(pbr.z.sub(GLOW_FUZZ)).div(0.15)), 0, 1);
