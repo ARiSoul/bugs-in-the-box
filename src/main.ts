@@ -973,6 +973,11 @@ const pauseMenu = new PauseMenu(
     // (back to the setup: nobody gains from the match left)
     leave: () => openSetup(),
   },
+  () => ({
+    place: scenario.name,
+    turn: match.turnNumber + 1,
+    teams: match.teams.map((q, i) => ({ name: q.name.replace('Cockroaches', 'Roaches'), color: i ? '#5fb4ff' : '#ff5a45', health: match.teamHealth(i), alive: match.teamAlive(i) })),
+  }),
 );
 document.getElementById('hud')?.append(pauseMenu.button);
 window.addEventListener('keydown', (e) => {
