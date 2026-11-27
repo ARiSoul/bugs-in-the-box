@@ -2190,19 +2190,19 @@ export class Match {
     const top = k === 0 ? 0 : 9;
     const low = k === 0 ? 3 : 6;
     // (a second bore over its own, as steep as it: the roof over the top of it gone, a cut as gentle as the way itself;
-    // its spheres lie on a line, from over the mouth to over six tenths of the way along)
-    const lift = radius * 1.1;
+    // its spheres lie on a line, from over the mouth to over half the way along)
+    const lift = radius * 0.9;
     this.events.push({
       type: 'opened',
       x1: path[top] + nx * lift,
       y1: path[top + 1] + ny * lift,
       z1: path[top + 2] + nz * lift,
-      x2: path[top] + (path[low] - path[top]) * 0.6 + nx * lift,
-      y2: path[top + 1] + (path[low + 1] - path[top + 1]) * 0.6 + ny * lift,
-      z2: path[top + 2] + (path[low + 2] - path[top + 2]) * 0.6 + nz * lift,
+      x2: path[top] + (path[low] - path[top]) * 0.5 + nx * lift,
+      y2: path[top + 1] + (path[low + 1] - path[top + 1]) * 0.5 + ny * lift,
+      z2: path[top + 2] + (path[low + 2] - path[top + 2]) * 0.5 + nz * lift,
       radius,
     });
-    for (let s = 0; s <= 6; s++) {
+    for (let s = 0; s <= 5; s++) {
       const f = s / 10;
       this.field.carve(
         path[top] + (path[low] - path[top]) * f + nx * lift,
