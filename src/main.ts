@@ -929,8 +929,9 @@ window.addEventListener('pointermove', (e) => {
 });
 (document.getElementById('toSetup') as HTMLButtonElement).addEventListener('click', () => openSetup());
 
-// Dev only: shift+click blows up the terrain under the pointer (handy to test falls and damage).
-if (import.meta.env.DEV) {
+// Dev only, and only asked for (`?boom=1`): shift+click blows up the terrain under the pointer (handy to test falls and
+// damage). (Shift is also the run key: never on in a match by itself.)
+if (import.meta.env.DEV && new URLSearchParams(location.search).get('boom') === '1') {
   canvas.addEventListener('pointerup', (e) => {
     if (!e.shiftKey || e.button !== 0) return;
     const p = pickTerrain(e, canvas, stage.camera, terrain);
@@ -1511,7 +1512,8 @@ function frame(now: number): void {
     }
     if (tracking) follow.update(target, dt);
     // (under the ground: from high above, so little stands between the view and the bug)
-    if (burrowing) follow.overlook(holding ? 1.25 : 0.85, holding ? 29 : 21, dt, match.activeUnit.bug.hx, match.activeUnit.bug.hz);
+    // (aiming it: the view does not turn after the ant, which turns with the view; digging: it turns to the way it digs)
+    if (burrowing) follow.overlook(holding ? 1.25 : 0.85, holding ? 29 : 21, dt, holding ? match.activeUnit.bug.hx : 0, holding ? match.activeUnit.bug.hz : 0);
     // (a bug walking through a tunnel: seen from above, not followed from behind)
     // (turned to the tunnel's way, not the bug's: the bug faces where the view looks, and the two would chase each other)
     else if (tracking && match.inTunnel) follow.overlook(1.25, 21, dt, match.inTunnel.ax * match.inTunnel.dir, match.inTunnel.az * match.inTunnel.dir);
