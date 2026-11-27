@@ -25,7 +25,7 @@ const AHEAD_ROUND = 4;
 const UNDER_ROUND = 4;
 const UNDER_LEFT = 0.22;
 /** Right over it, this far round, nothing is left at all (no lines across the bug). */
-const UNDER_CLEAR = 1.5;
+const UNDER_CLEAR = 1.1;
 
 /**
  * What stands between the camera and a bug is drawn as thin lines, so the bug is seen through it and one still knows that
