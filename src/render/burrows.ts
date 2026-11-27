@@ -60,6 +60,8 @@ export class BurrowViews {
       const r = b.species.radius;
       // (where it goes in: the ground under it, on what is drawn there; it faces from the first point to the second)
       const up = r - this.drawnOver(match, p[0], p[1], p[2], b.nx, b.ny, b.nz);
+      // (one tunnel, one earth: both its ends heaped with what was dug where it went in)
+      this.soil = this.dug(this.groundColor?.(p[0] - b.nx * (r + 1), p[1] - b.ny * (r + 1), p[2] - b.nz * (r + 1)) ?? GREY);
       this.mound(match, p[0] - b.nx * up, p[1] - b.ny * up, p[2] - b.nz * up, b.nx, b.ny, b.nz, p[0] - p[3], p[2] - p[5], 90, 1.0, 0.35);
       this.tube(p, e.radius);
       // (a burst of earth out of the hole as it goes in)
@@ -99,7 +101,8 @@ export class BurrowViews {
         const e = this.dug(this.groundColor?.(deep.path[0], deep.path[1] - 1.5, deep.path[2]) ?? GREY);
         // (darker and warmer than the tunnel's walls: the earth round it, not more of it)
         // (earth: some of the map's own broken stuff in a brown)
-        (this.earth.material as THREE.MeshBasicMaterial).color.setRGB(e[0] * 0.22 + 0.095, e[1] * 0.17 + 0.062, e[2] * 0.12 + 0.03);
+        const s = brown(e);
+        (this.earth.material as THREE.MeshBasicMaterial).color.setRGB(s[0], s[1], s[2]);
       }
     }
     // (a bug walking through a tunnel: its far wall drawn, so the bug is seen in it through the ground)
@@ -163,6 +166,9 @@ export class BurrowViews {
     return core ? [skin[0] * 0.3 + core[0] * 0.7, skin[1] * 0.3 + core[1] * 0.7, skin[2] * 0.3 + core[2] * 0.7] : skin;
   }
 
+  /** The earth of the tunnel dug last (its mounds, its mouths, its inside are all of it); null: none yet. */
+  private soil: readonly [number, number, number] | null = null;
+
   /** What the map is made of inside (set by the owner; linear): the earth dug out is mostly that. */
   inside: (() => readonly [number, number, number] | undefined) | null = null;
   /** The colour of the ground at a place (set by the owner); without it, a dull grey-brown. */
@@ -207,7 +213,8 @@ export class BurrowViews {
     this.mount(match, x0, y0, z0, x1, y1, z1, t0 - lift, t1 - lift, nx, ny, nz, radius);
     const ground = this.dug(this.groundColor?.(p[0] - nx * r, p[1] - ny * r, p[2] - nz * r) ?? GREY);
     for (let k = 0; k <= count; k++) {
-      const f = k / count;
+      // (unevenly spaced, as spoil falls)
+      const f = Math.min(1, Math.max(0, (k + 0.8 * (Math.random() - 0.5)) / count));
       // (crumbs along the lips of its crack)
       const w = (Math.random() < 0.5 ? -1 : 1) * radius * (0.12 + 0.3 * Math.random());
       const ox = x0 + (x1 - x0) * f + sx * w;
@@ -219,7 +226,7 @@ export class BurrowViews {
       // (not on top of a part it went under: only on the ground over it)
       if (t < line - 0.8) continue;
       // (a heaved ridge: high along its middle, low to its sides)
-      const size = 0.09 + 0.11 * Math.random();
+      const size = 0.06 + 0.18 * Math.random() ** 2;
       // (on the mound's flank, not in the air nor under it)
       const heave = HEAVE_HIGH * 0.8 * (1 - (w / radius) ** 2);
       this.q.setFromEuler(this.e.set(Math.random() * 6, Math.random() * 6, Math.random() * 6));
@@ -354,7 +361,7 @@ export class BurrowViews {
     const pos = new Float32Array((RINGS + 1) * AROUND * 3);
     // (a hole: its lip the dug earth, lit, darker down it, black at its throat)
     const col = new Float32Array((RINGS + 1) * AROUND * 3);
-    const earth = this.dug(this.groundColor?.(x - nx, y - ny, z - nz) ?? GREY);
+    const earth = this.soil ?? this.dug(this.groundColor?.(x - nx, y - ny, z - nz) ?? GREY);
     for (let i = 0; i <= RINGS; i++) {
       const t = i / RINGS;
       const lit = 0.6 * (1 - t) ** 2.2;
@@ -409,7 +416,7 @@ export class BurrowViews {
     const t2 = new THREE.Vector3().crossVectors(n, t1);
     const f = t1.clone();
     // (dug out from under its skin: mostly the map's broken inside, a little of its outside)
-    const ground = this.dug(this.groundColor?.(x, y, z) ?? GREY);
+    const ground = this.soil ?? this.dug(this.groundColor?.(x, y, z) ?? GREY);
     for (let k = 0; k < count; k++) {
       const a = Math.random() * Math.PI * 2;
       // (more on the side it faced)
@@ -461,7 +468,8 @@ export class BurrowViews {
     const g = new THREE.TubeGeometry(curve, TUBE_SEGMENTS, radius * 0.92, TUBE_SIDES, false);
     // (the dug earth's colour: its floor pale, as if lit from the way in, its sides darker, its roof darkest; a little
     // grain along it)
-    const earth = this.dug(this.groundColor?.(path[0], path[1] - 1.5, path[2]) ?? GREY);
+    // (the earth round it, as the disc under a bug shows it, darker: dug through, not a pipe)
+    const earth = brown(this.soil ?? this.dug(this.groundColor?.(path[0], path[1] - 1.5, path[2]) ?? GREY));
     const nor = g.getAttribute('normal') as THREE.BufferAttribute;
     const col = new Float32Array(nor.count * 3);
     for (let i = 0; i < nor.count; i++) {
@@ -470,9 +478,9 @@ export class BurrowViews {
       const rib = Math.floor(i / (TUBE_SIDES + 1)) % 4 === 0 ? 0.72 : 1;
       const k = (0.18 + 0.62 * down * down) * rib * (0.9 + 0.2 * Math.abs(Math.sin(i * 12.9898)));
       // (darker than the earth round it: a hollow, not a log)
-      col[i * 3] = Math.min(1, earth[0] * 0.42 * k + 0.006);
-      col[i * 3 + 1] = Math.min(1, earth[1] * 0.44 * k + 0.006);
-      col[i * 3 + 2] = Math.min(1, earth[2] * 0.5 * k + 0.008);
+      col[i * 3] = Math.min(1, earth[0] * 0.62 * k);
+      col[i * 3 + 1] = Math.min(1, earth[1] * 0.62 * k);
+      col[i * 3 + 2] = Math.min(1, earth[2] * 0.66 * k);
     }
     g.setAttribute('color', new THREE.BufferAttribute(col, 3));
     g.setDrawRange(0, 0);
@@ -524,4 +532,9 @@ function earthDisc(): THREE.BufferGeometry {
   }
   g.setAttribute('color', new THREE.BufferAttribute(col, 3));
   return g;
+}
+
+/** Earth in a brown: a little of the map's own broken stuff in it (what the disc under a bug and its tunnel show). */
+function brown(e: readonly [number, number, number]): [number, number, number] {
+  return [e[0] * 0.22 + 0.095, e[1] * 0.17 + 0.062, e[2] * 0.12 + 0.03];
 }
