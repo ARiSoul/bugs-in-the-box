@@ -446,6 +446,13 @@ function handleEvents(events: readonly MatchEvent[]): void {
           minimap.touch();
         }
         break;
+      case 'opened':
+        // (a tunnel's mouth opened to the sky: what is drawn over it opens, and what lay on it falls)
+        stage.craters.addTunnel(e.x1, e.y1, e.z1, e.x2, e.y2, e.z2, e.radius);
+        ground.addTunnel(e.x1, e.y1, e.z1, e.x2, e.y2, e.z2, e.radius);
+        ground.dropLoose(e.x1, e.y1, e.z1, e.radius + 2);
+        minimap.touch();
+        break;
       case 'dig':
         lines.beam(at.set(e.x1, e.y1, e.z1), at2.set(e.x2, e.y2, e.z2));
         stage.craters.addTunnel(e.x1, e.y1, e.z1, e.x2, e.y2, e.z2, e.radius);

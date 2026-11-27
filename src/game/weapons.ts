@@ -315,7 +315,7 @@ export const TITAN_LIFT: Weapon = {
 };
 
 /** Ants only, a few times a match: it digs a tunnel as wide as it along its aim and runs out through it. Once a turn. */
-export const BURROW: Weapon = { ...BASE, id: 'burrow', name: 'Burrow', kind: 'burrow', species: 'ant', found: true, start: 3, alone: true, tunnelRadius: 1.35, color: 0xc98a4a };
+export const BURROW: Weapon = { ...BASE, id: 'burrow', name: 'Burrow', kind: 'burrow', species: 'ant', found: true, start: 3, alone: true, tunnelRadius: 1.8, color: 0xc98a4a };
 
 export const WEAPONS: readonly Weapon[] = [SOLDER_BLOB, CAPACITOR, SHORT_CIRCUIT, SOLDERING_IRON, WEB_SHOT, WEB_BOW, ANT_COLUMN, BLACKOUT_SWARM, THERMAL_PASTE, QUEENS_FLIGHT, RAMPART, LIVING_BRIDGE, ANTHILL, SILK_CURTAIN, SILK_SPAN, SILK_FUNNEL, SHIELD_WALL, SCALE_WALK, HUSK, COMB_WALL, COMB_SPAN, WAX_NEST, BURST, BURROW, TITAN_LIFT];
 

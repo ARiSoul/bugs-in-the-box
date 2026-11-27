@@ -230,6 +230,8 @@ export type MatchEvent =
   | { type: 'explosion'; x: number; y: number; z: number; radius: number }
   | { type: 'arc'; x1: number; y1: number; z1: number; x2: number; y2: number; z2: number }
   | { type: 'dig'; x1: number; y1: number; z1: number; x2: number; y2: number; z2: number; radius: number }
+  /** The ground opened along a line of spheres, quietly (a tunnel's mouth opened to the sky): what is drawn over it opens too. */
+  | { type: 'opened'; x1: number; y1: number; z1: number; x2: number; y2: number; z2: number; radius: number }
   | { type: 'arrow'; x: number; y: number; z: number; dx: number; dy: number; dz: number; unit: number }
   | { type: 'swarm'; unit: number }
   | { type: 'collapse'; x: number; y: number; z: number; unit: number }
@@ -314,8 +316,8 @@ const BURST_TICKS = 50;
 export const LIFT_HIGH = 1.6;
 /** A burrow: how fast an ant goes through it, how short and how long it may be, how deep and how steep, the hop out. */
 const BURROW_SPEED = 8;
-export const BURROW_SHORT = 7;
-export const BURROW_LONG = 20;
+export const BURROW_SHORT = 12;
+export const BURROW_LONG = 24;
 const BURROW_DEEP = 1.9;
 const BURROW_SLOPE = 2.6;
 const BURROW_HOP = 5;
@@ -336,13 +338,14 @@ const BURROW_RISE = 0.15;
  * the grid keeps whole: thinner ones melt open). */
 const BURROW_ROOF = 0.5;
 const BURROW_ROOF_WHOLE = 2;
-/** How fast a bug walks through a tunnel (units a second; backing, this much of it), and how much room it needs in it (its radius and this). */
-const TUNNEL_WALK = 4.5;
-const TUNNEL_BACK = 0.6;
-/** Out of a tunnel, a bug goes in again only once it is this much further than the tunnel's radius from both its mouths. */
-const TUNNEL_AWAY = 2.5;
-const TUNNEL_ROOM = 0.2;
-const TUNNEL_HOP = 3;
+/**
+ * How long its ways down and up are along the ground, for each unit of depth: gentle enough to walk (bugs stand on
+ * slopes up to about 50 degrees; these are about 40).
+ */
+const BURROW_RAMP = 1.25;
+/** How much of its way off a tunnel's middle line a bug down in it is drawn back each tick (and at most how far at once). */
+const GUIDE_RATE = 0.25;
+const GUIDE_PULL = 0.6;
 /** The Burrow's tunnel radius (the way bugs fit in one). */
 const BURROW_TUNNEL = WEAPONS.find((w) => w.kind === 'burrow')?.tunnelRadius ?? 1.35;
 export const BURST_AT = WEAPONS.findIndex((w) => w.kind === 'burst');
@@ -506,17 +509,36 @@ export class Match {
 
   /** The tunnels ants dug this match (their ways, four points; their radius): any bug that fits may walk through them. */
   readonly tunnels: { readonly path: readonly number[]; readonly radius: number; readonly end: number }[] = [];
-  /** Bugs in a tunnel now: which tunnel, how far along it, which way it goes (+1: from its first point). */
-  private readonly walks = new Map<number, { tunnel: number; s: number; dir: 1 | -1 }>();
-  /** Bugs just out of a tunnel: which (they go in again only once they have gone away from its mouths). */
-  private readonly outOf = new Map<number, number>();
-
-  /** The active bug in a tunnel now: its way, how far along it is, its radius (render only reads it); null: none. */
+  /**
+   * The active bug in a tunnel now (down in one, ground over it): the tunnel's way, how far along it the bug is, its
+   * radius, and which way along it the bug faces (+1: from its first point). Bugs walk tunnels by their own physics; this
+   * only says where one is (render only reads it); null: none.
+   */
   get inTunnel(): { readonly unit: number; readonly path: readonly number[]; readonly s: number; readonly end: number; readonly radius: number; readonly dir: number } | null {
-    const w = this.walks.get(this.active);
-    if (!w) return null;
-    const t = this.tunnels[w.tunnel];
-    return { unit: this.active, path: t.path, s: w.s, end: t.end, radius: t.radius, dir: w.dir };
+    const b = this.units[this.active]?.bug;
+    if (!b || !b.alive || this.burrowing) return null;
+    for (const t of this.tunnels) {
+      const p = t.path;
+      let s0 = 0;
+      for (let k = 0; k + 3 < p.length; k += 3) {
+        const dx = p[k + 3] - p[k];
+        const dy = p[k + 4] - p[k + 1];
+        const dz = p[k + 5] - p[k + 2];
+        const l = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1;
+        let f = ((b.x - p[k]) * dx + (b.y - p[k + 1]) * dy + (b.z - p[k + 2]) * dz) / (l * l);
+        f = f < 0 ? 0 : f > 1 ? 1 : f;
+        const ox = b.x - (p[k] + dx * f);
+        const oy = b.y - (p[k + 1] + dy * f);
+        const oz = b.z - (p[k + 2] + dz * f);
+        // (in its bore, with ground over it: not just by a mouth in the open)
+        if (ox * ox + oy * oy + oz * oz < t.radius * t.radius && this.field.raycast(b.x, b.y, b.z, 0, 1, 0, 3.5) >= 0) {
+          const dir = (b.hx * dx + b.hz * dz) >= 0 ? 1 : -1;
+          return { unit: this.active, path: p, s: s0 + f * l, end: t.end, radius: t.radius, dir };
+        }
+        s0 += l;
+      }
+    }
+    return null;
   }
 
   /** An ant under the ground now: which, its way, how far along it is (render only reads it); null: none. */
@@ -652,8 +674,8 @@ export class Match {
     this.events.length = 0;
     this.tick++;
     const unit = this.units[this.active];
-    // (in a tunnel: it only walks on, or stops; nothing is fired, nor is it jumped)
-    if (this.walks.has(unit.id)) input = { ...input, fire: false, jump: false, aim: 0, weapon: -1 };
+    // (in a tunnel: nothing is fired from under the ground)
+    if (input.fire && this.inTunnel) input = { ...input, fire: false };
     const fireDown = input.fire && !this.fireWasDown;
     this.fireWasDown = input.fire;
     this.turnHeld = input.turn !== 0 && input.turn === this.turnDir ? this.turnHeld + 1 : 0;
@@ -709,9 +731,8 @@ export class Match {
       if (this.phase === 'spin' && this.isCarried(u)) continue;
       // (an ant in its tunnel is carried along it)
       if (this.burrowing?.unit === u && this.carryThrough(this.burrowing)) continue;
-      // (in a tunnel, a bug walks along it while it is told to go on; at a tunnel's mouth, going on into it, it goes in)
-      const going = u === unit && (this.phase === 'aim' || this.retreatTicks > 0) ? input.move : 0;
-      if (this.walkThrough(u, going)) continue;
+      // (down in a tunnel or its mouth, a bug is drawn gently to its middle: the bore is narrow)
+      this.guide(b);
       b.step(this.field, u === unit ? move : IDLE);
       if (b.justLanded && this.soft.delete(u.id)) {
         // (it meant to)
@@ -2081,8 +2102,9 @@ export class Match {
     const oy = ey + b.ny * up;
     const oz = ez + b.nz * up;
     out.push(b.x, b.y, b.z);
-    out.push(b.x + fx * BURROW_SLOPE - b.nx * deep, b.y + fy * BURROW_SLOPE - b.ny * deep, b.z + fz * BURROW_SLOPE - b.nz * deep);
-    out.push(ox - fx * BURROW_SLOPE - b.nx * deep, oy - fy * BURROW_SLOPE - b.ny * deep, oz - fz * BURROW_SLOPE - b.nz * deep);
+    const ramp = Math.max(BURROW_SLOPE, deep * BURROW_RAMP);
+    out.push(b.x + fx * ramp - b.nx * deep, b.y + fy * ramp - b.ny * deep, b.z + fz * ramp - b.nz * deep);
+    out.push(ox - fx * ramp - b.nx * deep, oy - fy * ramp - b.ny * deep, oz - fz * ramp - b.nz * deep);
     out.push(ox, oy, oz);
     return out;
   }
@@ -2108,137 +2130,89 @@ export class Match {
         f.hard(cx - (fy * nz - fz * ny) * tr, cy - (fz * nx - fx * nz) * tr, cz - (fx * ny - fy * nx) * tr)
       );
     };
+    const ramp = Math.max(BURROW_SLOPE, deep * BURROW_RAMP);
     // (the way down into it)
-    for (let s = 0; s <= 1; s += 0.25) {
-      if (!fine(x + fx * BURROW_SLOPE * s - nx * deep * s, y + fy * BURROW_SLOPE * s - ny * deep * s, z + fz * BURROW_SLOPE * s - nz * deep * s)) return -1;
+    for (let s = 0; s <= 1; s += 0.2) {
+      if (!fine(x + fx * ramp * s - nx * deep * s, y + fy * ramp * s - ny * deep * s, z + fz * ramp * s - nz * deep * s)) return -1;
     }
-    // (along under the ground, and under where it comes up: the way up is the last BURROW_SLOPE of it)
+    // (along under the ground, and under where it comes up: the way up is the last `ramp` of it)
     let ok = 0;
-    for (let s = BURROW_SLOPE; s <= len + 1e-9; s += BURROW_STEP) {
+    for (let s = ramp; s <= len + 1e-9; s += BURROW_STEP) {
       if (!fine(x + fx * s - nx * deep, y + fy * s - ny * deep, z + fz * s - nz * deep)) break;
       ok = s;
     }
     // (too short to go down and up again: it cannot)
-    return ok < BURROW_SLOPE * 2 + 0.5 ? -1 : Math.min(len, ok);
+    return ok < ramp * 2 + 0.5 ? -1 : Math.min(len, ok);
   }
 
   /**
-   * One tick of a bug and the tunnels: in one, it walks along it while `going` on (forwards only: or it stops), and out at
-   * its far end; at a tunnel's mouth, grounded and going on into it, and if it fits, it goes in. False: it goes on by its
-   * own physics.
+   * A bug down in a tunnel (or in the cut of its mouth) is drawn a little towards its middle line each tick, across it,
+   * not along it: it walks the tunnel by its own physics, and does not ride up its narrow walls.
    */
-  private walkThrough(u: Unit, going: number): boolean {
-    const b = u.bug;
-    let w = this.walks.get(u.id);
-    if (!w) {
-      // (just out of one: away from its mouths first)
-      const out = this.outOf.get(u.id);
-      if (out !== undefined) {
-        const p = this.tunnels[out].path;
-        const f = this.tunnels[out].radius + TUNNEL_AWAY;
-        const far = f * f;
-        const ax = b.x - p[0];
-        const ay = b.y - p[1];
-        const az = b.z - p[2];
-        const bx = b.x - p[9];
-        const by = b.y - p[10];
-        const bz = b.z - p[11];
-        const d0 = ax * ax + ay * ay + az * az;
-        const d1 = bx * bx + by * by + bz * bz;
-        if (d0 > far && d1 > far) this.outOf.delete(u.id);
+  private guide(b: Bug): void {
+    if (!b.alive || !b.grounded) return;
+    for (const t of this.tunnels) {
+      const p = t.path;
+      for (let k = 0; k + 3 < p.length; k += 3) {
+        const dx = p[k + 3] - p[k];
+        const dy = p[k + 4] - p[k + 1];
+        const dz = p[k + 5] - p[k + 2];
+        const l2 = dx * dx + dy * dy + dz * dz;
+        if (l2 < 1e-6) continue;
+        let f = ((b.x - p[k]) * dx + (b.y - p[k + 1]) * dy + (b.z - p[k + 2]) * dz) / l2;
+        if (f < 0 || f > 1) continue;
+        const cx = p[k] + dx * f;
+        const cy = p[k + 1] + dy * f;
+        const cz = p[k + 2] + dz * f;
+        // (in its bore, or over it in the cut of a mouth)
+        const up = b.y - cy;
+        if (up < -t.radius || up > t.radius * 2.4) continue;
+        // (across the way, level)
+        const hl = Math.sqrt(dx * dx + dz * dz) || 1;
+        const sx = -dz / hl;
+        const sz = dx / hl;
+        const off = (b.x - cx) * sx + (b.z - cz) * sz;
+        if (off * off > t.radius * t.radius) continue;
+        const pull = off > GUIDE_PULL ? GUIDE_PULL : off < -GUIDE_PULL ? -GUIDE_PULL : off;
+        b.x -= sx * pull * GUIDE_RATE;
+        b.z -= sz * pull * GUIDE_RATE;
+        return;
       }
-      if (going !== 1 || !b.grounded || !b.alive || u.web >= 0 || u.cover || b.species.radius + TUNNEL_ROOM > BURROW_TUNNEL) return false;
-      for (let i = 0; i < this.tunnels.length && !w; i++) {
-        const t = this.tunnels[i];
-        if (b.species.radius + TUNNEL_ROOM > t.radius || this.outOf.get(u.id) === i) continue;
-        const p = t.path;
-        for (let end = 0; end <= 9; end += 9) {
-          const dx = b.x - p[end];
-          const dy = b.y - p[end + 1];
-          const dz = b.z - p[end + 2];
-          if (dx * dx + dy * dy + dz * dz > (t.radius + 0.6) * (t.radius + 0.6)) continue;
-          // (facing into it)
-          const n = end === 0 ? 3 : 6;
-          const ix = p[n] - p[end];
-          const iz = p[n + 2] - p[end + 2];
-          const il = Math.sqrt(ix * ix + iz * iz) || 1;
-          if ((b.hx * ix + b.hz * iz) / il < 0.4) continue;
-          w = { tunnel: i, s: end === 0 ? 0.01 : t.end - 0.01, dir: end === 0 ? 1 : -1 };
-          this.walks.set(u.id, w);
-          break;
-        }
-      }
-      if (!w) return false;
     }
-    const t = this.tunnels[w.tunnel];
-    b.px = b.x;
-    b.py = b.y;
-    b.pz = b.z;
-    if (!b.alive) {
-      this.walks.delete(u.id);
-      return false;
-    }
-    // (on, or back a little slower, facing the same way)
-    if (going !== 0) {
-      const next = w.s + w.dir * going * TUNNEL_WALK * (going === 1 ? 1 : TUNNEL_BACK) * DT;
-      const at = this.along(t.path, next < 0 ? 0 : next > t.end ? t.end : next);
-      // (something built in its way, or the ground pushed in: it stops)
-      if (this.field.sample(at[0], at[1], at[2]) > -0.4) w.s = next < 0 ? 0 : next > t.end ? t.end : next;
-    }
-    const at = this.along(t.path, w.s);
-    b.x = at[0];
-    b.y = at[1];
-    b.z = at[2];
-    // (it faces the way it goes)
-    const hx = at[3] * w.dir;
-    const hz = at[5] * w.dir;
-    const hl = Math.sqrt(hx * hx + hz * hz);
-    if (hl > 0.1) {
-      b.hx = hx / hl;
-      b.hz = hz / hl;
-    }
-    b.vx = b.vy = b.vz = 0;
-    b.grounded = true;
-    if (w.s > 0 && w.s < t.end) return true;
-    // (out at an end: a little hop up out of the hole, onto its rim, the way out of it)
-    this.walks.delete(u.id);
-    this.outOf.set(u.id, w.tunnel);
-    const way = w.s >= t.end ? 1 : -1;
-    const ox = at[3] * way;
-    const oz = at[5] * way;
-    const ol = Math.sqrt(ox * ox + oz * oz) || 1;
-    b.vx = (ox / ol) * TUNNEL_HOP * 0.6;
-    b.vy = TUNNEL_HOP;
-    b.vz = (oz / ol) * TUNNEL_HOP * 0.6;
-    b.grounded = false;
-    this.soft.add(u.id);
-    // (out by a mouth already dug: nothing breaks, no earth is thrown)
-    return false;
   }
 
-  /** Where along a tunnel's way `s` is, and the way's direction there (x, y, z, then dx, dy, dz). */
-  private readonly alongAt = new Float64Array(6);
-  private along(p: readonly number[], s: number): Float64Array {
-    const o = this.alongAt;
-    let left = s;
-    for (let k = 0; k + 3 < p.length; k += 3) {
-      const dx = p[k + 3] - p[k];
-      const dy = p[k + 4] - p[k + 1];
-      const dz = p[k + 5] - p[k + 2];
-      const l = Math.sqrt(dx * dx + dy * dy + dz * dz);
-      if (left <= l || k + 6 >= p.length) {
-        const f = l > 0 ? Math.min(1, left / l) : 1;
-        o[0] = p[k] + dx * f;
-        o[1] = p[k + 1] + dy * f;
-        o[2] = p[k + 2] + dz * f;
-        o[3] = l > 0 ? dx / l : 0;
-        o[4] = l > 0 ? dy / l : 0;
-        o[5] = l > 0 ? dz / l : 0;
-        return o;
-      }
-      left -= l;
+  /**
+   * Open the upper part of a tunnel's way down or up (the stretch from path point `k` to `k + 3`) to the sky: spheres along
+   * it lifted along the ground's normal, so near its mouth it is a cut a bug walks down into, not a hole it steps over.
+   */
+  private openRamp(path: readonly number[], k: number, radius: number, nx: number, ny: number, nz: number): void {
+    // (the end of the stretch at the surface: the first point going down, the last going up)
+    const top = k === 0 ? 0 : 9;
+    const low = k === 0 ? 3 : 6;
+    // (a second bore over its own, as steep as it: the roof over the top of it gone, a cut as gentle as the way itself;
+    // its spheres lie on a line, from over the mouth to over six tenths of the way along)
+    const lift = radius * 1.1;
+    this.events.push({
+      type: 'opened',
+      x1: path[top] + nx * lift,
+      y1: path[top + 1] + ny * lift,
+      z1: path[top + 2] + nz * lift,
+      x2: path[top] + (path[low] - path[top]) * 0.6 + nx * lift,
+      y2: path[top + 1] + (path[low + 1] - path[top + 1]) * 0.6 + ny * lift,
+      z2: path[top + 2] + (path[low + 2] - path[top + 2]) * 0.6 + nz * lift,
+      radius,
+    });
+    for (let s = 0; s <= 6; s++) {
+      const f = s / 10;
+      this.field.carve(
+        path[top] + (path[low] - path[top]) * f + nx * lift,
+        path[top + 1] + (path[low + 1] - path[top + 1]) * f + ny * lift,
+        path[top + 2] + (path[low + 2] - path[top + 2]) * f + nz * lift,
+        radius,
+        false,
+        false,
+      );
     }
-    return o;
   }
 
   /** An ant burrows (charged this much): down, along under the ground, up again. Once a turn; the turn goes on. */
@@ -2268,11 +2242,11 @@ export class Match {
       const n = Math.max(1, Math.ceil(l / (w.tunnelRadius * 0.5)));
       // (the way up is dug only as far as under the top: it breaks through when it gets there)
       const last = k + 6 >= path.length ? Math.floor(n * 0.1) : n;
-      for (let s = k === 0 ? Math.floor(n * 0.3) : 0; s <= last; s++) this.field.carve(path[k] + (dx * s) / n, path[k + 1] + (dy * s) / n, path[k + 2] + (dz * s) / n, w.tunnelRadius, false, false);
+      for (let s = 0; s <= last; s++) this.field.carve(path[k] + (dx * s) / n, path[k + 1] + (dy * s) / n, path[k + 2] + (dz * s) / n, w.tunnelRadius, false, false);
       for (let s = 0; s <= n; s += 2) this.react(path[k] + (dx * s) / n, path[k + 1] + (dy * s) / n, path[k + 2] + (dz * s) / n, w.tunnelRadius, tagsOf(w.id));
     }
-    // (the hole it goes in by: a slope down into it, not a pit)
-    this.field.carve(path[0] * 0.55 + path[3] * 0.45, path[1] * 0.55 + path[4] * 0.45, path[2] * 0.55 + path[5] * 0.45, w.tunnelRadius * 0.8, false, false);
+    // (the hole it goes in by: the top of its way down open to the sky, a cut a bug walks down into, not a pit)
+    this.openRamp(path, 0, w.tunnelRadius, u.bug.nx, u.bug.ny, u.bug.nz);
     this.burrowing = { unit: u, path, s: 0, end: total, hold: BURROW_HOLD, radius: w.tunnelRadius };
     // (and it stays: a way through for any bug that fits)
     this.tunnels.push({ path: path.slice(), radius: w.tunnelRadius, end: total });
@@ -2314,17 +2288,16 @@ export class Match {
     b.vx = b.vy = b.vz = 0;
     b.grounded = false;
     if (r.s < r.end && b.alive) return true;
-    // (it breaks through: the rest of the way up, and a slope out of it)
+    // (it breaks through: the rest of the way up, its top open to the sky as the way in was)
     const p6 = r.path;
     for (let s = 1; s <= 10; s++) this.field.carve(p6[6] + ((p6[9] - p6[6]) * s) / 10, p6[7] + ((p6[10] - p6[7]) * s) / 10, p6[8] + ((p6[11] - p6[8]) * s) / 10, r.radius, false, false);
-    this.field.carve(p6[9] * 0.5 + p6[6] * 0.5, p6[10] * 0.5 + p6[7] * 0.5, p6[11] * 0.5 + p6[8] * 0.5, r.radius, false, false);
+    this.openRamp(p6, 6, r.radius, b.nx, b.ny, b.nz);
     // (out: a little hop up out of the hole, and it lands softly)
     // (up, and on the way it went: it lands past its hole, not back in it)
     b.vx = b.nx * BURROW_HOP + b.hx * BURROW_ON;
     b.vy = b.ny * BURROW_HOP;
     b.vz = b.nz * BURROW_HOP + b.hz * BURROW_ON;
     this.events.push({ type: 'emerge', unit: r.unit.id, x: b.x, y: b.y, z: b.z });
-    this.outOf.set(r.unit.id, this.tunnels.length - 1);
     this.burrowing = null;
     // (out: back to what it had in hand)
     if (this.phase === 'aim') this.weapon = this.keptBy(r.unit);

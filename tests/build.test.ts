@@ -360,61 +360,56 @@ describe('burrow and the ground', () => {
 
   it('stops short of what is hard (metal, stone): blasts still break it', () => {
     const t = world(4, 2, 2, (_i, j) => j - 10);
-    // (a steel plate standing down into the ground at x 30..31)
-    for (let k = 0; k < t.sz; k++) for (let j = 0; j < 10; j++) for (let i = 30; i <= 31; i++) t.material[t.idx(i, j, k)] = STEEL;
+    // (a steel plate standing down into the ground at x 35..36)
+    for (let k = 0; k < t.sz; k++) for (let j = 0; j < 10; j++) for (let i = 35; i <= 36; i++) t.material[t.idx(i, j, k)] = STEEL;
     const m = setup(t);
     const path = m.burrowPath(m.units[0], 1, []);
     expect(path.length).toBe(12);
-    expect(path[9]).toBeLessThan(30);
-    expect(t.hard(30, 8, 32)).toBe(true);
+    expect(path[9]).toBeLessThan(35);
+    expect(t.hard(35, 8, 32)).toBe(true);
     expect(t.hard(26, 8, 32)).toBe(false);
   });
 
-  it('a tunnel stays: a bug walks into it and through it (on, back, or it stops), and out at its far end, and not straight back in', () => {
+  it('a tunnel stays, a part of the ground: a bug walks into it by its own physics, through it under the ground (on, back, or it stops), and up out of its far mouth', () => {
     const t = world(4, 2, 2, (_i, j) => j - 10);
     const m = setup(t, ANT, SPIDER);
     const b = m.units[0].bug;
     expect(dig(m).some((e) => e.type === 'burrow')).toBe(true);
-    expect(run(m, 240).some((e) => e.type === 'emerge')).toBe(true);
+    expect(run(m, 300).some((e) => e.type === 'emerge')).toBe(true);
     expect(m.tunnels.length).toBe(1);
-    const out = b.x;
-    // (away from it first: right out of it, it does not go in again)
-    run(m, 50, { move: 1, faceX: 1 });
+    const p = m.tunnels[0].path;
+    // (on, a little past the hole it came up by)
+    run(m, 30, { move: 1, faceX: 1 });
     expect(m.inTunnel).toBe(null);
-    // (back into the hole it came up by, facing into it)
+    // (back: into its mouth, down its way, under the ground)
     let inside = false;
-    for (let k = 0; k < 120 && !inside; k++) {
+    let low = 99;
+    for (let k = 0; k < 400 && !inside; k++) {
       run(m, 1, { move: 1, faceX: -1 });
       inside = m.inTunnel !== null;
+      low = Math.min(low, b.y);
     }
-    expect(inside).toBe(true);
-    // (under the ground)
-    run(m, 40, { move: 1 });
+    expect(inside, JSON.stringify([b.x, b.y, p])).toBe(true);
+    run(m, 40, { move: 1, faceX: -1 });
     expect(b.y).toBeLessThan(10);
+    expect(m.inTunnel).not.toBe(null);
     // (it stops when it is not told to go on)
+    run(m, 10);
     const x = b.x;
     run(m, 30);
-    expect(b.x).toBe(x);
-    expect(m.inTunnel).not.toBe(null);
-    // (it backs up, slower, facing the same way)
-    const hx = b.hx;
+    expect(Math.abs(b.x - x)).toBeLessThan(0.05);
+    // (it backs up)
     run(m, 20, { move: -1 });
-    expect(b.x).toBeGreaterThan(x);
-    expect(b.hx).toBe(hx);
-    // (on, and out where the ant first went in)
-    const events = run(m, 400, { move: 1 });
-    // (out by a mouth already dug: no earth thrown, no new hole)
-    expect(events.some((e) => e.type === 'emerge')).toBe(false);
-    expect(m.inTunnel).toBe(null);
-    expect(b.x).toBeLessThan(out - 8);
-    // (still going on, facing back into it: it does not go in again at once)
-    for (let k = 0; k < 90; k++) {
-      run(m, 1, { move: 1, faceX: 1 });
-      expect(m.inTunnel).toBe(null);
+    expect(b.x).toBeGreaterThan(x + 0.3);
+    // (on, along it and up out of the mouth the ant first went in by)
+    let out = false;
+    for (let k = 0; k < 900 && !out; k++) {
+      run(m, 1, { move: 1, faceX: -1 });
+      out = b.x < p[0] - 1 && b.y > 10;
     }
-    run(m, 60);
+    expect(out, JSON.stringify([b.x, b.y, p[0]])).toBe(true);
+    expect(m.inTunnel).toBe(null);
     expect(b.alive).toBe(true);
-    expect(b.y).toBeGreaterThan(10);
   });
 });
 
