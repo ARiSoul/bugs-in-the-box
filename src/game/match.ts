@@ -320,7 +320,7 @@ const BURROW_DEEP = 1.9;
 const BURROW_SLOPE = 2.6;
 const BURROW_HOP = 5;
 /** Out of its hole, how fast it goes on the way it went (it lands past the hole). */
-const BURROW_ON = 3.2;
+const BURROW_ON = 4.4;
 /** How far under the top it waits, and for how many ticks. */
 const BURROW_UNDER = 1.4;
 const BURROW_HOLD = 10;
