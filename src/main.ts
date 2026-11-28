@@ -73,6 +73,13 @@ const players = ['human', 'normal'];
 let brains: (Brain | null)[] = [null, null];
 /** The computer whose turn it is, if any. */
 const brain = (): Brain | null => brains[match.activeUnit.team];
+/**
+ * This side does not play the turn now: the computer does, or, online, the other player (then this side watches: the
+ * other's hand, aim, previews and marks are theirs, and are not shown here).
+ */
+const notMine = (): boolean => brain() !== null || watching();
+/** Online, and the turn is the other player's. */
+const watching = (): boolean => online !== null && match.activeUnit.team !== online.seat;
 /** The rules: bugs per team, seconds per turn, how strong the wind is (`?size=3&turn=30&wind=1`). */
 const rules = { size: 3, seconds: 30, wind: 1 };
 /** No levels in this match (`?equal=1`). */
@@ -273,9 +280,9 @@ const placing = new Placing();
 const READ_TURN = 20;
 const READ_MATCH = 90;
 const reading = { turn: READ_TURN, match: [READ_MATCH, READ_MATCH], key: '', on: false };
-const places = (): boolean => !reading.on && !brain() && !debugCamera && !menus.setup && !menus.over && match.phase === 'aim' && !match.going && match.activeUnit.bug.alive && Placing.takes(match.currentWeapon);
+const places = (): boolean => !reading.on && !notMine() && !debugCamera && !menus.setup && !menus.over && match.phase === 'aim' && !match.going && match.activeUnit.bug.alive && Placing.takes(match.currentWeapon);
 /** The player marks a spot for a brood. */
-const marking = (): boolean => !brain() && match.stance && match.phase === 'aim' && match.currentWeapon.kind === 'brood' && brood.camera.active;
+const marking = (): boolean => !notMine() && match.stance && match.phase === 'aim' && match.currentWeapon.kind === 'brood' && brood.camera.active;
 const follow = new FollowCamera(stage.camera, stage.controls);
 // the right button turns the view (and the bug with it), the wheel zooms; the left button stays free
 stage.controls.mouseButtons = { LEFT: null, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.ROTATE };
@@ -1279,7 +1286,7 @@ function lookAtUnit(unit: number, amount: number): void {
 function looksAtHit(): boolean {
   if (!hit.on || (match.phase !== 'flight' && match.phase !== 'settle' && match.phase !== 'spin')) return false;
   if (deathFocus >= 0) return false;
-  if (!brain() && match.phase === 'flight' && (match.tick > hit.until || (match.retreatTicks > 0 && controls.moveHeld !== 0))) {
+  if (!notMine() && match.phase === 'flight' && (match.tick > hit.until || (match.retreatTicks > 0 && controls.moveHeld !== 0))) {
     hit.on = false;
     return false;
   }
@@ -1378,7 +1385,7 @@ canvas.addEventListener('pointermove', (e) => {
     swarmAim.hold = SWARM_HOLD;
     return;
   }
-  if (brain() || !match.stance || match.phase !== 'aim' || (e.buttons & 3) === 0) return;
+  if (notMine() || !match.stance || match.phase !== 'aim' || (e.buttons & 3) === 0) return;
   const slow = SIGHT_SPEED * (match.charging ? 0.6 : 1);
   const b = match.activeUnit.bug;
   const a = -e.movementX * slow;
@@ -1404,7 +1411,7 @@ const SWARM_HOLD = 40;
 const SWARM_LEAD = 0.7;
 /** The player aims, or flies, a swarm. */
 function flockAims(): boolean {
-  return !brain() && !debugCamera && (match.flock !== null || (match.stance && match.phase === 'aim' && match.currentWeapon.kind === 'flock'));
+  return !notMine() && !debugCamera && (match.flock !== null || (match.stance && match.phase === 'aim' && match.currentWeapon.kind === 'flock'));
 }
 /** The next tick's input turns the swarm (or its bee) towards where the mouse points. */
 function steerSwarm(): void {
@@ -1645,7 +1652,7 @@ function frame(now: number): void {
   const viewTurns = orbiting || orbitTail > 0;
   orbitTail = Math.max(0, orbitTail - dt);
   stage.controls.enabled = !inScene() && !debugCamera && !inMenu && !menus.over;
-  if (viewTurns && !inScene() && !debugCamera && !intro && !follow.gliding && steering && !brain() && match.activeUnit.bug.alive) {
+  if (viewTurns && !inScene() && !debugCamera && !intro && !follow.gliding && steering && !notMine() && match.activeUnit.bug.alive) {
     // the turn keys still turn the bug while the view is held: they turn the view (at the bug's turn
     // rate, with the same slow start for fine steps), and the bug faces where it looks
     const turn = controls.turnHeld;
@@ -1698,13 +1705,13 @@ function frame(now: number): void {
   }
   const team = match.activeUnit.team;
   if (minimap.big && (brain() || match.phase === 'over' || inMenu || menus.over)) minimap.toggle(false);
-  reading.on = (inventory.isOpen || minimap.big) && !brain() && !inMenu && !menus.over && match.phase === 'aim' && !inScene() && reading.turn > 0 && reading.match[team] > 0;
+  reading.on = (inventory.isOpen || minimap.big) && !notMine() && !inMenu && !menus.over && match.phase === 'aim' && !inScene() && reading.turn > 0 && reading.match[team] > 0;
   if (reading.on) {
     reading.turn -= dt;
     reading.match[team] -= dt;
   }
   controls.frozen = inventory.locked = reading.on;
-  hud.reading(reading.on ? Math.min(reading.turn, reading.match[team]) : -1, (inventory.isOpen || minimap.big) && match.phase === 'aim' && !brain() && !reading.on);
+  hud.reading(reading.on ? Math.min(reading.turn, reading.match[team]) : -1, (inventory.isOpen || minimap.big) && match.phase === 'aim' && !notMine() && !reading.on);
   if (!inMenu && !reading.on) accumulator += scaled;
   while (accumulator >= DT) {
     prevTurns = match.turntableTurns;
@@ -1811,12 +1818,15 @@ function frame(now: number): void {
   placeSight();
   // (a burst leaves a trail)
   for (const u of match.units) if (u.bug.floating > 0 && u.bug.alive) buildViews.trail(bugViews[u.id].view.root.position);
-  itemViews.reveal = !brain() && match.phase === 'aim' && match.passive(match.activeUnit.team, 'scent') > 0;
+  itemViews.reveal = !notMine() && match.phase === 'aim' && match.passive(match.activeUnit.team, 'scent') > 0;
   itemViews.update(match, scaled, now / 1000);
-  buildViews.update(match, bugViews.map((v) => v.view), !brain() && !debugCamera && !inMenu && !menus.over ? placing : null, scaled, now / 1000);
+  buildViews.update(match, bugViews.map((v) => v.view), !notMine() && !debugCamera && !inMenu && !menus.over ? placing : null, scaled, now / 1000);
   webViews.update(match, ground, (i, out) => out.copy(bugViews[i].view.root.position), now);
   const active = bugViews[match.active];
   aim.update(match, active.view.root.position, active.height, now, stage.camera.position.distanceTo(active.view.root.position));
+  // (the other player's aim, online, is theirs: this side sees the bug turn, and the shot)
+  if (watching()) aim.hide();
+  brood.hideMark = watching();
   if (inMenu || menus.over) {
     aim.hide();
     for (const v of bugViews) v.view.root.visible = false;
@@ -1887,7 +1897,7 @@ function frame(now: number): void {
   const fz = camDir.z / fl;
   const right = match.windX * -fz + match.windZ * fx;
   const away = match.windX * fx + match.windZ * fz;
-  hud.renderMatch(match, Math.atan2(-away, right), brain() !== null);
+  hud.renderMatch(match, Math.atan2(-away, right), notMine(), watching() ? online?.names[match.activeUnit.team] || match.teams[match.activeUnit.team].name : '');
   minimap.update(terrain, match, Math.atan2(fx, fz), stage.camera.position, dt, !inMenu && !menus.over && !inScene() && !debugCamera);
 
   if (debugCamera) {

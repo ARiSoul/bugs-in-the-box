@@ -67,6 +67,8 @@ interface Runner {
  * when the light comes back. It reads the match and never changes it.
  */
 export class BroodScene {
+  /** Online, the other player's turn: where they mark is theirs, and is not shown here. */
+  hideMark = false;
   readonly camera = new BroodCamera();
   timeScale = 1;
   /** Seconds into the scene that plays before the aim, by its own clock (-1: it does not play). */
@@ -363,7 +365,7 @@ export class BroodScene {
     this.fx.black.value = dark;
 
     // ---- the mark
-    if (stance && match.mark) {
+    if (stance && match.mark && !this.hideMark) {
       this.mark.set(match.mark.x, match.mark.y, match.mark.z);
       this.markUp.set(match.mark.nx, match.mark.ny, match.mark.nz);
     }
@@ -371,7 +373,7 @@ export class BroodScene {
       const v = this.victims[0];
       this.subject.lerp(v ? v.root.position : this.mark, v ? 1 - Math.exp(-dt * 4) : 1);
     } else this.subject.copy(this.mark);
-    const marking = stance && match.mark !== null;
+    const marking = stance && match.mark !== null && !this.hideMark;
     this.ringLevel.value += ((marking ? 1.1 : this.shotT >= 0 && this.shotT < 0.5 ? 2 * (1 - this.shotT * 2) : 0) - this.ringLevel.value) * (1 - Math.exp(-dt * 14));
     this.ring.visible = this.ringLevel.value > 0.02 && (marking || this.shotT >= 0);
     if (marking) this.layRing(match.coverRadius);

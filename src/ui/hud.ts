@@ -230,7 +230,8 @@ export class Hud {
   }
 
   /** `windAngle`: screen angle of the wind in radians (0 = right, positive = clockwise). */
-  renderMatch(match: Match, windAngle: number, computer = false): void {
+  /** `computer`: this side does not play the turn (the computer, or online the other); `watching`: online, the name of who does. */
+  renderMatch(match: Match, windAngle: number, computer = false, watching = ''): void {
     const u = match.activeUnit;
     const team = match.teams[u.team];
 
@@ -296,11 +297,11 @@ export class Hud {
     this.set('call', () => {
       this.deck.classList.toggle('away', computer);
       if (match.phase !== 'aim') return;
-      this.call.innerHTML = letters(u.name.toUpperCase(), { fill: TEAM[u.team] ?? '#f6efdf' }) + `<span>${computer ? 'the computer is up' : 'your turn'}</span>`;
+      this.call.innerHTML = letters(u.name.toUpperCase(), { fill: TEAM[u.team] ?? '#f6efdf' }) + `<span>${watching ? `${watching} plays` : computer ? 'the computer is up' : 'your turn'}</span>`;
       this.call.classList.remove('on');
       void this.call.offsetWidth;
       this.call.classList.add('on');
-    }, `${match.turnNumber}|${computer}`);
+    }, `${match.turnNumber}|${computer}|${watching}`);
 
     // the hand: what every bug has
     this.set('hand', () => {
