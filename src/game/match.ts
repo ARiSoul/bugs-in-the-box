@@ -1,8 +1,8 @@
 import { createRng } from '../terrain/noise';
-import { Bug, DT, IDLE, TICK_RATE, type BugInput } from './bug';
+import { Bug, DT, IDLE, TICK_RATE, type BugInput, type Physics } from './bug';
 import { abilityAt, AGAIN_POOL, CHARGE_POOL, costFor, SKILL_FULL, usesPool, WORKS_POOL } from './abilities';
 import { Effects, pay, Resources, Triggers, type AbilityDef, type MatchTriggers, type SettingsSet } from './engine';
-import { passiveSetting, RULE, speciesSetting, TUNING, tunedWeapons } from './tuning';
+import { passiveSetting, physicsOf, RULE, speciesSetting, TUNING, tunedWeapons } from './tuning';
 import { Unit } from './unit';
 import { surfaceDistance, type TerrainField } from './field';
 import { rot, rotate2 } from './math';
@@ -595,6 +595,8 @@ export class Match {
   readonly tuning: SettingsSet;
   /** The weapons as its tuning has them, by the same index as `WEAPONS`. */
   readonly arsenal: readonly Weapon[];
+  /** The numbers of motion its bugs, shots and boxes move by (from its tuning). */
+  readonly physics: Readonly<Physics>;
 
   constructor(
     readonly field: TerrainField,
@@ -605,6 +607,7 @@ export class Match {
     this.rng = createRng(seed * 2654435761 + 97);
     this.tuning = options.tuning ?? TUNING.defaults();
     this.arsenal = tunedWeapons(this.tuning);
+    this.physics = physicsOf(this.tuning);
     let id = 0;
     const maxSize = teams.reduce((m, t) => Math.max(m, t.size), 0);
     // interleave teams so the spawn order (and so the spread over the map) is fair
@@ -612,6 +615,7 @@ export class Match {
       for (let t = 0; t < teams.length; t++) {
         if (i >= teams[t].size) continue;
         const bug = new Bug(teams[t].species);
+        bug.physics = this.physics;
         bug.confine = options.confine ?? null;
         // (its species' numbers, as the tuning has them)
         if (!this.tuning.shipped) {
@@ -634,7 +638,7 @@ export class Match {
     this.kept = teams.map(() => 0);
     this.quarterTurns = options.turned ?? 0;
     this.luck = createRng(seed * 1597334677 + 411);
-    this.items = new Items(field, this.luck, options.spawnLevels === true, options.confine ?? null);
+    this.items = new Items(field, this.luck, options.spawnLevels === true, options.confine ?? null, this.physics);
     this.pools = teams.map((t) => {
       const r = new Resources();
       WEAPONS.forEach((w) => r.set(usesPool(w.id), w.species === undefined || w.species === t.species.id ? (w.start ?? 0) : 0));
@@ -1581,6 +1585,7 @@ export class Match {
   columnHead(u: Pick<Unit, 'bug'>): Bug {
     const b = u.bug;
     const h = new Bug(MARCHER);
+    h.physics = this.physics;
     h.confine = b.confine;
     h.x = h.px = b.x;
     h.y = h.py = b.y;
@@ -1862,7 +1867,7 @@ export class Match {
     const off = b.species.radius + 0.5;
     // (a lifted block goes from over its head)
     const up = w.kind === 'lift' ? b.species.radius + LIFT_HIGH : 0;
-    return new Projectile(this.nextProjectileId++, w, b).launch(
+    return new Projectile(this.nextProjectileId++, w, b, this.physics).launch(
       b.x + dx * off + b.nx * up,
       b.y + dy * off + b.ny * up,
       b.z + dz * off + b.nz * up,
@@ -2781,6 +2786,7 @@ export class Match {
   /** Does a bug dropped where this one is come to rest, and not fall out of the map? */
   private staysUp(bug: Bug): boolean {
     const probe = new Bug(bug.species);
+    probe.physics = this.physics;
     probe.x = bug.x;
     probe.y = bug.y;
     probe.z = bug.z;

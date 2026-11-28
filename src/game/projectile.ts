@@ -1,4 +1,4 @@
-import { DT, GRAVITY, KILL_Y, type Bug } from './bug';
+import { DT, KILL_Y, PHYSICS, type Bug, type Physics } from './bug';
 import { surfaceDistance, type TerrainField } from './field';
 import type { Weapon } from './weapons';
 
@@ -9,10 +9,6 @@ const OWNER_GRACE_TICKS = 8;
 /** Largest move per substep: keeps fast shells from skipping through thin walls. */
 const MAX_SUBSTEP = 0.3;
 const MAX_SUBSTEPS = 12;
-/** A grenade slower than this after a bounce comes to rest. */
-const REST_SPEED = 1.2;
-/** Tangential speed kept after a bounce. */
-const BOUNCE_FRICTION = 0.8;
 
 export type ProjectileResult = 'fly' | 'explode' | 'lost';
 
@@ -36,6 +32,8 @@ export class Projectile {
     readonly id: number,
     readonly weapon: Weapon,
     readonly owner: Bug | null,
+    /** The numbers of motion it flies by (its match's). */
+    readonly physics: Readonly<Physics> = PHYSICS,
   ) {}
 
   launch(x: number, y: number, z: number, vx: number, vy: number, vz: number): this {
@@ -64,7 +62,7 @@ export class Projectile {
     if (w.kind === 'grenade' && this.age >= w.fuseTicks) return 'explode';
 
     this.vx += windX * w.windFactor * DT;
-    this.vy -= GRAVITY * w.gravityFactor * DT;
+    this.vy -= this.physics.gravity * w.gravityFactor * DT;
     this.vz += windZ * w.windFactor * DT;
 
     const dx = this.vx * DT;
@@ -126,12 +124,13 @@ export class Projectile {
       const ty = this.vy - n[1] * vn;
       const tz = this.vz - n[2] * vn;
       const bn = -vn * this.weapon.bounce;
-      this.vx = tx * BOUNCE_FRICTION + n[0] * bn;
-      this.vy = ty * BOUNCE_FRICTION + n[1] * bn;
-      this.vz = tz * BOUNCE_FRICTION + n[2] * bn;
+      const f = this.physics.shotBounce;
+      this.vx = tx * f + n[0] * bn;
+      this.vy = ty * f + n[1] * bn;
+      this.vz = tz * f + n[2] * bn;
     }
     const sp = this.vx * this.vx + this.vy * this.vy + this.vz * this.vz;
-    if (sp < REST_SPEED * REST_SPEED) {
+    if (sp < this.physics.shotRest * this.physics.shotRest) {
       this.vx = this.vy = this.vz = 0;
       this.resting = true;
     }

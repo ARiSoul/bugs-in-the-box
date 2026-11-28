@@ -1,3 +1,4 @@
+import { PHYSICS, type Physics } from './bug';
 import { Settings, type SettingsSet } from './engine';
 import { PASSIVES } from './progress';
 import { SPECIES, type BugSpecies } from './species';
@@ -69,6 +70,32 @@ export const RULE = {
   spring: TUNING.define({ id: 'boxes.spring', group: 'Boxes', label: 'Springs: jump', unit: '× jump', min: 1, max: 3, step: 0.01, value: 1.42, help: 'How much higher a bug on springs jumps.' }),
   magnet: TUNING.define({ id: 'boxes.magnet', group: 'Boxes', label: 'Magnet reach', unit: 'units', min: 0, max: 120, step: 1, value: 45, help: 'How far a magnet pulls the nearest enemy from.' }),
 } as const;
+
+/** The numbers of motion, as settings: each field of `Physics` (as shipped in `bug.ts`). */
+const MOTION: readonly [keyof Physics, string, string, number, number, number, string][] = [
+  ['gravity', 'Gravity', 'units/s²', 5, 60, 0.5, 'Pulls bugs, shots and boxes down.'],
+  ['maxFall', 'Fastest fall', 'units/s', 10, 80, 1, 'A falling bug goes no faster.'],
+  ['run', 'Running', '× walk', 1, 3, 0.05, 'How much faster a bug runs (shift) than it walks.'],
+  ['back', 'Walking back', '× walk', 0.2, 1, 0.05, 'How fast a bug walks backwards.'],
+  ['climb', 'Climbing', '× walk', 0.2, 1.5, 0.05, 'How fast a bug walks up a wall or under a ceiling.'],
+  ['flySpeed', 'Flying', 'units/s', 2, 20, 0.5, 'How fast a bee flies on.'],
+  ['flyClimb', 'Flying up', 'units/s', 1, 15, 0.5, 'How fast a bee climbs.'],
+  ['flySink', 'Flying: sinking', 'units/s', 0, 6, 0.1, 'How fast a bee sinks when it does not climb.'],
+  ['threadSpeed', 'Thread', 'units/s', 1, 20, 0.5, 'How fast a spider goes down its thread.'],
+  ['catchSpeed', 'Catching hold', 'units/s', 0, 40, 1, 'A falling bug that walks into a wall takes hold of it if it falls slower than this.'],
+  ['shotBounce', 'Shots: bounce', '× along', 0, 1, 0.05, 'What a bouncing shot keeps of its speed along the surface.'],
+  ['shotRest', 'Shots: rest below', 'units/s', 0.2, 5, 0.1, 'A bouncing shot slower than this comes to rest.'],
+];
+export const physicsSetting = (k: keyof Physics): string => `physics.${k}`;
+for (const [k, label, unit, min, max, step, help] of MOTION) TUNING.define({ id: physicsSetting(k), group: 'Physics', label, unit, min, max, step, value: PHYSICS[k], help });
+
+/** The numbers of motion a set makes (the very same object, as shipped). */
+export function physicsOf(set: SettingsSet): Readonly<Physics> {
+  if (set.shipped) return PHYSICS;
+  const out = { ...PHYSICS } as Record<keyof Physics, number>;
+  for (const [k] of MOTION) out[k] = set.get(physicsSetting(k));
+  return Object.freeze(out);
+}
 
 /** The weapons as `set` has them: the same objects where it changes nothing of theirs, copies where it does. */
 export function tunedWeapons(set: SettingsSet): readonly Weapon[] {

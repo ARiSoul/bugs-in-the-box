@@ -3,7 +3,7 @@ import { wordFor } from './reactions';
 import { Flock, FLOCK_TICKS, steerFlock, type FlockInput } from './flock';
 import { ITEM_KINDS, type Item, type ItemKind } from './items';
 import { createRng } from '../terrain/noise';
-import { Bug, GRAVITY, type BugInput } from './bug';
+import { Bug, type BugInput } from './bug';
 import { blastShare, BURST_AT, CHARGE_TICKS, launch, LIFT_HIGH, MIN_POWER, NO_INPUT, type Column, type Match, type MatchInput, type Place, type Unit } from './match';
 import { rot, rotate2 } from './math';
 import { Projectile } from './projectile';
@@ -287,7 +287,7 @@ export class Brain {
   /** The arc that takes time `part` (of what it may take) to the target: aim and charge it, and see where it goes. */
   private tryArc(match: Match, u: Unit, b: Bug, bugs: readonly Bug[], w: Weapon, index: number, e: Unit, part: number, plans: Plan[]): number {
     const gx = match.windX * w.windFactor;
-    const gy = -GRAVITY * w.gravityFactor;
+    const gy = -match.physics.gravity * w.gravityFactor;
     const gz = match.windZ * w.windFactor;
     const out = b.species.radius + 0.5;
     const tx = e.bug.x;
@@ -336,7 +336,7 @@ export class Brain {
     const speed = Math.max(MIN_POWER, charge / CHARGE_TICKS) * w.maxSpeed;
     const out = b.species.radius + 0.5;
     const up = w.kind === 'lift' ? b.species.radius + LIFT_HIGH : 0;
-    const p = new Projectile(0, w, b).launch(b.x + dx * out + b.nx * up, b.y + dy * out + b.ny * up, b.z + dz * out + b.nz * up, dx * speed, dy * speed, dz * speed);
+    const p = new Projectile(0, w, b, match.physics).launch(b.x + dx * out + b.nx * up, b.y + dy * out + b.ny * up, b.z + dz * out + b.nz * up, dx * speed, dy * speed, dz * speed);
     for (let n = 0; n < FLIGHT; n++) {
       const r = p.step(match.field, match.windX, match.windZ, bugs, match.options.strictBounds === true);
       // (a curtain of silk catches it)
@@ -661,6 +661,7 @@ export class Brain {
     const p = match.burrowPath({ bug: probe }, ticks / CHARGE_TICKS, tunnel);
     if (p.length < 12) return null;
     const at = new Bug(u.bug.species);
+    at.physics = match.physics;
     if (!at.drop(match.field, p[9], p[11], p[10] + 6)) return null;
     step.move = step.turn = step.faceX = step.faceZ = 0;
     step.jump = step.run = false;

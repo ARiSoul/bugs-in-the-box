@@ -3,7 +3,9 @@ import { DataCache, MemoryStore, Settings as Kept } from '../src/data';
 import { Settings } from '../src/game/engine';
 import { Match, NO_INPUT, RETREAT_TICKS, WIND_MAX } from '../src/game/match';
 import { ANT, COCKROACH, SPIDER } from '../src/game/species';
-import { RULE, speciesSetting, TUNING, tunedWeapons, weaponSetting } from '../src/game/tuning';
+import { physicsOf, physicsSetting, RULE, speciesSetting, TUNING, tunedWeapons, weaponSetting } from '../src/game/tuning';
+import { Bug, GRAVITY, PHYSICS } from '../src/game/bug';
+import { Projectile } from '../src/game/projectile';
 import { CAPACITOR, SOLDER_BLOB, WEAPONS, weaponIndex } from '../src/game/weapons';
 import { keptOf, readKept } from '../src/ui/tuning';
 import { flat } from './helpers/worlds';
@@ -151,5 +153,49 @@ describe('the rules in the settings', () => {
       return Math.hypot(p[9] - p[0], p[11] - p[2]);
     };
     expect(reach(match({ [RULE.burrowLong]: 40 }))).toBeGreaterThan(reach(match({})) + 8);
+  });
+});
+
+describe('physics in the settings', () => {
+  it('are the shipped numbers of motion; as shipped, the very same object', () => {
+    for (const k of Object.keys(PHYSICS) as (keyof typeof PHYSICS)[]) expect(TUNING.get(physicsSetting(k)).value, k).toBe(PHYSICS[k]);
+    expect(physicsOf(TUNING.defaults())).toBe(PHYSICS);
+    expect(GRAVITY).toBe(PHYSICS.gravity);
+  });
+
+  it("a match's bugs, shots and boxes move by its own: more gravity, a jump comes down sooner, a shot falls faster", () => {
+    const heavy = TUNING.make({ [physicsSetting('gravity')]: 50 });
+    const air = (changed: Record<string, number>): { up: number; shot: number } => {
+      const t = flat(10);
+      const m = new Match(t, [{ name: 'a', species: ANT, color: 0, size: 1 }, { name: 'b', species: SPIDER, color: 0, size: 1 }], 1, { placeBugs: false, wind: 0, tuning: TUNING.make(changed) });
+      m.units[0].bug.drop(t, 30, 32);
+      m.units[1].bug.drop(t, 80, 32);
+      for (let n = 0; n < 60; n++) m.step(NO_INPUT);
+      const b = m.units[0].bug;
+      const y0 = b.y;
+      // (a jump: its highest point)
+      let up = 0;
+      m.step({ ...NO_INPUT, jump: true });
+      for (let n = 0; n < 60; n++) {
+        m.step(NO_INPUT);
+        up = Math.max(up, b.y - y0);
+      }
+      // (a shot as the match flies one)
+      const p = new Projectile(0, m.arsenal[0], null, m.physics).launch(30, 40, 32, 5, 0, 0);
+      for (let n = 0; n < 20; n++) p.step(m.field, 0, 0, [], false);
+      expect(b.physics).toBe(m.physics);
+      return { up, shot: 40 - p.y };
+    };
+    const light = air({});
+    const hard = air({ [physicsSetting('gravity')]: 50 });
+    expect(hard.up).toBeLessThan(light.up * 0.7);
+    expect(hard.shot).toBeGreaterThan(light.shot * 1.8);
+    expect(physicsOf(heavy).gravity).toBe(50);
+    // (a bug the computer makes in its head moves by them too)
+    const probe = new Bug(ANT);
+    probe.physics = physicsOf(heavy);
+    const copy = new Bug(ANT);
+    copy.copy(probe);
+    expect(copy.physics.gravity).toBe(50);
   });
 });

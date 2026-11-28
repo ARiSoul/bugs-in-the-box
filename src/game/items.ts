@@ -1,4 +1,4 @@
-import { Bug, DT, GRAVITY, IDLE, KILL_Y, type BugInput } from './bug';
+import { Bug, DT, IDLE, KILL_Y, PHYSICS, type BugInput, type Physics } from './bug';
 import type { TerrainField } from './field';
 import { dropNear } from './spawn';
 import { ANT } from './species';
@@ -67,6 +67,8 @@ export class Items {
     private readonly rng: () => number,
     private readonly spawnLevels: boolean,
     private readonly confine: ((x: number, y: number, z: number) => boolean) | null,
+    /** The numbers of motion its boxes fall by (the match's). */
+    private readonly physics: Readonly<Physics> = PHYSICS,
   ) {}
 
   /** A turn starts: a box may set out (`bugs`: where there are any). Returns it, if one does. */
@@ -111,7 +113,7 @@ export class Items {
         if ((tick + it.id) % LOOK === 0 && this.field.raycast(it.x, it.y, it.z, 0, -1, 0, BOX + 0.6) < 0 && this.field.sample(it.x, it.y, it.z) > 0.3) it.resting = false;
         continue;
       }
-      it.vy -= GRAVITY * DT;
+      it.vy -= this.physics.gravity * DT;
       const drop = -it.vy * DT;
       const t = this.field.raycast(it.x, it.y, it.z, 0, -1, 0, drop + BOX);
       if (t >= 0 && t <= drop + BOX) {
@@ -160,6 +162,7 @@ export class Items {
   private ground(bugs: readonly Bug[]): Bug | null {
     const { W, H, D } = this.field;
     const b = new Bug(ANT);
+    b.physics = this.physics;
     b.confine = this.confine;
     let x = EDGE + this.rng() * (W - 2 * EDGE);
     let z = EDGE + this.rng() * (D - 2 * EDGE);

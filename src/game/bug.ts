@@ -16,15 +16,48 @@ import type { BugSpecies } from './species';
 /** Simulation ticks per second. Every gameplay constant below assumes this rate. */
 export const TICK_RATE = 60;
 export const DT = 1 / TICK_RATE;
-export const GRAVITY = 25;
+/**
+ * The numbers of motion a match plays with: gravity, how bugs run, back, climb, fly and go down a thread, how fast a
+ * falling one may catch hold, and how shots bounce and come to rest. As shipped here; a match takes its own from its
+ * settings (`tuning.ts`) and gives it to its bugs and shots.
+ */
+export interface Physics {
+  readonly gravity: number;
+  readonly maxFall: number;
+  readonly run: number;
+  readonly back: number;
+  readonly climb: number;
+  readonly flySpeed: number;
+  readonly flyClimb: number;
+  readonly flySink: number;
+  readonly threadSpeed: number;
+  readonly catchSpeed: number;
+  readonly shotBounce: number;
+  readonly shotRest: number;
+}
+export const PHYSICS: Readonly<Physics> = Object.freeze({
+  gravity: 25,
+  maxFall: 40,
+  run: 1.8,
+  back: 0.6,
+  climb: 0.75,
+  flySpeed: 9,
+  flyClimb: 6.5,
+  flySink: 1.6,
+  threadSpeed: 6,
+  catchSpeed: 18,
+  shotBounce: 0.8,
+  shotRest: 1.2,
+});
+export const GRAVITY = PHYSICS.gravity;
 /** How much of the gravity a bursting bug feels. */
 const FLOAT_GRAVITY = 0.15;
-export const MAX_FALL_SPEED = 40;
+export const MAX_FALL_SPEED = PHYSICS.maxFall;
 /** A contact whose normal has at least this Y component is ground; below it is wall (~50°). */
 export const WALKABLE_NY = 0.64;
-export const WALK_BACK_FACTOR = 0.6;
+export const WALK_BACK_FACTOR = PHYSICS.back;
 /** Speed multiplier while running (shift held). */
-export const RUN_FACTOR = 1.8;
+export const RUN_FACTOR = PHYSICS.run;
 /** Below this height the bug has left the world and dies. */
 export const KILL_Y = -4;
 
@@ -46,7 +79,6 @@ const RESOLVE_ITERS = 4;
  * edge it goes round. Only a jump, a push (an explosion) or the surface's disappearance makes it fall.
  */
 /** Speed while on a surface too steep to stand on, as a fraction of the walking speed. */
-const CLIMB_FACTOR = 0.75;
 /** How squarely (cosine) a bug must walk into a surface to go over onto it; at a flatter angle it slides along. */
 const TAKE_OVER = -0.45;
 /** Surfaces that hang over more than this (normal Y below it) carry the heading along instead of taking it from the facing. */
@@ -55,13 +87,9 @@ const CEILING_NY = -0.8;
 const AIM_LEVEL_NY = 0.94;
 const AIM_SURFACE_NY = 0.64;
 /** Flying: speed ahead, up and down; how fast it takes its new speed; how near the top of the world it may go. */
-const FLY_SPEED = 9;
-const FLY_CLIMB = 6.5;
-const FLY_SINK = 1.6;
 const FLY_GRIP = 0.12;
 const FLY_ROOF = 4;
 /** A spider on its thread comes down at this speed; sideways it slows by this factor a tick. */
-const THREAD_SPEED = 6;
 const THREAD_DRAG = 0.97;
 /** After this long in the air (ticks) it takes hold of anything it touches. */
 const THREAD_GRIP = 20;
@@ -71,7 +99,6 @@ const WEDGED_MOVE = 0.02;
 /** How near the world's sides (and, under things, its bottom) a crawling bug goes. */
 const EDGE = 2.4;
 /** Falling, a bug that is walking forward into a wall catches hold of it, unless it falls faster than this. */
-const CATCH_SPEED = 18;
 
 export interface BugInput {
   /** +1 forward, -1 backward. */
@@ -164,6 +191,8 @@ export class Bug {
 
   /** Its attributes (speed, jump, health...): its species' numbers, and what effects, items and levels put on them. */
   readonly stats: Attributes;
+  /** The numbers of motion it moves by (its match's). */
+  physics: Readonly<Physics> = PHYSICS;
 
   /** Its full health (the same for every species: see `BugSpecies.toughness`). */
   get maxHealth(): number {
@@ -216,6 +245,7 @@ export class Bug {
 
   /** Be where another bug is, as it is (to try a way in one's head). */
   copy(o: Bug): void {
+    this.physics = o.physics;
     this.x = this.px = o.x;
     this.y = this.py = o.y;
     this.z = this.pz = o.z;
@@ -287,8 +317,8 @@ export class Bug {
       }
       this.grounded = false;
     } else if (this.grounded) {
-      const walk = input.run ? this.stats.get('speed') * RUN_FACTOR : this.stats.get('speed');
-      const v = (input.move > 0 ? walk : input.move < 0 ? -walk * WALK_BACK_FACTOR : 0) * (this.ny < WALKABLE_NY ? CLIMB_FACTOR : 1) * this.slow;
+      const walk = input.run ? this.stats.get('speed') * this.physics.run : this.stats.get('speed');
+      const v = (input.move > 0 ? walk : input.move < 0 ? -walk * this.physics.back : 0) * (this.ny < WALKABLE_NY ? this.physics.climb : 1) * this.slow;
       this.vx = this.hx * v;
       this.vy = this.hy * v;
       this.vz = this.hz * v;
@@ -297,23 +327,23 @@ export class Bug {
       if (input.jump && this.breath > 0) this.flying = !this.flying;
       if (input.jump && sp.silk && this.stood) this.thread = !this.thread;
       if (this.thread && field.sample(this.tx, this.ty, this.tz) > 1) this.thread = false;
-      if (!this.flying) this.vy -= GRAVITY * DT * (this.floating > 0 ? FLOAT_GRAVITY : 1);
+      if (!this.flying) this.vy -= this.physics.gravity * DT * (this.floating > 0 ? FLOAT_GRAVITY : 1);
       if (this.floating > 0) this.floating--;
       if (this.thread) {
-        if (this.vy < -THREAD_SPEED) this.vy = -THREAD_SPEED;
+        if (this.vy < -this.physics.threadSpeed) this.vy = -this.physics.threadSpeed;
         this.vx *= THREAD_DRAG;
         this.vz *= THREAD_DRAG;
       }
       if (this.flying) {
         this.breath--;
-        const v = input.move > 0 ? FLY_SPEED : input.move < 0 ? -FLY_SPEED * 0.6 : 0;
-        const up = input.run && this.y < field.H - FLY_ROOF ? FLY_CLIMB : -FLY_SINK;
+        const v = input.move > 0 ? this.physics.flySpeed : input.move < 0 ? -this.physics.flySpeed * 0.6 : 0;
+        const up = input.run && this.y < field.H - FLY_ROOF ? this.physics.flyClimb : -this.physics.flySink;
         this.vx += (this.fx * v - this.vx) * FLY_GRIP;
         this.vy += (up - this.vy) * FLY_GRIP;
         this.vz += (this.fz * v - this.vz) * FLY_GRIP;
         if (this.breath <= 0) this.flying = false;
       }
-      if (this.vy < -MAX_FALL_SPEED) this.vy = -MAX_FALL_SPEED;
+      if (this.vy < -this.physics.maxFall) this.vy = -this.physics.maxFall;
       fallSpeed = -this.vy;
     }
 
@@ -380,7 +410,7 @@ export class Bug {
         // landed
         this.setNormal();
         this.grounded = true;
-      } else if (wasGrounded === false && input.move > 0 && aheadDot < TAKE_OVER && fallSpeed < CATCH_SPEED) {
+      } else if (wasGrounded === false && input.move > 0 && aheadDot < TAKE_OVER && fallSpeed < this.physics.catchSpeed) {
         // falling (or jumping) against a wall it walks into: it catches hold
         this.nx = ahead[0];
         this.ny = ahead[1];
