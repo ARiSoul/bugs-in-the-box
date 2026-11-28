@@ -22,7 +22,7 @@ for (const w of WEAPONS) {
   if (w.blastRadius > 0) TUNING.define({ id: weaponSetting(w, 'blast'), group: w.name, label: 'Blast radius', unit: 'units', min: 0.5, max: 12, step: 0.1, value: w.blastRadius, help: 'How far its blast reaches, and the crater it leaves.' });
   if (w.kind === 'gale') {
     TUNING.define({ id: weaponSetting(w, 'reach'), group: w.name, label: 'Reach', unit: 'units', min: 4, max: 60, step: 1, value: w.reach, help: 'How far its gale reaches.' });
-    TUNING.define({ id: weaponSetting(w, 'push'), group: w.name, label: 'Push', unit: 'units/s', min: 0, max: 80, step: 1, value: w.push ?? 0, help: 'How hard it throws a bug right before it (a third of that at its far end).' });
+    TUNING.define({ id: weaponSetting(w, 'push'), group: w.name, label: 'Push', unit: 'units/s', min: 0, max: 80, step: 1, value: w.push ?? 0, help: 'How hard it throws a bug right before it (60% of that at its far end).' });
   }
   if (w.arcs > 0) TUNING.define({ id: weaponSetting(w, 'arc'), group: w.name, label: 'Arc damage', unit: 'health', min: 0, max: 200, step: 1, value: w.arcDamage, help: 'What each arc takes.' });
 }

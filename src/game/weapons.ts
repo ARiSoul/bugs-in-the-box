@@ -86,7 +86,7 @@ export interface Weapon {
   readonly coverHealth?: number;
   /** Built, hidden in: how far from the bug it may be put. A gale: how far it reaches. */
   readonly reach: number;
-  /** A gale: how hard it throws a bug right before the bug (a third of that at its far end), and how wide its cone is (the cosine of half its angle). */
+  /** A gale: how hard it throws a bug right before the bug (60% of that at its far end), and how wide its cone is (the cosine of half its angle). */
   readonly push?: number;
   readonly cone?: number;
   /** Render only. */
@@ -329,9 +329,9 @@ export const WING_STORM: Weapon = {
   name: 'Wing Storm',
   kind: 'gale',
   species: 'cockroach',
-  damage: 26,
+  damage: 18,
   reach: 28,
-  push: 34,
+  push: 44,
   cone: 0.8,
   sceneTicks: 60,
   color: 0x9fd8ff,

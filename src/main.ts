@@ -10,7 +10,7 @@ import { PerfLog } from './debug/perf';
 import { viewsFor, type ScenarioViews } from './debug/views';
 import { Brain, SKILLS } from './game/brain';
 import { DT, GRAVITY, KILL_Y, TICK_RATE } from './game/bug';
-import { CHARGE_TICKS, galeDirection, LIFT_HIGH, Match, NO_INPUT, SKILL_FULL, type MatchEvent, type MatchInput, type TeamSpec } from './game/match';
+import { CHARGE_TICKS, galeDirection, GALE_SPEED, LIFT_HIGH, Match, NO_INPUT, SKILL_FULL, type MatchEvent, type MatchInput, type TeamSpec } from './game/match';
 import { ANT, SPECIES, SPIDER, type BugSpecies } from './game/species';
 import { SOLDER_BLOB, WEAPONS } from './game/weapons';
 import { Controls, keepKeysIn } from './input/controls';
@@ -454,6 +454,11 @@ function newTeams(s: number, turns = 0): void {
   buildViews.clear(match.teams.map((t) => t.species.id));
   burrows.clear();
   gales.clear();
+  flung.clear();
+  galeLook = -1;
+  galeVictim = -1;
+  galeAfter = -1;
+  punch = 0;
   bow.clear();
   antColumn.clear();
   brood.clear();
@@ -638,13 +643,16 @@ function handleEvents(events: readonly MatchEvent[]): void {
         // a bug that fell out of the world is just gone; any other dies on screen, and the camera looks
         const u = match.units[e.unit];
         if (u.bug.y > KILL_Y && deathFocus < 0) deathFocus = e.unit;
+        // (one a gale threw off the map: said where it went over)
+        else if (u.bug.y <= KILL_Y && flung.has(e.unit)) texts.spawn('swept away!', 0xbfeaff, at.set(u.bug.x, Math.max(u.bug.y, 2) + 4, u.bug.z));
         break;
       }
       case 'special':
         bowPending = match.currentWeapon.kind === 'arrow';
         break;
       case 'fire':
-        hit.on = false;
+        // (a gale's view, set as it went out, is kept)
+        if (match.currentWeapon.kind !== 'gale') hit.on = false;
         if (match.currentWeapon.kind === 'arrow') bow.onFire();
         else if (match.currentWeapon.kind === 'column') antColumn.onFire();
         else if (match.currentWeapon.kind === 'brood') brood.onFire(match, ground);
@@ -674,9 +682,34 @@ function handleEvents(events: readonly MatchEvent[]): void {
         antColumn.onCollapse(e.x, e.y, e.z);
         break;
       case 'gale': {
-        // (from a little before the bug, along the aim; the view shakes with it)
-        gales.spawn(at.set(e.x + e.dx * 0.8, e.y + e.dy * 0.8 + 0.4, e.z + e.dz * 0.8), at2.set(e.dx, e.dy, e.dz), e.reach, e.cone);
-        shake = Math.max(shake, 0.22);
+        // (from a little before the bug, along the aim; the view shakes with it, its lens kicks wide)
+        const r = match.units[e.unit].bug.species.radius;
+        gales.spawn(at.set(e.x + e.dx * 0.8, e.y + e.dy * 0.8 + 0.4, e.z + e.dz * 0.8), at2.set(e.dx, e.dy, e.dz), e.reach, e.cone, r + 0.4);
+        shake = Math.max(shake, 0.35);
+        punch = 1;
+        // (the view looks down the cone, at all it sweeps, not at each bug it throws)
+        // (it goes out as the shot is fired, still in the aim: so the view is set here, not through lookAtSpot)
+        // (on what lies between the bug and the cone's far end, until the front has passed)
+        galeLook = match.tick + Math.ceil((e.reach * TICK_RATE) / GALE_SPEED);
+        galeVictim = -1;
+        hit.on = !inScene();
+        hit.unit = -1;
+        hit.amount = 0;
+        hit.until = galeLook + (TICK_RATE >> 1);
+        hit.at.set(e.x + e.dx * e.reach * 0.5, e.y, e.z + e.dz * e.reach * 0.5);
+        const hl = Math.hypot(e.dx, e.dz) || 1;
+        galeWay[0] = e.dx / hl;
+        galeWay[1] = e.dz / hl;
+        break;
+      }
+      case 'galeHit': {
+        const u = match.units[e.unit];
+        gales.hit(at.set(u.bug.x, u.bug.y, u.bug.z), e.vx, e.vy, e.vz);
+        bugViews[e.unit].view.flash = 1;
+        flung.set(e.unit, match.tick);
+        // (the first it gets to, the nearest, is thrown hardest: the view goes with it once the front has passed)
+        if (galeVictim === -1) galeVictim = e.unit;
+        shake = Math.max(shake, 0.18);
         break;
       }
       case 'arrow':
@@ -1314,6 +1347,17 @@ let chasePending = false;
 let deathFocus = -1;
 /** What the shot hit: the camera stays on it (the bug it hurt most, or the spot) after the shot is gone. */
 const hit = { on: false, unit: -1, amount: 0, until: 0, at: new THREE.Vector3() };
+/** A gale went out: the view keeps to its cone until this tick, not cutting to the bugs it throws. */
+let galeLook = -1;
+/** That gale's way (horizontal, unit): the view looks across it from above, not along it from behind. */
+const galeWay = [0, 1];
+/** The bug a gale threw that the view goes with once its front has passed (-1: none yet; -2: done), and till when. */
+let galeVictim = -1;
+let galeAfter = -1;
+/** Bugs a gale threw: the tick it got to each (they tumble while they fly). */
+const flung = new Map<number, number>();
+/** A gale's release kicks the lens wide (1), easing back. */
+let punch = 0;
 /** The computer's hits stay in view until the next turn; a player gets back to the shooter sooner, or at once by walking. */
 const HIT_TICKS = Math.round(1.6 * TICK_RATE);
 function lookAtSpot(x: number, y: number, z: number): void {
@@ -1326,6 +1370,8 @@ function lookAtSpot(x: number, y: number, z: number): void {
 }
 function lookAtUnit(unit: number, amount: number): void {
   if ((match.phase !== 'flight' && match.phase !== 'settle') || inScene()) return;
+  // (a gale's sweep is looked at whole while its front goes out)
+  if (match.tick < galeLook) return;
   if (!hit.on) hit.unit = -1;
   if (hit.unit < 0) hit.amount = 0;
   hit.on = true;
@@ -1916,10 +1962,40 @@ function frame(now: number): void {
   if (watching()) aim.hide();
   // (a gale being aimed: the cone it would sweep, from the bug as it is drawn)
   const aimsGale = !notMine() && match.phase === 'aim' && match.stance && match.currentWeapon.kind === 'gale' && match.activeUnit.bug.alive;
+  const groundBelow = match.activeUnit.bug.species.radius;
   if (aimsGale) {
     const g = galeDirection(match.activeUnit.bug, match.activeUnit.aimH, match.activeUnit.aimV, galeDir);
-    gales.preview(at.copy(active.view.root.position), at2.set(g[0], g[1], g[2]), match.currentWeapon.reach, match.currentWeapon.cone ?? 1);
+    gales.preview(at.copy(active.view.root.position), at2.set(g[0], g[1], g[2]), match.currentWeapon.reach, match.currentWeapon.cone ?? 1, now, groundBelow);
   } else gales.preview(null);
+  // (winding up, and held in its stance: dust drawn in to the bug)
+  const windsUp = (match.phase === 'special' || (match.phase === 'aim' && match.stance)) && match.currentWeapon.kind === 'gale' && match.activeUnit.bug.alive && !inMenu && !menus.over;
+  gales.inhale(windsUp ? active.view.root.position : null, groundBelow);
+  // (a bug a gale threw tumbles while it flies, and rights itself when it lands)
+  for (const [i, t0] of flung) {
+    const b = match.units[i].bug;
+    const flying = b.alive && !b.grounded && match.tick - t0 < 4 * TICK_RATE;
+    const v = bugViews[i].view;
+    v.tumble = flying ? Math.min(1, (match.tick - t0) / 6) : 0;
+    if (flying) buildViews.trail(v.root.position);
+    if (!flying && match.tick - t0 > 6) {
+      // (where it comes down: a ring of dust, and the view jolts)
+      if (b.alive && b.grounded) {
+        gales.land(at.set(b.x, b.y - b.species.radius + 0.05, b.z));
+        shake = Math.max(shake, 0.15);
+      }
+      flung.delete(i);
+    }
+  }
+  // (the front has passed: the view goes with the bug it threw hardest, if it is still in the world)
+  if (galeVictim >= 0 && match.tick >= galeLook + 6) {
+    const b = match.units[galeVictim].bug;
+    if (hit.on && hit.unit < 0 && b.alive && b.y > KILL_Y) {
+      hit.unit = galeVictim;
+      hit.until = match.tick + Math.round(1.4 * TICK_RATE);
+      galeAfter = hit.until;
+    }
+    galeVictim = -2;
+  }
   brood.hideMark = watching();
   if (inMenu || menus.over) {
     aim.hide();
@@ -1957,6 +2033,7 @@ function frame(now: number): void {
     const under = match.underground;
     if (burrowAfter > 0) burrowAfter = Math.max(0, burrowAfter - dt);
     const holding = under !== null || (burrowAfter > 0 && burrowPath.length === 12);
+    const sweeping = tracking && hit.on && hit.unit < 0 && match.tick < hit.until && match.tick < galeLook + 6;
     const burrowing = tracking && ((match.phase === 'aim' && match.currentWeapon.kind === 'burrow') || holding) && match.activeUnit.bug.alive;
     if (burrowing) {
       const p = under ? under.path : holding ? burrowPath : match.burrowPath(match.activeUnit, match.charging ? match.power : 0, burrowWay);
@@ -1975,8 +2052,11 @@ function frame(now: number): void {
     // (a bug walking through a tunnel: seen from above, not followed from behind)
     // (turned to the tunnel's way, not the bug's: the bug faces where the view looks, and the two would chase each other)
     else if (tracking && match.inTunnel) follow.overlook(1.25, 21, dt, match.inTunnel.ax * match.inTunnel.dir, match.inTunnel.az * match.inTunnel.dir);
-    // (out of the ground again, or out of the tunnel: back behind the bug, looking where it walks)
-    const above = burrowing || (tracking && match.inTunnel !== null);
+    // (a gale going out: from above and aside, so it runs across the view and all it throws is seen)
+    else if (sweeping) follow.overlook(0.5, 32, dt, galeWay[0], galeWay[1], 1.35);
+    // (out of the ground again, out of the tunnel, or the gale gone: back behind the bug, looking where it walks)
+    // (and while the view goes with the bug the gale threw, it stays where it was, not behind the shooter)
+    const above = burrowing || (tracking && match.inTunnel !== null) || sweeping || (hit.on && match.tick < galeAfter);
     if (overlooked && !above && tracking && match.activeUnit.bug.alive && !follow.gliding) {
       const b = match.activeUnit.bug;
       follow.chase(terrain, bugViews[match.active].view.root.position, b.fx, b.fz, 1.1);
@@ -2052,6 +2132,12 @@ function frame(now: number): void {
   texts.update(now);
   placeLabels();
   burrows.update(match, scaled);
+  // (a gale's release: the lens kicks wide and eases back)
+  if (punch > 0 && !inScene() && !debugCamera) {
+    punch = Math.max(0, punch - dt * 2.2);
+    stage.camera.fov = bow.camera.fov + 7 * punch * punch;
+    stage.camera.updateProjectionMatrix();
+  }
   if (shake > 0) {
     const k = shake * shake * 1.6;
     stage.camera.position.x += (Math.random() - 0.5) * k;

@@ -220,6 +220,8 @@ export type MatchEvent =
   | { type: 'death'; unit: number }
   /** A gale beaten up by a bug: from where, which way (unit), how far, how wide (the cosine of half its angle); the bugs it threw. */
   | { type: 'gale'; unit: number; x: number; y: number; z: number; dx: number; dy: number; dz: number; reach: number; cone: number; hit: number[] }
+  /** A gale's front got to a bug: it is thrown so. */
+  | { type: 'galeHit'; unit: number; vx: number; vy: number; vz: number }
   /** Tags met on a bug: what came of it, in a word (a web burnt off it, its shelter burnt, a swarm slowed...). */
   | { type: 'reacted'; unit: number; word: string }
   | { type: 'ring'; index: number; x: number; y: number; z: number }
@@ -350,10 +352,14 @@ export interface Brood {
   readonly harm: number[];
 }
 
-/** How long the bugs a gale threw are looked at before the turn goes on. */
-const GALE_LINGER = Math.round(2.5 * TICK_RATE);
-/** A gale lifts what it throws a little (so it does not just slide): this much up, against its way. */
-export const GALE_LIFT = 0.35;
+/** How long the bugs a gale threw are looked at, once its front has passed, before the turn goes on. */
+const GALE_LINGER = Math.round(1.5 * TICK_RATE);
+/** A gale lifts what it throws (so it clears what lies low before it): this much up, against its way. */
+export const GALE_LIFT = 0.48;
+/** How fast a gale's front goes out (units a second): it reaches each bug, and throws it, when it gets there. */
+export const GALE_SPEED = 35;
+/** How hard a gale throws a bug `f` of the way in (1 right before the bug that beat it up, 0 at its far end). */
+export const galeSpeed = (w: Weapon, f: number): number => (w.push ?? 0) * (0.6 + 0.4 * f);
 /** A gale goes along what the bug stands on: its aim raises or lowers it, at most this much (the sine of the angle). */
 export const GALE_RISE = 0.3;
 
@@ -612,6 +618,8 @@ export class Match {
   private readonly bugs: Bug[] = [];
   /** The numbers this match is tuned by (`MatchOptions.tuning`). */
   readonly tuning: SettingsSet;
+  /** A gale's front on its way: who it gets to, at which tick, how it throws them, what it takes. */
+  private readonly gusts: { unit: number; at: number; vx: number; vy: number; vz: number; damage: number }[] = [];
   /** A gale's way (horizontal, unit): the wind of the next turn blows so; null: none. */
   private galeWind: [number, number] | null = null;
   /** The weapons as its tuning has them, by the same index as `WEAPONS`. */
@@ -734,6 +742,7 @@ export class Match {
         // (getting away: its slot throws it at once)
         if (input.weapon >= 0 && WEAPONS[input.weapon]?.kind === 'burst' && this.has(unit, input.weapon) && !unit.cover) this.burst(unit);
       }
+      if (this.gusts.length > 0) this.galeTick();
       if (this.column) this.columnTick(this.column, unit, input);
       else if (this.brood) this.broodTick(this.brood, unit);
       else if (this.flock) this.flockTick(this.flock, unit, input);
@@ -1524,9 +1533,8 @@ export class Match {
     } else if (w.kind === 'flock') this.flock = this.newFlock(unit);
     else if (w.kind === 'brood' && this.mark) this.brood = { at: this.mark, ticks: 0, units: [], harm: [] };
     else if (w.kind === 'gale') {
-      this.gale(unit, w);
-      // (the bugs it threw are looked at as they fly)
-      this.lingerTicks = GALE_LINGER;
+      // (the bugs it throws are looked at as they fly: from its last hit on)
+      this.lingerTicks = this.gale(unit, w) + GALE_LINGER;
     }
     else this.projectiles.push(this.makeProjectile(unit, w, this.power));
     this.phase = 'flight';
@@ -1560,7 +1568,8 @@ export class Match {
   }
 
   /** A gale along the aim: what it reaches is thrown away along it, lifted a little, and hurt a little. */
-  private gale(u: Unit, w: Weapon): void {
+  /** A gale goes out; the ticks until its front gets to the last bug it reaches. */
+  private gale(u: Unit, w: Weapon): number {
     const b = u.bug;
     const [dx, dy, dz] = galeDirection(b, u.aimH, u.aimV, aimed);
     const hits = this.galeHits(u, w, [dx, dy, dz]);
@@ -1576,10 +1585,28 @@ export class Match {
     // (and the wind of the next turn blows its way, as hard as the wind may)
     const hl = Math.sqrt(dx * dx + dz * dz);
     this.galeWind = hl > 0.1 ? [dx / hl, dz / hl] : null;
+    // (each bug is thrown when the front gets to it)
+    let last = 0;
     for (const { unit: q, f } of hits) {
-      const speed = (w.push ?? 0) * (1 / 3 + (2 / 3) * f);
-      this.struck(q, Math.round(w.damage * this.hard), GALE_TAGS);
-      if (q.bug.alive) q.bug.push(px * speed, py * speed, pz * speed);
+      const at = Math.ceil(((1 - f) * w.reach * TICK_RATE) / GALE_SPEED);
+      const speed = galeSpeed(w, f);
+      this.gusts.push({ unit: q.id, at: this.tick + at, vx: px * speed, vy: py * speed, vz: pz * speed, damage: Math.round(w.damage * this.hard) });
+      if (at > last) last = at;
+    }
+    return last;
+  }
+
+  /** The gale's front gets to the bugs it reaches now: each is hurt, and thrown. */
+  private galeTick(): void {
+    for (let i = 0; i < this.gusts.length; i++) {
+      const g = this.gusts[i];
+      if (g.at > this.tick) continue;
+      this.gusts.splice(i--, 1);
+      const q = this.units[g.unit];
+      if (!q.bug.alive) continue;
+      this.events.push({ type: 'galeHit', unit: q.id, vx: g.vx, vy: g.vy, vz: g.vz });
+      this.struck(q, g.damage, GALE_TAGS);
+      if (q.bug.alive) q.bug.push(g.vx, g.vy, g.vz);
     }
   }
 

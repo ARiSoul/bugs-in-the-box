@@ -173,6 +173,8 @@ export class GameSounds {
           // (wings beaten hard, and the rush of air they send off)
           engine.play('wings', { at, rate: 0.55, level: 1.5 });
           engine.play('pour', { at, rate: 0.55, level: 0.9 });
+          // (and a low thump as it lets go)
+          engine.play('slam', { at, rate: 0.55, level: 0.9 });
         }
         else if (kind === 'web') engine.play('spit', { at });
         else if (kind === 'shelter') this.works(e.weapon, at);
@@ -239,6 +241,13 @@ export class GameSounds {
         engine.play('burrow', { at: e, rate: 1.15, level: 0.9 });
         engine.play('slam', { at: e, rate: 1.3, level: 0.45 });
         break;
+      case 'galeHit': {
+        // (the front slaps into a bug)
+        const at = match.units[e.unit].bug;
+        engine.play('impact', { at, rate: 1.45, level: 0.55 });
+        engine.play('cloth', { at, rate: 0.8, level: 0.7 });
+        break;
+      }
       case 'burst':
         engine.play('lob', { at: match.units[e.unit].bug, rate: 1.7, level: 1.2 });
         engine.play('wings', { at: match.units[e.unit].bug, rate: 1.6, level: 0.6 });

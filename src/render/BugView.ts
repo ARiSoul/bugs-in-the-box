@@ -71,6 +71,10 @@ interface Leg {
  * The look of one bug: a few spheres and cylinders built from its species proportions.
  * Purely cosmetic: reads the simulation state, never writes it. Local frame: +Z forward, +Y up.
  */
+/** How long a blow's white glow lasts (s), and its colour. */
+const FLASH = 0.14;
+const FLASH_WHITE = new THREE.Color(0xffffff);
+
 export class BugView {
   readonly root = new THREE.Group();
   private readonly legs: Leg[] = [];
@@ -97,6 +101,9 @@ export class BugView {
   /** It fights off a swarm, sinking under it (0..1); it tumbles, its legs thrown up (0..1). */
   struggle = 0;
   tumble = 0;
+  /** A blow lands: it glows white (1), fading over FLASH seconds. */
+  flash = 0;
+  private flashing = false;
   private fight = 0;
   /** Where its body rides when it stands on all its legs (a cockroach is low). */
   readonly restY: number = 0;
@@ -406,9 +413,18 @@ export class BugView {
       this.root.quaternion.multiply(this.roll);
       for (const leg of this.legs) leg.pivot.rotation.z += leg.side * (0.75 + 0.3 * Math.sin(this.fight * 21 + leg.offset)) * this.tumble;
     }
+    if (this.flash > 0 || this.flashing) this.glow(dt);
     if (this.cases.length > 0) this.moveArmour(dt);
     if (this.pose.weight > 0.001) this.stand(ground);
     else if (this.posed) this.unpose();
+  }
+
+  /** A blow's white glow, fading; its own glow back when it is gone. */
+  private glow(dt: number): void {
+    if (!this.flashing) for (const tint of this.tints) tint.emissive.copy(tint.m.emissive);
+    this.flashing = this.flash > 0;
+    for (const tint of this.tints) tint.m.emissive.copy(tint.emissive).lerp(FLASH_WHITE, this.flash * 0.8);
+    this.flash = Math.max(0, this.flash - dt / FLASH);
   }
 
   /** Into its shelter, or out of it. */

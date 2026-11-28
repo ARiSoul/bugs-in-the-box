@@ -4,7 +4,7 @@ import { Flock, FLOCK_TICKS, steerFlock, type FlockInput } from './flock';
 import { ITEM_KINDS, type Item, type ItemKind } from './items';
 import { createRng } from '../terrain/noise';
 import { Bug, type BugInput } from './bug';
-import { blastShare, BURST_AT, CHARGE_TICKS, galeDirection, GALE_LIFT, launch, LIFT_HIGH, MIN_POWER, NO_INPUT, type Column, type Match, type MatchInput, type Place, type Unit } from './match';
+import { blastShare, BURST_AT, CHARGE_TICKS, galeDirection, GALE_LIFT, galeSpeed, launch, LIFT_HIGH, MIN_POWER, NO_INPUT, type Column, type Match, type MatchInput, type Place, type Unit } from './match';
 import { rot, rotate2 } from './math';
 import { Projectile } from './projectile';
 import { WEAPONS, type Weapon } from './weapons';
@@ -514,7 +514,7 @@ export class Brain {
       py /= pl;
       pz /= pl;
       for (const { unit: q, f } of hits) {
-        const speed = (w.push ?? 0) * (1 / 3 + (2 / 3) * f);
+        const speed = galeSpeed(w, f);
         const flown = new Bug(q.bug.species);
         flown.copy(q.bug);
         flown.push(px * speed, py * speed, pz * speed);

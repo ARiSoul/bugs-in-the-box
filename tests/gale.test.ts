@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Brain, SKILLS } from '../src/game/brain';
-import { galeDirection, GALE_RISE, Match, NO_INPUT, SKILL_FULL, type MatchEvent, type MatchInput } from '../src/game/match';
+import { galeDirection, GALE_RISE, GALE_SPEED, Match, NO_INPUT, SKILL_FULL, type MatchEvent, type MatchInput } from '../src/game/match';
 import { ANT, COCKROACH, type BugSpecies } from '../src/game/species';
 import { TUNING, weaponSetting } from '../src/game/tuning';
 import { BLACKOUT_SWARM, SPECIAL_AT, specialsAt, WEAPONS, WING_STORM } from '../src/game/weapons';
@@ -63,9 +63,27 @@ describe('Wing Storm', () => {
     expect(g?.hit).toEqual([m.units.find((u) => u.bug === near)?.id]);
     run(m, 120);
     expect(near.x - x0[0]).toBeGreaterThan(8);
-    expect(near.health).toBe(100 - WING_STORM.damage);
+    // (its harm, and maybe a hard landing on top)
+    expect(near.health).toBeLessThanOrEqual(100 - WING_STORM.damage);
     expect([aside.x, aside.health]).toEqual([x0[1], 100]);
     expect([far.x, far.health]).toEqual([x0[2], 100]);
+  });
+
+  it('its front goes out at GALE_SPEED: a bug is thrown when the front gets to it, not before', () => {
+    const m = setup([[42, 32]]);
+    const ant = m.units.find((u) => u.team === 1) as (typeof m.units)[number];
+    const x = ant.bug.x;
+    const e = storm(m);
+    expect(e.some((q) => q.type === 'gale')).toBe(true);
+    // (12 units away: about 12 / GALE_SPEED of a second, then the hit)
+    const d = Math.abs(ant.bug.x - m.units[0].bug.x);
+    const ticks = Math.ceil((d * 60) / GALE_SPEED);
+    const before = run(m, ticks - 4);
+    expect(before.some((q) => q.type === 'galeHit')).toBe(false);
+    expect([ant.bug.x, ant.bug.health]).toEqual([x, 100]);
+    const after = run(m, 10);
+    expect(after.some((q) => q.type === 'galeHit' && q.unit === ant.id)).toBe(true);
+    expect(ant.bug.health).toBeLessThan(100);
   });
 
   it('reaches a friend in its cone too, but not through a wall', () => {
