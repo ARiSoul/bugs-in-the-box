@@ -32,6 +32,8 @@ export interface InventoryUse {
   item(a: Action): void;
   /** Nothing of the slots any more: back to what it had. */
   drop(): void;
+  /** The slot of what is in hand, picked again: true if that acts at once (a special in its stance fires), else it is dropped. */
+  again?(index: number): boolean;
 }
 
 /**
@@ -134,7 +136,9 @@ export class Inventory {
   private act(a: Action): void {
     if (!this.match || !this.unit || this.locked) return;
     if (a.item) this.use.item(a);
-    else if (this.match.weapon === a.weapon) this.use.drop();
+    else if (this.match.weapon === a.weapon) {
+      if (!this.use.again?.(a.weapon)) this.use.drop();
+    }
     else this.use.weapon(a.weapon);
   }
 

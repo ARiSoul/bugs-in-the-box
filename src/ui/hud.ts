@@ -340,7 +340,7 @@ export class Hud {
     let aim = computer
       ? ''
       : gale
-        ? `<b>${match.currentWeapon.name}</b> ${inPath === 0 ? 'nobody in its path' : inPath === 1 ? '1 bug in its path' : `${inPath} bugs in its path`} · A/D turn it · the next turn's wind blows its way · fire key: beat it up`
+        ? `<b>${match.currentWeapon.name}</b> ${inPath === 0 ? 'nobody in its path' : inPath === 1 ? '1 bug in its path' : `${inPath} bugs in its path`} · A/D turn it · the next turn's wind blows its way · its slot again (or Q): beat it up`
       : brood && !match.mark
         ? 'point at a spot nearer to it'
         : brood

@@ -205,6 +205,12 @@ export class Controls {
     this.clicked = true;
   }
 
+  /** Hold fire for this many ticks, then let go (a special fired from its slot, charged that much). */
+  fireFor(ticks: number): void {
+    this.firing = ticks;
+  }
+  private firing = 0;
+
   /** -1, 0 or +1: the walk keys held right now. */
   get moveHeld(): -1 | 0 | 1 {
     return this.any('forward') ? 1 : this.any('back') ? -1 : 0;
@@ -236,8 +242,9 @@ export class Controls {
     this.out.turn = this.turnHeld;
     this.out.run = this.any('run');
     this.out.aim = this.any('aimUp') ? 1 : this.any('aimDown') ? -1 : 0;
-    this.out.fire = this.any('fire') || this.clicked;
+    this.out.fire = this.any('fire') || this.clicked || this.firing > 0;
     this.clicked = false;
+    if (this.firing > 0) this.firing--;
     this.out.jump = this.jumpQueued;
     this.out.weapon = this.weaponQueued;
     this.out.faceX = this.faceX;

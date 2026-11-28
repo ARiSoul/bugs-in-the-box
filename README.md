@@ -65,7 +65,7 @@ The match starts when both players are in. On your turn you play; on the other's
 | **Space** | jump (bees: again in the air to fly; spiders: again to hang on a thread) |
 | **Q** (hold) | charge, release to fire |
 | **1–4** | the hand: weapons every bug has |
-| **5–9** | quick slots: the special attack, a wall, a bridge, a shelter, Burst (another order can be set in the inventory) |
+| **5–9** | quick slots: the special attack, a wall, a bridge, a shelter, Burst (another order can be set in the inventory). A slot acts from its key or a click: Burst throws at once; a special, when loaded, starts, and its key again fires it (not loaded, it says how far it is) |
 | **I** or **P** | inventory (drag weapons and items to the slots) |
 | **M** | the large map |
 | **K** | sound on / off |
@@ -118,7 +118,7 @@ The game reads these from the address (the setup screen writes most of them itse
 
 The **menu** box in the top-left corner of a match is for development:
 
-- **settings**: every number the game is tuned by, by group, with search, sliders, a mark on what is changed, back as shipped, export and import as JSON. Changes apply from the next match (Restart in the pause box plays the same match with them). **Your growth (testing)** sets each species' level.
+- **settings**: every number the game is tuned by, by group, with search, sliders, a mark on what is changed, back as shipped, export and import as JSON. Changes apply from the next match (Restart in the pause box plays the same match with them). **Your growth (testing)** sets each species' level, and **Load both specials now** fills both teams' special cards in the match (to try a special at once; `Specials → Load a turn` at 1000 loads them every turn).
 - **setup**, **new match**, **random**: back to the setup screen, the same map anew, another seed.
 - **free camera** and **cinematic camera**: fly round the map by hand, or along a scripted path.
 - **benchmark**: the terrain pipeline in the browser.

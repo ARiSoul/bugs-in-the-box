@@ -10,7 +10,7 @@ import { PerfLog } from './debug/perf';
 import { viewsFor, type ScenarioViews } from './debug/views';
 import { Brain, SKILLS } from './game/brain';
 import { DT, GRAVITY, KILL_Y, TICK_RATE } from './game/bug';
-import { galeDirection, LIFT_HIGH, Match, NO_INPUT, type MatchEvent, type MatchInput, type TeamSpec } from './game/match';
+import { CHARGE_TICKS, galeDirection, LIFT_HIGH, Match, NO_INPUT, SKILL_FULL, type MatchEvent, type MatchInput, type TeamSpec } from './game/match';
 import { ANT, SPECIES, SPIDER, type BugSpecies } from './game/species';
 import { SOLDER_BLOB, WEAPONS } from './game/weapons';
 import { Controls, keepKeysIn } from './input/controls';
@@ -742,9 +742,36 @@ cameraButton.addEventListener('click', () => {
   cameraButton.blur();
 });
 setCamera(data.settings.get<string>(CAMERA) !== 'moves');
+/** A special fired from its slot is charged this much (a tap of the fire key is the least; holding it, more). */
+const SLOT_CHARGE = Math.round(CHARGE_TICKS * 0.7);
 const inventory = new Inventory(
   {
-    weapon: (i) => controls.selectWeapon(i),
+    weapon: (i) => {
+      const w = WEAPONS[i];
+      const u = match.activeUnit;
+      // (a special not loaded yet: how far it is)
+      if (w.sceneTicks > 0 && !match.canUse(u, i) && match.has(u, i)) {
+        const b = u.bug;
+        texts.spawn(`${w.name}: ${Math.floor((match.skill[u.team] / SKILL_FULL) * 100)}% loaded`, 0xffd59a, at.set(b.x, b.y + bugViews[match.active].height + 2.2, b.z));
+        return;
+      }
+      controls.selectWeapon(i);
+      // (Burst: picked, it throws at once)
+      if (w.kind === 'burst' && match.phase === 'aim') controls.click();
+    },
+    again: (i) => {
+      const w = WEAPONS[i];
+      if (match.phase !== 'aim') return false;
+      if (w.kind === 'burst') {
+        controls.click();
+        return true;
+      }
+      // (a special in its stance: it goes; one that is charged, charged so much)
+      if (w.sceneTicks === 0 || !match.stance) return false;
+      if (w.kind === 'arrow' || w.kind === 'column' || w.kind === 'lift') controls.fireFor(SLOT_CHARGE);
+      else controls.click();
+      return true;
+    },
     item: (a) => a.item && controls.useItem(itemIndex(a.item)),
     drop: () => controls.selectWeapon(match.kept[match.activeUnit.team]),
   },
@@ -1181,6 +1208,21 @@ const tuningPage = new TuningPage(
       row.append(name, pick, xp, document.createElement('span'), back);
       into.append(row);
     }
+    // (for testing: both teams' specials loaded now, in this match; not online, where it would put the two out of step)
+    if (online) return;
+    const load = document.createElement('button');
+    load.textContent = 'Load both specials now';
+    load.title = 'fill both teams\' special cards in this match (for testing; also: Specials → Load a turn at 1000 loads them every turn)';
+    load.addEventListener('click', () => {
+      match.skill.fill(SKILL_FULL);
+      if (recorder) recorder.touched = true;
+      load.textContent = 'Loaded';
+      setTimeout(() => (load.textContent = 'Load both specials now'), 1200);
+    });
+    const row = document.createElement('div');
+    row.className = 'tuning-tools';
+    row.append(load);
+    into.append(row);
   },
 );
 /** The player's growth changed (from the settings page): what shows it, anew. */
