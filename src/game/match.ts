@@ -354,6 +354,18 @@ export interface Brood {
 const GALE_LINGER = Math.round(2.5 * TICK_RATE);
 /** A gale lifts what it throws a little (so it does not just slide): this much up, against its way. */
 export const GALE_LIFT = 0.35;
+/** A gale goes along what the bug stands on: its aim raises or lowers it, at most this much (the sine of the angle). */
+export const GALE_RISE = 0.3;
+
+/**
+ * Which way a gale of bug `b` goes, aimed (`aimH`, `aimV`): along the surface it stands on, raised or lowered by its aim
+ * by no more than GALE_RISE, so a bug that aims high (as every turn starts) still sweeps the ground before it.
+ */
+export function galeDirection(b: Bug, aimH: number, aimV: number, out: Float64Array): Float64Array {
+  const v = aimV > GALE_RISE ? GALE_RISE : aimV < -GALE_RISE ? -GALE_RISE : aimV;
+  const h = Math.sqrt(1 - v * v) * (aimH < 0 ? -1 : 1);
+  return b.direction(h, v, out);
+}
 /** How long a special attack's hit is looked at before the turn goes on. */
 export const LINGER_TICKS = Math.round(4.5 * TICK_RATE);
 /** In a stance, turning and aiming are this much slower (the view is close, the aim fine)... */
@@ -600,6 +612,8 @@ export class Match {
   private readonly bugs: Bug[] = [];
   /** The numbers this match is tuned by (`MatchOptions.tuning`). */
   readonly tuning: SettingsSet;
+  /** A gale's way (horizontal, unit): the wind of the next turn blows so; null: none. */
+  private galeWind: [number, number] | null = null;
   /** The weapons as its tuning has them, by the same index as `WEAPONS`. */
   readonly arsenal: readonly Weapon[];
   /** The numbers of motion its bugs, shots and boxes move by (from its tuning). */
@@ -1548,7 +1562,7 @@ export class Match {
   /** A gale along the aim: what it reaches is thrown away along it, lifted a little, and hurt a little. */
   private gale(u: Unit, w: Weapon): void {
     const b = u.bug;
-    const [dx, dy, dz] = this.aimDirection(u, aimed);
+    const [dx, dy, dz] = galeDirection(b, u.aimH, u.aimV, aimed);
     const hits = this.galeHits(u, w, [dx, dy, dz]);
     // (along the aim, and a little up)
     let px = dx;
@@ -1559,6 +1573,9 @@ export class Match {
     py /= pl;
     pz /= pl;
     this.events.push({ type: 'gale', unit: u.id, x: b.x, y: b.y, z: b.z, dx, dy, dz, reach: w.reach, cone: w.cone ?? 1, hit: hits.map((h) => h.unit.id) });
+    // (and the wind of the next turn blows its way, as hard as the wind may)
+    const hl = Math.sqrt(dx * dx + dz * dz);
+    this.galeWind = hl > 0.1 ? [dx / hl, dz / hl] : null;
     for (const { unit: q, f } of hits) {
       const speed = (w.push ?? 0) * (1 / 3 + (2 / 3) * f);
       this.struck(q, Math.round(w.damage * this.hard), GALE_TAGS);
@@ -1883,6 +1900,12 @@ export class Match {
         const wind = this.tuning.get(RULE.wind) * (this.options.wind ?? 1);
         this.windX = (this.rng() * 2 - 1) * wind;
         this.windZ = (this.rng() * 2 - 1) * wind;
+        // (a gale beaten up in the last turn: its wind, as strong as the wind may be here)
+        if (this.galeWind) {
+          this.windX = this.galeWind[0] * wind;
+          this.windZ = this.galeWind[1] * wind;
+          this.galeWind = null;
+        }
         for (const q of this.units) q.bug.breath = Math.round(q.bug.stats.get('breath') * TICK_RATE);
         this.triggers.emit('teamTurn', { team: t });
         if (!u.shell && u.bug.species.shell && u.bug.health < this.passive(t, 'survivor') && !this.regrown.has(u.id)) {

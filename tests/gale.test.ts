@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Brain, SKILLS } from '../src/game/brain';
-import { Match, NO_INPUT, SKILL_FULL, type MatchEvent, type MatchInput } from '../src/game/match';
+import { galeDirection, GALE_RISE, Match, NO_INPUT, SKILL_FULL, type MatchEvent, type MatchInput } from '../src/game/match';
 import { ANT, COCKROACH, type BugSpecies } from '../src/game/species';
 import { TUNING, weaponSetting } from '../src/game/tuning';
 import { BLACKOUT_SWARM, SPECIAL_AT, specialsAt, WEAPONS, WING_STORM } from '../src/game/weapons';
@@ -10,7 +10,7 @@ import { even } from './helpers/even';
 const AT = WEAPONS.indexOf(WING_STORM);
 
 /** A cockroach at (30, 32) with Wing Storm loaded, facing +x; bugs of the other team (and maybe a friend) where given. */
-function setup(foes: [number, number][], friend: [number, number] | null = null, changed: Record<string, number> = {}, wall = false): Match {
+function setup(foes: [number, number][], friend: [number, number] | null = null, changed: Record<string, number> = {}, wall = false, wind = 0): Match {
   const t = world(4, 2, 2, (i, j) => Math.min(j - 10, wall && i >= 37 && i <= 39 ? Math.max(j - 20, 37 - i, i - 39) : 99));
   const m = new Match(
     t,
@@ -19,7 +19,7 @@ function setup(foes: [number, number][], friend: [number, number] | null = null,
       { name: 'A', species: ANT, color: 0, size: foes.length },
     ],
     1,
-    { placeBugs: false, wind: 0, tuning: TUNING.make(changed) },
+    { placeBugs: false, wind, tuning: TUNING.make(changed) },
   );
   even(m);
   const roaches = m.units.filter((u) => u.team === 0);
@@ -95,6 +95,35 @@ describe('Wing Storm', () => {
     expect(thrown({ [weaponSetting(WING_STORM, 'push')]: 50 }, 42)).toBeGreaterThan(thrown({}, 42) + 4);
     expect(thrown({}, 60)).toBe(0);
     expect(thrown({ [weaponSetting(WING_STORM, 'reach')]: 40 }, 60)).toBeGreaterThan(2);
+  });
+
+  it('goes along the ground before the bug, whatever its aim: as every turn starts, aimed high, it still sweeps', () => {
+    const m = setup([[42, 32]]);
+    const ant = m.units.find((u) => u.team === 1)?.bug;
+    const x = ant?.x ?? 0;
+    run(m, 1, { weapon: AT });
+    run(m, WING_STORM.sceneTicks + 2);
+    // (no aiming at all: the aim it had, 45 degrees up)
+    expect(m.activeUnit.aimV).toBeGreaterThan(0.6);
+    run(m, 2, { fire: true });
+    run(m, 120);
+    expect((ant?.x ?? 0) - x).toBeGreaterThan(8);
+    // (its way is raised by the aim, but no more than GALE_RISE)
+    const d = galeDirection(m.activeUnit.bug, 0, 1, new Float64Array(3));
+    expect(d[1]).toBeCloseTo(GALE_RISE, 6);
+  });
+
+  it('the wind of the next turn blows its way, as hard as the wind may', () => {
+    const m = setup([[42, 32]], null, {}, false, 1);
+    storm(m);
+    for (let n = 0; n < 60 * 20 && m.turnNumber < 2; n++) m.step(NO_INPUT);
+    expect(m.turnNumber).toBe(2);
+    // (the cockroach faces +x: the wind blows +x, at the strongest the match allows)
+    expect(m.windX).toBeGreaterThan(0);
+    expect(Math.abs(m.windZ)).toBeLessThan(m.windX * 0.2);
+    // (and the turn after, the wind is drawn again)
+    for (let n = 0; n < 60 * 40 && m.turnNumber < 3; n++) m.step(NO_INPUT);
+    expect(m.turnNumber).toBe(3);
   });
 
   it('the computer uses it to throw an enemy that stands by the edge off the map', () => {

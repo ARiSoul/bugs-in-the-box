@@ -6,7 +6,7 @@ Each phase must end with something playable or measurable. Do not move on to the
 
 A PC proof of concept: six maps, four species with their own traits, defences and specials, building and hiding, boxes, levels and passives, a computer opponent, local and online matches (a room server, lockstep, checked by the server), all synthesized sound and music. Under it: a linked engine (attributes, effects, triggers, abilities, reactions, settings), whole matches as records checked across clients, the player's data in the browser first.
 
-**Next**, in this order: the Wing Storm's balance (cockroaches win 45% with it, 62% with the Blackout Swarm); the bee's second special (Honey Fall) and the spider's (to be chosen); then the rest of the systems and mechanics (more settings, music-driven scenery). Hosting the room server is one of the last steps.
+**Next**, in this order: the bee's second special (Honey Fall) and the spider's (to be chosen); the Blackout Swarm looks strong (cockroaches win 62% with it, 50% with the Wing Storm); then the rest of the systems and mechanics (more settings, music-driven scenery). Hosting the room server is one of the last steps.
 
 ## Phase 0 · Terrain (done)
 - [x] Density grid + chunked Surface Nets

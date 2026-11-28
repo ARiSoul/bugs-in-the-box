@@ -10,7 +10,7 @@ import { PerfLog } from './debug/perf';
 import { viewsFor, type ScenarioViews } from './debug/views';
 import { Brain, SKILLS } from './game/brain';
 import { DT, GRAVITY, KILL_Y, TICK_RATE } from './game/bug';
-import { LIFT_HIGH, Match, NO_INPUT, type MatchEvent, type MatchInput, type TeamSpec } from './game/match';
+import { galeDirection, LIFT_HIGH, Match, NO_INPUT, type MatchEvent, type MatchInput, type TeamSpec } from './game/match';
 import { ANT, SPECIES, SPIDER, type BugSpecies } from './game/species';
 import { SOLDER_BLOB, WEAPONS } from './game/weapons';
 import { Controls, keepKeysIn } from './input/controls';
@@ -228,6 +228,8 @@ const ground = new DrawnGround(terrain);
 const flashes = new ExplosionFlashes(stage.scene);
 const lines = new LineFlashes(stage.scene);
 const gales = new GaleView(stage.scene);
+/** A gale's way while it is aimed (render only). */
+const galeDir = new Float64Array(3);
 const texts = new FloatingTexts(stage.hud);
 const projectiles = new ProjectileViews(stage.scene);
 const burrows = new BurrowViews(stage.scene);
@@ -1870,6 +1872,12 @@ function frame(now: number): void {
   aim.update(match, active.view.root.position, active.height, now, stage.camera.position.distanceTo(active.view.root.position));
   // (the other player's aim, online, is theirs: this side sees the bug turn, and the shot)
   if (watching()) aim.hide();
+  // (a gale being aimed: the cone it would sweep, from the bug as it is drawn)
+  const aimsGale = !notMine() && match.phase === 'aim' && match.stance && match.currentWeapon.kind === 'gale' && match.activeUnit.bug.alive;
+  if (aimsGale) {
+    const g = galeDirection(match.activeUnit.bug, match.activeUnit.aimH, match.activeUnit.aimV, galeDir);
+    gales.preview(at.copy(active.view.root.position), at2.set(g[0], g[1], g[2]), match.currentWeapon.reach, match.currentWeapon.cone ?? 1);
+  } else gales.preview(null);
   brood.hideMark = watching();
   if (inMenu || menus.over) {
     aim.hide();

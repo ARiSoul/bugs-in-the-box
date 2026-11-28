@@ -4,7 +4,7 @@ import { Flock, FLOCK_TICKS, steerFlock, type FlockInput } from './flock';
 import { ITEM_KINDS, type Item, type ItemKind } from './items';
 import { createRng } from '../terrain/noise';
 import { Bug, type BugInput } from './bug';
-import { blastShare, BURST_AT, CHARGE_TICKS, GALE_LIFT, launch, LIFT_HIGH, MIN_POWER, NO_INPUT, type Column, type Match, type MatchInput, type Place, type Unit } from './match';
+import { blastShare, BURST_AT, CHARGE_TICKS, galeDirection, GALE_LIFT, launch, LIFT_HIGH, MIN_POWER, NO_INPUT, type Column, type Match, type MatchInput, type Place, type Unit } from './match';
 import { rot, rotate2 } from './math';
 import { Projectile } from './projectile';
 import { WEAPONS, type Weapon } from './weapons';
@@ -503,7 +503,7 @@ export class Brain {
       if (!toAim(probe, dx, dy, dz, p)) continue;
       probe.fx = p.fx;
       probe.fz = p.fz;
-      probe.direction(p.aimH, p.aimV, dir);
+      galeDirection(probe, p.aimH, p.aimV, dir);
       const hits = match.galeHits(u, w, dir, b);
       if (hits.length === 0) continue;
       let px = dir[0];
@@ -581,7 +581,10 @@ export class Brain {
       }
     } else {
       const best = this.bestOf(this.plans);
-      if ((!best || best.score < GOOD) && this.walks < WALKS && match.turnTicks > HURRY && u.web < 0) {
+      // (a gale loaded and taken, and nobody in its reach from here: it looks for a place that brings one in, once)
+      const sp = match.special(u.team);
+      const galeIdle = sp >= 0 && this.specials && match.arsenal[sp].kind === 'gale' && match.canUse(u, sp) && !this.plans.some((p) => p.weapon === sp) && this.walks === 0;
+      if ((!best || best.score < GOOD || galeIdle) && this.walks < WALKS && match.turnTicks > HURRY && u.web < 0) {
         this.seekSpots(match, u);
         return;
       }

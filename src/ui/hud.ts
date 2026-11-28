@@ -3,7 +3,7 @@ import { actionOf } from '../game/actions';
 import { tagsOf, wordFor } from '../game/reactions';
 import { RING_DAMAGE } from '../game/weapons';
 import { TICK_RATE } from '../game/bug';
-import { SKILL_FULL, WIND_MAX, type Match } from '../game/match';
+import { galeDirection, SKILL_FULL, WIND_MAX, type Match } from '../game/match';
 import type { ItemKind } from '../game/items';
 import { WEAPONS, type Weapon } from '../game/weapons';
 import { CHUNK } from '../terrain/constants';
@@ -231,6 +231,9 @@ export class Hud {
 
   /** `windAngle`: screen angle of the wind in radians (0 = right, positive = clockwise). */
   /** `computer`: this side does not play the turn (the computer, or online the other); `watching`: online, the name of who does. */
+  /** A gale's way, worked out for the HUD. */
+  private readonly dir = new Float64Array(3);
+
   renderMatch(match: Match, windAngle: number, computer = false, watching = ''): void {
     const u = match.activeUnit;
     const team = match.teams[u.team];
@@ -331,8 +334,13 @@ export class Hud {
 
     // the aim angle above the horizon, in degrees, for fine aiming
     const brood = match.currentWeapon.kind === 'brood' && match.stance;
+    // (a gale: who it would take, and that it turns the wind)
+    const gale = match.currentWeapon.kind === 'gale' && match.stance && match.phase === 'aim';
+    const inPath = gale ? match.galeHits(u, match.currentWeapon, galeDirection(u.bug, u.aimH, u.aimV, this.dir)).length : 0;
     let aim = computer
       ? ''
+      : gale
+        ? `<b>${match.currentWeapon.name}</b> ${inPath === 0 ? 'nobody in its path' : inPath === 1 ? '1 bug in its path' : `${inPath} bugs in its path`} · A/D turn it · the next turn's wind blows its way · fire key: beat it up`
       : brood && !match.mark
         ? 'point at a spot nearer to it'
         : brood
