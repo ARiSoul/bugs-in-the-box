@@ -322,7 +322,7 @@ describe('determinism', () => {
     expect(Math.hypot(a[n - 8] - a[0], a[n - 6] - a[2])).toBeGreaterThan(5);
   });
 
-  it('game and terrain code use no device-dependent Math functions', () => {
+  it('game, terrain, sim and net code use no device-dependent Math functions', () => {
     const banned = /Math\.(random|sin|cos|tan|asin|acos|atan2?|sinh|cosh|tanh|exp|expm1|log\w*|pow|cbrt|hypot)\b/;
     const files = (dir: string): string[] =>
       readdirSync(dir).flatMap((f) => {
@@ -330,7 +330,7 @@ describe('determinism', () => {
         return statSync(p).isDirectory() ? files(p) : p.endsWith('.ts') ? [p] : [];
       });
     const offenders: string[] = [];
-    for (const file of [...files('src/terrain'), ...files('src/game')]) {
+    for (const file of [...files('src/terrain'), ...files('src/game'), ...files('src/sim'), ...files('src/net')]) {
       const code = readFileSync(file, 'utf8')
         .replace(/\/\*[\s\S]*?\*\//g, '')
         .replace(/\/\/.*$/gm, '');

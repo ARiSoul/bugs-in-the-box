@@ -15,6 +15,20 @@
 
 The boundary that matters is the one on the left: gameplay only uses `sample`, `normal`, `raycast` and `carve`. Whatever draws (three.js today, something else tomorrow) only receives `ChunkMesh`.
 
+### Layers
+
+| Layer | What it is | May not import |
+|---|---|---|
+| `src/terrain/` | the density grid, the mesher, the generators | game, render, ui, input, audio, data, debug, workers; three, dexie |
+| `src/game/` | gameplay and the linked engine (`engine/`), the settings (`tuning.ts`) | render, ui, input, audio, data, debug, workers; three, dexie |
+| `src/sim/` | a whole match as a record, replayed without a screen, digests | render, ui, input, audio, data, debug, workers; three, dexie |
+| `src/net/` | the online protocol, the lockstep, the WebSocket client | render, ui, input, audio, data, debug, workers; three, dexie |
+| `src/data/` | the player's data in the browser (Dexie), the sync engine | game, terrain, render, ui, input, audio, debug, workers; three |
+| `src/render/`, `src/ui/`, `src/input/`, `src/audio/` | what is drawn, shown, typed and heard; they read the match, never change it | |
+| `server/` | the room server (Node + `ws`), with the game's own simulation | (not checked) |
+
+`tests/architecture.test.ts` holds these borders; it also keeps the DOM and browser storage out of `game/`, `terrain/` and `sim/`, and browser storage out of everything but `data/`. `tests/bug.test.ts` keeps `Math.random`, `sin`, `cos`, `pow`, `hypot` and the like (they may differ between devices) out of `terrain/`, `game/`, `sim/` and `net/`. `src/main.ts` wires it all together.
+
 ## Data model
 
 - A world of `W×H×D` cells (default 160×96×160 = 5×3×5 chunks of 32; `?map=3x2x3` gives 96×64×96). One world unit = one cell.

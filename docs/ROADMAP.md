@@ -2,6 +2,12 @@
 
 Each phase must end with something playable or measurable. Do not move on to the next one without green tests and benchmark.
 
+## Where it stands
+
+A PC proof of concept: six maps, four species with their own traits, defences and specials, building and hiding, boxes, levels and passives, a computer opponent, local and online matches (a room server, lockstep, checked by the server), all synthesized sound and music. Under it: a linked engine (attributes, effects, triggers, abilities, reactions, settings), whole matches as records checked across clients, the player's data in the browser first.
+
+**Next**, in this order: the Wing Storm's balance (cockroaches win 45% with it, 62% with the Blackout Swarm); the bee's second special (Honey Fall) and the spider's (to be chosen); then the rest of the systems and mechanics (more settings, music-driven scenery). Hosting the room server is one of the last steps.
+
 ## Phase 0 · Terrain (done)
 - [x] Density grid + chunked Surface Nets
 - [x] Deterministic procedural generation from a seed (`floatingIslands`)
@@ -55,12 +61,13 @@ Goal now: a PC demo first, as a proof of concept. The phone items below are post
 - [x] Building and hiding: a wall, a bridge and a shelter of each species' own, limits per kind and in all, the hand in three parts; the other ideas one prototype at a time (IDEAS); boxes that give more
 - [ ] Abilities per species: spider done (Web Shot, the thread, Web Bow), the ant's done (Ant Column and Titan Lift, its own Burrow; Acid Charge and Lightning Mandible for later, in IDEAS; a team takes one special, picked on its setup card; the second unlocked by playing, at level 3); the cockroach done (Hard Shell, Blackout Swarm, Wing Storm; the other ideas in IDEAS); the bee done (flight, Queen's Flight); each team's species is picked in the menu
 
-## Settings and admins (proposed)
+## Settings and admins (begun)
 
 - [ ] One registry of settings (id, value, unit, range, what it does), by module, instead of constants spread over the code: limits, times, speeds, damage, texts (**begun**: `engine/settings.ts`, `game/tuning.ts`: 85 settings: the weapons' damage, blast and arcs, the species' toughness, walk and jump, the passives' numbers, and the rules of falls, knockback, getting away, wind, specials' loading, webs, the Ant Column, the brood, the Burrow and the boxes; and the physics of bugs and shots: 85 in all)
 - [x] The client's data, offline first: IndexedDB (Dexie) under a cache, an outbox and a sync engine for any server (`src/data/`); the old `localStorage` values brought in
 - [x] A match takes a frozen, numbered set of settings (as it takes a seed): every client must simulate with the same (`MatchOptions.tuning`, its hash)
-- [ ] An admin page that edits a set live (first local, in dev; then behind a server with accounts and roles, with history and undo). Numbers of the simulation change from the next match on; looks, sounds and texts at once
+- [x] A local settings page, in development (the debug menu's **settings**): every setting by group, search, changed marks, back as shipped, export and import; the set is kept in the browser and the next match takes it
+- [ ] The admin page behind a server, with accounts and roles, history and undo, editing a set live (numbers of the simulation from the next match on; looks, sounds and texts at once)
 
 ## One linked engine, RPG style (begun: one list of actions with tags, quick slots, an inventory, kept items, levels and passives, the first tags that meet)
 
@@ -101,9 +108,10 @@ Decided: the species evolves, per player · levels give options, not strength ·
 - [x] Computer opponent (`game/brain.ts`): easy, normal, hard; either team, or both
 - [x] Music: a theme per map, computed in code, in three layers that follow the match
 - [ ] Scenario elements that react to the beat (`MusicEngine.beat`)
-- [ ] Menus, team screen, settings
+- [x] Setup screen (map, species, specials, players, rules, online), end screen, pause box
+- [ ] A settings page for players (sound, keys, camera) outside the debug menu
 - [ ] Acceptance tests on real browsers and devices
 
 ## Open questions
 - Final name, art/visual style of the bugs, license.
-- Whether the server is .NET or another stack (no preference: the criteria are performance and simplicity).
+- The room server is Node + `ws` (it runs the game's own simulation to check matches); the stack for accounts and the admin backend is still open.
