@@ -17,7 +17,8 @@
     "test:watch": "vitest",
     "bench": "tsx scripts/bench.ts",
     "golden": "tsx scripts/golden.ts",
-    "balance": "tsx scripts/balance.ts"
+    "balance": "tsx scripts/balance.ts",
+    "crosscheck": "tsx scripts/crosscheck.ts"
   },
   "dependencies": {
     "dexie": "^4.4.7",

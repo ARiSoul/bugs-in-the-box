@@ -10,11 +10,11 @@ import { PerfLog } from './debug/perf';
 import { viewsFor, type ScenarioViews } from './debug/views';
 import { Brain, SKILLS } from './game/brain';
 import { DT, GRAVITY, KILL_Y, TICK_RATE } from './game/bug';
-import { LIFT_HIGH, Match, NO_INPUT, type MatchEvent, type TeamSpec } from './game/match';
+import { LIFT_HIGH, Match, NO_INPUT, type MatchEvent, type MatchInput, type TeamSpec } from './game/match';
 import { ANT, SPECIES, SPIDER, type BugSpecies } from './game/species';
 import { SOLDER_BLOB, WEAPONS } from './game/weapons';
 import { Controls, keepKeysIn } from './input/controls';
-import { openData } from './data';
+import { openData, type Collections } from './data';
 import { pickTerrain } from './input/picking';
 import { AimView } from './render/aim';
 import { BugView } from './render/BugView';
@@ -55,6 +55,7 @@ import { EndScreen, SetupScreen, type SetupChoice } from './ui/setup';
 import { setupKeysMenu } from './ui/keys';
 import { SoundMenu } from './ui/sound';
 import { PauseMenu } from './ui/pause';
+import { groundDigest, Recorder, type MatchRecord, type MatchSetup } from './sim';
 import { keptOf, readKept, TuningPage } from './ui/tuning';
 import { TUNING } from './game/tuning';
 
@@ -241,6 +242,8 @@ let bugViews: { view: BugView; face: Face; wing: number; blink: number; label: U
 
 /** New map and new match from one number: the seed is all two players need to share. */
 function newMatch(s: number): void {
+  // (the last match's record first, while its map is as it left it)
+  keepRecord('left');
   const t0 = performance.now();
   const chunksNow = mapSize(scenario);
   if (chunksNow.join() !== [terrain.cx, terrain.cy, terrain.cz].join()) {
@@ -268,12 +271,46 @@ function newMatch(s: number): void {
   state.lastExplosionChunks = 0;
   state.bench = '';
 
+  made = { seed: s, ground: groundDigest(terrain) };
   newTeams(s);
+}
+
+/** The map as it was made (its seed, and its ground's digest): a match on it, unchanged, can be made again from the seed. */
+let made = { seed: -1, ground: '' };
+/** Records the match being played (every input), kept when it ends or is left. */
+let recorder: Recorder | null = null;
+/** Most matches kept as records on this device. */
+const KEEP_RECORDS = 20;
+/** Keep the record of the match being played (once), as it stands. */
+function keepRecord(end: MatchRecord['end']): void {
+  const r = recorder;
+  recorder = null;
+  // (a few seconds of one is not worth keeping)
+  if (!r || r.length < 600) return;
+  const rec = r.finish(end);
+  const id = `${Date.now().toString(36)}-${rec.setup.seed}`;
+  data.cache.put('replays', id, rec as unknown as Collections['replays']);
+  const ids = data.cache.ids('replays').sort();
+  for (const old of ids.slice(0, Math.max(0, ids.length - KEEP_RECORDS))) data.cache.remove('replays', old);
 }
 
 /** New teams on the map as it is; `turns`: how far its turntable has turned. */
 function newTeams(s: number, turns = 0): void {
-  match = new Match(terrain, teams(), s, { tuning, turned: turns, turnSeconds: rules.seconds, wind: rules.wind, strictBounds: scenario.strictBounds, spawnLevels: scenario.spawnLevels === true, turntable: scenario.turntable?.(terrain.W, terrain.H, terrain.D), confine: scenario.confine?.(terrain.W, terrain.H, terrain.D) });
+  keepRecord('left');
+  const sides = teams();
+  match = new Match(terrain, sides, s, { tuning, turned: turns, turnSeconds: rules.seconds, wind: rules.wind, strictBounds: scenario.strictBounds, spawnLevels: scenario.spawnLevels === true, turntable: scenario.turntable?.(terrain.W, terrain.H, terrain.D), confine: scenario.confine?.(terrain.W, terrain.H, terrain.D) });
+  const groundNow = (): string => groundDigest(terrain);
+  const start = groundNow();
+  const setup: MatchSetup = {
+    scenario: scenario.id,
+    size: [terrain.cx, terrain.cy, terrain.cz],
+    seed: s,
+    teams: sides.map((q) => ({ name: q.name, species: q.species.id, special: q.special, color: q.color, size: q.size, growth: q.growth })),
+    rules: { turnSeconds: rules.seconds, wind: rules.wind, turned: turns },
+    tuning: { version: tuning.version, changed: { ...tuning.changed }, hash: tuning.hash },
+    fresh: made.seed === s && made.ground === start,
+  };
+  recorder = new Recorder(setup, match, groundNow, start);
 
   brains = players.map((id, i) => {
     const s = SKILLS.find((q) => q.id === id);
@@ -1054,6 +1091,7 @@ if (import.meta.env.DEV && new URLSearchParams(location.search).get('boom') === 
     const p = pickTerrain(e, canvas, stage.camera, terrain);
     if (!p) return;
     match.explode(p.x, p.y, p.z, SOLDER_BLOB);
+    if (recorder) recorder.touched = true;
     handleEvents(match.events);
     gameSounds.tick(match, false);
     syncTerrain();
@@ -1369,6 +1407,12 @@ let frameCount = 0;
 let lastFps = performance.now();
 let lastFrame = performance.now();
 let accumulator = 0;
+/** One tick of the match, recorded. */
+function step(input: Readonly<MatchInput>): void {
+  if (recorder) recorder.step(input);
+  else match.step(input);
+  if (match.phase === 'over') keepRecord('over');
+}
 /** The turntable's turns before the last tick (render interpolates the plate between ticks). */
 let prevTurns = 0;
 /** Time per frame for indexing the drawn ground of a new map (ms). */
@@ -1479,13 +1523,13 @@ function frame(now: number): void {
   while (accumulator >= DT) {
     prevTurns = match.turntableTurns;
     // a debug camera (or the intro) owns the view: the match keeps running without input
-    if (debugCamera || intro || menus.over) match.step(NO_INPUT);
+    if (debugCamera || intro || menus.over) step(NO_INPUT);
     else {
       // (while the computer plays, the player's keys go nowhere)
       steerSwarm();
       const typed = controls.next();
       const b = brain();
-      match.step(b ? b.next(match) : typed);
+      step(b ? b.next(match) : typed);
       faced ||= !b && controls.faced;
     }
     handleEvents(match.events);

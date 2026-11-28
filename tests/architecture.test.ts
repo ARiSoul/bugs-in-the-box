@@ -28,6 +28,7 @@ const RULES: Record<string, readonly RegExp[]> = {
   'src/terrain': [/^(game|render|ui|input|audio|data|debug|workers)\//, /^three/, /^dexie/],
   'src/game': [/^(render|ui|input|audio|data|debug|workers)\//, /^three/, /^dexie/],
   'src/data': [/^(render|ui|input|audio|debug|workers|game|terrain)\//, /^three/],
+  'src/sim': [/^(render|ui|input|audio|data|debug|workers)\//, /^three/, /^dexie/],
 };
 
 describe('architecture', () => {
@@ -46,7 +47,7 @@ describe('architecture', () => {
 
   it('the game core uses no DOM or browser storage', () => {
     const offenders: string[] = [];
-    for (const f of [...files('src/game'), ...files('src/terrain')]) {
+    for (const f of [...files('src/game'), ...files('src/terrain'), ...files('src/sim')]) {
       const code = readFileSync(f, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
       const m = code.match(/\b(document|window|localStorage|indexedDB|navigator)\./);
       if (m) offenders.push(`${f}: ${m[0]}`);

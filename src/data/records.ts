@@ -16,10 +16,12 @@ export interface Collections {
   settings: { value: unknown };
   /** A match played (id: unique), for history and later for the server to check. */
   matches: { at: number; scenario: string; seed: number; species: string[]; won: boolean; xp: number };
+  /** A match as a record (its setup and every input; see `sim/record.ts`), to look at again and to check (id: unique). */
+  replays: { version: number; ticks: number; [k: string]: unknown };
 }
 
 export type CollectionName = keyof Collections;
-export const COLLECTIONS: readonly CollectionName[] = ['growth', 'loadout', 'settings', 'matches'];
+export const COLLECTIONS: readonly CollectionName[] = ['growth', 'loadout', 'settings', 'matches', 'replays'];
 
 /** A record as it is kept and synced. */
 export interface Row<C extends CollectionName = CollectionName> {

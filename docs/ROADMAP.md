@@ -88,7 +88,7 @@ Decided: the species evolves, per player · levels give options, not strength ·
 - [ ] Burrow, later: the computer using tunnels; the microwave has nothing an ant can dig (all metal and marble)
 
 ## Phase 5 · Multiplayer
-- [ ] Deterministic simulation validated across clients (same seed + same events = same map)
+- [x] Deterministic simulation validated across clients (same seed + same events = same map): a match as a record (`src/sim/`: setup, inputs where they change, checkpoints), every match recorded and kept, `npm run crosscheck` (Node and Chrome, bit for bit); Firefox and Safari still to check
 - [ ] Turn-based room server; map sharing by seed/link
 - [ ] Asynchronous mode (play when you can)
 
