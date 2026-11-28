@@ -22,6 +22,8 @@ export type WeaponKind =
   | 'column'
   /** A block torn out of the ground before the bug and thrown from over its head: it crushes where it lands. */
   | 'lift'
+  /** No projectile: the bug beats up a gale before it, at once; it throws every bug in a cone away, and hurts a little. */
+  | 'gale'
   /** A swarm called in the dark, from everywhere, onto a marked spot: it covers every enemy near it. */
   | 'brood'
   /** A swarm the player flies through the air, through rings that make it stronger, into whatever it meets. */
@@ -82,8 +84,11 @@ export interface Weapon {
   /** Shelter: how much of a blow it keeps off (0..1), and how much in all before it breaks. */
   readonly cover?: number;
   readonly coverHealth?: number;
-  /** Built, hidden in: how far from the bug it may be put. */
+  /** Built, hidden in: how far from the bug it may be put. A gale: how far it reaches. */
   readonly reach: number;
+  /** A gale: how hard it throws a bug right before the bug (a third of that at its far end), and how wide its cone is (the cosine of half its angle). */
+  readonly push?: number;
+  readonly cone?: number;
   /** Render only. */
   readonly color: number;
 }
@@ -317,7 +322,22 @@ export const TITAN_LIFT: Weapon = {
 /** Ants only, a few times a match: it digs a tunnel as wide as it along its aim and runs out through it. Once a turn. */
 export const BURROW: Weapon = { ...BASE, id: 'burrow', name: 'Burrow', kind: 'burrow', species: 'ant', found: true, start: 3, alone: true, tunnelRadius: 1.8, color: 0xc98a4a };
 
-export const WEAPONS: readonly Weapon[] = [SOLDER_BLOB, CAPACITOR, SHORT_CIRCUIT, SOLDERING_IRON, WEB_SHOT, WEB_BOW, ANT_COLUMN, BLACKOUT_SWARM, THERMAL_PASTE, QUEENS_FLIGHT, RAMPART, LIVING_BRIDGE, ANTHILL, SILK_CURTAIN, SILK_SPAN, SILK_FUNNEL, SHIELD_WALL, SCALE_WALK, HUSK, COMB_WALL, COMB_SPAN, WAX_NEST, BURST, BURROW, TITAN_LIFT];
+/** The cockroach's second special: it opens its wings and beats up a gale; little harm, but it sweeps bugs away, off the map if they stand badly. */
+export const WING_STORM: Weapon = {
+  ...BASE,
+  id: 'wing-storm',
+  name: 'Wing Storm',
+  kind: 'gale',
+  species: 'cockroach',
+  damage: 26,
+  reach: 28,
+  push: 34,
+  cone: 0.8,
+  sceneTicks: 60,
+  color: 0x9fd8ff,
+};
+
+export const WEAPONS: readonly Weapon[] = [SOLDER_BLOB, CAPACITOR, SHORT_CIRCUIT, SOLDERING_IRON, WEB_SHOT, WEB_BOW, ANT_COLUMN, BLACKOUT_SWARM, THERMAL_PASTE, QUEENS_FLIGHT, RAMPART, LIVING_BRIDGE, ANTHILL, SILK_CURTAIN, SILK_SPAN, SILK_FUNNEL, SHIELD_WALL, SCALE_WALK, HUSK, COMB_WALL, COMB_SPAN, WAX_NEST, BURST, BURROW, TITAN_LIFT, WING_STORM];
 
 /** The special attacks a species may take into a match (a team takes one). */
 export function specialsOf(species: string): Weapon[] {

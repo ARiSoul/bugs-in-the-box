@@ -53,7 +53,7 @@ Goal now: a PC demo first, as a proof of concept. The phone items below are post
 - [x] Cinematic camera in the menu, for every map (the scripted flight, with pause, skip and restart)
 - [x] Pause in a match (Esc or the HUD's button): continue, restart the match, or leave it for the menu
 - [x] Building and hiding: a wall, a bridge and a shelter of each species' own, limits per kind and in all, the hand in three parts; the other ideas one prototype at a time (IDEAS); boxes that give more
-- [ ] Abilities per species: spider done (Web Shot, the thread, Web Bow), the ant's done (Ant Column and Titan Lift, its own Burrow; Acid Charge and Lightning Mandible for later, in IDEAS; a team takes one special, picked on its setup card; the second unlocked by playing, at level 3); the cockroach done (Hard Shell, Blackout Swarm; the other ideas in IDEAS); the bee done (flight, Queen's Flight); each team's species is picked in the menu
+- [ ] Abilities per species: spider done (Web Shot, the thread, Web Bow), the ant's done (Ant Column and Titan Lift, its own Burrow; Acid Charge and Lightning Mandible for later, in IDEAS; a team takes one special, picked on its setup card; the second unlocked by playing, at level 3); the cockroach done (Hard Shell, Blackout Swarm, Wing Storm; the other ideas in IDEAS); the bee done (flight, Queen's Flight); each team's species is picked in the menu
 
 ## Settings and admins (proposed)
 

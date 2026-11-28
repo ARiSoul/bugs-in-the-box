@@ -61,6 +61,7 @@ const ABOUT: Record<string, [string, string, string]> = {
 /** A line for each special attack that is not its species' first. */
 const SPECIAL_ABOUT: Record<string, string> = {
   'titan-lift': 'Tear a block out of the ground, throw it at them',
+  'wing-storm': 'Beat up a gale, sweep them off their feet',
 };
 /** A line for each device, and its colour. */
 const PLACES: Record<string, [string, string]> = {

@@ -41,7 +41,7 @@ Special skills as attacks, each with its own attack animation (a skill is a weap
 - **Lightning Mandible (ant, for later):** time stops, the mandibles open, and the ant itself is the shot: one straight dash that ends on the first bug and throws it far.
 - **Blackout Swarm (cockroach, in the game):** it rubs its wings and the lights of the map fail; only eyes glow. The player marks a spot, cockroaches come from everywhere in the dark, and the light comes back on whoever they cover. Hurts every enemy in the area, hardly any crater.
 - **Last Nerve (cockroach):** it runs on without its head. The body runs blind, steered only in wide turns, and bursts at the end; the head stays behind and sees it all.
-- **Wing Storm (cockroach):** it opens its wings, takes off and beats up a gale: little damage, but it sweeps a whole cone of bugs away, off the map if they stand badly.
+- **Wing Storm (cockroach, in the game):** it opens its wings and beats up a gale: little damage, but it sweeps a whole cone of bugs away, off the map if they stand badly.
 - **Fallout Charge (cockroach):** it soaks up the device's energy, glows from inside and drops head first from high up: a huge crater, and it pays with its own health (goes well with Hard Shell).
 - **Queen's Flight (bee, in the game):** a ring of light becomes its crown; the player flies the swarm through the air, and every ring of pollen it takes makes the hit stronger.
 - **Waggle Squadron (bee):** the dance is the order: the player marks three waypoints, and a squadron in an arrow flies that route and dives at its end.

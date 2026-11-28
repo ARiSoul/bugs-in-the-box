@@ -25,7 +25,9 @@ export type Effect =
   | { readonly kind: 'swarm'; readonly radius: number; readonly damage: number }
   | { readonly kind: 'shelter'; readonly cover: number; readonly health: number }
   | { readonly kind: 'build' }
-  | { readonly kind: 'throw' };
+  | { readonly kind: 'throw' }
+  /** A gale in a cone: how far, how hard it throws, what it hurts. */
+  | { readonly kind: 'gale'; readonly reach: number; readonly push: number; readonly damage: number };
 
 export interface AbilityDef {
   readonly id: string;

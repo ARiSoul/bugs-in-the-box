@@ -4,10 +4,11 @@ import { Flock, FLOCK_TICKS, steerFlock, type FlockInput } from './flock';
 import { ITEM_KINDS, type Item, type ItemKind } from './items';
 import { createRng } from '../terrain/noise';
 import { Bug, type BugInput } from './bug';
-import { blastShare, BURST_AT, CHARGE_TICKS, launch, LIFT_HIGH, MIN_POWER, NO_INPUT, type Column, type Match, type MatchInput, type Place, type Unit } from './match';
+import { blastShare, BURST_AT, CHARGE_TICKS, GALE_LIFT, launch, LIFT_HIGH, MIN_POWER, NO_INPUT, type Column, type Match, type MatchInput, type Place, type Unit } from './match';
 import { rot, rotate2 } from './math';
 import { Projectile } from './projectile';
 import { WEAPONS, type Weapon } from './weapons';
+import { RULE } from './tuning';
 
 /**
  * A computer opponent. Like a player, it only gives the match one input per tick: it looks at the state, tries shots
@@ -71,6 +72,9 @@ const DIG_NEAR = 6;
 /** Ticks it lets a bug it put at a tunnel's far end settle, in its head. */
 const SETTLE = 40;
 const BURROW_AT = WEAPONS.findIndex((w) => w.kind === 'burrow');
+/** How long it follows a bug a gale throws, in its head, to see if it falls off the map; how much higher than straight at it it tries. */
+const GALE_FLIGHT = 200;
+const GALE_UPS = [-0.02, 0.18, 0.34];
 const BURST_COST = 10;
 const BURST_NEAR = 8;
 const LANDS = 300;
@@ -272,6 +276,8 @@ export class Brain {
         for (const e of enemies) this.queue.push(() => this.tryFlock(match, u, index, e));
       } else if (w.kind === 'column') {
         for (const e of enemies) this.queue.push(() => this.tryColumn(match, u, index, e));
+      } else if (w.kind === 'gale') {
+        for (const e of enemies) this.queue.push(() => this.tryGale(match, u, w, index, e));
       } else {
         for (const e of enemies) for (let k = 0; k < this.skill.arcs; k++) this.queue.push(() => this.tryArc(match, u, u.bug, bugs, w, index, e, k / this.skill.arcs, this.plans));
       }
@@ -471,6 +477,63 @@ export class Brain {
     }
   }
 
+  /**
+   * A gale aimed at enemy `e`, at a few heights (higher throws higher, over an edge, while the cone still takes it in):
+   * who it throws, in its head; one that falls off the map counts as killed, the others by the little it hurts.
+   */
+  private tryGale(match: Match, u: Unit, w: Weapon, index: number, e: Unit, b: Bug = u.bug, plans: Plan[] = this.plans): number {
+    const ex = e.bug.x - b.x;
+    const ey = e.bug.y - b.y;
+    const ez = e.bug.z - b.z;
+    const l = Math.sqrt(ex * ex + ey * ey + ez * ez);
+    if (l < 1e-3 || l > w.reach) return 0;
+    let best: Plan | null = null;
+    for (const up of GALE_UPS) {
+      let dx = ex / l;
+      let dy = ey / l + up;
+      let dz = ez / l;
+      const dl = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      dx /= dl;
+      dy /= dl;
+      dz /= dl;
+      const p: Plan = { weapon: index, fx: b.fx, fz: b.fz, aimH: u.aimH, aimV: u.aimV, charge: 0, score: 0, target: e.id, mark: null };
+      const probe = new Bug(b.species);
+      probe.copy(b);
+      // (its aim as the match will read it: from the bug turned that way)
+      if (!toAim(probe, dx, dy, dz, p)) continue;
+      probe.fx = p.fx;
+      probe.fz = p.fz;
+      probe.direction(p.aimH, p.aimV, dir);
+      const hits = match.galeHits(u, w, dir, b);
+      if (hits.length === 0) continue;
+      let px = dir[0];
+      let py = dir[1] + GALE_LIFT;
+      let pz = dir[2];
+      const pl = Math.sqrt(px * px + py * py + pz * pz) || 1;
+      px /= pl;
+      py /= pl;
+      pz /= pl;
+      for (const { unit: q, f } of hits) {
+        const speed = (w.push ?? 0) * (1 / 3 + (2 / 3) * f);
+        const flown = new Bug(q.bug.species);
+        flown.copy(q.bug);
+        flown.push(px * speed, py * speed, pz * speed);
+        step.move = step.turn = step.faceX = step.faceZ = 0;
+        step.jump = step.run = false;
+        // (and the landing: what hits the ground too fast hurts, as the match's own fall does)
+        let fall = 0;
+        for (let n = 0; n < GALE_FLIGHT && flown.alive; n++) {
+          flown.step(match.field, step);
+          if (flown.justLanded && flown.lastImpact > match.tuning.get(RULE.fallSafe)) fall = Math.max(fall, Math.round((flown.lastImpact - match.tuning.get(RULE.fallSafe)) * match.tuning.get(RULE.fallDamage)));
+        }
+        p.score += this.harmScore(u, q, flown.alive ? w.damage + fall : q.bug.health + w.damage);
+      }
+      if (!best || p.score > best.score) best = p;
+    }
+    if (best) plans.push(best);
+    return best ? best.score : 0;
+  }
+
   // ---------------------------------------------------------------- what to do
 
   private decide(match: Match, u: Unit): void {
@@ -614,6 +677,15 @@ export class Brain {
   private rate(match: Match, u: Unit, s: Spot, enemies: readonly Unit[]): void {
     this.spots.push(s);
     const bugs = match.units.map((q) => (q === u ? s.bug : q.bug));
+    // (a gale, loaded and taken, from there: it reaches only what is near)
+    const sp = match.special(u.team);
+    const gale = sp >= 0 && this.specials && match.arsenal[sp].kind === 'gale' && match.canUse(u, sp) ? match.arsenal[sp] : null;
+    if (gale)
+      for (const e of enemies)
+        this.queue.push(() => {
+          const score = this.tryGale(match, u, gale, sp, e, s.bug, []);
+          if (score * 0.9 > s.best) s.best = score * 0.9;
+        });
     for (const e of enemies)
       for (const index of [0, 1])
         for (let k = 0; k < 7; k++)
@@ -939,7 +1011,7 @@ export class Brain {
     if (!this.tuned) {
       this.tuned = true;
       this.timer = 8;
-      if (w.kind !== 'tunnel' && w.kind !== 'column' && w.kind !== 'flock' && w.kind !== 'shelter') this.tune(match, u, w, p);
+      if (w.kind !== 'tunnel' && w.kind !== 'column' && w.kind !== 'flock' && w.kind !== 'shelter' && w.kind !== 'gale') this.tune(match, u, w, p);
       return;
     }
     o.fire = true;

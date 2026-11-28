@@ -35,6 +35,7 @@ import { WebViews } from './render/webs';
 import { DrawnGround } from './render/drawnGround';
 import { ChunkRenderer } from './render/ChunkRenderer';
 import { ExplosionFlashes, LineFlashes } from './render/effects';
+import { GaleView } from './render/gale';
 import { CHASE_ELEVATION, FollowCamera } from './render/followCamera';
 import { MeshWorkers, type MeshBatch } from './render/MeshWorkers';
 import { FloatingTexts, UnitLabel } from './render/labels';
@@ -226,6 +227,7 @@ const chunks = new ChunkRenderer(stage.scene, stage.look);
 const ground = new DrawnGround(terrain);
 const flashes = new ExplosionFlashes(stage.scene);
 const lines = new LineFlashes(stage.scene);
+const gales = new GaleView(stage.scene);
 const texts = new FloatingTexts(stage.hud);
 const projectiles = new ProjectileViews(stage.scene);
 const burrows = new BurrowViews(stage.scene);
@@ -449,6 +451,7 @@ function newTeams(s: number, turns = 0): void {
   itemViews.clear();
   buildViews.clear(match.teams.map((t) => t.species.id));
   burrows.clear();
+  gales.clear();
   bow.clear();
   antColumn.clear();
   brood.clear();
@@ -668,6 +671,12 @@ function handleEvents(events: readonly MatchEvent[]): void {
       case 'collapse':
         antColumn.onCollapse(e.x, e.y, e.z);
         break;
+      case 'gale': {
+        // (from a little before the bug, along the aim; the view shakes with it)
+        gales.spawn(at.set(e.x + e.dx * 0.8, e.y + e.dy * 0.8 + 0.4, e.z + e.dz * 0.8), at2.set(e.dx, e.dy, e.dz), e.reach, e.cone);
+        shake = Math.max(shake, 0.22);
+        break;
+      }
       case 'arrow':
         // (a bug it hits: in the middle of it)
         if (e.unit >= 0) bow.onHit(match.units[e.unit].bug.x, match.units[e.unit].bug.y, match.units[e.unit].bug.z);
@@ -1820,8 +1829,10 @@ function frame(now: number): void {
     const queen = sceneNow === flock && i === match.active;
     if (queen && !flock.glad) v.blink = Math.max(v.blink, 0.4);
     v.face.blink(!u.bug.alive || (queen && flock.glad) || (sceneNow === flock && flock.hurts(v.view)) || v.blink < 0 ? 1 : 0);
-    v.wing += (Math.max(queen ? flock.wing : 0, u.bug.alive && !u.bug.grounded ? (u.bug.flying ? 1 : 0.5) : 0) - v.wing) * (1 - Math.exp(-scaled * 14));
-    v.face.wingsTo?.(v.wing, u.bug.flying || (queen && flock.wing > 0) ? 1 : 0, now / 1000);
+    // (a Wing Storm: its wings open wide as it winds up, and beat while it holds its stance)
+    const storm = i === match.active && u.bug.alive && match.currentWeapon.kind === 'gale' && (match.phase === 'special' || match.stance);
+    v.wing += (Math.max(queen ? flock.wing : 0, storm ? 1 : 0, u.bug.alive && !u.bug.grounded ? (u.bug.flying ? 1 : 0.5) : 0) - v.wing) * (1 - Math.exp(-scaled * 14));
+    v.face.wingsTo?.(v.wing, u.bug.flying || storm || (queen && flock.wing > 0) ? 1 : 0, now / 1000);
     v.face.jaws(!u.bug.alive ? 0.3 : i === match.active && match.charging ? match.power : 0.12 + 0.1 * Math.sin(now * 0.002 + i * 2));
   });
   // (stung: it cries out)
@@ -1987,6 +1998,7 @@ function frame(now: number): void {
   updateMenus(dt);
   flashes.update(now);
   lines.update(now);
+  gales.update(now);
   texts.update(now);
   placeLabels();
   burrows.update(match, scaled);

@@ -12,7 +12,7 @@ export const CATEGORIES = ['common', 'special', 'skill', 'defence', 'item'] as c
 export type Category = (typeof CATEGORIES)[number];
 
 /** What it is of, or works by: rules will look at these, not at names. */
-export type Tag = 'fire' | 'electric' | 'metal' | 'silk' | 'wax' | 'honey' | 'wood' | 'earth' | 'chitin' | 'alive' | 'sticky' | 'heal' | 'swarm' | 'blast' | 'dig';
+export type Tag = 'fire' | 'electric' | 'metal' | 'silk' | 'wax' | 'honey' | 'wood' | 'earth' | 'chitin' | 'alive' | 'sticky' | 'heal' | 'swarm' | 'blast' | 'dig' | 'air';
 
 export interface Action {
   readonly id: string;
@@ -56,6 +56,7 @@ const ABOUT: Readonly<Record<string, readonly [string, ...Tag[]]>> = {
   'comb-span': ['A bridge of comb. Fire melts it into a puddle that holds the others.', 'wax', 'honey'],
   'wax-nest': ['Keeps off 60% until it breaks.', 'wax'],
   'titan-lift': ['A block torn out of the ground, thrown from over its head: it crushes where it lands.', 'earth'],
+  'wing-storm': ['A gale beaten up before it: little harm, but it sweeps away every bug in its cone, off the map if they stand badly.', 'air'],
   burrow: ['It digs along its aim and runs out through it. Three a match, once a turn; the turn goes on.', 'earth'],
   burst: ['It throws itself along its aim, far and fast, and lands softly. Twice a match; also while it gets away.', 'alive'],
   'thermal-paste': ['Smeared where you stand: others stick in it. It conducts shocks to all in it.', 'metal', 'sticky'],

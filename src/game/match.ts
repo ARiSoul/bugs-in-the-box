@@ -218,6 +218,8 @@ export type MatchEvent =
   | { type: 'webGone'; id: number; torn: boolean }
   | { type: 'damage'; unit: number; amount: number }
   | { type: 'death'; unit: number }
+  /** A gale beaten up by a bug: from where, which way (unit), how far, how wide (the cosine of half its angle); the bugs it threw. */
+  | { type: 'gale'; unit: number; x: number; y: number; z: number; dx: number; dy: number; dz: number; reach: number; cone: number; hit: number[] }
   /** Tags met on a bug: what came of it, in a word (a web burnt off it, its shelter burnt, a swarm slowed...). */
   | { type: 'reacted'; unit: number; word: string }
   | { type: 'ring'; index: number; x: number; y: number; z: number }
@@ -348,6 +350,10 @@ export interface Brood {
   readonly harm: number[];
 }
 
+/** How long the bugs a gale threw are looked at before the turn goes on. */
+const GALE_LINGER = Math.round(2.5 * TICK_RATE);
+/** A gale lifts what it throws a little (so it does not just slide): this much up, against its way. */
+export const GALE_LIFT = 0.35;
 /** How long a special attack's hit is looked at before the turn goes on. */
 export const LINGER_TICKS = Math.round(4.5 * TICK_RATE);
 /** In a stance, turning and aiming are this much slower (the view is close, the aim fine)... */
@@ -360,6 +366,7 @@ const PASTE = WEAPONS.findIndex((w) => w.kind === 'trap');
 const SHOCK: readonly Tag[] = ['electric'];
 const NONE: readonly Tag[] = [];
 const SWARMING: readonly Tag[] = ['swarm'];
+const GALE_TAGS: readonly Tag[] = ['air'];
 const WEB = WEAPONS.findIndex((w) => w.kind === 'web');
 /** After hiding there is a moment to see it (ticks). */
 const HIDE_TICKS = 70;
@@ -898,7 +905,7 @@ export class Match {
     if (fireDown && unit.bug.grounded) {
       if (w.kind === 'wall' || w.kind === 'bridge') this.build(unit, w);
       else if (w.kind === 'shelter') this.shelter(unit, w);
-      else if (w.kind === 'tunnel' || w.kind === 'trap' || w.kind === 'flock' || (w.kind === 'brood' && this.mark)) this.fire(unit, w);
+      else if (w.kind === 'tunnel' || w.kind === 'trap' || w.kind === 'flock' || w.kind === 'gale' || (w.kind === 'brood' && this.mark)) this.fire(unit, w);
       else if (w.kind !== 'brood') {
         this.charging = true;
         this.power = 0;
@@ -1502,10 +1509,61 @@ export class Match {
       this.column = { head: this.columnHead(unit), path: [], left: Math.round(this.ticks(RULE.march) * power * (this.passive(unit.team, 'long-march') || 1)), swarm: 0, still: 0, victim: -1 };
     } else if (w.kind === 'flock') this.flock = this.newFlock(unit);
     else if (w.kind === 'brood' && this.mark) this.brood = { at: this.mark, ticks: 0, units: [], harm: [] };
+    else if (w.kind === 'gale') {
+      this.gale(unit, w);
+      // (the bugs it threw are looked at as they fly)
+      this.lingerTicks = GALE_LINGER;
+    }
     else this.projectiles.push(this.makeProjectile(unit, w, this.power));
     this.phase = 'flight';
     this.retreatTicks = w.sceneTicks > 0 ? 0 : this.ticks(RULE.retreat);
     this.stance = false;
+  }
+
+  /**
+   * Who a gale of `u`'s along `dir` (unit) would throw, and how: every bug in its cone, within its reach, with nothing solid
+   * between (a shelter keeps its bug where it is, a web holds its own); `f`: 1 right before it, 0 at its far end.
+   */
+  galeHits(u: Unit, w: Weapon, dir: ArrayLike<number>, from: Bug = u.bug): { unit: Unit; f: number }[] {
+    const b = from;
+    const out: { unit: Unit; f: number }[] = [];
+    const reach = w.reach;
+    const cone = w.cone ?? 1;
+    for (const q of this.units) {
+      if (q === u || !q.bug.alive || q.cover || q.web >= 0) continue;
+      const dx = q.bug.x - b.x;
+      const dy = q.bug.y - b.y;
+      const dz = q.bug.z - b.z;
+      const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      if (d < 1e-6 || d > reach) continue;
+      if ((dx * dir[0] + dy * dir[1] + dz * dir[2]) / d < cone) continue;
+      // (a wall between: the gale goes round, not through)
+      const clear = d - q.bug.species.radius;
+      if (clear > 0 && this.field.raycast(b.x, b.y, b.z, dx / d, dy / d, dz / d, clear) >= 0) continue;
+      out.push({ unit: q, f: 1 - d / reach });
+    }
+    return out;
+  }
+
+  /** A gale along the aim: what it reaches is thrown away along it, lifted a little, and hurt a little. */
+  private gale(u: Unit, w: Weapon): void {
+    const b = u.bug;
+    const [dx, dy, dz] = this.aimDirection(u, aimed);
+    const hits = this.galeHits(u, w, [dx, dy, dz]);
+    // (along the aim, and a little up)
+    let px = dx;
+    let py = dy + GALE_LIFT;
+    let pz = dz;
+    const pl = Math.sqrt(px * px + py * py + pz * pz) || 1;
+    px /= pl;
+    py /= pl;
+    pz /= pl;
+    this.events.push({ type: 'gale', unit: u.id, x: b.x, y: b.y, z: b.z, dx, dy, dz, reach: w.reach, cone: w.cone ?? 1, hit: hits.map((h) => h.unit.id) });
+    for (const { unit: q, f } of hits) {
+      const speed = (w.push ?? 0) * (1 / 3 + (2 / 3) * f);
+      this.struck(q, Math.round(w.damage * this.hard), GALE_TAGS);
+      if (q.bug.alive) q.bug.push(px * speed, py * speed, pz * speed);
+    }
   }
 
   /** A flock of this unit's, where it would set out now. */

@@ -14,12 +14,16 @@ export const TUNING = new Settings();
 const title = (id: string): string => id.charAt(0).toUpperCase() + id.slice(1);
 
 /** Setting ids, by what they tune. */
-export const weaponSetting = (w: Weapon, what: 'damage' | 'blast' | 'arc'): string => `weapon.${w.id}.${what}`;
+export const weaponSetting = (w: Weapon, what: 'damage' | 'blast' | 'arc' | 'reach' | 'push'): string => `weapon.${w.id}.${what}`;
 export const speciesSetting = (s: BugSpecies, what: 'toughness' | 'walk' | 'jump'): string => `species.${s.id}.${what}`;
 
 for (const w of WEAPONS) {
   if (w.damage > 0) TUNING.define({ id: weaponSetting(w, 'damage'), group: w.name, label: 'Damage', unit: 'health', min: 0, max: 200, step: 1, value: w.damage, help: 'What a full hit takes, from a bug of toughness 100.' });
   if (w.blastRadius > 0) TUNING.define({ id: weaponSetting(w, 'blast'), group: w.name, label: 'Blast radius', unit: 'units', min: 0.5, max: 12, step: 0.1, value: w.blastRadius, help: 'How far its blast reaches, and the crater it leaves.' });
+  if (w.kind === 'gale') {
+    TUNING.define({ id: weaponSetting(w, 'reach'), group: w.name, label: 'Reach', unit: 'units', min: 4, max: 60, step: 1, value: w.reach, help: 'How far its gale reaches.' });
+    TUNING.define({ id: weaponSetting(w, 'push'), group: w.name, label: 'Push', unit: 'units/s', min: 0, max: 80, step: 1, value: w.push ?? 0, help: 'How hard it throws a bug right before it (a third of that at its far end).' });
+  }
   if (w.arcs > 0) TUNING.define({ id: weaponSetting(w, 'arc'), group: w.name, label: 'Arc damage', unit: 'health', min: 0, max: 200, step: 1, value: w.arcDamage, help: 'What each arc takes.' });
 }
 for (const s of SPECIES) {
@@ -107,6 +111,8 @@ export function tunedWeapons(set: SettingsSet): readonly Weapon[] {
     const damage = w.damage > 0 ? set.get(weaponSetting(w, 'damage')) : w.damage;
     const blastRadius = w.blastRadius > 0 ? set.get(weaponSetting(w, 'blast')) : w.blastRadius;
     const arcDamage = w.arcs > 0 ? set.get(weaponSetting(w, 'arc')) : w.arcDamage;
-    return damage === w.damage && blastRadius === w.blastRadius && arcDamage === w.arcDamage ? w : { ...w, damage, blastRadius, arcDamage };
+    const reach = w.kind === 'gale' ? set.get(weaponSetting(w, 'reach')) : w.reach;
+    const push = w.kind === 'gale' ? set.get(weaponSetting(w, 'push')) : w.push;
+    return damage === w.damage && blastRadius === w.blastRadius && arcDamage === w.arcDamage && reach === w.reach && push === w.push ? w : { ...w, damage, blastRadius, arcDamage, reach, push };
   });
 }

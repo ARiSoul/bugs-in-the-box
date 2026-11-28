@@ -169,6 +169,11 @@ export class GameSounds {
           engine.play('wings', { at, scene: true, rate: 1.25 });
           engine.play('pour', { at, scene: true, rate: 0.8 });
         } else if (kind === 'flock') engine.play('beesOut', { at, scene: true, rate: 1.2 });
+        else if (kind === 'gale') {
+          // (wings beaten hard, and the rush of air they send off)
+          engine.play('wings', { at, rate: 0.55, level: 1.5 });
+          engine.play('pour', { at, rate: 0.55, level: 0.9 });
+        }
         else if (kind === 'web') engine.play('spit', { at });
         else if (kind === 'shelter') this.works(e.weapon, at);
         else if (e.weapon === 'short-circuit') engine.play('spark', { at });

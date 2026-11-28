@@ -14,6 +14,9 @@ const EMBLEMS: Record<string, string> = {
   // a crown over a comb's cell, bees about it
   'queens-flight':
     '<path d="M24 20l11 6.4v12.8L24 45.6l-11-6.4V26.4z" fill="none" stroke-width="2.6"/><path d="M24 26.5l5.6 3.2v6.4L24 39.3l-5.6-3.2v-6.4z" stroke="none" fill="currentColor"/><path d="M14 15 12 4l6.5 5L24 2l5.5 7L36 4l-2 11z" stroke="none" fill="currentColor"/><g stroke="none" fill="currentColor"><circle cx="5" cy="24" r="1.8"/><circle cx="43" cy="24" r="1.8"/><circle cx="6" cy="37" r="1.5"/><circle cx="42" cy="37" r="1.5"/><circle cx="4" cy="13" r="1.4"/><circle cx="44" cy="13" r="1.4"/></g>',
+  // wings spread wide, the gale they send off
+  'wing-storm':
+    '<path d="M24 14c-6-8-16-9-21-5 4 2 7 6 8 11 4-3 9-5 13-6zM24 14c6-8 16-9 21-5-4 2-7 6-8 11-4-3-9-5-13-6z" stroke="none" fill="currentColor"/><ellipse cx="24" cy="21" rx="3.4" ry="6" stroke="none" fill="currentColor"/><path d="M8 32h24M5 38h31M10 44h20" stroke-width="2.6"/><path d="m32 32 6-3m-2 9 7-2m-13 8 5-1" stroke-width="2"/>',
   // eyes in the dark
   'blackout-swarm':
     '<g stroke="none" fill="currentColor"><ellipse cx="17" cy="24" rx="5" ry="6.5"/><ellipse cx="31" cy="24" rx="5" ry="6.5"/><circle cx="6" cy="10" r="1.7"/><circle cx="11" cy="10" r="1.7"/><circle cx="34" cy="8" r="1.5"/><circle cx="38.5" cy="8" r="1.5"/><circle cx="40" cy="38" r="1.8"/><circle cx="45" cy="38" r="1.8"/><circle cx="7" cy="39" r="1.4"/><circle cx="11" cy="39" r="1.4"/><circle cx="22" cy="43" r="1.4"/><circle cx="26" cy="43" r="1.4"/><circle cx="20" cy="5" r="1.2"/><circle cx="24" cy="5" r="1.2"/></g>',

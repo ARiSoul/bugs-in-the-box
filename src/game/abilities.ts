@@ -31,6 +31,7 @@ const TARGETS: Readonly<Record<WeaponKind, Target>> = {
   arrow: 'aim',
   column: 'steer',
   lift: 'aim',
+  gale: 'aim',
   brood: 'mark',
   flock: 'steer',
   trap: 'self',
@@ -51,6 +52,7 @@ function effectsOf(w: Weapon): Effect[] {
   if (w.kind === 'wall' || w.kind === 'bridge') out.push({ kind: 'build' });
   if (w.kind === 'shelter') out.push({ kind: 'shelter', cover: w.cover ?? 0, health: w.coverHealth ?? 0 });
   if (w.kind === 'lift') out.push({ kind: 'throw' });
+  if (w.kind === 'gale') out.push({ kind: 'gale', reach: w.reach, push: w.push ?? 0, damage: w.damage });
   if (w.blastRadius > 0) out.push({ kind: 'blast', radius: w.blastRadius, damage: w.damage });
   if (w.arcs > 0) out.push({ kind: 'arcs', count: w.arcs, range: w.arcRange, damage: w.arcDamage });
   if (w.tunnelRadius > 0 && (w.kind === 'tunnel' || w.kind === 'burrow')) out.push({ kind: 'dig', length: w.tunnelLength, radius: w.tunnelRadius });
