@@ -33,7 +33,7 @@ import { CATCHES, DUD, hasWeapon, SILK_CURTAIN, specialsAt, WORKS, RING_DAMAGE, 
  */
 
 export const AIM_TICKS = 30 * TICK_RATE;
-export const RETREAT_TICKS = 3 * TICK_RATE;
+export const RETREAT_TICKS = Math.round(TUNING.get(RULE.retreat).value * TICK_RATE);
 /** Everything must be at rest for this long before the next turn starts... */
 const SETTLE_HOLD_TICKS = 20;
 /** ...unless it takes longer than this (e.g. a bug sliding forever). */
@@ -56,7 +56,7 @@ const RAMP_TICKS = Math.round(0.6 * TICK_RATE);
 /** Aim pitch limits, as the vertical component of the aim vector. */
 const AIM_MAX_DOWN = -0.8;
 /** Strongest wind, as a horizontal acceleration per axis (world units / s²). */
-export const WIND_MAX = 5;
+export const WIND_MAX = TUNING.get(RULE.wind).value;
 /** Damage reaches this many blast radii from the centre, falling off linearly. */
 export const BLAST_REACH = 1.6;
 /** Knockback speed at the blast centre for a 45-damage weapon. */
@@ -66,10 +66,8 @@ const SPAWN_SETTLE_TICKS = 3 * TICK_RATE;
 /** After bugs die at the end of a turn, wait this long (their death on screen) before the next turn. */
 export const DEATH_HOLD_TICKS = Math.round(1.6 * TICK_RATE);
 
-/** A bug held by a web walks at this fraction of its speed (and cannot jump)... */
-export const WEB_SLOW = 0.12;
-/** ...until it has pulled at it for this long, on its own turns: then the web tears. */
-export const WEB_TEAR_TICKS = 4 * TICK_RATE;
+/** A bug held by a web pulls at it this long, on its own turns, before it tears (as shipped; the match's own is `RULE.webTear`). */
+export const WEB_TEAR_TICKS = Math.round(TUNING.get(RULE.webTear).value * TICK_RATE);
 /** A web holds a bug whose centre is nearer its surface than this many radii. */
 const WEB_REACH = 1.6;
 
@@ -249,11 +247,9 @@ export type MatchEvent =
   | { type: 'caught'; x: number; y: number; z: number }
   | { type: 'over'; winner: number };
 
-/** An ant column marches this long at full power, swarms a bug this long, biting this many times this hard. */
-export const MARCH_TICKS = 6 * TICK_RATE;
+/** An ant column marches this long at full power (as shipped; the match's own is `RULE.march`), and swarms a bug this long (its bites: `RULE.bites`, `RULE.bite`). */
+export const MARCH_TICKS = Math.round(TUNING.get(RULE.march).value * TICK_RATE);
 export const SWARM_TICKS = Math.round(3.1 * TICK_RATE);
-const SWARM_BITES = 8;
-const SWARM_BITE = 7;
 /** How near its head comes to an enemy before the column swarms it. */
 const SWARM_REACH = 1.5;
 /** Numbers per tick in a column's path: place, normal, heading. */
@@ -278,24 +274,19 @@ export const BROOD_COVER = 108;
 const BROOD_BITES = 6;
 const BROOD_BITE_TICKS = 14;
 export const BROOD_LIGHT = 216;
-/** The damage at the edge of what a brood covers, as a fraction of the full one; how it throws them as it flees. */
+/** The damage at the edge of what a brood covers, as a fraction of the full one (how it throws them as it flees: `RULE.broodThrow`). */
 const BROOD_EDGE = 0.4;
-const BROOD_THROW = 5;
 
 /**
  * The skill loader: a team's special attack must be loaded (to SKILL_FULL) before it can be used, and using it empties
- * it. It loads at every turn of the team, with the damage it does (not by the special itself) and takes.
+ * it. It loads at every turn of the team, with the damage it does (not by the special itself) and takes (how much: `RULE.skillTurn`, `skillDone`, `skillTaken`).
  */
 export { SKILL_FULL } from './abilities';
-const SKILL_TURN = 200;
 /** Ticks a burst hardly falls. */
 const BURST_TICKS = 50;
 /** How high over an ant's back a lifted block is held (and thrown from). */
 export const LIFT_HIGH = 1.6;
-/** A burrow: how fast an ant goes through it, how short and how long it may be, how deep and how steep, the hop out. */
-const BURROW_SPEED = 8;
-export const BURROW_SHORT = 12;
-export const BURROW_LONG = 24;
+/** A burrow: how deep and how steep it goes, the hop out (how fast, how short and how long: `RULE.burrowSpeed`, `burrowShort`, `burrowLong`). */
 const BURROW_DEEP = 1.9;
 const BURROW_SLOPE = 2.6;
 const BURROW_HOP = 5;
@@ -337,8 +328,6 @@ export function launch(b: Bug, dx: number, dy: number, dz: number): void {
   b.vz = dz * v;
   b.floating = BURST_TICKS;
 }
-const SKILL_DONE = 2.5;
-const SKILL_TAKEN = 1.8;
 
 /** A place on a surface: where, and its normal. */
 export interface Mark {
@@ -365,13 +354,7 @@ export const LINGER_TICKS = Math.round(4.5 * TICK_RATE);
 const STANCE_RATE = 0.4;
 /** ...and the view turns the aim at most this much in a tick. */
 const PITCH_MAX = 0.06;
-/** Boxes: how much a battery loads, a patch heals (of the full health, and how far over it), a crystal adds (seconds); an overclocked shot's damage; a spring's jump; a magnet's reach. */
-const BATTERY = 400;
-const PATCH_OVER = 0.15;
-const CRYSTAL = 15;
-const OVERCLOCK = 1.5;
-const SPRING = 1.42;
-const MAGNET = 45;
+/** (What boxes give is in the settings: `RULE.battery`, `patch`, `patchOver`, `crystal`, `overclock`, `spring`, `magnet`.) */
 const PASTE = WEAPONS.findIndex((w) => w.kind === 'trap');
 /** What hits a bug, in tags: a shock, or nothing in particular. */
 const SHOCK: readonly Tag[] = ['electric'];
@@ -731,7 +714,7 @@ export class Match {
       else if (this.flock) this.flockTick(this.flock, unit, input);
       else if (this.lingerTicks > 0) {
         // (a special attack's hit is looked at first; then the shooter may walk away)
-        if (--this.lingerTicks === 0) this.retreatTicks = RETREAT_TICKS;
+        if (--this.lingerTicks === 0) this.retreatTicks = this.ticks(RULE.retreat);
       } else if (this.projectiles.length === 0 && this.retreatTicks === 0) this.startSettle();
     } else if (this.phase === 'special') {
       if (!unit.bug.alive) this.endAim();
@@ -1006,6 +989,11 @@ export class Match {
     return TUNING.has(s) ? this.tuning.get(s) : passive(id) ? 1 : 0;
   }
 
+  /** A setting of this match's that is a time in seconds, in ticks. */
+  private ticks(id: string): number {
+    return Math.round(this.tuning.get(id) * TICK_RATE);
+  }
+
   /**
    * The teams' passives come into the match through the engine: those that multiply an attribute are modifiers on their
    * bugs' attributes; those that act when something happens hang on the match's triggers. The rest are asked for by
@@ -1089,7 +1077,7 @@ export class Match {
       const w = u.bug.alive ? this.webAt(u) : null;
       if (w && u.web !== w.id) this.events.push({ type: 'stuck', unit: u.id });
       u.web = w ? w.id : -1;
-      u.bug.slow = w ? WEB_SLOW : this.stuckTo(u);
+      u.bug.slow = w ? this.tuning.get(RULE.webSlow) : this.stuckTo(u);
       if (!w || u !== active || (move.move === 0 && !move.jump)) continue;
       if (--w.strength > 0) continue;
       this.removeWeb(w, true);
@@ -1168,7 +1156,7 @@ export class Match {
     if (!on) return;
     const id = this.nextWebId++;
     const team = this.units[this.active].team;
-    this.webs.push({ id, ...on, radius: w.webRadius, turns: w.webTurns + (paste < 0 ? this.passive(team, 'strong-silk') : 0), strength: WEB_TEAR_TICKS, grand, paste, team });
+    this.webs.push({ id, ...on, radius: w.webRadius, turns: w.webTurns + (paste < 0 ? this.passive(team, 'strong-silk') : 0), strength: this.ticks(RULE.webTear), grand, paste, team });
     this.events.push({ type: 'web', id });
   }
 
@@ -1228,7 +1216,10 @@ export class Match {
     if (c.ticks < BROOD_LIGHT) return;
     for (const id of c.units) {
       const b = this.units[id].bug;
-      if (b.alive) b.push(b.nx * BROOD_THROW, b.ny * BROOD_THROW, b.nz * BROOD_THROW);
+      if (b.alive) {
+        const k = this.tuning.get(RULE.broodThrow);
+        b.push(b.nx * k, b.ny * k, b.nz * k);
+      }
     }
     this.brood = null;
     this.events.push({ type: 'lights', x: c.at.x, y: c.at.y, z: c.at.z, units: c.units });
@@ -1497,19 +1488,19 @@ export class Match {
     const index = weaponIndex(w);
     // (what it costs: a found weapon's use, a special attack's charge)
     this.use(unit, abilityAt(index));
-    this.hard = unit.boost ? OVERCLOCK : 1;
+    this.hard = unit.boost ? this.tuning.get(RULE.overclock) : 1;
     unit.boost = false;
     if (w.kind === 'lift') this.tearOut(unit, w);
     if (w.kind === 'tunnel') this.dig(unit, w);
     else if (w.kind === 'trap') this.openWeb(unit.bug.x, unit.bug.y, unit.bug.z, w, false, unit.team);
     else if (w.kind === 'column') {
       const power = this.power < MIN_POWER ? MIN_POWER : this.power;
-      this.column = { head: this.columnHead(unit), path: [], left: Math.round(MARCH_TICKS * power * (this.passive(unit.team, 'long-march') || 1)), swarm: 0, still: 0, victim: -1 };
+      this.column = { head: this.columnHead(unit), path: [], left: Math.round(this.ticks(RULE.march) * power * (this.passive(unit.team, 'long-march') || 1)), swarm: 0, still: 0, victim: -1 };
     } else if (w.kind === 'flock') this.flock = this.newFlock(unit);
     else if (w.kind === 'brood' && this.mark) this.brood = { at: this.mark, ticks: 0, units: [], harm: [] };
     else this.projectiles.push(this.makeProjectile(unit, w, this.power));
     this.phase = 'flight';
-    this.retreatTicks = w.sceneTicks > 0 ? 0 : RETREAT_TICKS;
+    this.retreatTicks = w.sceneTicks > 0 ? 0 : this.ticks(RULE.retreat);
     this.stance = false;
   }
 
@@ -1572,7 +1563,7 @@ export class Match {
     this.rings = [];
     if (end === 'lost') {
       this.events.push({ type: 'sting', x: f.x, y: f.y, z: f.z, unit: -1, rings: f.taken });
-      this.retreatTicks = RETREAT_TICKS;
+      this.retreatTicks = this.ticks(RULE.retreat);
       return;
     }
     const v = f.touched;
@@ -1612,7 +1603,7 @@ export class Match {
     if (c.victim >= 0) {
       const v = this.units[c.victim];
       c.swarm++;
-      if (v.bug.alive && c.swarm % Math.floor(SWARM_TICKS / SWARM_BITES) === 0 && c.swarm < SWARM_TICKS) this.struck(v, Math.round(SWARM_BITE * this.hard * this.tired), SWARMING);
+      if (v.bug.alive && c.swarm % Math.floor(SWARM_TICKS / this.tuning.get(RULE.bites)) === 0 && c.swarm < SWARM_TICKS) this.struck(v, Math.round(this.tuning.get(RULE.bite) * this.hard * this.tired), SWARMING);
       if (v.bug.alive && c.swarm < SWARM_TICKS) return;
       // (under it: the nearest ground, which on an edge is not straight below)
       const on = v.bug.alive ? this.toSurface(v.bug.x, v.bug.y, v.bug.z) : null;
@@ -1650,7 +1641,7 @@ export class Match {
     if (!h.alive || h.airTicks > 60) {
       // (it fell off: lost)
       this.column = null;
-      this.retreatTicks = RETREAT_TICKS;
+      this.retreatTicks = this.ticks(RULE.retreat);
     } else if (c.left <= 0 || c.still > 20) this.collapse(c, h.x - h.nx * h.species.radius, h.y - h.ny * h.species.radius, h.z - h.nz * h.species.radius);
   }
 
@@ -1826,7 +1817,7 @@ export class Match {
         this.retreatTicks = 0;
         this.charging = false;
         this.power = 0;
-        const wind = WIND_MAX * (this.options.wind ?? 1);
+        const wind = this.tuning.get(RULE.wind) * (this.options.wind ?? 1);
         this.windX = (this.rng() * 2 - 1) * wind;
         this.windZ = (this.rng() * 2 - 1) * wind;
         for (const q of this.units) q.bug.breath = Math.round(q.bug.stats.get('breath') * TICK_RATE);
@@ -1847,7 +1838,7 @@ export class Match {
         // (springs wear off as their bug's turns go by)
         for (const q of this.units) {
           if (q === u && q.spring > 0) q.spring--;
-          q.bug.leap = q.spring > 0 ? SPRING : 1;
+          q.bug.leap = q.spring > 0 ? this.tuning.get(RULE.spring) : 1;
         }
         this.turnNumber++;
         if (this.options.items ?? this.options.placeBugs !== false) {
@@ -1856,7 +1847,7 @@ export class Match {
         }
         this.events.push({ type: 'turn', unit: u.id });
         this.triggers.emit('turnStart', { turn: this.turnNumber, team: u.team, unit: u.id });
-        this.load(u.team, SKILL_TURN);
+        this.load(u.team, this.tuning.get(RULE.skillTurn));
         return;
       }
     }
@@ -1944,7 +1935,7 @@ export class Match {
     if (!on) return;
     for (const w of this.webs) if (w.honey && (w.x - on.x) * (w.x - on.x) + (w.y - on.y) * (w.y - on.y) + (w.z - on.z) * (w.z - on.z) < 4) return;
     const id = this.nextWebId++;
-    this.webs.push({ id, ...on, radius: HONEY_WIDE, turns: HONEY_TURNS * this.teams.length, strength: WEB_TEAR_TICKS, grand: false, paste: team, team, honey: true });
+    this.webs.push({ id, ...on, radius: HONEY_WIDE, turns: HONEY_TURNS * this.teams.length, strength: this.ticks(RULE.webTear), grand: false, paste: team, team, honey: true });
     this.events.push({ type: 'web', id });
   }
 
@@ -2165,7 +2156,8 @@ export class Match {
     fz /= l;
     // (as far as the ground lets it: it ends short where the ground under it gives out, or something hard is near; under
     // thin ground it runs shallower, if that takes it further)
-    const want = BURROW_SHORT + (BURROW_LONG - BURROW_SHORT) * (power < 0 ? 0 : power > 1 ? 1 : power);
+    const short = this.tuning.get(RULE.burrowShort);
+    const want = short + (this.tuning.get(RULE.burrowLong) - short) * (power < 0 ? 0 : power > 1 ? 1 : power);
     let len = -1;
     let deep = r + BURROW_DEEP;
     for (let d = r + BURROW_TUNNEL + BURROW_ROOF_WHOLE; d >= r + BURROW_TUNNEL + BURROW_ROOF - 1e-9 && len < want; d -= BURROW_RISE) {
@@ -2348,7 +2340,7 @@ export class Match {
     b.pz = b.z;
     // (just under the top, it waits a moment: then it breaks out)
     if (r.s >= r.end - BURROW_UNDER && r.hold > 0) r.hold--;
-    else r.s = Math.min(r.end, r.s + BURROW_SPEED * DT);
+    else r.s = Math.min(r.end, r.s + this.tuning.get(RULE.burrowSpeed) * DT);
     // (where along the path that is)
     let left = r.s;
     const p = r.path;
@@ -2620,10 +2612,10 @@ export class Match {
     let gain = 0;
     switch (kind) {
       case 'battery':
-        this.load(u.team, BATTERY);
+        this.load(u.team, this.tuning.get(RULE.battery));
         break;
       case 'patch':
-        gain = Math.max(0, Math.min(Math.round(b.maxHealth * this.tuning.get(RULE.patch)), Math.round(b.maxHealth * (1 + PATCH_OVER)) - b.health));
+        gain = Math.max(0, Math.min(Math.round(b.maxHealth * this.tuning.get(RULE.patch)), Math.round(b.maxHealth * (1 + this.tuning.get(RULE.patchOver))) - b.health));
         b.health += gain;
         break;
       case 'fuse':
@@ -2634,14 +2626,14 @@ export class Match {
         break;
       case 'spring':
         u.spring = 3;
-        b.leap = SPRING;
+        b.leap = this.tuning.get(RULE.spring);
         break;
       case 'paste':
         this.pools[u.team].give(usesPool(WEAPONS[PASTE].id), 1);
         break;
       case 'crystal':
-        if (u === this.units[this.active] && this.phase === 'aim') this.turnTicks += CRYSTAL * TICK_RATE;
-        else u.extra += CRYSTAL;
+        if (u === this.units[this.active] && this.phase === 'aim') this.turnTicks += this.tuning.get(RULE.crystal) * TICK_RATE;
+        else u.extra += this.tuning.get(RULE.crystal);
         break;
       case 'magnet':
         this.magnet(u);
@@ -2663,7 +2655,8 @@ export class Match {
   /** The nearest enemy in reach is pulled over. */
   private magnet(u: Unit): void {
     let best: Unit | null = null;
-    let bestD = MAGNET * MAGNET;
+    const magnet = this.tuning.get(RULE.magnet);
+    let bestD = magnet * magnet;
     const b = u.bug;
     for (const q of this.units) {
       if (q.team === u.team || !q.bug.alive) continue;
@@ -2762,8 +2755,8 @@ export class Match {
     if (by !== u.team) this.tally[by].damage += amount;
     // (specials load by the blow itself, before its toughness: hitting a tough bug loads as much as a frail one)
     const blow = amount * b.stats.get('defence');
-    this.load(u.team, blow * SKILL_TAKEN);
-    if (by !== u.team && this.currentWeapon.sceneTicks === 0) this.load(by, blow * SKILL_DONE);
+    this.load(u.team, blow * this.tuning.get(RULE.skillTaken));
+    if (by !== u.team && this.currentWeapon.sceneTicks === 0) this.load(by, blow * this.tuning.get(RULE.skillDone));
     this.hurtOwnTurn(u);
   }
 

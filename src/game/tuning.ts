@@ -42,6 +42,32 @@ export const RULE = {
   fallDamage: TUNING.define({ id: 'rules.fall.damage', group: 'Rules', label: 'Fall damage', unit: 'health per unit/s', min: 0, max: 10, step: 0.1, value: 2.5, help: 'What each unit/s over the safe speed takes.' }),
   knockback: TUNING.define({ id: 'rules.knockback', group: 'Rules', label: 'Knockback', unit: 'units/s', min: 0, max: 40, step: 0.5, value: 14, help: 'How hard a full blast throws a bug.' }),
   patch: TUNING.define({ id: 'rules.patch', group: 'Rules', label: 'Patch heals', unit: '× full health', min: 0, max: 1, step: 0.05, value: 0.35, help: 'What a patch from a box heals.' }),
+  retreat: TUNING.define({ id: 'rules.retreat', group: 'Rules', label: 'Time to get away', unit: 's', min: 0, max: 10, step: 0.5, value: 3, help: 'After the shot, the shooter may still walk this long.' }),
+  wind: TUNING.define({ id: 'rules.wind', group: 'Rules', label: 'Strongest wind', unit: 'units/s²', min: 0, max: 15, step: 0.5, value: 5, help: 'How hard the wind may push a shot (times the wind of the setup).' }),
+
+  skillTurn: TUNING.define({ id: 'specials.turn', group: 'Specials', label: 'Load a turn', unit: 'of 1000', min: 0, max: 1000, step: 10, value: 200, help: 'What the special of a team loads when its turn comes.' }),
+  skillDone: TUNING.define({ id: 'specials.done', group: 'Specials', label: 'Load by damage done', unit: '× damage', min: 0, max: 10, step: 0.1, value: 2.5, help: 'What hurting an enemy loads (by the blow, before its toughness).' }),
+  skillTaken: TUNING.define({ id: 'specials.taken', group: 'Specials', label: 'Load by damage taken', unit: '× damage', min: 0, max: 10, step: 0.1, value: 1.8, help: 'What being hurt loads.' }),
+
+  webSlow: TUNING.define({ id: 'webs.slow', group: 'Webs', label: 'Held: speed', unit: '× speed', min: 0, max: 1, step: 0.01, value: 0.12, help: 'How fast a bug held in a web still walks.' }),
+  webTear: TUNING.define({ id: 'webs.tear', group: 'Webs', label: 'Time to tear free', unit: 's', min: 0.5, max: 15, step: 0.5, value: 4, help: 'How long a held bug pulls (walking or jumping) before its web gives.' }),
+
+  march: TUNING.define({ id: 'column.march', group: 'Ant Column', label: 'March', unit: 's', min: 1, max: 15, step: 0.5, value: 6, help: 'How long the column marches at full charge.' }),
+  bites: TUNING.define({ id: 'column.bites', group: 'Ant Column', label: 'Bites', unit: '', min: 1, max: 20, step: 1, value: 8, help: 'How many times the swarm bites the bug it met.' }),
+  bite: TUNING.define({ id: 'column.bite', group: 'Ant Column', label: 'Bite', unit: 'health', min: 0, max: 40, step: 1, value: 7, help: 'What each bite takes.' }),
+
+  broodThrow: TUNING.define({ id: 'brood.throw', group: 'Blackout Swarm', label: 'Throw', unit: 'units/s', min: 0, max: 20, step: 0.5, value: 5, help: 'How hard the brood throws a bug off as it flees the light.' }),
+
+  burrowShort: TUNING.define({ id: 'burrow.short', group: 'Burrow', label: 'Shortest', unit: 'units', min: 6, max: 40, step: 1, value: 12, help: 'Its length with no charge.' }),
+  burrowLong: TUNING.define({ id: 'burrow.long', group: 'Burrow', label: 'Longest', unit: 'units', min: 6, max: 60, step: 1, value: 24, help: 'Its length at full charge.' }),
+  burrowSpeed: TUNING.define({ id: 'burrow.speed', group: 'Burrow', label: 'Speed', unit: 'units/s', min: 2, max: 30, step: 0.5, value: 8, help: 'How fast the ant goes through it.' }),
+
+  battery: TUNING.define({ id: 'boxes.battery', group: 'Boxes', label: 'Battery loads', unit: 'of 1000', min: 0, max: 1000, step: 10, value: 400, help: 'What a battery loads of the special of its team.' }),
+  patchOver: TUNING.define({ id: 'boxes.patchOver', group: 'Boxes', label: 'Patch: over full', unit: '× full health', min: 0, max: 1, step: 0.05, value: 0.15, help: 'How far over its full health a patch may take a bug.' }),
+  crystal: TUNING.define({ id: 'boxes.crystal', group: 'Boxes', label: 'Crystal adds', unit: 's', min: 0, max: 60, step: 1, value: 15, help: 'More time for its turn.' }),
+  overclock: TUNING.define({ id: 'boxes.overclock', group: 'Boxes', label: 'Overclocked shot', unit: '× damage', min: 1, max: 4, step: 0.05, value: 1.5, help: 'What the next shot of an overclocked bug hurts.' }),
+  spring: TUNING.define({ id: 'boxes.spring', group: 'Boxes', label: 'Springs: jump', unit: '× jump', min: 1, max: 3, step: 0.01, value: 1.42, help: 'How much higher a bug on springs jumps.' }),
+  magnet: TUNING.define({ id: 'boxes.magnet', group: 'Boxes', label: 'Magnet reach', unit: 'units', min: 0, max: 120, step: 1, value: 45, help: 'How far a magnet pulls the nearest enemy from.' }),
 } as const;
 
 /** The weapons as `set` has them: the same objects where it changes nothing of theirs, copies where it does. */

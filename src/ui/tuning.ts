@@ -153,16 +153,17 @@ export class TuningPage {
       this.extra(box);
       this.list.append(box);
     }
-    let group = '';
-    let box: HTMLElement | null = null;
+    // (one box a group, wherever its settings were defined: a weapon's numbers and its rules together)
+    const boxes = new Map<string, HTMLElement>();
     for (const d of this.of.all()) {
       const changed = d.id in this.set.changed;
       if (this.only && !changed) continue;
       if (q && !`${d.group} ${d.label} ${d.id}`.toLowerCase().includes(q)) continue;
-      if (d.group !== group || !box) {
-        group = d.group;
+      let box = boxes.get(d.group);
+      if (!box) {
         box = document.createElement('section');
-        box.innerHTML = `<h3>${group}</h3>`;
+        box.innerHTML = `<h3>${d.group}</h3>`;
+        boxes.set(d.group, box);
         this.list.append(box);
       }
       box.append(this.row(d.id, changed));

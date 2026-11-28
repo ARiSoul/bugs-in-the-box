@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DataCache, MemoryStore, Settings as Kept } from '../src/data';
 import { Settings } from '../src/game/engine';
-import { Match, NO_INPUT } from '../src/game/match';
+import { Match, NO_INPUT, RETREAT_TICKS, WIND_MAX } from '../src/game/match';
 import { ANT, COCKROACH, SPIDER } from '../src/game/species';
 import { RULE, speciesSetting, TUNING, tunedWeapons, weaponSetting } from '../src/game/tuning';
 import { CAPACITOR, SOLDER_BLOB, WEAPONS, weaponIndex } from '../src/game/weapons';
@@ -118,5 +118,38 @@ describe('a set kept on this device', () => {
     const back = readKept(TUNING, kept.get('tuning'));
     expect([back.hash, back.version]).toEqual([set.hash, 3]);
     for (const junk of [undefined, 7, 'x', { changed: 'no', version: -2 }, { changed: { [RULE.patch]: 'a', nothing: 3 } }]) expect(readKept(TUNING, junk).hash).toBe(TUNING.defaults().hash);
+  });
+});
+
+describe('the rules in the settings', () => {
+  const match = (changed: Record<string, number>, wind = 1): Match => {
+    const t = flat(10);
+    const m = new Match(t, [{ name: 'a', species: ANT, color: 0, size: 1 }, { name: 'b', species: SPIDER, color: 0, size: 1 }], 3, { placeBugs: false, wind, tuning: TUNING.make(changed) });
+    m.units[0].bug.drop(t, 40, 32);
+    m.units[1].bug.drop(t, 90, 32);
+    for (let n = 0; n < 30; n++) m.step(NO_INPUT);
+    return m;
+  };
+
+  it('are listed by what they are about, each with its value as shipped', () => {
+    const groups = new Set(TUNING.all().map((d) => d.group));
+    for (const g of ['Rules', 'Specials', 'Webs', 'Ant Column', 'Blackout Swarm', 'Burrow', 'Boxes']) expect(groups.has(g), g).toBe(true);
+    expect(TUNING.all().length).toBeGreaterThan(60);
+    // (what other files still read as a number is the shipped value, from the one place)
+    expect(WIND_MAX).toBe(TUNING.get(RULE.wind).value);
+    expect(RETREAT_TICKS).toBe(TUNING.get(RULE.retreat).value * 60);
+  });
+
+  it("a match plays with its set's: the wind, what a turn loads, a burrow's length", () => {
+    const calm = match({ [RULE.wind]: 0 });
+    expect(Math.abs(calm.windX) + Math.abs(calm.windZ)).toBe(0);
+    expect(match({}).windX).not.toBe(0);
+    expect(match({ [RULE.skillTurn]: 500 }).skill[0]).toBe(500);
+    expect(match({}).skill[0]).toBe(200);
+    const reach = (m: Match): number => {
+      const p = m.burrowPath(m.units[0], 1, []);
+      return Math.hypot(p[9] - p[0], p[11] - p[2]);
+    };
+    expect(reach(match({ [RULE.burrowLong]: 40 }))).toBeGreaterThan(reach(match({})) + 8);
   });
 });

@@ -57,7 +57,7 @@ Goal now: a PC demo first, as a proof of concept. The phone items below are post
 
 ## Settings and admins (proposed)
 
-- [ ] One registry of settings (id, value, unit, range, what it does), by module, instead of constants spread over the code: limits, times, speeds, damage, texts (**begun**: `engine/settings.ts`, `game/tuning.ts`: the weapons' damage, blast and arcs, the species' toughness, walk and jump, four rules)
+- [ ] One registry of settings (id, value, unit, range, what it does), by module, instead of constants spread over the code: limits, times, speeds, damage, texts (**begun**: `engine/settings.ts`, `game/tuning.ts`: 77 settings: the weapons' damage, blast and arcs, the species' toughness, walk and jump, the passives' numbers, and the rules of falls, knockback, getting away, wind, specials' loading, webs, the Ant Column, the brood, the Burrow and the boxes; the physics of bugs and shots still to come)
 - [x] The client's data, offline first: IndexedDB (Dexie) under a cache, an outbox and a sync engine for any server (`src/data/`); the old `localStorage` values brought in
 - [x] A match takes a frozen, numbered set of settings (as it takes a seed): every client must simulate with the same (`MatchOptions.tuning`, its hash)
 - [ ] An admin page that edits a set live (first local, in dev; then behind a server with accounts and roles, with history and undo). Numbers of the simulation change from the next match on; looks, sounds and texts at once
