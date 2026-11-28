@@ -134,6 +134,12 @@ export class PauseMenu {
     return this.state.open;
   }
 
+  /** Offer Restart, or not (a match online is not played again from its start). */
+  withRestart(on: boolean): void {
+    const b = this.choices.get('restart');
+    if (b) b.hidden = !on;
+  }
+
   /** Esc, or the button. True if it opened or closed. */
   toggle(): boolean {
     const was = this.state.open;

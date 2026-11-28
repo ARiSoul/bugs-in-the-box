@@ -23,6 +23,7 @@ npm run build       # typecheck + production build into dist/
 npm run bench       # CPU benchmark of the terrain pipeline (no rendering)
 npm run golden      # rewrite the golden replays (only when the game is meant to change)
 npm run crosscheck  # the same matches in Node and in a headless Chrome, bit for bit (dev server running)
+npm run server      # the room server for online play (ws://localhost:8787)
 ```
 
 Before any commit: `npm run typecheck && npm run test` (the golden replays included: a change that must leave the game as it was must keep them; one that changes the game rewrites them with `npm run golden` in the same commit). Every change brings its tests: unit tests for pure parts, integration tests through a `Match`, regression through the golden replays. For changes in `src/terrain/` or the mesher: also run `npm run bench` and compare against the reference numbers below.
@@ -69,9 +70,11 @@ src/
   input/              Controls (keyboard + on-screen pad -> MatchInput), picking against the density field, placing.ts (what is built follows the pointer)
   ui/                 DOM HUD; inventory.ts (quick slots, inventory), profile.ts and species.ts (levels)
   data/               the client's data, offline first: DataCache (memory, read at once) over a DataStore (IndexedDB via Dexie, or memory), an outbox and SyncEngine (any server, one merge rule `newer`); never imported by game/ or terrain/
+  net/                online: the protocol (JSON messages), Lockstep (one input stream, each tick's from whose turn it is; the server's feed checks it), NetClient (WebSocket); shared by the game and server/
   sim/                a whole match: MatchRecord (setup + inputs where they change + checkpoints), Recorder, replay without a screen, digests; pure (game + terrain, no DOM), the same in a browser, Node or a server
   bench/              benchmark shared between the in-browser button and scripts/bench.ts
   main.ts             glue: wires terrain, render, input and UI
+server/               the room server (Node + ws): Lobby and Room (two seats, the match simulated here too, turn order and checkpoints checked, seats come back with a token); `npm run server`
 tests/                Vitest + helpers (meshIntegrity, worlds, replay); golden/replays.json (whole matches, tick for tick); architecture.test.ts (layer borders)
 scripts/bench.ts      Node benchmark; scripts/balance.ts: the computer plays itself, species and weapons compared (`npm run balance`); scripts/crosscheck.ts: matches recorded in Node played in a headless Chrome and back, bit for bit (`npm run crosscheck -- [port]`, dev server running)
 docs/                 ARCHITECTURE.md, ROADMAP.md, IDEAS.md

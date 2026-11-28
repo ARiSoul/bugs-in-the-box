@@ -31,6 +31,8 @@ export interface SetupHooks {
   onMap(): void;
   onSpecies(side: number): void;
   onPlay(): void;
+  /** Play online (make a room, or join one). */
+  onOnline?(): void;
   /** The pointer is on a side's fighter. */
   onHover(side: number): void;
   /** The pointer is on Play (or left it). */
@@ -140,7 +142,10 @@ export class SetupScreen {
         this.marchers.hurry = on;
         hooks.onReady(on);
       });
-    bar.append(this.marchers.canvas, shelf, this.place, this.rules, this.play);
+    const online = make('button', 'online', '<b>Online</b><span>a room for two</span>');
+    online.title = 'make a room for two players, or join one with its code';
+    online.addEventListener('click', () => hooks.onOnline?.());
+    bar.append(this.marchers.canvas, shelf, this.place, this.rules, online, this.play);
     this.root.append(bar);
     this.root.hidden = true;
     document.body.append(this.root);

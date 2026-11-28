@@ -174,6 +174,24 @@
       #panel:not([open]) { background: rgba(15, 12, 11, 0.82); border: 0; border-radius: 0; transform: skewX(-8deg); font-family: 'Bahnschrift', 'Segoe UI', sans-serif; } #fps { display: none; } body:has(#panel[open]) #fps { display: block; }
       @media (hover: hover) and (pointer: fine) { #pad { display: none; } }
       #setup[hidden], #ending[hidden] { display: none; }
+      /* online: the setup's button, the box that makes or joins a room, the room waiting, the line over a match */
+      #setup .online { flex: none; height: 10.6vh; padding: 0 1.6vh; display: grid; place-content: center; text-align: left; background: rgba(255, 255, 255, 0.08); color: var(--ink); transform: skewX(-6deg); transition: background 0.15s, transform 0.18s cubic-bezier(0.2, 2, 0.4, 1); }
+      #setup .online b { font-size: 1.5em; color: var(--amber); } #setup .online span { color: var(--dim); font-size: 0.85em; } #setup .online:hover { background: rgba(255, 255, 255, 0.16); transform: skewX(-6deg) scale(1.04); }
+      #online[hidden] { display: none; }
+      #online { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; background: rgba(6, 4, 4, 0.6); backdrop-filter: blur(3px); font-family: 'Bahnschrift', 'Segoe UI', system-ui, sans-serif; color: #f6efdf; font-size: clamp(12px, 1.7vh, 19px); }
+      #online .online-box { display: flex; flex-direction: column; gap: 1.4vh; width: min(52vh, 90vw); padding: 2.4vh 3vh 2.6vh; background: rgba(16, 12, 10, 0.97); border-top: 0.55vh solid #ffb547; transform: skewX(-4deg); }
+      #online .online-box > * { transform: skewX(4deg); } #online h2 { margin: 0; color: #ffb547; font-size: 2em; letter-spacing: 0.03em; }
+      #online input { padding: 0.55em 0.7em; background: #1f1915; border: 1px solid #3a2f26; border-radius: 3px; color: inherit; font: inherit; }
+      #online .online-field { display: grid; gap: 0.4em; } #online .online-field span, #online .online-join span { color: #c2bbac; }
+      #online button { border: 0; border-radius: 3px; font: inherit; color: inherit; cursor: pointer; }
+      #online .online-create { display: grid; text-align: left; padding: 0.8em 1em; background: #ffb547; color: #1b1206; } #online .online-create b { font-size: 1.3em; } #online .online-create:hover { background: #ffd08a; } #online .online-create:disabled { opacity: 0.6; }
+      #online .online-join { display: grid; grid-template-columns: 1fr 6em auto; align-items: center; gap: 0.6em; } #online .online-join input { text-transform: uppercase; letter-spacing: 0.3em; font-weight: 800; text-align: center; }
+      #online .online-go, #online .online-close { padding: 0.6em 1em; background: #2a221c; } #online .online-go:hover, #online .online-close:hover { background: #3a2f26; } #online .online-close { justify-self: end; }
+      #online .online-note { margin: 0; min-height: 1.3em; color: #c2bbac; } #online .online-note.bad { color: #ff8a6e; }
+      #loading .online-wait { display: grid; justify-items: center; gap: 1.2vh; margin-top: 2vh; color: #f6efdf; } #loading .online-wait h2 { margin: 0; color: #ffb547; letter-spacing: 0.05em; }
+      #loading .online-code { font-size: 7vh; font-weight: 800; letter-spacing: 0.25em; color: #f6efdf; } #loading .online-wait small { color: #8d8478; user-select: all; }
+      #loading .online-row { display: flex; gap: 1vh; } #loading button { padding: 0.6em 1.1em; border: 0; border-radius: 3px; background: #2a221c; color: #f6efdf; font: inherit; cursor: pointer; } #loading button:hover { background: #3a2f26; }
+      #hud .online-status { position: absolute; left: 50%; top: 13.2vh; translate: -50% 0; padding: 0.35em 0.9em; background: rgba(9, 7, 7, 0.72); border-radius: 3px; color: #f6efdf; font-size: 0.9em; white-space: nowrap; } #hud .online-status.warn { color: #ffb4a0; }
       /* the settings page (development) */
       #tuning[hidden] { display: none; }
       #tuning { position: fixed; inset: 4vh 4vw; z-index: 70; display: flex; flex-direction: column; background: rgba(14, 11, 9, 0.97); border-top: 4px solid #ffb547; box-shadow: 0 2vh 6vh rgba(0, 0, 0, 0.7); color: #f6efdf; font: 13px/1.4 'Bahnschrift', 'Segoe UI', system-ui, sans-serif; }

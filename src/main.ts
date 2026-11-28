@@ -55,7 +55,11 @@ import { EndScreen, SetupScreen, type SetupChoice } from './ui/setup';
 import { setupKeysMenu } from './ui/keys';
 import { SoundMenu } from './ui/sound';
 import { PauseMenu } from './ui/pause';
-import { groundDigest, Recorder, type MatchRecord, type MatchSetup } from './sim';
+import { EVERY, groundDigest, Recorder, type InputChange, type MatchRecord, type MatchSetup } from './sim';
+import { NetClient, serverUrl, tokenKey } from './net/client';
+import { Lockstep } from './net/lockstep';
+import { isCode, type Inputs } from './net/protocol';
+import { OnlineBox, OnlineStatus, waitingBox } from './ui/online';
 import { keptOf, readKept, TuningPage } from './ui/tuning';
 import { TUNING } from './game/tuning';
 
@@ -87,10 +91,14 @@ function growthFor(side: number): Growth | undefined {
   if (equal) return undefined;
   return players[side] === 'human' ? profile.growth(picked[side].id) : computerGrowth(picked[side].id, levelFor(side, picked, players));
 }
-const teams = (): TeamSpec[] => [
+const teams = (): TeamSpec[] =>
+  online
+    ? // (online: the teams as the room has them, the same on both sides)
+      online.setup.teams.map((t) => ({ name: t.name, species: SPECIES.find((q) => q.id === t.species) ?? ANT, special: t.special, color: t.color, size: t.size, growth: t.growth }))
+    : [
   { growth: growthFor(0), name: `Red ${PLURAL[picked[0].id]}`, species: picked[0], special: specials[0] || undefined, color: 0xff6b5e, size: rules.size },
   { growth: growthFor(1), name: `Blue ${PLURAL[picked[1].id]}`, species: picked[1], special: specials[1] || undefined, color: 0x5fb0ff, size: rules.size },
-];
+      ];
 
 const canvas = document.getElementById('c') as HTMLCanvasElement;
 const params = new URLSearchParams(location.search);
@@ -113,12 +121,94 @@ equal = params.get('equal') === '1';
 rules.size = Math.round(ruleOf('size', 1, 5, 3));
 rules.seconds = ruleOf('turn', 10, 120, 30);
 rules.wind = ruleOf('wind', 0, 2, 1);
+// ---- online: a room in the address (`?room=CODE`) waits for both players; its setup is the match ----
+/** A match played online: the room, this client's seat (its team), the connection, the setup, the lockstep. */
+interface Online {
+  readonly code: string;
+  readonly seat: number;
+  readonly client: NetClient;
+  readonly setup: MatchSetup;
+  lock: Lockstep | null;
+  /** Every input so far, when it came (one coming back plays them first). */
+  start: { inputs: readonly InputChange[]; known: number };
+  here: readonly boolean[];
+  names: readonly string[];
+  desync: number;
+  sentChecks: number;
+  /** The other's batches that came before this side's match was made (they wait for it). */
+  early: Inputs[];
+}
+/** Back to the menu from a room (the room is left). */
+function leaveRoom(): void {
+  online?.client.close();
+  const p = new URLSearchParams(location.search);
+  for (const k of ['room', 'play']) p.delete(k);
+  location.href = `?${p.toString()}`;
+}
+async function enterRoom(code: string): Promise<Online> {
+  const sign = document.querySelector<HTMLElement>('#loading span');
+  const say = (text: string): void => {
+    if (sign) sign.textContent = text;
+  };
+  const client = new NetClient(serverUrl(params, location));
+  try {
+    say('Finding the room…');
+    await client.open();
+    const growths = Object.fromEntries(SPECIES.map((s) => [s.id, profile.growth(s.id)]));
+    // (who is there: kept from the first word on, also before the match is made)
+    const seen: { names: readonly string[]; here: readonly boolean[] } = { names: [], here: [] };
+    client.on((m) => {
+      if (m.t === 'presence') [seen.names, seen.here] = [m.names, m.here];
+    });
+    const started = client.next((m) => (m.t === 'start' ? m : null));
+    const { seat, token } = await client.join(code, data.settings.get<string>('name') ?? '', sessionStorage.getItem(tokenKey(code)) ?? undefined, growths);
+    sessionStorage.setItem(tokenKey(code), token);
+    const link = `${location.origin}${location.pathname}?room=${code}${params.get('server') ? `&server=${encodeURIComponent(params.get('server') as string)}` : ''}`;
+    const wait = waitingBox(code, link, leaveRoom);
+    say('');
+    document.getElementById('loading')?.append(wait.root);
+    const s = await started;
+    wait.root.remove();
+    say('warming up the box');
+    const o: Online = { code, seat, client, setup: s.setup, lock: null, start: { inputs: s.inputs, known: s.known }, here: seen.here, names: seen.names, desync: -1, sentChecks: 0, early: [] };
+    client.on((m) => {
+      if (m.t === 'presence') [o.here, o.names] = [m.here, m.names];
+    });
+    return o;
+  } catch (e) {
+    say(`${e instanceof Error ? e.message : String(e)}.`);
+    const back = document.createElement('button');
+    back.className = 'online-back';
+    back.textContent = 'Back to the menu';
+    back.addEventListener('click', leaveRoom);
+    document.getElementById('loading')?.append(back);
+    return new Promise<Online>(() => {});
+  }
+}
+const roomCode = params.get('room');
+const online: Online | null = roomCode && isCode(roomCode) ? await enterRoom(roomCode) : null;
+if (online) {
+  const s = online.setup;
+  s.teams.forEach((t, i) => {
+    picked[i] = SPECIES.find((q) => q.id === t.species) ?? picked[i];
+    specials[i] = t.special ?? '';
+    players[i] = 'human';
+  });
+  rules.size = s.teams[0].size;
+  rules.seconds = s.rules.turnSeconds ?? rules.seconds;
+  rules.wind = s.rules.wind ?? rules.wind;
+  equal = s.teams[0].growth === undefined;
+  params.set('seed', String(s.seed));
+  params.set('scenario', s.scenario);
+}
+
 // Map size in chunks of 32, e.g. `?map=3x2x3` for the small map. Without it, the
 // scenario's own size (a scenario at a larger scale needs a larger map), else 5x3x5.
 const size = (params.get('map') ?? '').match(/^(\d+)x(\d+)x(\d+)$/);
 let seed = Number(params.get('seed') ?? 1234) | 0;
 let scenario: Scenario = scenarioById(params.get('scenario'));
-const mapSize = (sc: Scenario): [number, number, number] => (size ? [Number(size[1]), Number(size[2]), Number(size[3])] : (sc.mapSize ?? [5, 3, 5]));
+const mapSize = (sc: Scenario): [number, number, number] =>
+  online && online.setup.scenario === sc.id ? [...online.setup.size] as [number, number, number] : size ? [Number(size[1]), Number(size[2]), Number(size[3])] : (sc.mapSize ?? [5, 3, 5]);
 const terrain = new Terrain(...mapSize(scenario));
 const layout = createLayout();
 const stageOptions: StageOptions = { fixedSize: hooks.fixedSize, timestamps: hooks.perf, seed };
@@ -173,7 +263,7 @@ const seeThrough = new SeeThrough();
 /** The setting the camera's way is kept under. */
 const CAMERA = 'camera';
 /** The numbers the next match is tuned by (the settings page changes them; kept on this device). */
-let tuning = readKept(TUNING, data.settings.get('tuning'));
+let tuning = online ? TUNING.make(online.setup.tuning.changed, online.setup.tuning.version) : readKept(TUNING, data.settings.get('tuning'));
 /** How far along the aim the view is kept free. */
 const AHEAD = 14;
 const aimAt = new Float64Array(3);
@@ -311,6 +401,17 @@ function newTeams(s: number, turns = 0): void {
     fresh: made.seed === s && made.ground === start,
   };
   recorder = new Recorder(setup, match, groundNow, start);
+  if (online) {
+    // (online the room records the match; this side steps it in lockstep, first with every input it missed)
+    recorder = null;
+    const l = new Lockstep(match, online.seat);
+    if (online.start.known > 0) l.take({ t: 'inputs', from: 0, upTo: online.start.known, changes: online.start.inputs });
+    while (l.tick < online.start.known) l.step();
+    online.sentChecks = l.digests.length;
+    online.start = { inputs: [], known: 0 };
+    online.lock = l;
+    for (const b of online.early.splice(0)) if (!l.take(b)) location.reload();
+  }
 
   brains = players.map((id, i) => {
     const s = SKILLS.find((q) => q.id === id);
@@ -704,7 +805,7 @@ hud.bench.addEventListener('click', () => {
 
 // ---- the setup screen, and the end of a match ----
 /** The menu comes first, unless the address asks for something else (`?play=1`: straight into the match). */
-const menuAtStart = !usesDebugCamera(hooks) && !hooks.perf && params.get('play') !== '1';
+const menuAtStart = !usesDebugCamera(hooks) && !hooks.perf && params.get('play') !== '1' && !online;
 if (menuAtStart && params.get('seed') === null) seed = randomSeed();
 const menus = {
   setup: false,
@@ -752,11 +853,49 @@ const setup = new SetupScreen(choice, {
   onPick: (strong) => sound.play(strong ? 'select' : 'tick'),
   random: randomSeed,
   onMute: () => soundMenu.toggle(),
+  onOnline: () => onlineBox.toggle(true),
 });
+/** Make a room with the setup as it is, or join one by its code: either way, the page goes to the room's address. */
+const onlineBox = new OnlineBox(data.settings.get<string>('name') ?? '', {
+  name: (n) => data.settings.set('name', n),
+  create: async (name) => {
+    data.settings.set('name', name);
+    const sc = scenarioById(choice.scenario);
+    const grown = (i: number): MatchSetup['teams'][number]['growth'] => (choice.equal ? undefined : i === 0 ? profile.growth(choice.species[0].id) : { level: 1, passives: [], items: {} });
+    const setup: MatchSetup = {
+      scenario: sc.id,
+      size: mapSize(sc),
+      seed: choice.seed,
+      teams: [0, 1].map((i) => ({ name: `${i ? 'Blue' : 'Red'} ${PLURAL[choice.species[i].id]}`, species: choice.species[i].id, special: choice.specials[i] || undefined, color: i ? 0x5fb0ff : 0xff6b5e, size: choice.size, growth: grown(i) })),
+      rules: { turnSeconds: choice.seconds, wind: choice.wind },
+      tuning: { version: tuning.version, changed: { ...tuning.changed }, hash: tuning.hash },
+      fresh: true,
+    };
+    const client = new NetClient(serverUrl(params, location));
+    await client.open();
+    const { code, token } = await client.create(name, setup);
+    sessionStorage.setItem(tokenKey(code), token);
+    goToRoom(code);
+  },
+  join: (code, name) => {
+    data.settings.set('name', name);
+    goToRoom(code);
+  },
+});
+/** The page of room `code` (the room server kept in the address, if it is not the default). */
+function goToRoom(code: string): void {
+  const p = new URLSearchParams();
+  p.set('room', code);
+  const server = params.get('server');
+  if (server) p.set('server', server);
+  location.href = `?${p.toString()}`;
+}
 const speciesPage = new SpeciesPage(profile, (strong) => sound.play(strong ? 'select' : 'tick'), () => setup.refresh());
 setup.root.append(soundMenu.panel(), speciesPage.root);
 const ending = new EndScreen(
   () => {
+    // (online, a match is one room's: another is made from the menu)
+    if (online) return leaveRoom();
     closeEnding();
     if (ending.keeps) newTeams(randomSeed(), match.turntableTurns);
     else {
@@ -767,6 +906,7 @@ const ending = new EndScreen(
     flash();
   },
   () => {
+    if (online) return leaveRoom();
     closeEnding();
     openSetup();
   },
@@ -1061,8 +1201,8 @@ const pauseMenu = new PauseMenu(
       newMatch(seed);
       flash();
     },
-    // (back to the setup: nobody gains from the match left)
-    leave: () => openSetup(),
+    // (back to the setup: nobody gains from the match left; online, the room is left)
+    leave: () => (online ? leaveRoom() : openSetup()),
   },
   () => ({
     place: scenario.name,
@@ -1071,6 +1211,8 @@ const pauseMenu = new PauseMenu(
   }),
 );
 document.getElementById('hud')?.append(pauseMenu.button);
+// (online, a match is not played again from its start: it is the room's)
+if (online) pauseMenu.withRestart(false);
 window.addEventListener('keydown', (e) => {
   if (e.code !== 'Escape' || e.repeat || e.defaultPrevented) return;
   // (the Esc that gives the mouse back from a flight is that, not a pause)
@@ -1408,13 +1550,57 @@ let lastFps = performance.now();
 let lastFrame = performance.now();
 let accumulator = 0;
 /** One tick of the match, recorded. */
-function step(input: Readonly<MatchInput>): void {
+/** One tick of the match, recorded (online: in lockstep). False: online, and the other's input for it has not come. */
+function step(input: Readonly<MatchInput>): boolean {
+  const l = online?.lock;
+  if (l) return l.step(l.own ? input : NO_INPUT);
   if (recorder) recorder.step(input);
   else match.step(input);
   if (match.phase === 'over') keepRecord('over');
+  return true;
 }
 /** The turntable's turns before the last tick (render interpolates the plate between ticks). */
 let prevTurns = 0;
+
+// ---- online, while a match is played: what comes in, what goes out, and the line that says how it stands ----
+const onlineStatus = new OnlineStatus();
+if (online) {
+  document.getElementById('hud')?.append(onlineStatus.root);
+  online.client.on((m) => {
+    const o = online;
+    if (!o) return;
+    if (m.t === 'inputs') {
+      // (a batch that does not follow on: this side lost its place; it starts again from the room's inputs)
+      if (!o.lock) o.early.push(m);
+      else if (!o.lock.take(m)) location.reload();
+    } else if (m.t === 'desync') o.desync = m.tick;
+    else if (m.t === 'refused') console.warn(`the room refused: ${m.why}`);
+  });
+  online.client.onLost = () => {
+    onlineStatus.show('Connection lost: coming back…', true);
+    setTimeout(() => location.reload(), 2000);
+  };
+}
+/** After the frame's ticks: catch up with what came, send this side's inputs and checkpoints, say how it stands. */
+function playOnline(): void {
+  const o = online;
+  const l = o?.lock;
+  if (!o || !l) return;
+  // (well behind the other: catch up, a little faster than the clock)
+  for (let n = 0; n < 30 && !l.own && l.knownUpTo - l.tick > 10; n++) {
+    if (!step(NO_INPUT)) break;
+    handleEvents(match.events);
+    gameSounds.tick(match, inScene() !== null);
+  }
+  const b = l.batch();
+  if (b) o.client.send(b);
+  for (; o.sentChecks < l.digests.length; o.sentChecks++) o.client.send({ t: 'check', tick: (o.sentChecks + 1) * EVERY, digest: l.digests[o.sentChecks] });
+  const other = 1 - o.seat;
+  const them = o.names[other] || 'the other player';
+  const turn = l.own ? 'your turn' : !o.here[other] ? `${them} is away` : !l.ready ? `waiting for ${them}…` : `${them}'s turn`;
+  const off = o.desync >= 0 ? ` · out of step since tick ${o.desync}` : tuning.hash !== o.setup.tuning.hash ? ' · another version of the game' : '';
+  onlineStatus.show(`Room ${o.code} · ${o.names[0] || 'Red'} vs ${o.names[1] || 'Blue'} · ${turn}${off}`, off !== '' || !o.here[other]);
+}
 /** Time per frame for indexing the drawn ground of a new map (ms). */
 const INDEX_MS = 3;
 let paused = false;
@@ -1523,19 +1709,26 @@ function frame(now: number): void {
   while (accumulator >= DT) {
     prevTurns = match.turntableTurns;
     // a debug camera (or the intro) owns the view: the match keeps running without input
-    if (debugCamera || intro || menus.over) step(NO_INPUT);
+    let stepped: boolean;
+    if (debugCamera || intro || menus.over) stepped = step(NO_INPUT);
     else {
       // (while the computer plays, the player's keys go nowhere)
       steerSwarm();
       const typed = controls.next();
       const b = brain();
-      step(b ? b.next(match) : typed);
+      stepped = step(b ? b.next(match) : typed);
       faced ||= !b && controls.faced;
+    }
+    if (!stepped) {
+      // (online, the other's input has not come: wait for it, without saving the time up)
+      accumulator = Math.min(accumulator, DT);
+      break;
     }
     handleEvents(match.events);
     gameSounds.tick(match, inScene() !== null);
     accumulator -= DT;
   }
+  if (online) playOnline();
   syncTerrain();
   const alpha = accumulator / DT;
   holdMouse();
@@ -1889,6 +2082,8 @@ const debugApi = {
   heroes,
   setup: openSetup,
   match: () => match,
+  /** Online: the room, the seat, the lockstep (its checkpoints). */
+  online: () => online,
   newMatch,
   views: () => views,
   /** Freeze the fly-through at `t` seconds (null: back to the clock). */

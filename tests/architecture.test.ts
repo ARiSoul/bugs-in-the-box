@@ -29,6 +29,7 @@ const RULES: Record<string, readonly RegExp[]> = {
   'src/game': [/^(render|ui|input|audio|data|debug|workers)\//, /^three/, /^dexie/],
   'src/data': [/^(render|ui|input|audio|debug|workers|game|terrain)\//, /^three/],
   'src/sim': [/^(render|ui|input|audio|data|debug|workers)\//, /^three/, /^dexie/],
+  'src/net': [/^(render|ui|input|audio|data|debug|workers)\//, /^three/, /^dexie/],
 };
 
 describe('architecture', () => {

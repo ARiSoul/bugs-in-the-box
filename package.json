@@ -18,15 +18,18 @@
     "bench": "tsx scripts/bench.ts",
     "golden": "tsx scripts/golden.ts",
     "balance": "tsx scripts/balance.ts",
-    "crosscheck": "tsx scripts/crosscheck.ts"
+    "crosscheck": "tsx scripts/crosscheck.ts",
+    "server": "tsx server/index.ts"
   },
   "dependencies": {
     "dexie": "^4.4.7",
-    "three": "^0.187.0"
+    "three": "^0.187.0",
+    "ws": "^8.23.1"
   },
   "devDependencies": {
     "@types/node": "^26.6.6",
     "@types/three": "^0.187.0",
+    "@types/ws": "^8.18.2",
     "fake-indexeddb": "^6.2.8",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
