@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { Brain, SKILLS, type Skill } from '../src/game/brain';
 import { Match, NO_INPUT } from '../src/game/match';
 import { ANT, COCKROACH, SPIDER, type BugSpecies } from '../src/game/species';
-import { flat } from './helpers/worlds';
+import { flat, world } from './helpers/worlds';
 import { WEAPONS } from '../src/game/weapons';
 import { pcCase } from '../src/terrain/generators/pcCase';
 import { createLayout } from '../src/terrain/generators/types';
@@ -127,5 +127,40 @@ describe('burst and bridges', () => {
       return m.units.map((u) => [u.bug.x, u.bug.y, u.bug.z, u.bug.health].join()).join('|');
     };
     expect(play()).toBe(play());
+  });
+});
+
+describe('burrows', () => {
+  /** An ant and a spider on level ground (at 10), maybe a tall wall between them; one turn of the ant, the computer's. */
+  const turn = (wall: boolean): { m: Match; kinds: string[] } => {
+    const t = world(4, 2, 2, (i, j) => Math.min(j - 10, wall && i >= 40 && i <= 46 ? Math.max(j - 40, 40 - i, i - 46) : 99));
+    const m = new Match(t, [{ name: 'A', species: ANT, color: 0, size: 1 }, { name: 'S', species: SPIDER, color: 0, size: 1 }], 1, { placeBugs: false, wind: 0, turnSeconds: 30 });
+    m.units[0].bug.drop(t, 24, 32);
+    m.units[1].bug.drop(t, 64, 32);
+    const b = new Brain(SKILLS[1], 5);
+    const kinds: string[] = [];
+    for (let n = 0; n < 60 * 35 && m.turnNumber <= 1; n++) {
+      m.step(m.activeUnit.team === 0 ? b.next(m) : NO_INPUT);
+      for (const e of m.events) kinds.push(e.type);
+    }
+    return { m, kinds };
+  };
+
+  it('with a wall in the way, the computer ant digs under it, comes out beyond it, and shoots from there', () => {
+    const { m, kinds } = turn(true);
+    expect(m.tunnels.length).toBe(1);
+    const p = m.tunnels[0].path;
+    // (in under the wall, out beyond it)
+    expect(p[0]).toBeLessThan(40);
+    expect(p[9]).toBeGreaterThan(46);
+    expect(kinds.indexOf('emerge')).toBeGreaterThan(kinds.indexOf('burrow'));
+    expect(kinds.lastIndexOf('fire')).toBeGreaterThan(kinds.indexOf('emerge'));
+    expect(m.units[1].bug.health).toBeLessThan(100);
+  });
+
+  it('with nothing in the way, it just shoots', () => {
+    const { m, kinds } = turn(false);
+    expect(m.tunnels.length).toBe(0);
+    expect(kinds).toContain('fire');
   });
 });

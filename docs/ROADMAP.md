@@ -85,7 +85,7 @@ Decided: the species evolves, per player · levels give options, not strength ·
 - [ ] Reading time over the network: the pause is an event of the match's, with its limits
 - [x] **Explosions like the builds' holes**: every crater uneven, its own shape for the place (deterministic, the same in the simulation and in what is drawn over the terrain), its walls the material's broken inside (matte), and lumps of the ground thrown out round it
 - [x] **Burrow and the ground**: the tunnel keeps solid ground under it (it runs shallower under thin ground, ends short where the ground gives out, and cannot start on a thin top); hard materials (metal, marble, ferrite; `HARD` in `terrain/materials.ts`) cannot be dug, and blasts still break them; the tunnel stays a part of the map: bugs walk in at either mouth and through it by their own physics (its ways down and up gentle, their tops open cuts; a bug in it drawn gently to its middle line), seen from above with the ground over it seen through
-- [ ] Burrow, later: the computer using tunnels; the microwave has nothing an ant can dig (all metal and marble)
+- [x] Burrow, later: the computer using tunnels (it digs in its head eight ways at three lengths, and goes under what stands between when the far end is much better; out there it thinks again); the microwave has nothing an ant can dig (all metal and marble)
 
 ## Phase 5 · Multiplayer
 - [x] Deterministic simulation validated across clients (same seed + same events = same map): a match as a record (`src/sim/`: setup, inputs where they change, checkpoints), every match recorded and kept, `npm run crosscheck` (Node and Chrome, bit for bit); Firefox and Safari still to check

@@ -2147,7 +2147,7 @@ export class Match {
    * further on, where the ground is. Four points (x, y, z each) written into `out`. Its aim's slope does not count: it
    * goes the way it faces.
    */
-  burrowPath(u: Unit, power: number, out: number[]): number[] {
+  burrowPath(u: Pick<Unit, 'bug'>, power: number, out: number[]): number[] {
     const b = u.bug;
     const r = b.species.radius;
     out.length = 0;

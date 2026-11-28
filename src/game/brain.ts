@@ -64,6 +64,13 @@ const WALL_NEAR = 45;
 const FALLS = 12;
 /** Burst: the aims it tries; what a better place must be better by to be worth one; how long it may take to land (ticks). */
 const BURST_AIMS = [0.3, 0.55];
+/** Burrows it thinks of: charged this many ticks (short, half, long); what one must be better by; how much nearer it counts. */
+const DIGS = [8, 36, 72];
+const DIG_COST = 9;
+const DIG_NEAR = 6;
+/** Ticks it lets a bug it put at a tunnel's far end settle, in its head. */
+const SETTLE = 40;
+const BURROW_AT = WEAPONS.findIndex((w) => w.kind === 'burrow');
 const BURST_COST = 10;
 const BURST_NEAR = 8;
 const LANDS = 300;
@@ -97,12 +104,16 @@ interface Spot {
   best: number;
   /** Not walked to: a burst gets it there, with this aim (along, up). */
   burst?: readonly [number, number];
+  /** Not walked to: a tunnel gets it there, dug this way, charged for this many ticks. */
+  dig?: number;
 }
 
-type State = 'look' | 'wall' | 'bridge' | 'flown' | 'fetch' | 'think' | 'spots' | 'walk' | 'aim' | 'charge' | 'done';
+type State = 'look' | 'wall' | 'bridge' | 'flown' | 'fetch' | 'think' | 'spots' | 'walk' | 'aim' | 'charge' | 'dug' | 'done';
 
 const fly: FlockInput = { turn: 0, up: 0, faceX: 0, faceZ: 0, pitch: 0 };
 const dir = new Float64Array(3);
+/** A burrow's way, in its head. */
+const tunnel: number[] = [];
 const vel = new Float64Array(3);
 const step: BugInput = { move: 0, turn: 0, jump: false, run: false, faceX: 0, faceZ: 0 };
 
@@ -182,6 +193,10 @@ export class Brain {
         // (landed: from here, then)
         this.think(match, u);
         break;
+      case 'dug':
+        // (out at the far end, on its feet: from here, then)
+        if (match.underground === null && u.bug.grounded) this.think(match, u);
+        break;
       case 'fetch':
         this.fetch(match, u);
         break;
@@ -249,7 +264,8 @@ export class Brain {
     const enemies = this.enemies(match, u);
     WEAPONS.forEach((w, index) => {
       if (!match.canUse(u, index) || (w.sceneTicks > 0 && !this.specials)) return;
-      if (w.kind === 'tunnel' || w.kind === 'trap' || w.kind === 'wall' || w.kind === 'bridge' || w.kind === 'shelter') return;
+      // (not a shot: what builds, hides or digs is thought of on its own; a burrow, as a way somewhere)
+      if (w.kind === 'tunnel' || w.kind === 'trap' || w.kind === 'wall' || w.kind === 'bridge' || w.kind === 'shelter' || w.kind === 'burrow') return;
       if (w.kind === 'brood') {
         for (const e of enemies) this.queue.push(() => this.tryMark(match, u, w, index, e));
       } else if (w.kind === 'flock') {
@@ -462,7 +478,7 @@ export class Brain {
       this.walkTo = null;
       let best = this.bestOf(this.plans)?.score ?? 0;
       for (const s of this.spots)
-        if (s.best > best + (s.burst ? BURST_COST : 4)) {
+        if (s.best > best + (s.burst ? BURST_COST : s.dig !== undefined ? DIG_COST : 4)) {
           best = s.best;
           this.walkTo = s;
         }
@@ -472,7 +488,7 @@ export class Brain {
         const d = (b: Bug): number => Math.sqrt((b.x - near.bug.x) * (b.x - near.bug.x) + (b.y - near.bug.y) * (b.y - near.bug.y) + (b.z - near.bug.z) * (b.z - near.bug.z));
         let least = d(u.bug) - 2;
         for (const s of this.spots) {
-          const far = d(s.bug) + (s.burst ? BURST_NEAR : 0);
+          const far = d(s.bug) + (s.burst ? BURST_NEAR : s.dig !== undefined ? DIG_NEAR : 0);
           if (s.bug.ny >= 0.3 && far < least) {
             least = far;
             this.walkTo = s;
@@ -483,11 +499,15 @@ export class Brain {
       }
       // (nor that: anywhere else it can stand)
       if (best <= 0 && !this.walkTo) {
-        const open = this.spots.filter((s) => s.bug.ny >= 0.64 && !s.burst);
+        const open = this.spots.filter((s) => s.bug.ny >= 0.64 && !s.burst && s.dig === undefined);
         this.walkTo = open[Math.floor(this.rng() * open.length)] ?? null;
       }
       if (this.walkTo?.burst) {
         this.leap(this.walkTo, this.walkTo.burst);
+        return;
+      }
+      if (this.walkTo?.dig !== undefined) {
+        this.dig(u, this.walkTo, this.walkTo.dig);
         return;
       }
       if (this.walkTo) {
@@ -572,6 +592,13 @@ export class Brain {
       this.queue.push(() => {
         for (const s of this.walkWay(match, u, way[0], way[1], 5)) this.rate(match, u, s, enemies);
       });
+      // (and where a tunnel would take it: an ant on the ground, with a burrow left this turn)
+      if (BURROW_AT >= 0 && match.canUse(u, BURROW_AT) && u.bug.ny >= 0.64 && u.web < 0)
+        for (const ticks of DIGS)
+          this.queue.push(() => {
+            const at = this.tunnelEnd(match, u, way[0], way[1], ticks);
+            if (at) this.rate(match, u, { bug: at, wx: way[0], wz: way[1], ticks: 0, best: 0, dig: ticks }, enemies);
+          });
       // (and where a burst would take it; the last one is kept for getting away)
       if (match.canBurst(u) && match.usesLeft(u.team, BURST_AT) > 1)
         for (const v of BURST_AIMS)
@@ -618,6 +645,38 @@ export class Brain {
   /** Off it goes: turned, aimed, and the burst. */
   private leap(s: Spot, aim: readonly [number, number]): void {
     this.plan = { weapon: BURST_AT, fx: s.wx, fz: s.wz, aimH: aim[0], aimV: aim[1], charge: 0, score: 0, target: -1, mark: null };
+    this.state = 'aim';
+    this.timer = 2;
+    this.tuned = true;
+    this.walks++;
+  }
+
+  /** Where a burrow dug this way, charged `ticks`, comes out, in its head: on its feet there (null: no way here, or no footing). */
+  private tunnelEnd(match: Match, u: Unit, wx: number, wz: number, ticks: number): Bug | null {
+    const probe = new Bug(u.bug.species);
+    probe.copy(u.bug);
+    probe.fx = probe.hx = wx;
+    probe.fz = probe.hz = wz;
+    probe.hy = 0;
+    const p = match.burrowPath({ bug: probe }, ticks / CHARGE_TICKS, tunnel);
+    if (p.length < 12) return null;
+    const at = new Bug(u.bug.species);
+    if (!at.drop(match.field, p[9], p[11], p[10] + 6)) return null;
+    step.move = step.turn = step.faceX = step.faceZ = 0;
+    step.jump = step.run = false;
+    for (let n = 0; n < SETTLE; n++) {
+      at.step(match.field, step);
+      if (!at.alive) return null;
+    }
+    if (!at.grounded || at.ny < 0.5 || match.units.some((q) => q !== u && q.bug.alive && near2(q.bug, at) < 9)) return null;
+    at.fx = wx;
+    at.fz = wz;
+    return at;
+  }
+
+  /** Down it goes: turned, and the burrow charged for its length; it thinks again where it comes out. */
+  private dig(u: Unit, s: Spot, ticks: number): void {
+    this.plan = { weapon: BURROW_AT, fx: s.wx, fz: s.wz, aimH: u.aimH, aimV: u.aimV, charge: ticks, score: 0, target: -1, mark: null };
     this.state = 'aim';
     this.timer = 2;
     this.tuned = true;
@@ -955,7 +1014,8 @@ export class Brain {
   private charge(match: Match): void {
     // (held for the plan's ticks, then let go; the first tick of it only starts the charge)
     if (!match.charging) {
-      this.state = 'done';
+      // (a burrow: it thinks again once it is out at the far end)
+      this.state = this.plan && match.arsenal[this.plan.weapon].kind === 'burrow' ? 'dug' : 'done';
       return;
     }
     this.out.fire = this.timer-- > 0;

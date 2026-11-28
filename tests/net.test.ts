@@ -63,7 +63,8 @@ class Client {
     const l = this.lock;
     if (!l) return;
     for (let k = 0; k < n && l.ready; k++) l.step(l.tick < l.knownUpTo || !l.own ? NO_INPUT : (this.brain as Brain).next(l.match));
-    const b = l.batch();
+    // (at the end of the test's ticks, what is left goes too: the game sends it when its turn ends)
+    const b = l.batch(n === 0);
     if (b) this.say(b);
     for (; this.sentChecks < l.digests.length; this.sentChecks++) this.say({ t: 'check', tick: (this.sentChecks + 1) * EVERY, digest: l.digests[this.sentChecks] });
   }
