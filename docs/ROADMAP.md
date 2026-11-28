@@ -53,7 +53,7 @@ Goal now: a PC demo first, as a proof of concept. The phone items below are post
 - [x] Cinematic camera in the menu, for every map (the scripted flight, with pause, skip and restart)
 - [x] Pause in a match (Esc or the HUD's button): continue, restart the match, or leave it for the menu
 - [x] Building and hiding: a wall, a bridge and a shelter of each species' own, limits per kind and in all, the hand in three parts; the other ideas one prototype at a time (IDEAS); boxes that give more
-- [ ] Abilities per species: spider done (Web Shot, the thread, Web Bow), the ant's done (Ant Column and Titan Lift, its own Burrow; Acid Charge and Lightning Mandible for later, in IDEAS; a team takes one special, picked on its setup card; unlocking by playing still to come); the cockroach done (Hard Shell, Blackout Swarm; the other ideas in IDEAS); the bee done (flight, Queen's Flight); each team's species is picked in the menu
+- [ ] Abilities per species: spider done (Web Shot, the thread, Web Bow), the ant's done (Ant Column and Titan Lift, its own Burrow; Acid Charge and Lightning Mandible for later, in IDEAS; a team takes one special, picked on its setup card; the second unlocked by playing, at level 3); the cockroach done (Hard Shell, Blackout Swarm; the other ideas in IDEAS); the bee done (flight, Queen's Flight); each team's species is picked in the menu
 
 ## Settings and admins (proposed)
 
@@ -73,9 +73,9 @@ Everything that affects something else goes through the same five pieces, as dat
 - **Progression**: what stays between matches (experience, levels, skills chosen, items kept); it enters a match at its start, like the seed
 - **Tags** (fire, electric, silk, wax, resin, metal, wet) link them: a rule looks at the tag, not at the weapon's name
 
-Order: 1 the base, the game unchanged (whole matches compared tick by tick; **done**: `src/game/engine/`, golden replays) · 2 items, shelters, webs and shell moved over, one at a time (**done**: `conditions.ts`, `unit.ts`) · 3 every attack in the one format (**done**: `AbilityDef`, `Resources`, `abilities.ts`) · 4 tags and the first five combinations (**done**: `Reactions` in the engine, reaching bugs' effects; the first five on bugs: fire burns a web free, fire burns silk and wax shelters, blasts shatter chitin shelters, a whole shell insulates, silk tires swarms) · 5 the local settings page (**done**: `ui/tuning.ts`, the debug panel's settings) · 6 progression.
+Order: 1 the base, the game unchanged (whole matches compared tick by tick; **done**: `src/game/engine/`, golden replays) · 2 items, shelters, webs and shell moved over, one at a time (**done**: `conditions.ts`, `unit.ts`) · 3 every attack in the one format (**done**: `AbilityDef`, `Resources`, `abilities.ts`) · 4 tags and the first five combinations (**done**: `Reactions` in the engine, reaching bugs' effects; the first five on bugs: fire burns a web free, fire burns silk and wax shelters, blasts shatter chitin shelters, a whole shell insulates, silk tires swarms) · 5 the local settings page (**done**: `ui/tuning.ts`, the debug panel's settings) · 6 progression (**done**: passives as modifiers and triggers, their numbers in the settings, the second special unlocked at level 3, growth set for testing).
 
-To be decided: who evolves (recommended: the species, per player) · whether levels give power (recommended: options, not strength) · whether interactions reach one's own team (recommended: yes).
+Decided: the species evolves, per player · levels give options, not strength · interactions reach one's own team too.
 
 ## Backlog (from playing)
 

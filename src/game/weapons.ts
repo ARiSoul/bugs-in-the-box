@@ -324,6 +324,14 @@ export function specialsOf(species: string): Weapon[] {
   return WEAPONS.filter((w) => w.sceneTicks > 0 && w.species === species);
 }
 
+/** The level at which a species' 1st, 2nd... special attack can be taken into a match (played to be unlocked). */
+export const SPECIAL_AT: readonly number[] = [1, 3];
+
+/** The special attacks a species may take at `level` (all of them, with no levels: `Infinity`). */
+export function specialsAt(species: string, level: number): Weapon[] {
+  return specialsOf(species).filter((_, i) => level >= (SPECIAL_AT[i] ?? SPECIAL_AT[SPECIAL_AT.length - 1]));
+}
+
 /** Whether a bug of this species has the weapon. */
 export function hasWeapon(species: string, w: Weapon): boolean {
   return !w.found && (w.species === undefined || w.species === species);

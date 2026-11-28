@@ -1,4 +1,5 @@
 import { Settings, type SettingsSet } from './engine';
+import { PASSIVES } from './progress';
 import { SPECIES, type BugSpecies } from './species';
 import { WEAPONS, type Weapon } from './weapons';
 
@@ -25,6 +26,14 @@ for (const s of SPECIES) {
   TUNING.define({ id: speciesSetting(s, 'toughness'), group: g, label: 'Toughness', unit: '%', min: 20, max: 300, step: 1, value: s.toughness, help: 'How hard it is to hurt: a blow takes 100 / toughness of what it takes of a bug of 100. Every bug has 100 health.' });
   TUNING.define({ id: speciesSetting(s, 'walk'), group: g, label: 'Walk speed', unit: 'units/s', min: 1, max: 15, step: 0.1, value: s.walkSpeed });
   TUNING.define({ id: speciesSetting(s, 'jump'), group: g, label: 'Jump', unit: 'units/s', min: 2, max: 20, step: 0.1, value: s.jumpSpeed, help: 'How fast it leaves the ground, up.' });
+}
+
+export const passiveSetting = (id: string): string => `passive.${id}`;
+for (const q of PASSIVES) {
+  // (one that is only on or off has no number to tune)
+  if (q.value <= 0) continue;
+  const whole = Number.isInteger(q.value);
+  TUNING.define({ id: passiveSetting(q.id), group: `Passives: ${title(q.species)}`, label: q.name, unit: q.attr ? `× ${q.attr}` : whole ? '' : '×', min: 0, max: whole ? Math.max(4, q.value * 4) : Math.round(q.value * 300) / 100, step: whole ? 1 : 0.01, value: q.value, help: q.text });
 }
 
 /** The rules' ids, and their values as shipped (the match reads them through its set). */

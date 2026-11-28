@@ -1,4 +1,5 @@
 import { BAG_SPACES, QUICK_SLOTS, type Tag } from './actions';
+import type { AttributeId } from './engine';
 import type { ItemKind } from './items';
 
 /**
@@ -97,16 +98,22 @@ export interface Passive {
   readonly name: string;
   readonly text: string;
   readonly tags: readonly Tag[];
-  /** Its one number, where it has one. */
+  /** Its one number, where it has one (0: none; it is on or off). */
   readonly value: number;
+  /** What its bugs' attribute it multiplies by its number, for the whole match (a modifier on it). */
+  readonly attr?: AttributeId;
+  /** When it acts, if it hangs on an event of the match (a trigger), not on a rule of its own. */
+  readonly on?: 'death' | 'boxOpen' | 'teamTurn';
 }
 
 const p = (species: string, branch: Passive['branch'], id: string, name: string, value: number, text: string, ...tags: Tag[]): Passive => ({ id, species, branch, name, value, text, tags });
+/** The same, with what it multiplies, or when it acts. */
+const with_ = (q: Passive, more: Pick<Passive, 'attr' | 'on'>): Passive => ({ ...q, ...more });
 
 export const PASSIVES: readonly Passive[] = [
   p('ant', 'Attack', 'hot-tip', 'Hot Tip', 15, 'The Soldering Iron hurts who stands in its tunnel (15).', 'fire', 'dig'),
   p('ant', 'Attack', 'long-march', 'Long March', 1.25, 'The Ant Column marches a quarter longer.', 'swarm'),
-  p('ant', 'Defence', 'nursery', 'Nursery', 8, 'In its Anthill it heals 8 at every turn of its team.', 'earth', 'heal'),
+  with_(p('ant', 'Defence', 'nursery', 'Nursery', 8, 'In its Anthill it heals 8 at every turn of its team.', 'earth', 'heal'), { on: 'teamTurn' }),
   p('ant', 'Defence', 'many-hands', 'Many Hands', 1, 'Once a match, two builds in one turn.', 'alive'),
   p('ant', 'Body', 'carrier', 'Carrier', 1, 'One more space for items.'),
   p('ant', 'Body', 'scent', 'Scent', 0, 'It sees what is in a box before it opens it.'),
@@ -116,18 +123,18 @@ export const PASSIVES: readonly Passive[] = [
   p('spider', 'Defence', 'trapline', 'Trapline', 0.4, 'Enemies on its Silk Span stick.', 'silk', 'sticky'),
   p('spider', 'Body', 'light-feet', 'Light Feet', 0, 'Falls never hurt it.'),
   p('spider', 'Body', 'patience', 'Patience', 1.2, 'Its skill loads a fifth faster.'),
-  p('cockroach', 'Attack', 'leftovers', 'Leftovers', 15, 'Who it finishes off heals it (15).', 'heal'),
+  with_(p('cockroach', 'Attack', 'leftovers', 'Leftovers', 15, 'Who it finishes off heals it (15).', 'heal'), { on: 'death' }),
   p('cockroach', 'Attack', 'wider-swarm', 'Wider Swarm', 1.5, 'The Blackout Swarm covers a little more.', 'swarm'),
   p('cockroach', 'Defence', 'grounded', 'Grounded', 0, 'In its Husk arcs do nothing to it.', 'chitin', 'electric'),
   p('cockroach', 'Defence', 'thick-skin', 'Thick Skin', 20, 'Its Husk keeps off 20 more before it breaks.', 'chitin'),
-  p('cockroach', 'Body', 'scurry', 'Scurry', 1.16, 'It runs a sixth faster.'),
+  with_(p('cockroach', 'Body', 'scurry', 'Scurry', 1.16, 'It runs a sixth faster.'), { attr: 'speed' }),
   p('cockroach', 'Body', 'survivor', 'Survivor', 20, 'Its Hard Shell grows back once, below 20.', 'chitin'),
   p('bee', 'Attack', 'long-flight', 'Long Flight', 1.15, "The Queen's Flight lasts longer.", 'swarm'),
   p('bee', 'Attack', 'sting', 'Sting', 10, 'Flying into an enemy hurts it (10), once a turn.', 'alive'),
   p('bee', 'Defence', 'honey-trap', 'Honey Trap', 0.5, 'Enemies that touch its comb are slowed.', 'honey', 'sticky'),
-  p('bee', 'Defence', 'warm-nest', 'Warm Nest', 5, 'Its Nest heals friends beside it (5) at every turn of the team.', 'wax', 'heal'),
-  p('bee', 'Body', 'big-lungs', 'Big Lungs', 1.33, 'A third more breath to fly.'),
-  p('bee', 'Body', 'nectar', 'Nectar', 8, 'Every box it opens heals it (8).', 'honey', 'heal'),
+  with_(p('bee', 'Defence', 'warm-nest', 'Warm Nest', 5, 'Its Nest heals friends beside it (5) at every turn of the team.', 'wax', 'heal'), { on: 'teamTurn' }),
+  with_(p('bee', 'Body', 'big-lungs', 'Big Lungs', 1.33, 'A third more breath to fly.'), { attr: 'breath' }),
+  with_(p('bee', 'Body', 'nectar', 'Nectar', 8, 'Every box it opens heals it (8).', 'honey', 'heal'), { on: 'boxOpen' }),
 ];
 export const passive = (id: string): Passive | undefined => PASSIVES.find((q) => q.id === id);
 export const passivesOf = (species: string): Passive[] => PASSIVES.filter((q) => q.species === species);

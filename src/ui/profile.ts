@@ -1,6 +1,6 @@
 import { KEPT } from '../game/actions';
 import type { ItemKind } from '../game/items';
-import { CARRY, levelOf, passivesOf, type Growth, type Level } from '../game/progress';
+import { CARRY, LEVELS, levelOf, passivesOf, xpFor, type Growth, type Level } from '../game/progress';
 import type { DataCache } from '../data';
 
 /** A player's growth with one species. */
@@ -75,6 +75,22 @@ export class Profile {
     // (and put right again: what the new level allows)
     this.save(species, this.of(species));
     return { before, after: this.level(species) };
+  }
+
+  /** For testing (the settings page, in development): put the species at the start of `level`, keeping what it allows. */
+  setLevel(species: string, level: number): void {
+    const l = Math.max(1, Math.min(LEVELS, Math.floor(level)));
+    let xp = 0;
+    for (let k = 1; k < l; k++) xp += xpFor(k);
+    const g = this.of(species);
+    g.xp = xp;
+    this.save(species, g);
+    this.save(species, this.of(species));
+  }
+
+  /** For testing: the species as never played (no experience, no passives, nothing kept). */
+  reset(species: string): void {
+    this.data.remove('growth', species);
   }
 
   private save(species: string, g: Grown): void {

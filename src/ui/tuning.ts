@@ -37,6 +37,8 @@ export class TuningPage {
     private readonly onChange: (s: SettingsSet) => void,
     /** The set the match being played took (its hash is shown beside the one being made). */
     private readonly playing: () => SettingsSet | null,
+    /** More for testing, drawn above the settings (the player's growth, say). */
+    private readonly extra: ((into: HTMLElement) => void) | null = null,
   ) {
     this.root.id = 'tuning';
     this.root.hidden = true;
@@ -115,6 +117,11 @@ export class TuningPage {
     this.toggle(false);
   }
 
+  /** Draw it again, if it is open (what the extra part shows changed). */
+  refresh(): void {
+    if (this.open) this.draw();
+  }
+
   private put(s: SettingsSet): void {
     this.set = s;
     this.onChange(s);
@@ -140,6 +147,12 @@ export class TuningPage {
       '</p>';
     const q = this.search.value.trim().toLowerCase();
     this.list.replaceChildren();
+    if (this.extra && !q && !this.only) {
+      const box = document.createElement('section');
+      box.className = 'tuning-extra';
+      this.extra(box);
+      this.list.append(box);
+    }
     let group = '';
     let box: HTMLElement | null = null;
     for (const d of this.of.all()) {
@@ -154,7 +167,7 @@ export class TuningPage {
       }
       box.append(this.row(d.id, changed));
     }
-    if (!this.list.childElementCount) this.list.innerHTML = '<p class="tuning-none">Nothing matches.</p>';
+    if (!this.list.querySelector('.tuning-row')) this.list.innerHTML = '<p class="tuning-none">Nothing matches.</p>';
   }
 
   private row(id: string, changed: boolean): HTMLElement {

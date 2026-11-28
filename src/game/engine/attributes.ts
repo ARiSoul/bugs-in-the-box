@@ -6,9 +6,9 @@
  * bit for bit (x + 0 and x * 1 are exact).
  */
 
-/** What a bug has: its health (its most), its speed on foot, its jump (up, and forward), what it hits for, what it takes
- * (a multiplier on harm: 1 as it is), its luck. */
-export const ATTRIBUTES = ['health', 'speed', 'jump', 'jumpForward', 'damage', 'defence', 'luck'] as const;
+/** What a bug has: its health (its most), its speed on foot, its jump (up, and forward), what it hits for, how hard it is
+ * to hurt (a blow is divided by it: 1 as it is), its luck, and the seconds of breath it has to fly in a turn. */
+export const ATTRIBUTES = ['health', 'speed', 'jump', 'jumpForward', 'damage', 'defence', 'luck', 'breath'] as const;
 export type AttributeId = (typeof ATTRIBUTES)[number];
 
 /** One change to one attribute; `id` names where it comes from (an effect, an item), and is unique on a bug. */

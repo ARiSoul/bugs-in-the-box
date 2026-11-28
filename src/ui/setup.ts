@@ -1,7 +1,7 @@
 import type { BugSpecies } from '../game/species';
 import { SPECIES } from '../game/species';
 import { brings, type Gain, type Level } from '../game/progress';
-import { specialsOf } from '../game/weapons';
+import { SPECIAL_AT, specialsAt, specialsOf } from '../game/weapons';
 import { SCENARIOS } from '../terrain/scenarios';
 import { letters } from './lettering';
 import { BUGS } from './emblems';
@@ -274,10 +274,15 @@ export class SetupScreen {
     const c = this.choice;
     const s = c.species[i];
     const card = this.cards[i];
-    if (card.dataset.species !== s.id || card.dataset.special !== c.specials[i]) {
+    // (the specials it has played to: all of them in a match with no levels)
+    const reach = this.reach(i);
+    if (card.dataset.species !== s.id || card.dataset.special !== c.specials[i] || card.dataset.reach !== String(reach)) {
       card.dataset.species = s.id;
       card.dataset.special = c.specials[i];
-      const own = specialsOf(s.id);
+      card.dataset.reach = String(reach);
+      const own = specialsAt(s.id, reach);
+      const all = specialsOf(s.id);
+      const locked = all.filter((w) => !own.includes(w)).map((w) => `<small class="locked" title="played to at level ${SPECIAL_AT[all.indexOf(w)]}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 11V8a5 5 0 0 1 10 0v3M5 11h14v10H5z"/></svg>${w.name} · level ${SPECIAL_AT[all.indexOf(w)]}</small>`).join('');
       const special = own.find((w) => w.id === c.specials[i]) ?? own[0];
       const [line, gift, what] = ABOUT[s.id] ?? ['', '', ''];
       const bars: [string, number, number][] = [['Toughness', s.toughness / 125, s.toughness], ['Speed', s.walkSpeed / 7, s.walkSpeed], ['Jump', s.jumpSpeed / 10.5, s.jumpSpeed]];
@@ -286,7 +291,7 @@ export class SetupScreen {
         `<div class="name">${letters(SHORT[s.id], { fill: i ? '#8ccaff' : '#ff8676', drop: 7, outline: 11 })}</div><p>${line}</p>` +
         `<div class="stats">${bars.map(([n, v, k]) => `<div><em>${n}</em><i><u style="--v:${Math.min(1, v).toFixed(2)}"></u></i><strong>${k}</strong></div>`).join('')}</div>` +
         `<div class="trait"><em>Trait</em><span>${gift}</span></div>` +
-        (special ? `<div class="special${own.length > 1 ? ' pick' : ''}"${own.length > 1 ? ` role="button" tabindex="0" title="Another special" aria-label="Special: ${special.name}. Pick another."` : ''}><span class="emblem" style="color:#${(special?.color ?? 0xffffff).toString(16).padStart(6, '0')}">${special ? art(special.id) : ''}</span><div><em>Special${own.length > 1 ? ` · ${own.indexOf(special) + 1}/${own.length}` : ''}</em><b>${special?.name ?? ''}</b><span>${special && special !== own[0] ? (SPECIAL_ABOUT[special.id] ?? '') : what}</span></div></div>` : `<div class="special"><div><em>Special</em><span>${what}</span></div></div>`) +
+        (special ? `<div class="special${own.length > 1 ? ' pick' : ''}"${own.length > 1 ? ` role="button" tabindex="0" title="Another special" aria-label="Special: ${special.name}. Pick another."` : ''}><span class="emblem" style="color:#${(special?.color ?? 0xffffff).toString(16).padStart(6, '0')}">${special ? art(special.id) : ''}</span><div><em>Special${own.length > 1 ? ` · ${own.indexOf(special) + 1}/${own.length}` : ''}</em><b>${special?.name ?? ''}</b><span>${special && special !== own[0] ? (SPECIAL_ABOUT[special.id] ?? '') : what}</span>${locked}</div></div>` : `<div class="special"><div><em>Special</em><span>${what}</span></div></div>`) +
         `<button class="lv"></button>` +
         `<div class="who" role="group" aria-label="${SIDES[i]}: who plays"></div>`;
       for (const b of card.querySelectorAll<HTMLButtonElement>('.chips button')) b.addEventListener('click', () => this.pickSpecies(i, Number(b.dataset.k)));
@@ -327,9 +332,14 @@ export class SetupScreen {
     );
   }
 
-  /** The next of its species' special attacks, for side `i`. */
+  /** The level side `i` has played its species to (no levels: every special is open). */
+  private reach(i: number): number {
+    return this.choice.equal ? Infinity : this.hooks.level(i);
+  }
+
+  /** The next of its species' special attacks it has played to, for side `i`. */
   private pickSpecial(i: number): void {
-    const own = specialsOf(this.choice.species[i].id);
+    const own = specialsAt(this.choice.species[i].id, this.reach(i));
     const k = own.findIndex((w) => w.id === this.choice.specials[i]);
     this.choice.specials[i] = own[(Math.max(0, k) + 1) % own.length].id;
     this.hooks.onPick(true);

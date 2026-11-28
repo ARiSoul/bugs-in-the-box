@@ -173,7 +173,7 @@ export class Bug {
   constructor(readonly species: BugSpecies) {
     this.stats = new Attributes(speciesBase(species));
     this.health = this.stats.get('health');
-    this.breath = Math.round((species.flight ?? 0) * TICK_RATE);
+    this.breath = Math.round(this.stats.get('breath') * TICK_RATE);
   }
 
   /**

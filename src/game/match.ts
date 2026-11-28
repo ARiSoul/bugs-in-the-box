@@ -2,7 +2,7 @@ import { createRng } from '../terrain/noise';
 import { Bug, DT, IDLE, TICK_RATE, type BugInput } from './bug';
 import { abilityAt, AGAIN_POOL, CHARGE_POOL, costFor, SKILL_FULL, usesPool, WORKS_POOL } from './abilities';
 import { Effects, pay, Resources, Triggers, type AbilityDef, type MatchTriggers, type SettingsSet } from './engine';
-import { RULE, speciesSetting, TUNING, tunedWeapons } from './tuning';
+import { passiveSetting, RULE, speciesSetting, TUNING, tunedWeapons } from './tuning';
 import { Unit } from './unit';
 import { surfaceDistance, type TerrainField } from './field';
 import { rot, rotate2 } from './math';
@@ -13,9 +13,9 @@ import { before, bridgePieces, laid, PIECE, SPAN, SPANS, toPiece, WALL_DEEP, wal
 import { Flock, layRings, type FlockInput, type Ring } from './flock';
 import { KEPT, type Tag } from './actions';
 import { BURN_HURTS, HONEY_TURNS, HONEY_WIDE, reaction, SMOTHERED, tagsOf } from './reactions';
-import { levelAt, passive, type Growth, type Tally } from './progress';
+import { LEVELS, levelAt, passive, type Growth, type Tally } from './progress';
 import { BOX, ITEM_KINDS, Items, type Item, type ItemKind } from './items';
-import { CATCHES, DUD, hasWeapon, SILK_CURTAIN, specialsOf, WORKS, RING_DAMAGE, WEAPONS, weaponIndex, type Weapon } from './weapons';
+import { CATCHES, DUD, hasWeapon, SILK_CURTAIN, specialsAt, WORKS, RING_DAMAGE, WEAPONS, weaponIndex, type Weapon } from './weapons';
 
 /**
  * One match: teams of bugs taking turns on a destructible map. Pure and deterministic like Bug:
@@ -665,6 +665,7 @@ export class Match {
     this.bag = teams.map((t) => ({ ...t.growth?.items }));
     this.tally = teams.map(() => ({ damage: 0, kills: 0, blocked: 0, boxes: 0 }));
     this.skill = poolView(teams.length, () => CHARGE_POOL, (i) => this.pools[i]);
+    this.takePassives();
     if (options.placeBugs !== false) this.placeBugs();
     this.beginTurn(0);
   }
@@ -966,7 +967,8 @@ export class Match {
   /** The special attack a team took into the match (its weapon index; -1: its species has none). */
   special(team: number): number {
     const t = this.teams[team];
-    const own = specialsOf(t.species.id);
+    // (those it has played to: all of them, in a match with no levels)
+    const own = specialsAt(t.species.id, t.growth ? t.growth.level : LEVELS);
     const w = own.find((q) => q.id === t.special) ?? own[0];
     return w ? weaponIndex(w) : -1;
   }
@@ -999,7 +1001,35 @@ export class Match {
   /** A team's passive: its number (1 where it has none), or 0: it is not in use. */
   passive(team: number, id: string): number {
     if (!this.teams[team].growth?.passives.includes(id)) return 0;
-    return passive(id)?.value || 1;
+    // (its number as the tuning has it; one with no number is on: 1)
+    const s = passiveSetting(id);
+    return TUNING.has(s) ? this.tuning.get(s) : passive(id) ? 1 : 0;
+  }
+
+  /**
+   * The teams' passives come into the match through the engine: those that multiply an attribute are modifiers on their
+   * bugs' attributes; those that act when something happens hang on the match's triggers. The rest are asked for by
+   * the rules they change (`passive`).
+   */
+  private takePassives(): void {
+    const on = new Set<string>();
+    for (const u of this.units)
+      for (const id of this.teams[u.team].growth?.passives ?? []) {
+        const q = passive(id);
+        if (q?.attr) u.bug.stats.add({ id: `passive:${id}`, attr: q.attr, mul: this.passive(u.team, id) });
+        if (q?.on) on.add(q.on);
+      }
+    for (const u of this.units) u.bug.breath = Math.round(u.bug.stats.get('breath') * TICK_RATE);
+    // (who finishes off an enemy, with Leftovers, is healed)
+    if (on.has('death'))
+      this.triggers.on('death', ({ unit }) => {
+        const by = this.units[this.active];
+        if (by.team !== this.units[unit].team) this.heal(by, this.passive(by.team, 'leftovers'));
+      });
+    // (who opens a box, with Nectar, is healed)
+    if (on.has('boxOpen')) this.triggers.on('boxOpen', ({ unit }) => this.heal(this.units[unit], this.passive(this.units[unit].team, 'nectar')));
+    // (a team's turn: its shelters tend to who is in them, or beside them)
+    if (on.has('teamTurn')) this.triggers.on('teamTurn', ({ team }) => this.tend(team));
   }
 
   /** Spaces for items. */
@@ -1059,8 +1089,7 @@ export class Match {
       const w = u.bug.alive ? this.webAt(u) : null;
       if (w && u.web !== w.id) this.events.push({ type: 'stuck', unit: u.id });
       u.web = w ? w.id : -1;
-      const free = this.passive(u.team, 'scurry') && u === active ? this.passive(u.team, 'scurry') : 1;
-      u.bug.slow = w ? WEB_SLOW : free * this.stuckTo(u);
+      u.bug.slow = w ? WEB_SLOW : this.stuckTo(u);
       if (!w || u !== active || (move.move === 0 && !move.jump)) continue;
       if (--w.strength > 0) continue;
       this.removeWeb(w, true);
@@ -1800,8 +1829,8 @@ export class Match {
         const wind = WIND_MAX * (this.options.wind ?? 1);
         this.windX = (this.rng() * 2 - 1) * wind;
         this.windZ = (this.rng() * 2 - 1) * wind;
-        for (const q of this.units) q.bug.breath = Math.round((q.bug.species.flight ?? 0) * TICK_RATE * (this.passive(q.team, 'big-lungs') || 1));
-        this.tend(t);
+        for (const q of this.units) q.bug.breath = Math.round(q.bug.stats.get('breath') * TICK_RATE);
+        this.triggers.emit('teamTurn', { team: t });
         if (!u.shell && u.bug.species.shell && u.bug.health < this.passive(t, 'survivor') && !this.regrown.has(u.id)) {
           this.regrown.add(u.id);
           u.shell = true;
@@ -2536,7 +2565,6 @@ export class Match {
   private open(u: Unit, it: Item): void {
     this.items.remove(it);
     this.tally[u.team].boxes++;
-    this.heal(u, this.passive(u.team, 'nectar'));
     const kept = this.keeps(u, it.kind);
     // (the event first: what it does may end the turn, or the bug)
     const e = { type: 'open' as const, unit: u.id, kind: it.kind, x: it.x, y: it.y, z: it.z, id: it.id, gain: 0, kept };
@@ -2753,7 +2781,6 @@ export class Match {
     const by = this.units[this.active];
     if (by.team === u.team) return;
     this.tally[by.team].kills++;
-    this.heal(by, this.passive(by.team, 'leftovers'));
   }
 
   // ---------------------------------------------------------------- setup

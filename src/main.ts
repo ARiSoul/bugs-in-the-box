@@ -23,7 +23,7 @@ import { BroodScene } from './render/gpu/broodScene';
 import { FlockScene } from './render/gpu/flockScene';
 import { ColumnScene } from './render/gpu/columnScene';
 import { itemIndex } from './game/actions';
-import { computerGrowth, LEVELS, NO_GROWTH, VERSUS, worth, type Growth } from './game/progress';
+import { computerGrowth, LEVELS, VERSUS, worth, type Growth } from './game/progress';
 import { Profile } from './ui/profile';
 import { SpeciesPage } from './ui/species';
 import { Minimap } from './ui/minimap';
@@ -81,8 +81,9 @@ function levelFor(side: number, species: readonly BugSpecies[], who: readonly st
   if (who[side] === 'human') return profile.level(species[side].id).level;
   return who[1 - side] === 'human' ? profile.level(species[1 - side].id).level : 1;
 }
-function growthFor(side: number): Growth {
-  if (equal) return NO_GROWTH;
+/** What a side brings to the match (none with no levels: then every special is open, and no passive). */
+function growthFor(side: number): Growth | undefined {
+  if (equal) return undefined;
   return players[side] === 'human' ? profile.growth(picked[side].id) : computerGrowth(picked[side].id, levelFor(side, picked, players));
 }
 const teams = (): TeamSpec[] => [
@@ -954,7 +955,41 @@ const tuningPage = new TuningPage(
     data.settings.set('tuning', keptOf(s));
   },
   () => match.tuning,
+  // (for testing: each species' level with this player, or the species as never played)
+  (into) => {
+    into.innerHTML = '<h3>Your growth (testing)</h3>';
+    for (const s of SPECIES) {
+      const row = document.createElement('div');
+      row.className = 'tuning-row';
+      const name = document.createElement('span');
+      name.textContent = PLURAL[s.id];
+      const pick = document.createElement('select');
+      const now = profile.level(s.id).level;
+      for (let l = 1; l <= LEVELS; l++) pick.add(new Option(`Level ${l}`, String(l), false, l === now));
+      pick.addEventListener('change', () => {
+        profile.setLevel(s.id, Number(pick.value));
+        grown();
+      });
+      const xp = document.createElement('small');
+      xp.textContent = `${profile.of(s.id).xp} xp`;
+      const back = document.createElement('button');
+      back.className = 'tuning-back';
+      back.textContent = '↺';
+      back.title = 'as never played';
+      back.addEventListener('click', () => {
+        profile.reset(s.id);
+        grown();
+      });
+      row.append(name, pick, xp, document.createElement('span'), back);
+      into.append(row);
+    }
+  },
 );
+/** The player's growth changed (from the settings page): what shows it, anew. */
+function grown(): void {
+  tuningPage.refresh();
+  if (menus.setup) setup.refresh();
+}
 (document.getElementById('tuningOpen') as HTMLButtonElement).addEventListener('click', (e) => {
   tuningPage.toggle();
   (e.currentTarget as HTMLButtonElement).blur();

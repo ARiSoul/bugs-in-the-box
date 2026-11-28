@@ -7,12 +7,14 @@ import type { AttributeBase } from './attributes';
 
 /** A bug's attributes as its species gives them (what effects, items and levels change). */
 export function speciesBase(s: BugSpecies): AttributeBase {
-  return { health: HEALTH, speed: s.walkSpeed, jump: s.jumpSpeed, jumpForward: s.jumpForward, damage: 1, defence: s.toughness / 100, luck: 0 };
+  return { health: HEALTH, speed: s.walkSpeed, jump: s.jumpSpeed, jumpForward: s.jumpForward, damage: 1, defence: s.toughness / 100, luck: 0, breath: s.flight ?? 0 };
 }
 
 /** The events of a match that rules hang on (`Triggers<MatchTriggers>`), with what each carries. Unit numbers are
  * indexes into `Match.units`. */
 export interface MatchTriggers {
+  /** A team's turn comes, before anything of it is done (the shelters it hid in still stand). */
+  teamTurn: { readonly team: number };
   /** A turn begins: whose. */
   turnStart: { readonly turn: number; readonly team: number; readonly unit: number };
   /** A bug was hurt: by how much (after everything that lessened it), and by whose team (-1: the ground, a fall). */
