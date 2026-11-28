@@ -59,6 +59,21 @@ export interface PauseInfo {
   teams: readonly { name: string; color: string; health: number; alive: number }[];
 }
 
+/**
+ * Online, the pause box holds the shared match only on this side's own turn, and only from a reserve a match gives
+ * (`RULE.pauseMatch`); on the other's turn, or with the reserve spent, the match goes on under the box.
+ */
+export class PauseReserve {
+  constructor(public left: number) {}
+
+  /** The box is open for `dt` seconds more: whether it holds the match now (and what it spent of the reserve). */
+  hold(own: boolean, dt: number): boolean {
+    if (!own || this.left <= 0) return false;
+    this.left = Math.max(0, this.left - dt);
+    return this.left > 0;
+  }
+}
+
 const LABEL: Record<PauseChoice, [string, string]> = {
   continue: ['Continue', 'Continue'],
   restart: ['Restart', 'Restart? Click again'],
@@ -79,6 +94,7 @@ export class PauseMenu {
   readonly button = document.createElement('button');
   private readonly root = document.createElement('div');
   private readonly about = document.createElement('div');
+  private readonly line = document.createElement('p');
   private readonly choices = new Map<PauseChoice, HTMLButtonElement>();
   private timer = 0;
 
@@ -121,7 +137,9 @@ export class PauseMenu {
       row.append(b);
       this.choices.set(c, b);
     }
-    box.append(title, this.about, go, row);
+    this.line.className = 'pause-line';
+    this.line.hidden = true;
+    box.append(title, this.about, this.line, go, row);
     this.root.append(box);
     // (a click beside the box goes on with the match)
     this.root.addEventListener('pointerdown', (e) => {
@@ -132,6 +150,12 @@ export class PauseMenu {
 
   get open(): boolean {
     return this.state.open;
+  }
+
+  /** A line in the box (online: whether the match waits, and for how long); '': none. */
+  note(text: string): void {
+    if (this.line.textContent !== text) this.line.textContent = text;
+    this.line.hidden = text === '';
   }
 
   /** Offer Restart, or not (a match online is not played again from its start). */

@@ -90,7 +90,8 @@ Decided: the species evolves, per player · levels give options, not strength ·
 ## Phase 5 · Multiplayer
 - [x] Deterministic simulation validated across clients (same seed + same events = same map): a match as a record (`src/sim/`: setup, inputs where they change, checkpoints), every match recorded and kept, `npm run crosscheck` (Node and Chrome, bit for bit); Firefox and Safari still to check
 - [x] Turn-based room server; map sharing by seed/link (`server/`, Node + ws: rooms by a code and a link, lockstep inputs, turn order and checkpoints checked by the server's own simulation, seats that come back; **Online** on the setup screen)
-- [ ] Reading time and pauses over the network; accounts, so a player's growth is the server's to check
+- [x] Reading time and pauses over the network: the other is told why the match stands still and for how long; online, the pause holds the match only on one's own turn, from a reserve; the limits are settings (kept by each client for now)
+- [ ] Accounts, so a player's growth is the server's to check; the server keeping the time limits (playing for one who holds too long)
 - [ ] Host the room server (the owner's VPS, behind its proxy with TLS): one of the last steps, once the game's systems, engine and mechanics are done
 - [ ] Asynchronous mode (play when you can)
 

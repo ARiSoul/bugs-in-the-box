@@ -43,6 +43,9 @@ export const RULE = {
   fallDamage: TUNING.define({ id: 'rules.fall.damage', group: 'Rules', label: 'Fall damage', unit: 'health per unit/s', min: 0, max: 10, step: 0.1, value: 2.5, help: 'What each unit/s over the safe speed takes.' }),
   knockback: TUNING.define({ id: 'rules.knockback', group: 'Rules', label: 'Knockback', unit: 'units/s', min: 0, max: 40, step: 0.5, value: 14, help: 'How hard a full blast throws a bug.' }),
   patch: TUNING.define({ id: 'rules.patch', group: 'Rules', label: 'Patch heals', unit: '× full health', min: 0, max: 1, step: 0.05, value: 0.35, help: 'What a patch from a box heals.' }),
+  readTurn: TUNING.define({ id: 'rules.readTurn', group: 'Rules', label: 'Reading: a turn', unit: 's', min: 0, max: 120, step: 1, value: 20, help: 'On its own turn, the clock stands still this long while a player reads the inventory or the map.' }),
+  readMatch: TUNING.define({ id: 'rules.readMatch', group: 'Rules', label: 'Reading: a match', unit: 's', min: 0, max: 600, step: 5, value: 90, help: 'And this long in all, for each side, in a match.' }),
+  pauseMatch: TUNING.define({ id: 'rules.pauseMatch', group: 'Rules', label: 'Pause online: a match', unit: 's', min: 0, max: 600, step: 5, value: 60, help: 'Online, a player who pauses on its own turn holds the match this long in all; then its turn goes on under the pause.' }),
   retreat: TUNING.define({ id: 'rules.retreat', group: 'Rules', label: 'Time to get away', unit: 's', min: 0, max: 10, step: 0.5, value: 3, help: 'After the shot, the shooter may still walk this long.' }),
   wind: TUNING.define({ id: 'rules.wind', group: 'Rules', label: 'Strongest wind', unit: 'units/s²', min: 0, max: 15, step: 0.5, value: 5, help: 'How hard the wind may push a shot (times the wind of the setup).' }),
 

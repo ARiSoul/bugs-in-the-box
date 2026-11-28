@@ -54,14 +54,14 @@ import { HAND, Hud, type HudState } from './ui/hud';
 import { EndScreen, SetupScreen, type SetupChoice } from './ui/setup';
 import { setupKeysMenu } from './ui/keys';
 import { SoundMenu } from './ui/sound';
-import { PauseMenu } from './ui/pause';
+import { PauseMenu, PauseReserve } from './ui/pause';
 import { EVERY, groundDigest, Recorder, type InputChange, type MatchRecord, type MatchSetup } from './sim';
 import { NetClient, serverUrl, tokenKey } from './net/client';
 import { Lockstep } from './net/lockstep';
-import { isCode, type Inputs } from './net/protocol';
+import { isCode, type HoldWhy, type Inputs } from './net/protocol';
 import { OnlineBox, OnlineStatus, waitingBox } from './ui/online';
 import { keptOf, readKept, TuningPage } from './ui/tuning';
-import { TUNING } from './game/tuning';
+import { RULE, TUNING } from './game/tuning';
 
 /** The two teams, each of one species (chosen in the menu, kept in the address as `?teams=ant,spider`). */
 const PLURAL: Record<string, string> = { ant: 'Ants', spider: 'Spiders', cockroach: 'Cockroaches', bee: 'Bees' };
@@ -144,6 +144,8 @@ interface Online {
   sentChecks: number;
   /** The other's batches that came before this side's match was made (they wait for it). */
   early: Inputs[];
+  /** The other holds the match on its turn: why, and until when (ms, this clock); null: it does not. */
+  held: { why: HoldWhy; until: number } | null;
 }
 /** Back to the menu from a room (the room is left). */
 function leaveRoom(): void {
@@ -177,7 +179,7 @@ async function enterRoom(code: string): Promise<Online> {
     const s = await started;
     wait.root.remove();
     say('warming up the box');
-    const o: Online = { code, seat, client, setup: s.setup, lock: null, start: { inputs: s.inputs, known: s.known }, here: seen.here, names: seen.names, desync: -1, sentChecks: 0, early: [] };
+    const o: Online = { code, seat, client, setup: s.setup, lock: null, start: { inputs: s.inputs, known: s.known }, here: seen.here, names: seen.names, desync: -1, sentChecks: 0, early: [], held: null };
     client.on((m) => {
       if (m.t === 'presence') [o.here, o.names] = [m.here, m.names];
     });
@@ -276,10 +278,10 @@ const AHEAD = 14;
 const aimAt = new Float64Array(3);
 const lookAhead = new THREE.Vector3();
 const placing = new Placing();
-/** Time for reading: the clock stands still while the inventory is open on a player's turn; so much a turn, so much a match. */
-const READ_TURN = 20;
-const READ_MATCH = 90;
-const reading = { turn: READ_TURN, match: [READ_MATCH, READ_MATCH], key: '', on: false };
+/** Time for reading: the clock stands still while the inventory is open on a player's turn; so much a turn, so much a match (the settings). */
+const reading = { turn: 20, match: [90, 90], key: '', on: false };
+/** Online, what this side may still hold the match for on its own turn with the pause box (the settings). */
+const pauseReserve = new PauseReserve(60);
 const places = (): boolean => !reading.on && !notMine() && !debugCamera && !menus.setup && !menus.over && match.phase === 'aim' && !match.going && match.activeUnit.bug.alive && Placing.takes(match.currentWeapon);
 /** The player marks a spot for a brood. */
 const marking = (): boolean => !notMine() && match.stance && match.phase === 'aim' && match.currentWeapon.kind === 'brood' && brood.camera.active;
@@ -440,8 +442,9 @@ function newTeams(s: number, turns = 0): void {
   });
   bestHit = 0;
   minimap.touch();
-  reading.match = [READ_MATCH, READ_MATCH];
+  reading.match = [0, 1].map(() => match.tuning.get(RULE.readMatch));
   reading.key = '';
+  pauseReserve.left = match.tuning.get(RULE.pauseMatch);
   webViews.clear();
   itemViews.clear();
   buildViews.clear(match.teams.map((t) => t.species.id));
@@ -1580,7 +1583,8 @@ if (online) {
       // (a batch that does not follow on: this side lost its place; it starts again from the room's inputs)
       if (!o.lock) o.early.push(m);
       else if (!o.lock.take(m)) location.reload();
-    } else if (m.t === 'desync') o.desync = m.tick;
+    } else if (m.t === 'held') o.held = m.why ? { why: m.why, until: performance.now() + m.left * 1000 } : null;
+    else if (m.t === 'desync') o.desync = m.tick;
     else if (m.t === 'refused') console.warn(`the room refused: ${m.why}`);
   });
   online.client.onLost = () => {
@@ -1604,7 +1608,9 @@ function playOnline(): void {
   for (; o.sentChecks < l.digests.length; o.sentChecks++) o.client.send({ t: 'check', tick: (o.sentChecks + 1) * EVERY, digest: l.digests[o.sentChecks] });
   const other = 1 - o.seat;
   const them = o.names[other] || 'the other player';
-  const turn = l.own ? 'your turn' : !o.here[other] ? `${them} is away` : !l.ready ? `waiting for ${them}…` : `${them}'s turn`;
+  const hold = o.held && !l.own ? `${them} ${o.held.why === 'reading' ? 'is reading' : 'paused'} · ${Math.max(0, Math.ceil((o.held.until - performance.now()) / 1000))} s left` : '';
+  const mine = l.own && pauseMenu.open ? (pauseReserve.left > 0 ? ` · paused: ${Math.ceil(pauseReserve.left)} s left` : ' · no pause left: your turn goes on') : '';
+  const turn = l.own ? `your turn${mine}` : !o.here[other] ? `${them} is away` : hold || (!l.ready ? `waiting for ${them}…` : `${them}'s turn`);
   const off = o.desync >= 0 ? ` · out of step since tick ${o.desync}` : tuning.hash !== o.setup.tuning.hash ? ' · another version of the game' : '';
   onlineStatus.show(`Room ${o.code} · ${o.names[0] || 'Red'} vs ${o.names[1] || 'Blue'} · ${turn}${off}`, off !== '' || !o.here[other]);
 }
@@ -1617,11 +1623,36 @@ let advancing = false;
 let wasSpecial = false;
 function loop(now: number): void {
   requestAnimationFrame(loop);
-  if (paused || pauseMenu.open) {
+  // (online, the pause box holds the match only on this side's own turn, and only from its reserve)
+  if (paused || (pauseMenu.open && (!online || pauseHolds(now)))) {
     if (!advancing) lastFrame = now;
     return;
   }
   frame(now);
+}
+/** Online, with the pause box open: whether it holds the match now (this side's turn, reserve left); it spends it. */
+function pauseHolds(now: number): boolean {
+  const l = online?.lock;
+  const dt = Math.min(0.25, Math.max(0, (now - lastFrame) / 1000));
+  const holds = !!l && pauseReserve.hold(l.own, dt);
+  if (holds) tellHold('paused', pauseReserve.left);
+  pauseMenu.note(
+    !l ? '' : !l.own ? 'The match goes on: it is not your turn.' : holds ? `The match waits for you: ${Math.ceil(pauseReserve.left)} s of pause left.` : 'No pause left: your turn goes on.',
+  );
+  return holds;
+}
+/** What this side last told the other of its hold (online). */
+const told = { why: null as HoldWhy | null, left: -1, at: 0 };
+/** Tell the other why the match stands still on this side's turn (when that changes, and every second of it). */
+function tellHold(why: HoldWhy | null, left: number): void {
+  const o = online;
+  if (!o) return;
+  const now = performance.now();
+  if (why === told.why && (why === null || now - told.at < 1000)) return;
+  told.why = why;
+  told.left = left;
+  told.at = now;
+  o.client.send({ t: 'hold', why, left: Math.round(left * 10) / 10 });
 }
 
 /** The player hears from where the view is. */
@@ -1701,7 +1732,7 @@ function frame(now: number): void {
   const readKey = `${match.turnNumber}|${match.active}`;
   if (reading.key !== readKey) {
     reading.key = readKey;
-    reading.turn = READ_TURN;
+    reading.turn = match.tuning.get(RULE.readTurn);
   }
   const team = match.activeUnit.team;
   if (minimap.big && (brain() || match.phase === 'over' || inMenu || menus.over)) minimap.toggle(false);
@@ -1711,6 +1742,8 @@ function frame(now: number): void {
     reading.match[team] -= dt;
   }
   controls.frozen = inventory.locked = reading.on;
+  // (online: the other is told this side reads, or no longer holds the match)
+  if (online?.lock?.own) tellHold(reading.on ? 'reading' : null, Math.min(reading.turn, reading.match[team]));
   hud.reading(reading.on ? Math.min(reading.turn, reading.match[team]) : -1, (inventory.isOpen || minimap.big) && match.phase === 'aim' && !notMine() && !reading.on);
   if (!inMenu && !reading.on) accumulator += scaled;
   while (accumulator >= DT) {

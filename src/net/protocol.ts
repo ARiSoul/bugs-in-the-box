@@ -22,7 +22,17 @@ export type ToServer =
   | Inputs
   /** A checkpoint of the match as this client has it (see `sim/record.ts`). */
   | { readonly t: 'check'; readonly tick: number; readonly digest: string }
+  /** On its own turn, this client holds the match (reading, or paused), with so many seconds of it left; null: no more. */
+  | Hold
   | { readonly t: 'leave' };
+
+/** Why a player holds the match on its own turn. */
+export type HoldWhy = 'reading' | 'paused';
+export interface Hold {
+  readonly t: 'hold';
+  readonly why: HoldWhy | null;
+  readonly left: number;
+}
 
 export type ToClient =
   /** The room is made, or joined: this client's seat (its team), and the token to come back with. */
@@ -30,6 +40,8 @@ export type ToClient =
   /** Both seats are taken: the match, as both play it, and every input so far (for one that comes back). */
   | { readonly t: 'start'; readonly setup: MatchSetup; readonly inputs: readonly InputChange[]; readonly known: number }
   | Inputs
+  /** The other holds the match on its turn: why, and how long it still may (null: it goes on). */
+  | { readonly t: 'held'; readonly seat: number; readonly why: HoldWhy | null; readonly left: number }
   /** Who is there, by seat, and their names. */
   | { readonly t: 'presence'; readonly here: readonly boolean[]; readonly names: readonly string[] }
   /** A client's match went another way from the server's at this checkpoint. */
@@ -78,6 +90,8 @@ export function readToServer(raw: string): ToServer | null {
       return readInputs(m);
     case 'check':
       return isInt(m.tick) && typeof m.digest === 'string' ? { t: 'check', tick: m.tick, digest: m.digest.slice(0, 16) } : null;
+    case 'hold':
+      return m.why === null || m.why === 'reading' || m.why === 'paused' ? { t: 'hold', why: m.why, left: typeof m.left === 'number' && Number.isFinite(m.left) ? Math.max(0, Math.min(3600, m.left)) : 0 } : null;
     case 'leave':
       return { t: 'leave' };
     default:

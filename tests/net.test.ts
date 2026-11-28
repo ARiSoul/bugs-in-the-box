@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { Brain, SKILLS } from '../src/game/brain';
 import { NO_INPUT } from '../src/game/match';
 import { computerGrowth } from '../src/game/progress';
-import { TUNING } from '../src/game/tuning';
+import { RULE, TUNING } from '../src/game/tuning';
+import { PauseReserve } from '../src/ui/pause';
 import { Lockstep } from '../src/net/lockstep';
 import { isCode, PROTOCOL, readToServer, type ToClient, type ToServer } from '../src/net/protocol';
 import { EVERY, setUp, type MatchSetup } from '../src/sim';
@@ -176,5 +177,57 @@ describe('a room', () => {
     lobby.gone(b.peer);
     lobby.sweep(1000, Date.now() + 2000);
     expect(lobby.rooms.size).toBe(0);
+  });
+});
+
+describe('holding the match', () => {
+  it('a hold is read only as one: reading, paused, or none, with a time left', () => {
+    expect(readToServer(JSON.stringify({ t: 'hold', why: 'reading', left: 12.5 }))).toEqual({ t: 'hold', why: 'reading', left: 12.5 });
+    expect(readToServer(JSON.stringify({ t: 'hold', why: null, left: 0 }))).toEqual({ t: 'hold', why: null, left: 0 });
+    expect(readToServer(JSON.stringify({ t: 'hold', why: 'sleeping', left: 3 }))).toBe(null);
+    expect(readToServer(JSON.stringify({ t: 'hold', why: 'paused', left: 1e9 }))).toEqual({ t: 'hold', why: 'paused', left: 3600 });
+  });
+
+  it('the seat whose turn it is tells the other why it waits; the other seat may not hold the match', () => {
+    const { a, b } = room();
+    // (the first turn is the first seat's)
+    a.say({ t: 'hold', why: 'reading', left: 15 });
+    b.say({ t: 'hold', why: 'paused', left: 60 });
+    const toB = b.inbox.filter((m) => m.t === 'held');
+    const toA = a.inbox.filter((m) => m.t === 'held');
+    expect(toB).toEqual([{ t: 'held', seat: 0, why: 'reading', left: 15 }]);
+    expect(toA).toEqual([]);
+    expect(b.inbox.some((m) => m.t === 'refused')).toBe(true);
+    // (and that it no longer holds it)
+    a.say({ t: 'hold', why: null, left: 0 });
+    expect(b.inbox.filter((m) => m.t === 'held').at(-1)).toEqual({ t: 'held', seat: 0, why: null, left: 0 });
+  });
+
+  it('holds change nothing of the match: both play the same, with holds between their batches', () => {
+    const { lobby, a, b } = room();
+    let n = 0;
+    playOut(lobby, a, b, 1500, () => {
+      if (n++ % 7 === 0) (a.lock?.own ? a : b).say({ t: 'hold', why: n % 2 ? 'reading' : null, left: 5 });
+    });
+    expect(b.lock?.digests).toEqual(a.lock?.digests);
+    expect([a.desync, b.desync]).toEqual([-1, -1]);
+  });
+});
+
+describe('the pause online', () => {
+  it('holds the match only on its own turn, from its reserve; spent, the match goes on under it', () => {
+    const r = new PauseReserve(1);
+    // (the other's turn: it holds nothing, and spends nothing)
+    expect(r.hold(false, 0.5)).toBe(false);
+    expect(r.left).toBe(1);
+    expect(r.hold(true, 0.4)).toBe(true);
+    expect(r.hold(true, 0.4)).toBe(true);
+    expect(r.hold(true, 0.4)).toBe(false);
+    expect(r.left).toBe(0);
+    expect(r.hold(true, 0.1)).toBe(false);
+  });
+
+  it('its limits, and reading\'s, are settings, as shipped: 20 s a turn and 90 a match to read, 60 to pause', () => {
+    expect([TUNING.get(RULE.readTurn).value, TUNING.get(RULE.readMatch).value, TUNING.get(RULE.pauseMatch).value]).toEqual([20, 90, 60]);
   });
 });

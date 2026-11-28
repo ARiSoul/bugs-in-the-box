@@ -78,6 +78,12 @@ export class Room {
     const peer = this.seats[seat]?.peer;
     if (m.t === 'inputs') this.inputs(seat, m);
     else if (m.t === 'check') this.check(seat, m.tick, m.digest);
+    // (what holds the match, for the other to see: only the seat whose turn it is may hold it)
+    else if (m.t === 'hold') {
+      const l = this.lock;
+      if (l && m.why !== null && l.source !== seat) return peer?.send({ t: 'refused', why: 'not this seat\'s turn to hold' });
+      this.seats[1 - seat]?.peer?.send({ t: 'held', seat, why: m.why, left: m.left });
+    }
     else if (m.t === 'leave') this.gone(peer as Peer);
   }
 
